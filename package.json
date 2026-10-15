@@ -1,0 +1,12 @@
+{
+  "name": "ba-quizz-learn",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicație de pregătire pentru interviuri tehnice: grile cu explicații, carduri orale, live coding și plan pe zile, într-un singur fișier HTML.",
+  "scripts": {
+    "validate": "node validate.mjs",
+    "build": "node validate.mjs && node build.mjs && node --check dist/bundle-check.js",
+    "test:katas": "python3 -m pytest -q katas",
+    "test:ui": "python3 tools/check.py && python3 tools/test_teach.py && python3 tools/test_expl.py && python3 tools/test_terms.py"
+  }
+}
