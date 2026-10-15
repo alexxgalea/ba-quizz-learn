@@ -21,6 +21,21 @@ window.SpeechRecognition = window.webkitSpeechRecognition = class {   // Chromiu
 };
 """
 
+# Fake `window.claude` as inside an artifact viewer: only the `sample` capability is served.
+SAMPLE = """
+window.__sampleMode = 'ok'; window.__samplePrompts = [];
+const sample = async (prompt, opts) => {
+  window.__samplePrompts.push(prompt);
+  const m = window.__sampleMode;
+  if (m === 'denied') throw { code: 'not_granted', message: 'declined' };
+  if (m === 'rate') throw { code: 'rate_limited', message: 'slow down' };
+  if (m === 'garbage') return { text: 'nu e json', truncated: false };
+  const n = (prompt.match(/^\\d+\\. /gm) || []).length;
+  return { text: '```json\\n' + JSON.stringify({ covered: Array.from({ length: n }, (_, i) => i % 2 === 0), missing: ['costul proceselor'], wrong: [], feedback: 'Ai acoperit mecanismul, dar lipsește compromisul.' }) + '\\n```', truncated: false };
+};
+window.claude = { use: async name => (name === 'sample' ? sample : null) };
+"""
+
 fails = []
 def check(name, ok, extra=""):
     print(("PASS " if ok else "FAIL ") + name + (" " + str(extra) if extra and not ok else ""))
@@ -168,6 +183,47 @@ async def main():
         await pg.screenshot(path=str(SHOTS / "ai5-dark.png"), full_page=True)
 
         check("no page errors", not errs, errs)
+
+        # 9) inside the artifact: Claude through the `sample` capability is preferred, no key needed, no DeepSeek traffic
+        ctx2 = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2)
+        await ctx2.add_init_script(SAMPLE)
+        pg2 = await ctx2.new_page(); errs2, ds_hits = [], []
+        pg2.on("pageerror", lambda e: errs2.append(str(e)))
+        await pg2.route("**/fonts.*", lambda r: r.abort())
+        async def ds_spy(route):
+            ds_hits.append(route.request.url); await route.abort()
+        await pg2.route("https://api.deepseek.com/**", ds_spy)
+        await pg2.goto(PAGE); await pg2.wait_for_timeout(500)
+        await pg2.click('.tab[data-tab="progress"]'); await pg2.wait_for_timeout(100)
+        check("sample: settings explain Claude, no key form", await pg2.locator('#ds-key').count() == 0 and "Claude" in await pg2.inner_text('main'))
+        await pg2.screenshot(path=str(SHOTS / "ai6-sample-settings.png"))
+        await pg2.click('.tab[data-tab="oral"]'); await pg2.click('[data-a="oral"][data-f="smart"]'); await pg2.wait_for_timeout(100)
+        check("sample: AI button without any key, labelled Claude", "Claude" in await pg2.inner_text('[data-a="oral-ai"]'))
+        await pg2.fill('#ans-t', answer); await pg2.click('[data-a="oral-ai"]'); await pg2.wait_for_selector('.ai-v', timeout=5000)
+        sent = await pg2.evaluate("window.__samplePrompts")
+        n2 = await pg2.locator('.kp-i').count()
+        pressed2 = await pg2.eval_on_selector_all('.kp-i', "els => els.map(e => e.getAttribute('aria-pressed') === 'true')")
+        check("sample: prompt carries instructions, points and the answer", len(sent) == 1 and answer in sent[0] and "JSON" in sent[0] and re.search(r"^1\. ", sent[0], re.M) is not None)
+        check("sample: points pre-ticked, verdict titled Claude", pressed2 == [i % 2 == 0 for i in range(n2)] and "Verdict Claude" in await pg2.inner_text('.ai-v'), pressed2)
+        await pg2.screenshot(path=str(SHOTS / "ai7-sample-verdict.png"), full_page=True)
+        await pg2.click('[data-a="quit"]'); await pg2.click('[data-a="quit"]'); await pg2.wait_for_timeout(100)
+
+        for mode_name, expect in [("denied", "refuzat"), ("rate", "Prea multe cereri"), ("garbage", "formatul")]:
+            if await pg2.locator('[data-a="close-result"]').count(): await pg2.click('[data-a="close-result"]')
+            await pg2.evaluate("m => { window.__sampleMode = m; window.__samplePrompts.length = 0; }", mode_name)
+            await pg2.click('[data-a="oral"][data-f="smart"]'); await pg2.wait_for_timeout(100)
+            await pg2.fill('#ans-t', answer); await pg2.click('[data-a="oral-ai"]'); await pg2.wait_for_selector('.ai-err', timeout=5000)
+            calls = await pg2.evaluate("window.__samplePrompts.length")
+            check("sample " + mode_name + ": message, answer kept, exactly one call (no auto-retry)", expect in await pg2.inner_text('.ai-err') and await pg2.input_value('#ans-t') == answer and calls == 1, (await pg2.inner_text('.ai-err'), calls))
+            await pg2.click('[data-a="quit"]'); await pg2.click('[data-a="quit"]'); await pg2.wait_for_timeout(100)
+
+        # a saved DeepSeek key must not take over while Claude is available
+        await pg2.evaluate("window.__sampleMode = 'ok'; localStorage.setItem('onapsis-deepseek-v1', 'sk-should-not-be-used-123456')")
+        if await pg2.locator('[data-a="close-result"]').count(): await pg2.click('[data-a="close-result"]')
+        await pg2.click('[data-a="oral"][data-f="smart"]'); await pg2.wait_for_timeout(100)
+        await pg2.fill('#ans-t', answer); await pg2.click('[data-a="oral-ai"]'); await pg2.wait_for_selector('.ai-v', timeout=5000)
+        check("sample preferred over a stored DeepSeek key; no request to api.deepseek.com", not ds_hits, ds_hits)
+        check("sample: no page errors", not errs2, errs2)
         await b.close()
     print("\nFAILED: " + ", ".join(fails) if fails else "\nALL OK")
     raise SystemExit(1 if fails else 0)
