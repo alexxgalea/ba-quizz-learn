@@ -451,3 +451,15 @@ details.sheet, details.day { scroll-margin-top: 84px; }
   .mode.wide { grid-column: span 3; }
   .qtext { font-size: 19px; }
 }
+
+/* verificare AI (DeepSeek) la cardurile orale */
+textarea.ans, input.keyin { width: 100%; font: 16px/1.5 var(--font-body); border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 12px; background: var(--surface); color: var(--ink); }
+textarea.ans { min-height: 128px; resize: vertical; }
+textarea.ans:disabled { opacity: .6; }
+input.keyin { min-height: 44px; font-family: var(--font-mono); font-size: 16px; }
+.btn.rec { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.ai-err { color: var(--bad); }
+.ai-v { border-color: var(--accent); }
+.ai-l ul { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.ai-l b { font-size: 14px; color: var(--warn); }
+.ai-l.bad b { color: var(--bad); }

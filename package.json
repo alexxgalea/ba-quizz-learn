@@ -7,6 +7,6 @@
     "validate": "node validate.mjs",
     "build": "node validate.mjs && node build.mjs && node --check dist/bundle-check.js",
     "test:katas": "python3 -m pytest -q katas",
-    "test:ui": "python3 tools/check.py && python3 tools/test_teach.py && python3 tools/test_expl.py && python3 tools/test_terms.py"
+    "test:ui": "python3 tools/check.py && python3 tools/test_teach.py && python3 tools/test_expl.py && python3 tools/test_terms.py && python3 tools/test_ai.py"
   }
 }
