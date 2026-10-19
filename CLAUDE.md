@@ -8,7 +8,7 @@ Aplicația de pregătire a lui Alex pentru interviul tehnic de la Onapsis (Softw
 - Nu schimba ordinea variantelor în `src/data_*.js`: varianta corectă e la indexul 0 (`a: 0`), iar explicațiile folosesc literele B, C și D pentru indexurile 1–3.
 - După orice modificare de date sau explicații: `node validate.mjs` (trebuie să se termine cu „OK”), `node build.mjs`, `node --check dist/bundle-check.js`.
 - Înainte de publicare rulezi testele de interfață din `tools/` (`check.py`, `test_teach.py`, `test_expl.py`, `test_terms.py`, `test_ai.py`) și verifici vizual, la 360 px, în light și dark: `python3 tools/shot_q.py <modul> <ID> [dark]`. Singura eroare de consolă acceptată e blocarea fonturilor Google în sandbox.
-- Publici mereu la același link, ca progresul și permisiunile să rămână: Artifact publish cu `file_path: dist/pregatire-onapsis.html` și `url: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT`, fără `icon` și fără `capabilities`.
+- Publici mereu la același link, ca progresul și permisiunile să rămână: Artifact publish cu `file_path: dist/pregatire-onapsis.html`, `url: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT` și `capabilities: {db: {}, user: {}, sample: {}}` (`db` și `user` pentru sincronizare, `sample` pentru verificarea AI; o declarație nouă înlocuiește tot setul, deci le treci pe toate trei), fără `icon`.
 - După publicare îi trimiți lui Alex un mesaj scurt, în română, despre ce s-a schimbat.
 - Fără trailer `Co-Authored-By` în mesajele de commit și în descrierile de PR.
 
@@ -35,5 +35,5 @@ Aplicația de pregătire a lui Alex pentru interviul tehnic de la Onapsis (Softw
 - Starea se salvează local și se sincronizează prin `window.claude` (capabilitățile `db` și `user`) în `data/users/<uid>/progress`, cu merge pe item după timestamp; un reset (`r` mai nou) câștigă.
 - Nivelurile L1–L3 deblochează treptat grilele în „mix inteligent”, iar diagnosticul e adaptiv.
 - Explicațiile sunt parsate la build (`lib.mjs`) și injectate în `window.PREP.expl`, iar glosarul în `window.PREP.gloss`. Termenii din glosar sunt legați automat în texte, după `Forme:`.
-- Verificarea AI la cardurile orale (`AI`, `dsCall`, `dsGrade`, `parseVerdict`, `Mic` în `src/app.js`): cheia DeepSeek stă în `localStorage` (`onapsis-deepseek-v1`), niciodată în `S`, în export sau în brief. Verdictul doar pre-bifează `run.ticks`; scorul rămâne `updO`. Modelul și parametrii: verifică docs DeepSeek înainte să-i schimbi (numele modelelor se schimbă).
+- Verificarea AI la cardurile orale (`AI`, `aiGrade`, `sampleGrade`, `dsGrade`, `parseVerdict`, `Mic` în `src/app.js`): sursa e Claude prin capabilitatea `sample` (în artifact, unde CSP blochează `fetch`), iar DeepSeek e doar rezervă în afara artifactului. Cheia DeepSeek stă în `localStorage` (`onapsis-deepseek-v1`), niciodată în `S`, în export sau în brief. Verdictul doar pre-bifează `run.ticks`; scorul rămâne `updO`. Modelul și parametrii: verifică docs DeepSeek înainte să-i schimbi (numele modelelor se schimbă).
 - `window.__prep` expune funcții pentru teste: `mergeState`, `normalize`, `pickDiag`, `pickMock`, `pickSmart`, `updQ`, `parseVerdict`, `dsBody`, `state`.

@@ -9,7 +9,7 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 - **Glosar** de 46 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
 - **42 de carduri orale**, **9 exerciții de live coding** cu soluții testate cu pytest, fișe pe module și un plan pe zile.
 - **Diagnostic adaptiv** și **repetiție spațiată** (cutii Leitner).
-- **Verificare AI la cardurile orale** (opțională): scrii sau dictezi răspunsul, iar DeepSeek îl compară cu punctele cheie și pre-bifează ce ai acoperit, cu feedback scurt. Vezi secțiunea „Verificare AI (DeepSeek)”.
+- **Verificare AI la cardurile orale** (opțională): scrii sau dictezi răspunsul, iar Claude (în artifact) sau DeepSeek (în afara lui, cu cheie) îl compară cu punctele cheie și pre-bifează ce ai acoperit, cu feedback scurt. Vezi secțiunea „Verificare AI”.
 
 ## Structura
 
@@ -40,7 +40,7 @@ python3 tools/check.py       # teste de interfață (Playwright + Chromium)
 python3 tools/test_teach.py
 python3 tools/test_expl.py
 python3 tools/test_terms.py
-python3 tools/test_ai.py     # verificarea AI la carduri orale (DeepSeek simulat)
+python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample și DeepSeek simulate)
 ```
 
 Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:ui`.
@@ -78,14 +78,17 @@ Reguli:
 
 Glosarul (`src/expl/glosar.md`) are câte o secțiune `### Termen`, cu câmpurile `Forme:` (formele flexionate după care termenul e găsit în texte; trebuie să fie unice), `Definiție:`, `Scop:`, `Exemplu:`, `Analogie:`, `Limită:` și `Vezi și:`.
 
-## Verificare AI (DeepSeek)
+## Verificare AI
 
-La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dictează” (Web Speech, `ro-RO`, dacă browserul îl are). „Verifică cu DeepSeek” trimite întrebarea, punctele cheie, răspunsul model și răspunsul tău la `https://api.deepseek.com/chat/completions` (model `deepseek-flash`, mod JSON, fără thinking). Verdictul (`covered[]`, `missing`, `wrong`, `feedback`) pre-bifează punctele; le poți schimba, iar scorul și cutiile Leitner se calculează ca înainte din bife. „Fără AI” păstrează bifatul manual.
+La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dictează” (Web Speech, `ro-RO`, dacă browserul îl are). „Verifică cu Claude” (sau „cu DeepSeek”) trimite întrebarea, punctele cheie, răspunsul model și răspunsul tău, iar sursa verdictului se alege automat:
 
-- Cheia API se introduce în Progres › Verificare AI și stă doar în `localStorage` (`onapsis-deepseek-v1`), separat de progres: nu se sincronizează, nu intră în export sau în brief. Pe fiecare dispozitiv o introduci separat.
-- Apelul pleacă direct din browser. DeepSeek răspunde la preflight CORS pentru orice origin; dacă sandbox-ul artifactului blochează `fetch`, „Testează” spune asta, iar cardurile rămân utilizabile manual.
+1. **Claude, prin capabilitatea `sample`** (în artifact): fără cheie, pe contul tău Claude, cu cerere de permisiune la prima folosire. E singura variantă care merge în artifact, pentru că CSP-ul paginii blochează orice `fetch` către alt host.
+2. **DeepSeek**, doar dacă `sample` lipsește (aplicația rulată în afara artifactului): `https://api.deepseek.com/chat/completions`, model `deepseek-flash`, mod JSON, fără thinking, cu cheia din Progres. Verdictul (`covered[]`, `missing`, `wrong`, `feedback`) pre-bifează punctele; le poți schimba, iar scorul și cutiile Leitner se calculează ca înainte din bife. „Fără AI” păstrează bifatul manual.
+
+- Cheia DeepSeek (doar în afara artifactului) se introduce în Progres › Verificare AI și stă doar în `localStorage` (`onapsis-deepseek-v1`), separat de progres: nu se sincronizează, nu intră în export sau în brief. Pe fiecare dispozitiv o introduci separat.
+- Apelul DeepSeek pleacă direct din browser; DeepSeek răspunde la preflight CORS pentru orice origin. În artifact `fetch` e blocat de CSP, de aceea acolo se folosește `sample`. Cardurile rămân oricum utilizabile manual.
 - Răspunsul tău nu se salvează în progres; stă doar în sesiunea curentă.
-- Test: `python3 tools/test_ai.py` (DeepSeek și microfonul sunt simulate, nimic nu iese din mașină).
+- Test: `python3 tools/test_ai.py` (DeepSeek, `sample` și microfonul simulate, nimic nu iese din mașină).
 
 ## Publicare
 

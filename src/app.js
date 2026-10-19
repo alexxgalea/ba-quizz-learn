@@ -50,6 +50,7 @@
   const DS_URL = "https://api.deepseek.com/chat/completions";
   const DS_MODEL = "deepseek-flash";
   const DS_TIMEOUT = 25000;
+  const SAMPLE_TIMEOUT = 45000;
   const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   const LETTERS = "ABCDEF";
 
@@ -686,7 +687,17 @@
   }
 
   // ---------- verificare AI (DeepSeek) ----------
+  // Sursa verdictului: Claude prin `sample` (în artifact, fără cheie), altfel DeepSeek cu cheia din localStorage (în afara artifactului).
   const AI = {
+    sample: null,
+    async init() {
+      const c = window.claude;
+      if (!c || typeof c.use !== "function") return;
+      try { this.sample = (await c.use("sample")) || null; } catch (e) { this.sample = null; }
+      if (this.sample && !(ui.run && ui.run.ans)) render();
+    },
+    ready() { return !!(this.sample || this.get()); },
+    name() { return this.sample ? "Claude" : "DeepSeek"; },
     get() { try { return localStorage.getItem(DS_KEY) || ""; } catch (e) { return ""; } },
     set(k) { try { if (k) localStorage.setItem(DS_KEY, k); else localStorage.removeItem(DS_KEY); return true; } catch (e) { return false; } },
     mask: k => (k ? "…" + k.slice(-4) : "")
@@ -695,12 +706,15 @@
     nokey: "Adaugă mai întâi cheia DeepSeek, în Progres.",
     auth: "Cheia DeepSeek nu e validă. Verific-o în Progres.",
     credit: "Contul DeepSeek nu mai are credit.",
-    rate: "Prea multe cereri către DeepSeek. Așteaptă puțin și reîncearcă.",
+    rate: "Prea multe cereri. Așteaptă puțin și reîncearcă.",
     server: "DeepSeek nu răspunde acum. Reîncearcă.",
-    http: "DeepSeek a respins cererea. Reîncearcă.",
-    timeout: "DeepSeek a întârziat prea mult. Reîncearcă.",
+    http: "Cererea a fost respinsă. Reîncearcă.",
+    timeout: "Verificarea a întârziat prea mult. Reîncearcă.",
     network: "Nu pot ajunge la api.deepseek.com (rețea sau restricție a paginii).",
-    format: "Răspunsul DeepSeek nu avea formatul așteptat. Reîncearcă."
+    format: "Răspunsul AI nu avea formatul așteptat. Reîncearcă.",
+    nogrant: "Accesul la Claude a fost refuzat. Reîncarcă pagina ca să-l poți permite.",
+    refused: "Claude a refuzat cererea. Încearcă cu alt text.",
+    unavail: "Claude nu poate răspunde acum. Reîncearcă."
   };
   const aiError = code => { const e = new Error(code); e.code = code; return e; };
   // Un singur POST către DeepSeek; întoarce textul mesajului (poate fi gol) sau aruncă o eroare cu `code`.
@@ -725,9 +739,11 @@
     "Răspunde NUMAI cu un obiect JSON, de forma: " +
     '{"covered":[true,false],"missing":["ce a lipsit, pe scurt"],"wrong":["ce a spus greșit tehnic, pe scurt"],"feedback":"1–3 propoziții, la persoana a II-a, cu cel mai important lucru de îmbunătățit"}. ' +
     "covered are exact atâtea valori câte puncte cheie sunt, în aceeași ordine. wrong e [] dacă nu a greșit nimic. Tot textul e în română.";
+  const aiUser = (c, ans) => "Întrebare: " + c.q + "\n\nPuncte cheie:\n" + c.k.map((p, i) => (i + 1) + ". " + p).join("\n") + "\n\nRăspuns model: " + c.model +
+    "\n\nRăspunsul candidatului (între <<< și >>>):\n<<<\n" + ans + "\n>>>";
+  const aiPrompt = (c, ans) => DS_SYS + "\n\n" + aiUser(c, ans);       // `sample` nu are prompt de sistem: instrucțiunile intră în text
   function dsBody(c, ans) {
-    const user = "Întrebare: " + c.q + "\n\nPuncte cheie:\n" + c.k.map((p, i) => (i + 1) + ". " + p).join("\n") + "\n\nRăspuns model: " + c.model +
-      "\n\nRăspunsul candidatului (între <<< și >>>):\n<<<\n" + ans + "\n>>>";
+    const user = aiUser(c, ans);
     return { model: DS_MODEL, messages: [{ role: "system", content: DS_SYS }, { role: "user", content: user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.2, max_tokens: 800, stream: false };
   }
   // Validează verdictul: `covered` trebuie să aibă exact n valori booleene, altfel îl respingem.
@@ -750,6 +766,19 @@
     }
     throw last;
   }
+  const sampleCode = e => ({ not_granted: "nogrant", rate_limited: "rate", cancelled: "timeout", prompt_too_large: "http", refused: "refused" }[e && e.code] || "unavail");
+  // Fără reîncercare automată: `cache: false` face ca un nou clic să întrebe din nou, iar `rate_limited` nu se reîncearcă din cod.
+  async function sampleGrade(c, ans) {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), SAMPLE_TIMEOUT);
+    try {
+      let r;
+      try { r = await AI.sample(aiPrompt(c, ans), { signal: ctl.signal, cache: false }); } catch (e) { throw aiError(sampleCode(e)); }
+      const v = parseVerdict(r && r.text, c.k.length);
+      if (!v) throw aiError("format");
+      return v;
+    } finally { clearTimeout(tm); }
+  }
+  const aiGrade = (c, ans) => (AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans));
   async function aiTest() {
     const key = AI.get(); if (!key) return;
     const st = $("#ds-st"); if (st) st.textContent = "Se testează…";
@@ -830,7 +859,7 @@
     }
     h += "</div></article>";
     if (run.phase === "ask") {
-      const has = !!AI.get(), busy = !!(run.ai && run.ai.s === "busy");
+      const has = AI.ready(), busy = !!(run.ai && run.ai.s === "busy");
       h += '<section class="card stack-s"><div class="spread"><h3>Răspunsul tău</h3>' +
         (Mic.ok ? '<button class="btn sm' + (Mic.on ? " rec" : "") + '" id="mic-b" data-a="mic" aria-pressed="' + Mic.on + '">' + (Mic.on ? "Oprește" : "Dictează") + "</button>" : "") + "</div>" +
         '<textarea class="ans" id="ans-t" rows="5" maxlength="3000" placeholder="Scrie sau dictează răspunsul, în 3–4 propoziții" aria-label="Răspunsul tău"' + (busy ? " disabled" : "") + ">" + esc(run.ans || "") + "</textarea>";
@@ -838,12 +867,12 @@
       if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
       h += "</section>";
       if (has) {
-        h += '<button class="btn primary block" data-a="oral-ai"' + (busy ? " disabled" : "") + ">" + (busy ? "Se verifică cu DeepSeek…" : "Verifică cu DeepSeek") + "</button>";
+        h += '<button class="btn primary block" data-a="oral-ai"' + (busy ? " disabled" : "") + ">" + (busy ? "Se verifică cu " + AI.name() + "…" : "Verifică cu " + AI.name()) + "</button>";
         h += '<button class="btn block" data-a="oral-reveal"' + (busy ? " disabled" : "") + ">Fără AI: arată punctele cheie</button>";
       } else h += '<button class="btn primary block" data-a="oral-reveal">Am răspuns: arată punctele cheie</button>';
     } else {
       const ticked = c.k.filter((_, i) => run.ticks[i]).length;
-      if (run.ai && run.ai.s === "ok") h += vAiVerdict(run.ai.v, run.ans);
+      if (run.ai && run.ai.s === "ok") h += vAiVerdict(run.ai.v, run.ans, run.ai.p);
       h += '<section class="card stack"><div class="spread"><h3>Ce ai acoperit?</h3><span class="chip' + (ticked / c.k.length >= 0.8 ? " ok" : ticked / c.k.length >= 0.5 ? " warn" : "") + '">' + ticked + "/" + c.k.length + '</span></div><div class="kp">' +
         c.k.map((p, i) => '<button class="kp-i" data-a="tick" data-k="' + i + '" aria-pressed="' + !!run.ticks[i] + '"><span class="check">' + CHECK + "</span><span>" + fmt(p) + "</span></button>").join("") + "</div></section>";
       h += '<details class="model"><summary>Model de răspuns</summary><p>' + inlineRich(c.model, { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) }) + "</p></details>";
@@ -851,9 +880,9 @@
     }
     return h;
   }
-  function vAiVerdict(v, ans) {
+  function vAiVerdict(v, ans, who) {
     const ul = a => "<ul>" + a.map(x => "<li>" + fmt(x) + "</li>").join("") + "</ul>";
-    return '<section class="card stack-s ai-v"><div class="spread"><h3>Verdict DeepSeek</h3><span class="chip acc">AI</span></div>' +
+    return '<section class="card stack-s ai-v"><div class="spread"><h3>Verdict ' + esc(who || "AI") + '</h3><span class="chip acc">AI</span></div>' +
       (v.feedback ? "<p>" + fmt(v.feedback) + "</p>" : "") +
       (v.missing.length ? '<div class="ai-l"><b>Ți-a lipsit</b>' + ul(v.missing) + "</div>" : "") +
       (v.wrong.length ? '<div class="ai-l bad"><b>De corectat</b>' + ul(v.wrong) + "</div>" : "") +
@@ -865,13 +894,14 @@
     Mic.stop();
     const ans = (run.ans || "").trim(), idx = run.i, c = OBY[run.items[idx]];
     if (ans.length < 15) { toast("Scrie sau dictează un răspuns mai lung"); return; }
-    if (!AI.get()) { toast(AI_MSG.nokey); return; }
+    if (!AI.ready()) { toast(AI_MSG.nokey); return; }
+    const who = AI.name();
     run.ai = { s: "busy" }; render();
     let v = null, code = null;
-    try { v = await dsGrade(c, ans); } catch (err) { code = (err && err.code) || "network"; }
+    try { v = await aiGrade(c, ans); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.run !== run || run.i !== idx || run.phase !== "ask") return;      // cardul s-a schimbat între timp
     if (v) {
-      run.ai = { s: "ok", v }; run.ticks = {};
+      run.ai = { s: "ok", v, p: who }; run.ticks = {};
       v.covered.forEach((b, i) => { if (b) run.ticks[i] = true; });
       run.phase = "review"; run.tEnd = 0;
     } else { run.ai = { s: "err", code }; toast(AI_MSG[code] || AI_MSG.network); }
@@ -1030,6 +1060,7 @@
     return h;
   }
   function vAiSettings() {
+    if (AI.sample) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">La cardurile orale, Claude compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit. Nu ai nevoie de cheie: folosește contul tău Claude, iar prima dată ți se cere permisiunea.</p><p class="xs muted">Se trimit doar întrebarea, punctele cheie și răspunsul tău.</p></section>';
     const k = AI.get();
     return '<section class="card stack-s"><h3>Verificare AI (DeepSeek)</h3>' +
       '<p class="small">La cardurile orale, DeepSeek compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit.</p>' +
@@ -1242,6 +1273,7 @@
     }
     render();
     Sync.init();
+    AI.init();
   }
   const hot = window.claude && window.claude.hot;
   if (hot && typeof hot.snapshot === "function") { try { hot.snapshot(() => ({ ui: snapshotUi() })); } catch (e) { /* opțional */ } }
