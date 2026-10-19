@@ -129,11 +129,9 @@ function renderAppendix() {
   for (const k of P.katas) out.push("- **" + k.n + ". " + k.title + "** (" + k.level + "): " + k.why);
 
   out.push("", "## Anexa 6. Planul pe zile", "");
-  for (const d of P.plan) {
-    out.push("**" + d.day + " " + d.label + "** (" + d.when + "): " + d.focus, "");
-    d.tasks.forEach(t => out.push("- " + t.text + " (" + t.min + " min)"));
-    out.push("");
-  }
+  out.push("Planul se generează în aplicație din data interviului (" + P.cfg.interview + "), orele pe seară (~" + P.cfg.hours + " h) și progres: fiecare seară are aceeași rețetă (scadențe → fișă + grile + oral pe modulele cu cea mai mare nevoie → kata → greșeli), iar dimineața interviului are doar încălzire:", "");
+  P.planTpl.morning.forEach(t => out.push("- " + t.text + " (" + t.min + " min)"));
+  out.push("");
   return out.join("\n");
 }
 

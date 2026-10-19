@@ -1,14 +1,14 @@
 # ba-quizz-learn: instrucțiuni pentru Claude
 
-Aplicația de pregătire a lui Alex pentru interviul tehnic de la Onapsis (Software Engineer – Python, echipa Defend). Interviul e luni, 19 octombrie 2026. Alex o folosește mai ales pe telefon. Detaliile despre structură și format sunt în `README.md`.
+Aplicația de pregătire a lui Alex pentru interviul tehnic de la Onapsis (Software Engineer – Python, echipa Defend). Interviul e miercuri, 21 octombrie 2026 (data implicită e în `P.cfg`, `src/data_core.js`; Alex o poate schimba din Progres › Interviul). Alex o folosește mai ales pe telefon, ~2–3 h pe seară. Detaliile despre structură și format sunt în `README.md`.
 
 ## Reguli
 
 - Tot textul din aplicație e în română. Termenii tehnici rămân în engleză (thread, worker, broker, commit, endpoint).
 - Nu schimba ordinea variantelor în `src/data_*.js`: varianta corectă e la indexul 0 (`a: 0`), iar explicațiile folosesc literele B, C și D pentru indexurile 1–3.
 - După orice modificare de date sau explicații: `node validate.mjs` (trebuie să se termine cu „OK”), `node build.mjs`, `node --check dist/bundle-check.js`.
-- Înainte de publicare rulezi testele de interfață din `tools/` (`check.py`, `test_teach.py`, `test_expl.py`, `test_terms.py`, `test_ai.py`) și verifici vizual, la 360 px, în light și dark: `python3 tools/shot_q.py <modul> <ID> [dark]`. Singura eroare de consolă acceptată e blocarea fonturilor Google în sandbox.
-- Publici mereu la același link, ca progresul și permisiunile să rămână: Artifact publish cu `file_path: dist/pregatire-onapsis.html`, `url: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT` și `capabilities: {db: {}, user: {}, sample: {}}` (`db` și `user` pentru sincronizare, `sample` pentru verificarea AI; o declarație nouă înlocuiește tot setul, deci le treci pe toate trei), fără `icon`.
+- Înainte de publicare rulezi testele de interfață din `tools/` (`check.py`, `test_teach.py`, `test_expl.py`, `test_terms.py`, `test_ai.py`, `test_plan.py`) și verifici vizual, la 360 px, în light și dark: `python3 tools/shot_q.py <modul> <ID> [dark]`. Singura eroare de consolă acceptată e blocarea fonturilor Google în sandbox.
+- Publici mereu la același link, ca progresul și permisiunile să rămână: Artifact publish cu `file_path: dist/pregatire-onapsis.html` și `url: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT`, fără `icon` și fără `capabilities`. Artifactul are deja declarate `db` și `user` (sincronizarea) și `sample` (verificarea AI), iar fără câmpul `capabilities` le păstrează. Dacă vreodată le declari, le treci pe toate trei, fiindcă o declarație nouă înlocuiește tot setul.
 - După publicare îi trimiți lui Alex un mesaj scurt, în română, despre ce s-a schimbat.
 - Fără trailer `Co-Authored-By` în mesajele de commit și în descrierile de PR.
 
@@ -31,9 +31,13 @@ Aplicația de pregătire a lui Alex pentru interviul tehnic de la Onapsis (Softw
 
 ## Arhitectura, pe scurt
 
-- `src/app.js` e o singură IIFE. Starea `S` are forma `{ v, r, q, o, k, p, h }`: `q` grilele (cutia Leitner `b`, răspunsuri `n`, corecte `c`, ultimul rezultat `l`, timestamp `t`), `o` cardurile orale, `k` exercițiile, `p` planul, `h` istoricul, `r` epoca de reset.
+- `src/app.js` e o singură IIFE. Starea `S` are forma `{ v, r, q, o, x, k, p, h, c }`: `q` grilele (cutia Leitner `b`, răspunsuri `n`, corecte `c`, ultimul rezultat `l`, timestamp `t`), `o` cardurile orale, `x` întrebările deschise (aceeași formă; `l` = 0 nu / 1 parțial / 2 știu), `k` exercițiile, `p` sarcinile bifate din plan, `h` istoricul, `c` setările (`d` data interviului, `h` ore pe seară, `t`), `r` epoca de reset.
 - Starea se salvează local și se sincronizează prin `window.claude` (capabilitățile `db` și `user`) în `data/users/<uid>/progress`, cu merge pe item după timestamp; un reset (`r` mai nou) câștigă.
+- Scadențe (`dueAt`, `isDue`): cutia 1 → +20 min, 2 → +4 h, 3 → a doua zi, 4 → peste două zile, 5 → niciodată. `dueQ`/`dueO`/`dueX` dau itemii scadenți; modul „due” la grile, „De repetat” la orale și „Deschise scadente” îi iau în ordinea cutiei. Ponderile din `wQ`/`wO`/`wX` înmulțesc cu `dueF` (0,15 pentru ce nu e încă scadent), deci „Mix inteligent” și „Recomandate” respectă spațierea.
 - Nivelurile L1–L3 deblochează treptat grilele în „mix inteligent”, iar diagnosticul e adaptiv.
+- Planul (`genPlan`) se generează la fiecare render din `cfg()` (data, ore pe seară) și progres: pentru fiecare seară rămasă, sarcini cu chei stabile (`g<dată>-<cheie>`: `diag`, `due`, `sheet-<modul>`, `oral`, `open`, `smart`, `mock`, `kata-<id>`, `mist`, `intv`, `log`). Modulele intră după `modNeed` (prioritate × cât mai e de învățat) și durează `modMinutes`; sarcinile bifate azi rămân, iar bugetul de azi scade cu minutele din istoric (`spentMin`). Dimineața interviului vine din `P.planTpl.morning`.
+- Întrebările deschise (`OPEN`, `startOpen`, `vOpenRun`, `updX`): grilele cu `Verificare` + `Răspuns verificare` în explicație; rulează în tab-ul Oral, cu notare manuală. Nu intră în scorul de pregătire.
+- Studiu › Formulări (`vIntv`): liniile `La interviu` din explicații, filtrate P1 / greșite (cutia ≤ 1) / toate.
 - Explicațiile sunt parsate la build (`lib.mjs`) și injectate în `window.PREP.expl`, iar glosarul în `window.PREP.gloss`. Termenii din glosar sunt legați automat în texte, după `Forme:`.
 - Verificarea AI la cardurile orale (`AI`, `aiGrade`, `sampleGrade`, `dsGrade`, `parseVerdict`, `Mic` în `src/app.js`): sursa e Claude prin capabilitatea `sample` (în artifact, unde CSP blochează `fetch`), iar DeepSeek e doar rezervă în afara artifactului. Cheia DeepSeek stă în `localStorage` (`onapsis-deepseek-v1`), niciodată în `S`, în export sau în brief. Verdictul doar pre-bifează `run.ticks`; scorul rămâne `updO`. Modelul și parametrii: verifică docs DeepSeek înainte să-i schimbi (numele modelelor se schimbă).
-- `window.__prep` expune funcții pentru teste: `mergeState`, `normalize`, `pickDiag`, `pickMock`, `pickSmart`, `updQ`, `parseVerdict`, `dsBody`, `state`.
+- `window.__prep` expune funcții pentru teste: `mergeState`, `normalize`, `pickDiag`, `pickMock`, `pickSmart`, `pickDue`, `pickOpen`, `updQ`, `updO`, `updX`, `dueAt`, `isDue`, `genPlan`, `cfg`, `parseVerdict`, `dsBody`, `state`, `setState`.

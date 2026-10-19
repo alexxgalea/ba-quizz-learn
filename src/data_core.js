@@ -1,4 +1,4 @@
-/* Core data: modules, cheat sheets, day plan, study pages. */
+/* Core data: modules, cheat sheets, interview config + plan template, study pages. */
 window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas: [], diagrams: {}, plan: [], extra: {} };
 (function (P) {
   const R = String.raw;
@@ -373,106 +373,22 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
     }
   };
 
-  // ---------- plan ----------
-  // go: { t: "diag" | "smart" | "mock" | "mistakes" | "mcq" (m) | "sheet" (m) | "oral" (ms | due) | "kata" (id) | "study" (tab) }
-  P.plan = [
-    {
-      id: "d1", date: "2026-10-14", day: "Miercuri", label: "14 oct", when: "seara · ~2 h",
-      focus: "Calibrare și prima lacună de la Lateral: concurența și runtime-ul Python.",
-      tasks: [
-        { id: "d1a", min: 20, text: "Test diagnostic ghidat (30 de grile, cu context): baza din fiecare modul, apoi un pas mai departe. Nu ghici, apasă „Nu știu încă”.", go: { t: "diag" } },
-        { id: "d1b", min: 25, text: "Fișa + diagrama „GIL & concurență”, apoi grilele modulului.", go: { t: "sheet", m: "gil" } },
-        { id: "d1c", min: 15, text: "Fișa + grilele „Runtime Python”.", go: { t: "sheet", m: "runtime" } },
-        { id: "d1d", min: 15, text: "Oral, cu voce tare și cronometru de 90 s: CPU vs I/O, erori de tip la runtime.", go: { t: "oral", ms: ["gil", "runtime"] } },
-        { id: "d1e", min: 20, text: "Kata 8: fetch async cu limită de concurență.", go: { t: "kata", id: "k8" } },
-        { id: "d1f", min: 10, text: "Repetă greșelile de azi.", go: { t: "mistakes" } }
-      ]
-    },
-    {
-      id: "d2", date: "2026-10-15", day: "Joi", label: "15 oct", when: "seara · ~2,5 h",
-      focus: "Restul lacunelor P1: servere web Python, indexuri, PostgreSQL.",
-      tasks: [
-        { id: "d2a", min: 10, text: "Încălzire: cardurile orale din cutiile 1–2.", go: { t: "oral", due: true } },
-        { id: "d2b", min: 25, text: "Fișa + diagrama „WSGI/ASGI” și grilele.", go: { t: "sheet", m: "asgi" } },
-        { id: "d2c", min: 25, text: "Fișa + grilele „Indexuri”.", go: { t: "sheet", m: "index" } },
-        { id: "d2d", min: 35, text: "Fișa + grilele „PostgreSQL”.", go: { t: "sheet", m: "postgres" } },
-        { id: "d2e", min: 20, text: "Oral: Gunicorn + Uvicorn, WHERE email lent, sold concurent, MVCC.", go: { t: "oral", ms: ["asgi", "index", "postgres"] } },
-        {
-          id: "d2f", min: 20, text: "Opțional, practic: 1M de rânduri în Postgres, EXPLAIN ANALYZE înainte și după index.",
-          code: R`docker run -d --name pg -e POSTGRES_PASSWORD=x postgres:17
-docker exec -it pg psql -U postgres
-CREATE TABLE users AS
-  SELECT g AS id, 'u' || g || '@ex.com' AS email
-  FROM generate_series(1, 1000000) g;
-EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'u777@ex.com';
-CREATE INDEX CONCURRENTLY users_email_idx ON users (email);
-EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'u777@ex.com';`
-        },
-        { id: "d2g", min: 10, text: "Repetă greșelile.", go: { t: "mistakes" } }
-      ]
-    },
-    {
-      id: "d3", date: "2026-10-16", day: "Vineri", label: "16 oct", when: "seara · ~2,5 h",
-      focus: "Inima stack-ului Onapsis: Python core, SQLAlchemy, Celery.",
-      tasks: [
-        { id: "d3a", min: 15, text: "Mix inteligent (15 grile, cântărite pe punctele slabe).", go: { t: "smart" } },
-        { id: "d3b", min: 25, text: "Fișa + grilele „Python de senior”.", go: { t: "sheet", m: "python" } },
-        { id: "d3c", min: 35, text: "Fișa + diagrama „SQLAlchemy” și grilele.", go: { t: "sheet", m: "sqlalchemy" } },
-        { id: "d3d", min: 10, text: "Grilele „Django ORM → SQLAlchemy” (puntea din experiența ta).", go: { t: "mcq", m: "django" } },
-        { id: "d3e", min: 30, text: "Fișa + diagrama „Celery” și grilele.", go: { t: "sheet", m: "celery" } },
-        { id: "d3f", min: 20, text: "Oral: Session, N+1, task idempotent, de ce nu în request.", go: { t: "oral", ms: ["sqlalchemy", "celery", "python"] } },
-        { id: "d3g", min: 20, text: "Kata 3: decorator retry cu backoff și jitter.", go: { t: "kata", id: "k3" } }
-      ]
-    },
-    {
-      id: "d4", date: "2026-10-17", day: "Sâmbătă", label: "17 oct", when: "~5–6 h, în trei blocuri",
-      focus: "Restul stack-ului, securitate și live coding.",
-      tasks: [
-        { id: "d4a", min: 25, text: "Bloc 1 · Fișa + diagrama „RabbitMQ” și grilele.", go: { t: "sheet", m: "rabbitmq" } },
-        { id: "d4b", min: 25, text: "Bloc 1 · Fișa + grilele „Redis”.", go: { t: "sheet", m: "redis" } },
-        { id: "d4c", min: 30, text: "Bloc 1 · Fișa + grilele „Pytest”.", go: { t: "sheet", m: "pytest" } },
-        { id: "d4d", min: 20, text: "Bloc 1 · Oral: RabbitMQ vs Redis, Redis în detecție, testarea unui API extern, fixtures.", go: { t: "oral", ms: ["rabbitmq", "redis", "pytest"] } },
-        { id: "d4e", min: 30, text: "Bloc 2 · Fișa + grilele „Securitate”.", go: { t: "sheet", m: "security" } },
-        { id: "d4f", min: 20, text: "Bloc 2 · Fișa + grilele „Docker”.", go: { t: "sheet", m: "docker" } },
-        { id: "d4f2", min: 15, text: "Bloc 2 · Fișa + grilele „Linux” (fișa postului cere lucru în medii Linux).", go: { t: "sheet", m: "linux" } },
-        { id: "d4g", min: 15, text: "Bloc 2 · „SQL vs NoSQL”: exersează formulările precise.", go: { t: "sheet", m: "dbmodels" } },
-        { id: "d4h", min: 20, text: "Bloc 2 · Oral: securitate, Keycloak, Dockerfile, ce stochezi unde.", go: { t: "oral", ms: ["security", "docker", "dbmodels", "linux"] } },
-        { id: "d4i", min: 25, text: "Bloc 3 · Kata 1: detecție brute force (fereastră glisantă).", go: { t: "kata", id: "k1" } },
-        { id: "d4j", min: 20, text: "Bloc 3 · Kata 4: LRU cache.", go: { t: "kata", id: "k4" } },
-        { id: "d4k", min: 20, text: "Bloc 3 · Kata 6 și 9: top IP-uri, intervale.", go: { t: "kata", id: "k6" } },
-        { id: "d4l", min: 15, text: "Repetă greșelile zilei.", go: { t: "mistakes" } }
-      ]
-    },
-    {
-      id: "d5", date: "2026-10-18", day: "Duminică", label: "18 oct", when: "~5 h",
-      focus: "Integrare: system design, domeniul Onapsis, povești, simulare.",
-      tasks: [
-        { id: "d5a", min: 15, text: "Fișa + grilele „AWS”.", go: { t: "sheet", m: "aws" } },
-        { id: "d5b", min: 15, text: "Fișa + grilele „GraphQL”.", go: { t: "sheet", m: "graphql" } },
-        { id: "d5c", min: 15, text: "Fișa + grilele „Observabilitate & GitLab CI”.", go: { t: "sheet", m: "ops" } },
-        { id: "d5d", min: 45, text: "System design: parcurge pagina, desenează pipeline-ul pe hârtie și explică-l cu voce tare în 10 minute.", go: { t: "study", tab: "design" } },
-        { id: "d5e", min: 25, text: "Grilele „System design” și „Performanță”.", go: { t: "mcq", ms: ["design", "perf"] } },
-        { id: "d5f", min: 20, text: "Fișa + grilele „Domeniu Onapsis”.", go: { t: "sheet", m: "domain" } },
-        { id: "d5g", min: 30, text: "Comportamental: citește pitch-ul și poveștile STAR, adaptează-le cu detaliile tale reale.", go: { t: "study", tab: "behav" } },
-        { id: "d5g2", min: 15, text: "Cardurile orale „Comportamental”, cu voce tare. Înregistrează-te pe telefon și ascultă.", go: { t: "oral", ms: ["behav", "domain"] } },
-        { id: "d5h", min: 30, text: "Simulare de interviu: 25 de grile în 25 de minute, fără feedback până la final.", go: { t: "mock" } },
-        { id: "d5i", min: 25, text: "Repetă greșelile + cardurile orale slabe.", go: { t: "mistakes" } },
-        { id: "d5j", min: 20, text: "Kata 5: token bucket (sau kata 2: deduplicare de alerte).", go: { t: "kata", id: "k5" } },
-        { id: "d5k", min: 15, text: "Bonus, doar dacă pregătirea trece de 80%: React/TS.", go: { t: "sheet", m: "frontend" } },
-        { id: "d5l", min: 5, text: "Pregătește logistica pentru luni și culcă-te devreme.", go: { t: "study", tab: "tactics" } }
-      ]
-    },
-    {
-      id: "d6", date: "2026-10-19", day: "Luni", label: "19 oct", when: "dimineața · 30–40 min",
-      focus: "Încălzire. Nimic nou.",
-      tasks: [
-        { id: "d6a", min: 15, text: "Cardurile orale din cutiile 1–2.", go: { t: "oral", due: true } },
-        { id: "d6b", min: 10, text: "Recitește fișele P1, mai ales „De evitat”.", go: { t: "study", tab: "sheets" } },
-        { id: "d6c", min: 10, text: "Pitch-ul și întrebările pentru ei, cu voce tare.", go: { t: "study", tab: "behav" } },
-        { id: "d6d", min: 5, text: "Logistică: link sau adresă, laptop încărcat, editor deschis, apă, hârtie și pix.", go: { t: "study", tab: "tactics" } }
-      ]
-    }
-  ];
+  // ---------- interviu & plan ----------
+  // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
+  // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
+  P.cfg = { interview: "2026-10-21", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
+  // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "kata" (id) | "study" (tab) }
+  P.planTpl = {
+    // dimineața interviului: încălzire, nimic nou
+    morning: [
+      { id: "m-due", min: 15, text: "Cardurile și grilele scadente, cu voce tare.", go: { t: "due" } },
+      { id: "m-intv", min: 10, text: "Formulările pentru interviu (P1), cu voce tare.", go: { t: "study", tab: "intv" } },
+      { id: "m-behav", min: 10, text: "Pitch-ul și întrebările pentru ei, cu voce tare.", go: { t: "study", tab: "behav" } },
+      { id: "m-log", min: 5, text: "Logistică: link sau adresă, laptop încărcat, editor deschis, apă, hârtie și pix.", go: { t: "study", tab: "tactics" } }
+    ],
+    // ordinea în care intră exercițiile de live coding în plan (câte unul pe seară)
+    katas: ["k1", "k3", "k8", "k4", "k5", "k2", "k6", "k9", "k7"]
+  };
 
   // ---------- study pages ----------
   P.extra.tactics = [
@@ -543,7 +459,7 @@ EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'u777@ex.com';`
   P.extra.behav = {
     pitch: {
       h: "Pitch: „Spune-mi câte ceva despre tine” (~90 s)",
-      note: "Prezent → trecut → de ce rolul ăsta. Adaptează-l cu vocea ta și verifică statusul lucrării înainte de luni.",
+      note: "Prezent → trecut → de ce rolul ăsta. Adaptează-l cu vocea ta și verifică statusul lucrării înainte de interviu.",
       text: "Sunt full-stack engineer, cu peste trei ani de experiență, și lucrez la un institut de tehnologii avansate pe sisteme de producție, nu pe prototipuri de cercetare. Proiectul meu principal e o platformă de video analytics: backend în Django REST Framework, Elasticsearch pentru căutare și agregări, Keycloak pentru controlul accesului pe roluri, frontend în React, totul pe Docker Swarm. Am dus de la cap la coadă mai multe bucăți: un dashboard builder care transformă configurații salvate în agregări Elasticsearch, integrarea cu identity provider-ul unui sistem extern de management video și readucerea clusterului Swarm după ce își pierduse quorum-ul. Pe cont propriu am construit o platformă de management pentru studiouri de sport, cu Django, Celery și Redis. Am un master în inteligență artificială și o lucrare, ca unic autor, despre tracking cu SAM2. La Onapsis mă atrage combinația dintre backend Python la volum mare și securitate: să construiesc detecție pentru sisteme fără de care companiile nu pot funcționa."
     },
     map: [

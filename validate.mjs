@@ -47,20 +47,23 @@ for (const m of P.modules) if (!P.sheets[m.id]) errors.push("no sheet for " + m.
 for (const [k, s] of Object.entries(P.sheets)) if (s.diagram && !P.diagrams[s.diagram]) errors.push("missing diagram " + s.diagram);
 const kataIds = new Set(P.katas.map(k => k.id));
 const taskIds = new Set();
-for (const d of P.plan) for (const t of d.tasks) {
+if (!P.cfg || !/^\d{4}-\d{2}-\d{2}$/.test(P.cfg.interview) || !(P.cfg.hours > 0)) errors.push("cfg: interview date (YYYY-MM-DD) and hours are required");
+for (const t of (P.planTpl && P.planTpl.morning) || []) {
   if (taskIds.has(t.id)) errors.push("duplicate task " + t.id); taskIds.add(t.id);
   const g = t.go; if (!g) continue;
   if ((g.t === "mcq" || g.t === "sheet") && g.m && !mods.has(g.m)) errors.push(t.id + ": bad module " + g.m);
   for (const m of g.ms || []) if (!mods.has(m)) errors.push(t.id + ": bad module " + m);
   if (g.t === "kata" && !kataIds.has(g.id)) errors.push(t.id + ": bad kata " + g.id);
 }
+for (const k of (P.planTpl && P.planTpl.katas) || []) if (!kataIds.has(k)) errors.push("planTpl.katas: bad kata " + k);
+if (new Set(P.planTpl.katas).size !== P.katas.length) errors.push("planTpl.katas must list every kata once");
 
 const per = {};
 for (const m of P.modules) per[m.id] = { mcq: 0, oral: 0 };
 for (const q of P.mcq) per[q.m].mcq++;
 for (const c of P.oral) per[c.m].oral++;
 console.table(per);
-console.log("MCQ:", P.mcq.length, "oral:", P.oral.length, "katas:", P.katas.length, "plan tasks:", taskIds.size, "minutes:", P.plan.flatMap(d => d.tasks).reduce((s, t) => s + (t.min || 0), 0));
+console.log("MCQ:", P.mcq.length, "oral:", P.oral.length, "katas:", P.katas.length, "interview:", P.cfg.interview, "| morning tasks:", taskIds.size);
 // position of correct answers in source (all 0 is expected: the app shuffles)
 // new-format explanations + glossary
 const ex = buildExplanations(root, P);

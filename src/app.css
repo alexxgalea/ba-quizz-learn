@@ -463,3 +463,19 @@ input.keyin { min-height: 44px; font-family: var(--font-mono); font-size: 16px; 
 .ai-l ul { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .ai-l b { font-size: 14px; color: var(--warn); }
 .ai-l.bad b { color: var(--bad); }
+
+/* ---- de repetat acum (plan), întrebări deschise, formulări, lacune, setări ---- */
+.card.due { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); }
+.card.due .spread { align-items: center; gap: 10px; }
+.card.due b { font-family: var(--font-mono); color: var(--accent); }
+.row.grade { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.row.grade .btn { width: 100%; padding-inline: 6px; }
+.sheet-b.intv { gap: 10px; }
+.intv-r { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+.intv-r.weak { border-left: 3px solid var(--warn); }
+.intv-r .rt { margin: 0; font-size: 15px; line-height: 1.5; }
+.weak-r { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.weak-r:last-of-type { border-bottom: 0; }
+label.small { display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 0; }
+select.keyin { appearance: auto; min-height: 44px; font-family: var(--font-mono); font-size: 16px; }
+input.keyin[type="date"] { min-width: 0; }

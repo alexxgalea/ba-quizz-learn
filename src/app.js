@@ -13,8 +13,7 @@
   MODS.forEach(m => { MCQ_BY_M[m.id] = []; ORAL_BY_M[m.id] = []; });
   MCQ.forEach(q => MCQ_BY_M[q.m].push(q));
   ORAL.forEach(c => ORAL_BY_M[c.m].push(c));
-  const TASKS = P.plan.flatMap(d => d.tasks.map(t => Object.assign({ day: d.id }, t)));
-  const TBY = Object.fromEntries(TASKS.map(t => [t.id, t]));
+  // Întrebările deschise: grilele cu „Verificare” în explicație (răspuns liber, notat de tine).
   // Nivel (1 bază, 2 practic, 3 avansat) și context pentru fiecare grilă: din data_ctx.js sau direct pe întrebare.
   const LVL = { 1: "bază", 2: "practic", 3: "avansat" };
   MCQ.forEach(q => { const c = (P.qctx || {})[q.id]; if (c) { q.lvl = q.lvl || c[0]; q.ctx = q.ctx || c[1]; } q.lvl = q.lvl || 2; });
@@ -23,6 +22,7 @@
   const EXPL = P.expl || {};
   MCQ.forEach(q => { const x = EXPL[q.id]; if (x && x.ctx) q.ctx = x.ctx; });
   const GLOSS = (P.gloss || []).slice().sort((a, b) => a.t.localeCompare(b.t, "ro"));
+  const OPEN = MCQ.filter(q => EXPL[q.id] && EXPL[q.id].ver && EXPL[q.id].verR && MOD[q.m].p < 4);
   const GBY = Object.fromEntries(GLOSS.map(g => [g.id, g]));
   const slug = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   // Formele în care apare fiecare termen; varianta cu majusculă (început de propoziție) se adaugă automat.
@@ -43,7 +43,10 @@
   const PW = { 1: 3, 2: 2, 3: 1, 4: 0.3 };
   const PNAME = { 1: "P1 · critic", 2: "P2 · important", 3: "P3 · util", 4: "Bonus" };
   const MB = [0, 0, 0.5, 0.75, 0.9, 1];          // stăpânire pe cutie Leitner
-  const INTERVIEW = new Date(2026, 9, 19);       // luni, 19 octombrie 2026 (ora locală)
+  // Scadența pe cutie: 1 → după 20 min (aceeași seară), 2 → după 4 h, 3 → a doua zi, 4 → peste două zile, 5 → gata.
+  const GAP = [20 * 60000, 20 * 60000, 4 * 3600000];
+  const DAYS_RO = ["duminică", "luni", "marți", "miercuri", "joi", "vineri", "sâmbătă"];
+  const MONTHS_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"];
   const HMAX = 80;
   const LS_KEY = "onapsis-prep-v1";
   const DS_KEY = "onapsis-deepseek-v1";          // cheia API, separată de starea S: nu se sincronizează și nu se exportă
@@ -130,35 +133,45 @@
   }
 
   // ---------- state ----------
-  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, k: {}, p: {}, h: [] }; }
+  // q grile, o carduri orale, x întrebări deschise, k exerciții, p sarcini bifate, h istoric, c setări (data interviului, ore pe seară)
+  const MAPS = ["q", "o", "x", "k", "p"];
+  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, p: {}, h: [] }; }
+  const validCfg = c => !!(c && typeof c === "object" && /^\d{4}-\d{2}-\d{2}$/.test(c.d || ""));
   function normalize(x) {
     const s = emptyState();
     if (!x || typeof x !== "object") return s;
     s.r = +x.r || 0;
-    for (const k of ["q", "o", "k", "p"]) {
+    for (const k of MAPS) {
       const src = x[k];
       if (src && typeof src === "object" && !Array.isArray(src)) for (const id of Object.keys(src)) { const e = src[id]; if (e && typeof e === "object") s[k][id] = Object.assign({}, e); }
     }
     if (Array.isArray(x.h)) s.h = x.h.filter(e => e && e.id && e.ts).map(e => Object.assign({}, e)).slice(-HMAX);
+    if (validCfg(x.c)) s.c = { d: x.c.d, h: +x.c.h > 0 ? +x.c.h : P.cfg.hours, t: +x.c.t || 0 };
     return s;
   }
   function prune(s) {
     if (!s.r) return s;
-    for (const k of ["q", "o", "k", "p"]) for (const id of Object.keys(s[k])) if ((s[k][id].t || 0) < s.r) delete s[k][id];
+    for (const k of MAPS) for (const id of Object.keys(s[k])) if ((s[k][id].t || 0) < s.r) delete s[k][id];
     s.h = s.h.filter(e => e.ts >= s.r);
+    if (s.c && (s.c.t || 0) < s.r) delete s.c;
     return s;
   }
   function mergeState(local, remote) {
     const out = emptyState(); let ln = false, rn = false;
     out.r = Math.max(local.r || 0, remote.r || 0);
     if ((local.r || 0) > (remote.r || 0)) ln = true; else if ((remote.r || 0) > (local.r || 0)) rn = true;
-    for (const k of ["q", "o", "k", "p"]) {
-      const keys = new Set(Object.keys(local[k]).concat(Object.keys(remote[k])));
+    for (const k of MAPS) {
+      const keys = new Set(Object.keys(local[k] || {}).concat(Object.keys(remote[k] || {})));
       for (const id of keys) {
-        const a = local[k][id], b = remote[k][id];
+        const a = (local[k] || {})[id], b = (remote[k] || {})[id];
         const ta = a ? (a.t || 0) : -1, tb = b ? (b.t || 0) : -1;
         if (ta > tb) { out[k][id] = a; ln = true; } else { out[k][id] = b; if (tb > ta) rn = true; }
       }
+    }
+    const ca = validCfg(local.c) ? local.c : null, cb = validCfg(remote.c) ? remote.c : null;
+    if (ca || cb) {
+      const ta = ca ? (ca.t || 0) : -1, tb = cb ? (cb.t || 0) : -1;
+      if (ta > tb) { out.c = ca; ln = true; } else { out.c = cb; if (tb > ta) rn = true; }
     }
     const hm = new Map();
     remote.h.forEach(e => hm.set(e.id, e));
@@ -169,7 +182,7 @@
     prune(out);
     return { state: out, localNewer: ln, remoteNewer: rn };
   }
-  const hasData = s => s.h.length > 0 || ["q", "o", "k", "p"].some(k => Object.keys(s[k]).length > 0);
+  const hasData = s => s.h.length > 0 || !!s.c || MAPS.some(k => Object.keys(s[k]).length > 0);
 
   let S = emptyState();
   let lsOK = true;
@@ -178,7 +191,7 @@
     catch (e) { lsOK = false; return null; }
   }
   function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); lsOK = true; } catch (e) { lsOK = false; } }
-  function commit() { saveLocal(); Sync.push(); paintHeader(); }
+  function commit() { planCache = null; saveLocal(); Sync.push(); paintHeader(); }
 
   // ---------- sync (progres privat per utilizator, prin db) ----------
   const DEAD = ["invalid_argument", "not_granted", "revoked", "capability_disabled", "capability_removed", "transform_error"];
@@ -261,7 +274,25 @@
     e.t = now();
     S.o[id] = e;
   }
+  // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
+  function updX(id, g) {
+    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[id]);
+    e.n++;
+    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    e.l = g; e.t = now();
+    S.x[id] = e;
+  }
   const mastery = e => (e ? MB[e.b] || 0 : 0);
+  // Scadența unui item: cutiile 1–2 după un interval, 3–4 după una sau două zile calendaristice, 5 niciodată.
+  function dueAt(e) {
+    if (!e || !e.t) return 0;
+    const b = e.b || 0;
+    if (b >= 5) return Infinity;
+    if (b <= 2) return e.t + GAP[b];
+    const d = new Date(e.t); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (b === 3 ? 1 : 2)).getTime();
+  }
+  const isDue = e => !!e && now() >= dueAt(e);
+  const dueF = e => (!e || isDue(e) ? 1 : 0.15);
   function modStats(mid) {
     let sum = 0, n = 0, seen = 0, ans = 0, cor = 0, qn = 0, qseen = 0;
     for (const q of MCQ_BY_M[mid]) { const e = S.q[q.id]; sum += mastery(e); n++; qn++; if (e) { seen++; qseen++; ans += e.n; cor += e.c; } }
@@ -279,8 +310,9 @@
   }
   const needW = e => (!e ? 3 : e.b <= 1 ? 4 : ([0, 0, 2.4, 1.6, 1, 0.5][e.b] || 0.5));
   const recentF = e => (e && now() - (e.t || 0) < 20 * 60000 ? 0.2 : 1);
-  const wQ = q => PW[MOD[q.m].p] * needW(S.q[q.id]) * recentF(S.q[q.id]);
-  const wO = c => PW[MOD[c.m].p] * needW(S.o[c.id]) * recentF(S.o[c.id]);
+  const wQ = q => PW[MOD[q.m].p] * needW(S.q[q.id]) * recentF(S.q[q.id]) * dueF(S.q[q.id]);
+  const wO = c => PW[MOD[c.m].p] * needW(S.o[c.id]) * recentF(S.o[c.id]) * dueF(S.o[c.id]);
+  const wX = q => PW[MOD[q.m].p] * needW(S.x[q.id]) * recentF(S.x[q.id]) * dueF(S.x[q.id]);
   const rankBox = e => (!e ? 0.5 : e.b <= 1 ? 0 : e.b);
   const sortWeak = (items, st) => shuffle(items).sort((a, b) => rankBox(st[a.id]) - rankBox(st[b.id]));
 
@@ -295,10 +327,26 @@
     if (known(1) < 0.5) return 1;
     return known(2) < 0.5 ? 2 : 3;
   }
+  // Ce e scadent acum: grile, carduri orale, întrebări deschise (cele mai slabe și cele mai vechi primele).
+  const byDue = st => (a, b) => rankBox(st[a.id]) - rankBox(st[b.id]) || (st[a.id].t || 0) - (st[b.id].t || 0);
+  const dueQ = () => MCQ.filter(q => MOD[q.m].p < 4 && isDue(S.q[q.id])).sort(byDue(S.q));
+  const dueO = () => ORAL.filter(c => MOD[c.m].p < 4 && isDue(S.o[c.id])).sort(byDue(S.o));
+  const dueX = () => OPEN.filter(q => isDue(S.x[q.id])).sort(byDue(S.x));
+  function pickDue(n) { return dueQ().slice(0, n); }
+  // Mix inteligent: întâi ce e scadent (cel mult 60%), apoi grile pe nivelul tău, mai multe din modulele slabe și din P1.
   function pickSmart(n) {
     const ul = {}; MODS.forEach(m => { ul[m.id] = unlockedLvl(m.id); });
     const lvlF = q => { const d = q.lvl - ul[q.m]; return d <= 0 ? 1 : d === 1 ? 0.12 : 0.03; };
-    return wsample(MCQ.filter(q => MOD[q.m].p < 4), q => wQ(q) * lvlF(q), n).sort((a, b) => a.lvl - b.lvl);
+    const due = pickDue(Math.floor(n * 0.6)), used = new Set(due.map(q => q.id));
+    const rest = wsample(MCQ.filter(q => MOD[q.m].p < 4 && !used.has(q.id)), q => wQ(q) * lvlF(q), n - due.length);
+    return due.concat(rest).sort((a, b) => a.lvl - b.lvl);
+  }
+  // Întrebări deschise: scadentele, apoi întrebări noi din modulele cu nevoie mare (opțional, doar din modulele ms).
+  function pickOpen(n, ms) {
+    const pool = ms && ms.length ? OPEN.filter(q => ms.indexOf(q.m) >= 0) : OPEN;
+    const due = pool.filter(q => isDue(S.x[q.id])).sort(byDue(S.x)).slice(0, n), used = new Set(due.map(q => q.id));
+    const fresh = wsample(pool.filter(q => !used.has(q.id)), q => wX(q) * (q.lvl === 3 ? 0.5 : 1) * (modNeed(MOD[q.m]) + 0.2), n - due.length);
+    return due.concat(fresh);
   }
   // Diagnostic ghidat: întâi câte o grilă de bază din fiecare modul, apoi încă una la modulele P1.
   // A doua e de nivel „practic” doar dacă prima a ieșit; altfel rămâne la bază (vezi adaptDiag).
@@ -339,21 +387,134 @@
     return shuffle(out.concat(wsample(rest, q => PW[MOD[q.m].p] * needW(S.q[q.id]), n - out.length)));
   }
 
-  // ---------- dates & plan ----------
+  // ---------- dates & plan (generat din setări și progres) ----------
+  const cfg = () => ({ d: (S.c && S.c.d) || P.cfg.interview, h: (S.c && S.c.h) || P.cfg.hours });
+  function parseIso(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(NaN); }
   function todayDate() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
-  function daysLeft() { return Math.round((INTERVIEW - todayDate()) / 86400000); }
+  function interviewDate() { const d = parseIso(cfg().d); return isNaN(d) ? parseIso(P.cfg.interview) : d; }
+  function daysLeft() { return Math.round((interviewDate() - todayDate()) / 86400000); }
   function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
-  function todayIdx() {
-    const iso = isoLocal(todayDate());
-    const i = P.plan.findIndex(d => d.date === iso);
-    if (i >= 0) return i;
-    return iso < P.plan[0].date ? 0 : P.plan.length - 1;
-  }
+  const dayName = d => DAYS_RO[d.getDay()];
+  const dayLabel = d => d.getDate() + " " + MONTHS_RO[d.getMonth()];
+  const hoursRo = h => String(h).replace(".", ",") + " h";
+  const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
   const isDone = id => !!(S.p[id] && S.p[id].d);
+
+  // Nevoia unui modul: prioritatea × cât mai e de învățat (stăpânire și acoperire mici → nevoie mare).
+  function modNeed(m) { const st = modStats(m.id); return PW[m.p] * (1 - 0.6 * st.mastery - 0.4 * st.coverage); }
+  // Cât durează fișa + grilele unui modul: grilele noi ~1,3 min, cele greșite ~0,8, cele știute ~0,3; fișa ~4 min.
+  function modMinutes(m) {
+    let min = 4;
+    for (const q of MCQ_BY_M[m.id]) { const e = S.q[q.id]; min += !e ? 1.3 : e.b <= 1 ? 0.8 : 0.3; }
+    return Math.max(10, Math.min(40, Math.round(min / 5) * 5));
+  }
+  // Modulele care intră în plan, în ordinea nevoii (fără bonus și fără „comportamental”, care are pagina lui).
+  function modQueue() {
+    return MODS.filter(m => m.p < 4 && MCQ_BY_M[m.id].length).map(m => ({ m, need: modNeed(m) })).filter(x => x.need > 0.3 * PW[x.m.p]).sort((a, b) => b.need - a.need).map(x => x.m);
+  }
+  function nextKata(used) {
+    const order = (P.planTpl.katas || []).concat(KATAS.map(k => k.id));
+    const by = st => order.find(id => KBY[id] && !used.has(id) && kataStatus(id) === st);
+    return by(undefined) || by("redo") || by("hint") || null;
+  }
+  // Minutele petrecute într-o zi, din istoricul sesiunilor (grile, orale, întrebări deschise).
+  function spentMin(iso) { let m = 0; for (const e of S.h) if (isoLocal(new Date(e.ts)) === iso) m += (e.dur || 0) / 60; return Math.round(m); }
+  // Sarcinile planului, după cheie. Cheia stă în id-ul sarcinii (g<dată>-<cheie>), ca bifarea să rămână stabilă.
+  function mkTask(dayId, key, c) {
+    let min = 0, text = "", go = null;
+    if (key === "diag") { min = 25; text = "Test diagnostic ghidat (30 de grile): harta de pornire. Nu ghici, apasă „Nu știu încă”."; go = { t: "diag" }; }
+    else if (key === "due") {
+      const n = c.today ? c.dq + c.dO + c.dX : 0;
+      min = c.today ? (n ? Math.min(25, Math.max(10, Math.round(n * 0.8))) : 10) : 15;
+      text = !c.today ? "Scadențe: grilele, cardurile și întrebările deschise care revin azi." : n ? "Scadențe: " + c.dq + " grile, " + c.dO + " carduri orale, " + c.dX + " întrebări deschise." : "Scadențe: nimic încă. Revin pe măsură ce răspunzi.";
+      go = { t: "due" };
+    }
+    else if (key.indexOf("sheet-") === 0) { const m = MOD[key.slice(6)]; if (!m) return null; min = modMinutes(m); text = "Fișa + grilele „" + m.short + "”" + (P.sheets[m.id] && P.sheets[m.id].diagram ? " (cu diagramă)" : "") + "."; go = { t: "sheet", m: m.id }; }
+    else if (key === "oral") {
+      const ms = (c.mods || []).filter(m => ORAL_BY_M[m.id].length);
+      min = 15; go = ms.length ? { t: "oral", ms: ms.map(m => m.id) } : { t: "oral", due: true };
+      text = "Oral, cu voce tare și cronometru: " + (ms.length ? ms.map(m => m.short).join(", ") : "cardurile scadente") + ".";
+    }
+    else if (key === "open") { min = 15; const ms = (c.mods || []).map(m => m.id); text = ms.length ? "Întrebări deschise din modulele de azi, cu voce tare." : "8 întrebări deschise, cu voce tare: răspunzi, dezvălui, te notezi."; go = ms.length ? { t: "open", ms } : { t: "open" }; }
+    else if (key === "smart") { min = 15; text = "Mix inteligent: 15 grile pe nivelul tău."; go = { t: "smart" }; }
+    else if (key === "mock") { min = 25; text = "Simulare de interviu: 25 de grile în 25 de minute, fără context."; go = { t: "mock" }; }
+    else if (key.indexOf("kata-") === 0) { const k = KBY[key.slice(5)]; if (!k) return null; min = 20; text = "Kata " + k.n + ": " + k.title + " (20 min, cu voce tare)."; go = { t: "kata", id: k.id }; }
+    else if (key === "mist") { min = 10; text = c.today && c.mist ? "Repetă cele " + c.mist + " greșeli de azi." : "Repetă greșelile de azi."; go = { t: "mistakes" }; }
+    else if (key === "intv") { min = 15; text = "Formulările pentru interviu (P1), cu voce tare. Nimic nou după asta."; go = { t: "study", tab: "intv" }; }
+    else if (key === "log") { min = 5; text = "Pregătește logistica pentru mâine și culcă-te devreme."; go = { t: "study", tab: "tactics" }; }
+    else return null;
+    return { id: dayId + "-" + key, key, min, text, go };
+  }
+  const KEY_ORDER = ["diag", "due", "sheet-", "oral", "open", "smart", "mock", "kata-", "mist", "intv", "log"];
+  const keyRank = k => { const i = KEY_ORDER.findIndex(o => k === o || (o.slice(-1) === "-" && k.indexOf(o) === 0)); return i < 0 ? 99 : i; };
+  // Rețeta unei seri: scadențe → fișă + grile pe modulele cu nevoie mare → oral pe aceleași module → kata → greșeli.
+  // În ultima seară: fără modul nou în final, formulările P1 cu voce tare și logistică.
+  // Pentru azi, sarcinile deja bifate rămân în listă, iar restul se calculează din timpul rămas (orele pe seară minus sesiunile făcute).
+  function genPlan() {
+    const t0 = todayDate(), iv = interviewDate(), left = daysLeft(), h = cfg().h;
+    const days = [];
+    if (left < 0) return days;
+    const queue = modQueue(), usedK = new Set();
+    const hasDiag = S.h.some(e => e.mode === "diag");
+    for (let i = 0; i < left; i++) {
+      const date = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + i), iso = isoLocal(date), id = "g" + iso, last = i === left - 1, today = i === 0;
+      const c = { today, mods: [], dq: today ? dueQ().length : 0, dO: today ? dueO().length : 0, dX: today ? dueX().length : 0, mist: today ? pickMistakes().length : 0 };
+      const total = Math.round(h * 60), tasks = [], has = new Set();
+      const T = key => { if (has.has(key)) return null; const t = mkTask(id, key, c); if (t) { tasks.push(t); has.add(key); } return t; };
+      if (today) {
+        // sarcinile bifate azi rămân; modulele și exercițiile lor nu se mai propun
+        const done = Object.keys(S.p).filter(k => k.indexOf(id + "-") === 0 && S.p[k].d).map(k => k.slice(id.length + 1)).sort((a, b) => keyRank(a) - keyRank(b));
+        for (const key of done) {
+          if (key.indexOf("sheet-") === 0) { const m = MOD[key.slice(6)]; if (m) { c.mods.push(m); const qi = queue.indexOf(m); if (qi >= 0) queue.splice(qi, 1); } }
+          if (key.indexOf("kata-") === 0) usedK.add(key.slice(5));
+        }
+        for (const key of done) T(key);
+      }
+      let budget = total - (today ? spentMin(iso) : 0);
+      if (today && !hasDiag && readiness().cover < 0.2) { const t = T("diag"); if (t) budget -= t.min; }
+      { const t = T("due"); if (t) budget -= t.min; }
+      const fixed = (last ? 20 : 0) + 10 + 15 + 20;                 // formulări + greșeli + oral + kata
+      let modBudget = budget - fixed;
+      const fresh = [];
+      while (queue.length && modBudget >= 10) {
+        const m = queue[0], est = modMinutes(m);
+        if (est > modBudget + 10 && (fresh.length || c.mods.length)) break;
+        const min = Math.min(est, Math.max(10, modBudget));
+        queue.shift(); fresh.push(m); modBudget -= min;
+        const t = T("sheet-" + m.id); if (t) t.min = min;
+      }
+      c.mods = c.mods.concat(fresh);
+      if (c.mods.length) { if (c.mods.some(m => ORAL_BY_M[m.id].length)) T("oral"); else T("open"); }
+      else { T("smart"); T("open"); if (modBudget >= 25) T("mock"); }
+      const k = nextKata(usedK);
+      if (k && modBudget > -10) { usedK.add(k); T("kata-" + k); }
+      T("mist");
+      if (last) { T("intv"); T("log"); }
+      tasks.sort((a, b) => keyRank(a.key) - keyRank(b.key));
+      const spent = tasks.reduce((a, t) => a + t.min, 0) + (today ? spentMin(iso) : 0);
+      days.push({ id, date: iso, day: cap1(dayName(date)), label: dayLabel(date), when: (today ? "azi, seara" : "seara") + " · ~" + hoursRo(Math.round(spent / 30) / 2),
+        focus: c.mods.length ? (last ? "Ultimul tur: " : "Fișă + grile + oral: ") + c.mods.map(m => m.short).join(", ") + "." + (last ? " Seara se încheie cu formulările, nu cu lucruri noi." : "") : "Totul e acoperit: repetiție, întrebări deschise și simulare.",
+        tasks });
+    }
+    const iso = isoLocal(iv);
+    days.push({ id: "g" + iso, date: iso, day: cap1(dayName(iv)), label: dayLabel(iv), when: "dimineața · 30–40 min", focus: "Încălzire. Nimic nou.", tasks: P.planTpl.morning.map(t => Object.assign({}, t, { id: "g" + iso + "-" + t.id })) });
+    return days;
+  }
+  let planCache = null;
+  function plan() { if (!planCache) planCache = genPlan(); return planCache; }
+  function taskById(id) { for (const d of plan()) for (const t of d.tasks) if (t.id === id) return t; return null; }
+  function todayIdx() {
+    const iso = isoLocal(todayDate()), days = plan();
+    const i = days.findIndex(d => d.date === iso);
+    return i >= 0 ? i : 0;
+  }
   function nextTask() {
-    const ti = todayIdx();
-    const order = P.plan.slice(ti).concat(P.plan.slice(0, ti));
-    for (const d of order) for (const t of d.tasks) if (!isDone(t.id)) return { d, t };
+    const days = plan(), today = isoLocal(todayDate());
+    for (const d of days) for (const t of d.tasks) {
+      if (isDone(t.id)) continue;
+      if (t.key === "due" && d.date === today && !(dueQ().length + dueO().length + dueX().length)) continue;   // nimic scadent încă: treci mai departe
+      return { d, t };
+    }
     return null;
   }
 
@@ -379,8 +540,9 @@
     return "Interviul a trecut";
   }
   function paintHeader() {
-    const r = readiness();
+    const r = readiness(), iv = interviewDate();
     const t = $("#hdr-t"); if (t) t.textContent = headLabel(daysLeft());
+    const k = $("#hdr-k"); if (k) k.textContent = P.cfg.company + " · " + dayName(iv).slice(0, 3) + " " + dayLabel(iv);
     const rg = $("#ring"); if (rg) rg.innerHTML = ringSvg(r.ready);
     const rv = $("#ring-v"); if (rv) rv.textContent = pc(r.ready) + "%";
     paintStatus();
@@ -396,10 +558,11 @@
   function render() {
     const main = $("#main");
     let h = "";
+    planCache = null;
     try {
       if (ui.tab === "plan") h = vPlan();
       else if (ui.tab === "quiz") h = ui.run && ui.run.kind === "mcq" ? vMcqRun() : ui.result && ui.result.kind === "mcq" ? vMcqResult() : vQuizHome();
-      else if (ui.tab === "oral") h = ui.run && ui.run.kind === "oral" ? vOralRun() : ui.result && ui.result.kind === "oral" ? vOralResult() : vOralHome();
+      else if (ui.tab === "oral") h = ui.run && ui.run.kind === "oral" ? vOralRun() : ui.run && ui.run.kind === "open" ? vOpenRun() : ui.result && ui.result.kind === "oral" ? vOralResult() : ui.result && ui.result.kind === "open" ? vOpenResult() : vOralHome();
       else if (ui.tab === "study") h = vStudy();
       else h = vProgress();
     } catch (err) {
@@ -422,30 +585,38 @@
 
   // ---------- views: plan ----------
   function vPlan() {
-    const d = daysLeft(), r = readiness(), ti = todayIdx();
-    const doneN = TASKS.filter(t => isDone(t.id)).length;
-    const totalMin = TASKS.reduce((s, t) => s + (t.min || 0), 0);
+    const d = daysLeft(), r = readiness(), iv = interviewDate(), days = plan(), ti = todayIdx();
+    const tasks = days.flatMap(x => x.tasks), doneN = tasks.filter(t => isDone(t.id)).length;
+    const totalMin = tasks.reduce((a, t) => a + (t.min || 0), 0);
     const big = d > 0 ? "T−" + d : d === 0 ? "Azi" : "Gata";
     const small = d > 1 ? "zile până la interviu" : d === 1 ? "mâine e interviul" : d === 0 ? "succes!" : "interviul a trecut";
-    let h = '<section class="card hero"><div class="stack-s"><h1>Interviul tehnic Onapsis</h1><p class="muted small">Software Engineer – Python · Onapsis Defend · luni, 19 octombrie</p></div><div class="tminus">' + big + "<small>" + small + "</small></div></section>";
+    let h = '<section class="card hero"><div class="stack-s"><h1>Interviul tehnic ' + esc(P.cfg.company) + '</h1><p class="muted small">' + esc(P.cfg.role) + " · " + esc(dayName(iv) + ", " + dayLabel(iv)) + '</p></div><div class="tminus">' + big + "<small>" + small + "</small></div></section>";
     h += '<section class="card kpis">' +
       kpi(pc(r.ready) + "%", "pregătire (stăpânire ponderată)") +
       kpi(pc(r.cover) + "%", "acoperire (întrebări văzute)") +
-      kpi(doneN + "/" + TASKS.length, "sarcini din plan bifate") +
+      kpi(doneN + "/" + tasks.length, "sarcini din plan bifate") +
       kpi(r.ans ? pc(r.cor / r.ans) + "%" : "–", r.ans ? "corecte din " + r.ans + " răspunsuri" : "încă niciun răspuns") + "</section>";
+    if (d < 0) {
+      h += '<section class="card stack-s"><h2>Interviul a trecut</h2><p class="small">Dacă ai altul, setează data și orele în Progres și planul se reface singur.</p><button class="btn primary" data-a="tab" data-tab="progress">Setează data</button></section>';
+      return h;
+    }
+    const dq = dueQ().length, dO = dueO().length, dX = dueX().length;
     const nx = nextTask();
     if (nx) {
-      h += '<section class="card next"><div class="stack-s"><div class="eyebrow">Următorul pas · ' + esc(nx.d.day) + "</div><div>" + fmt(nx.t.text) + ' <span class="xs muted mono">' + nx.t.min + " min</span></div></div>" +
+      h += '<section class="card next"><div class="stack-s"><div class="eyebrow">Următorul pas · ' + esc(nx.d.day) + " " + esc(nx.d.label) + "</div><div>" + fmt(nx.t.text) + ' <span class="xs muted mono">' + nx.t.min + " min</span></div></div>" +
         (nx.t.go ? '<button class="btn primary" data-a="go" data-id="' + nx.t.id + '">Start</button>' : '<button class="btn" data-a="plan-toggle" data-id="' + nx.t.id + '">Bifează</button>') + "</section>";
     }
-    h += '<div class="sec-h"><h2>Planul pe zile</h2><span class="xs muted mono">~' + Math.round(totalMin / 60) + " h în total</span></div>";
-    P.plan.forEach((day, i) => {
+    h += '<section class="card due"><div class="spread"><div class="stack-s"><div class="eyebrow">De repetat acum</div><div class="small">' +
+      (dq + dO + dX ? '<b>' + dq + "</b> grile · <b>" + dO + "</b> carduri orale · <b>" + dX + "</b> întrebări deschise" : "Nimic scadent. Ce greșești sau marchezi „Nu știu încă” revine aici după 20 de minute; ce știi, a doua zi.") + "</div></div>" +
+      '<div class="row" style="flex:none">' + (dq ? '<button class="btn sm primary" data-a="mcq" data-mode="due">Grile</button>' : "") + (dO ? '<button class="btn sm" data-a="oral" data-f="due">Orale</button>' : "") + (dX ? '<button class="btn sm" data-a="open" data-f="due">Deschise</button>' : "") + "</div></div></section>";
+    h += '<div class="sec-h"><h2>Planul pe zile</h2><span class="xs muted mono">~' + Math.round(totalMin / 60) + " h · " + hoursRo(cfg().h) + "/seară</span></div>";
+    days.forEach((day, i) => {
       const dn = day.tasks.filter(t => isDone(t.id)).length;
       h += '<details class="day' + (i === ti ? " today" : "") + '" id="day-' + day.id + '"' + (i === ti ? " open" : "") + ">" +
         '<summary><span class="day-t">' + esc(day.day) + " " + esc(day.label) + '</span><span class="day-badge">' + dn + "/" + day.tasks.length + '</span><span class="day-s">' + esc(day.when) + "</span></summary>" +
         '<div class="day-body"><p class="focus">' + fmt(day.focus) + "</p>" + day.tasks.map(taskRow).join("") + "</div></details>";
     });
-    h += '<p class="note">Planul presupune ~2–2,5 h în serile de lucru și 5–6 h în weekend. Bifezi sarcinile tu; scorurile se calculează singure din răspunsuri.</p>';
+    h += '<p class="note">Planul se reface singur din progres: modulele intră în ordinea prioritate × cât mai ai de învățat, iar scadențele vin din cutiile Leitner. Bifezi sarcinile tu; data și orele pe seară le schimbi din Progres.</p>';
     return h;
   }
   function kpi(v, l) { return '<div class="kpi"><div class="v">' + v + '</div><div class="l">' + esc(l) + "</div></div>"; }
@@ -459,12 +630,13 @@
 
   // ---------- views: quiz ----------
   function vQuizHome() {
-    const r = readiness(), mist = pickMistakes().length, fresh = r.ans === 0;
+    const r = readiness(), mist = pickMistakes().length, due = dueQ().length, fresh = r.ans === 0;
     let h = '<div class="stack-s"><h1>Grile</h1><p class="muted small">' + MCQ.length + " de grile cu context și explicații, pe trei niveluri: bază, practic, avansat. Pornești de la bază și urci pe măsură ce le știi.</p></div>";
     h += '<div class="modes">' +
-      modeCard("diag", "Test diagnostic", "30 de grile: întâi baza din fiecare modul, apoi un pas mai departe. Nu ghici: apasă „Nu știu încă”.", "~25 min", fresh) +
-      modeCard("smart", "Mix inteligent", "15 grile pe nivelul tău, mai multe din modulele slabe și din P1.", "~10 min", !fresh) +
+      modeCard("due", "De repetat acum", due ? due + " grile scadente: greșite acum 20 de minute, știute ieri." : "Nimic scadent. Grilele revin după 20 min, 4 h, o zi sau două, după cutie.", due ? "~" + Math.max(1, Math.round(Math.min(due, 20) * 0.7)) + " min" : "–", due > 0) +
+      modeCard("smart", "Mix inteligent", "15 grile: întâi scadentele, apoi grile pe nivelul tău, mai multe din modulele slabe și din P1.", "~10 min", !fresh && !due) +
       modeCard("mistakes", "Greșelile mele", mist ? mist + " grile greșite la ultimul răspuns." : "Nimic de reluat încă.", mist ? "~" + Math.max(1, Math.round(mist * 0.7)) + " min" : "–", false) +
+      modeCard("diag", "Test diagnostic", "30 de grile: întâi baza din fiecare modul, apoi un pas mai departe. Nu ghici: apasă „Nu știu încă”.", "~25 min", fresh) +
       modeCard("mock", "Simulare de interviu", "25 de grile în 25 de minute, fără feedback până la final. Un singur răspuns per grilă contează.", "25 min", false, true) +
       "</div>";
     h += '<p class="xs muted">Contextul apare la grilele noi. După primul răspuns corect, grila revine fără context: ca s-o stăpânești complet, răspunde fără el.</p>';
@@ -495,6 +667,7 @@
     opt = opt || {};
     let qs = [], title = "", rounds = null;
     if (mode === "smart") { qs = pickSmart(15); title = "Mix inteligent"; }
+    else if (mode === "due") { qs = pickDue(20); title = "De repetat acum"; }
     else if (mode === "diag") { const d = pickDiag(); qs = d.map(x => x.q); rounds = d.map(x => x.round); title = "Test diagnostic"; }
     else if (mode === "mistakes") { qs = pickMistakes(); title = "Greșelile mele"; }
     else if (mode === "mock") { qs = pickMock(25); title = "Simulare de interviu"; }
@@ -505,7 +678,7 @@
       qs = [1, 2, 3].flatMap(l => sortWeak(pool.filter(q => q.lvl === l), S.q));
       title = ms.map(m => MOD[m] ? MOD[m].short : m).join(" + "); mode = "module";
     }
-    if (!qs.length) { toast(mode === "mistakes" ? "Nicio greșeală de reluat." : "Nu am găsit întrebări."); return; }
+    if (!qs.length) { toast(mode === "mistakes" ? "Nicio greșeală de reluat." : mode === "due" ? "Nicio grilă scadentă acum." : "Nu am găsit întrebări."); return; }
     ui.result = null;
     ui.run = { kind: "mcq", mode, title, items: qs.map((q, k) => mkItem(q, mode, rounds ? rounds[k] : 0)), i: 0, picks: {}, done: {}, assist: {}, t0: now(), deadline: mode === "mock" ? now() + 25 * 60000 : 0, confirmQuit: false };
     ui.tab = "quiz"; render(); window.scrollTo(0, 0);
@@ -665,6 +838,10 @@
     const mods = Object.keys(r.per).sort((a, b) => r.per[a].c / r.per[a].n - r.per[b].c / r.per[b].n);
     if (mods.length > 1) {
       h += '<section class="card stack"><h3>Pe module</h3><div class="brk">' + mods.map(mid => { const x = r.per[mid]; return '<div class="brk-r"><span>' + esc(MOD[mid].short) + '</span><span class="mono xs">' + x.c + "/" + x.n + "</span>" + bar(x.c / x.n) + "</div>"; }).join("") + "</div></section>";
+    }
+    if (r.mode === "due" || r.mode === "smart") {
+      const dO = dueO().length, dX = dueX().length;
+      if (dO || dX) h += '<section class="card stack-s"><h3>Mai e scadent</h3><div class="row">' + (dO ? '<button class="btn sm primary" data-a="oral" data-f="due">' + dO + " carduri orale</button>" : "") + (dX ? '<button class="btn sm" data-a="open" data-f="due">' + dX + " întrebări deschise</button>" : "") + "</div></section>";
     }
     if (r.wrong.length) {
       h += '<div class="sec-h"><h2>De revăzut</h2><span class="xs muted mono">' + r.wrong.length + "</span></div>";
@@ -826,12 +1003,13 @@
   function vOralHome() {
     const counts = [0, 0, 0, 0, 0, 0];
     ORAL.forEach(c => { counts[boxOf(c.id)]++; });
-    const due = ORAL.filter(c => MOD[c.m].p < 4 && boxOf(c.id) <= 2).length;
+    const due = dueO().length, dX = dueX().length, xSeen = Object.keys(S.x).length;
     let h = '<div class="stack-s"><h1>Răspunsuri cu voce tare</h1><p class="muted small">Regula din documentul tău: dacă nu poți răspunde în 3–4 propoziții, cu voce tare, mai ai de lucru. Spui răspunsul, apoi bifezi ce ai acoperit. Cardul urcă o cutie la cel puțin 80% și coboară în cutia 1 sub 50%.</p></div>';
     h += '<div class="boxes" style="grid-template-columns:repeat(6,1fr)">' + ["noi", "c. 1", "c. 2", "c. 3", "c. 4", "c. 5"].map((l, i) => '<div><div class="v">' + counts[i] + '</div><div class="l">' + l + "</div></div>").join("") + "</div>";
     h += '<div class="modes">' +
-      '<button class="mode hot" data-a="oral" data-f="smart"><span class="mt">Recomandate</span><span class="md">6 carduri, mai multe din cutiile mici și din P1.</span><span class="mm">~12 min</span></button>' +
-      '<button class="mode" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">Cardurile noi și cele din cutiile 1–2 (maximum 8).</span><span class="mm">' + due + " carduri</span></button>" +
+      '<button class="mode' + (due ? " hot" : "") + '" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">' + (due ? "Cardurile scadente acum, cele mai slabe primele (maximum 8)." : "Nimic scadent. Cardurile revin după 20 min, 4 h, o zi sau două, după cutie.") + '</span><span class="mm">' + (due ? due + " carduri" : "–") + "</span></button>" +
+      '<button class="mode' + (due ? "" : " hot") + '" data-a="oral" data-f="smart"><span class="mt">Recomandate</span><span class="md">6 carduri, mai multe din cutiile mici și din P1.</span><span class="mm">~12 min</span></button>' +
+      '<button class="mode wide' + (dX ? " hot" : "") + '" data-a="open" data-f="smart"><span class="mt">Întrebări deschise</span><span class="md">' + OPEN.length + ' întrebări scurte, fără variante: răspunzi cu voce tare, dezvălui răspunsul, te notezi. Cel mai aproape de interviu.</span><span class="mm">8 întrebări · ~10 min' + (dX ? " · " + dX + " scadente" : xSeen ? " · " + xSeen + " văzute" : "") + "</span></button>" +
       "</div>";
     h += '<div class="sec-h"><h2>Pe module</h2><span class="xs muted">văzute · stăpânire</span></div>' + modList("oral");
     return h;
@@ -841,9 +1019,9 @@
     let cards = [], title = "Oral";
     if (opt.ids) { cards = opt.ids.map(id => OBY[id]).filter(Boolean); title = "Reluare"; }
     else if (opt.ms) { cards = sortWeak(ORAL.filter(c => opt.ms.indexOf(c.m) >= 0), S.o); title = opt.ms.map(m => MOD[m].short).join(" + "); }
-    else if (opt.due) { cards = shuffle(ORAL.filter(c => MOD[c.m].p < 4 && boxOf(c.id) <= 2)).sort((a, b) => rankBox(S.o[a.id]) - rankBox(S.o[b.id])).slice(0, 8); title = "De repetat"; }
+    else if (opt.due) { cards = dueO().slice(0, 8); title = "De repetat"; }
     else { cards = wsample(ORAL.filter(c => MOD[c.m].p < 4), wO, 6); title = "Recomandate"; }
-    if (!cards.length) { toast(opt.due ? "Niciun card în cutiile 0–2. Încearcă „Recomandate”." : "Nu am găsit carduri."); return; }
+    if (!cards.length) { toast(opt.due ? "Niciun card scadent acum. Încearcă „Recomandate”." : "Nu am găsit carduri."); return; }
     ui.result = null;
     ui.run = { kind: "oral", title, items: cards.map(c => c.id), i: 0, phase: "ask", ticks: {}, scores: {}, t0: now(), tEnd: 0, confirmQuit: false };
     ui.tab = "oral"; render(); window.scrollTo(0, 0);
@@ -937,12 +1115,77 @@
     return h;
   }
 
+  // ---------- views: întrebări deschise (din „Verificare” + „Răspuns verificare”) ----------
+  const XG = { 0: ["bad", "Nu știam"], 1: ["warn", "Parțial"], 2: ["ok", "Știam"] };
+  function startOpen(opt) {
+    opt = opt || {};
+    let qs = [], title = "Întrebări deschise";
+    if (opt.ids) { qs = opt.ids.map(id => QBY[id]).filter(q => q && EXPL[q.id] && EXPL[q.id].ver); title = "Reluare"; }
+    else if (opt.due) { qs = dueX().slice(0, 10); title = "Deschise scadente"; }
+    else { qs = pickOpen(8, opt.ms); if (opt.ms && opt.ms.length) title = "Deschise · " + opt.ms.map(m => MOD[m] ? MOD[m].short : m).join(" + "); }
+    if (!qs.length) { toast(opt.due ? "Nicio întrebare deschisă scadentă." : "Nu am găsit întrebări."); return; }
+    ui.result = null;
+    ui.run = { kind: "open", title, items: qs.map(q => q.id), i: 0, phase: "ask", grades: {}, t0: now(), tEnd: 0, confirmQuit: false };
+    ui.tab = "oral"; render(); window.scrollTo(0, 0);
+  }
+  function vOpenRun() {
+    const run = ui.run, q = QBY[run.items[run.i]], x = EXPL[q.id], m = MOD[q.m], total = run.items.length;
+    const e = S.x[q.id], tc = { seen: new Set(), skip: skipFor(q) };
+    let h = '<div class="spread"><div class="eyebrow">' + esc(run.title) + " · " + (run.i + 1) + "/" + total + '</div><button class="btn sm ghost" data-a="quit">' + (run.confirmQuit ? "Sigur ieși?" : "Ieși") + "</button></div>";
+    h += '<div class="runbar">' + bar(run.i / total) + "</div>";
+    h += '<article class="icard"><div class="icard-h"><span class="row" style="gap:6px">' + prioChip(m.p) + '<span class="chip">' + esc(m.short) + '</span><span class="chip acc">' + esc(q.id.toUpperCase()) + "</span></span>" + leit(e ? e.b : 0) + '</div><div class="icard-b"><div class="icard-q">' + inlineRich(x.ver, run.phase === "ask" ? { seen: new Set(), skip: new Set([...skipFor(q), ...termsIn(x.ver)]) } : tc) + "</div>";
+    if (run.phase === "ask") {
+      h += '<p class="muted small">Răspunde cu voce tare, în 2–3 propoziții, fără să te uiți pe nimic. Apoi dezvăluie răspunsul și notează-te sincer.</p>';
+      h += '<div class="row">' + (run.tEnd ? '<span class="timer" data-timer="oral">' + mmss(run.tEnd - now()) + '</span><button class="btn sm" data-a="oral-timer">Oprește</button>' : '<button class="btn sm" data-a="oral-timer">Cronometru 90 s</button>') + "</div>";
+    }
+    h += "</div></article>";
+    if (run.phase === "ask") {
+      h += '<button class="btn primary block" data-a="open-reveal">Am răspuns: arată răspunsul</button>';
+      h += '<p class="xs muted">Pe laptop: Enter arată răspunsul, apoi 1 = nu știam, 2 = parțial, 3 = știam.</p>';
+    } else {
+      h += '<div class="explain dk" id="fb"><div class="ttl">Răspunsul</div>' + rich(x.verR, tc) +
+        '<div class="xp-sec"><div class="xp-h">Ideea din spate</div>' + rich(x.scurt, tc) + "</div>" +
+        (x.intv ? '<details class="model"><summary>Cum o spui la interviu</summary><div style="padding:0 14px 12px">' + rich(x.intv, tc) + "</div></details>" : "") +
+        '<details class="model"><summary>Grila de origine: ' + esc(q.id.toUpperCase()) + '</summary><div style="padding:0 14px 12px"><p class="small">' + fmt(q.q) + '</p><p class="small"><b class="xs mono" style="color:var(--ok)">CORECT</b><br>' + fmt(q.o[q.a]) + "</p></div></details></div>";
+      h += '<section class="card stack-s"><h3>Cum a fost?</h3><div class="row grade">' + [0, 1, 2].map(g => '<button class="btn' + (g === 2 ? " primary" : "") + '" data-a="open-grade" data-g="' + g + '">' + XG[g][1] + "</button>").join("") + "</div>" +
+        '<p class="xs muted">„Știam” urcă o cutie; „Parțial” rămâne cel mult în cutia 2; „Nu știam” revine după 20 de minute.</p></section>';
+    }
+    return h;
+  }
+  function openGrade(g) {
+    const run = ui.run; if (!run || run.kind !== "open" || run.phase !== "review") return;
+    const id = run.items[run.i];
+    updX(id, g); run.grades[id] = g; commit();
+    if (run.i < run.items.length - 1) { run.i++; run.phase = "ask"; run.tEnd = 0; render(); window.scrollTo(0, 0); }
+    else finishOpen();
+  }
+  function finishOpen() {
+    const run = ui.run, ids = Object.keys(run.grades);
+    if (ids.length) {
+      const sum = ids.reduce((a, id) => a + run.grades[id], 0);
+      S.h.push({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      S.h = S.h.slice(-HMAX); commit();
+      ui.result = { kind: "open", title: run.title, items: ids.map(id => ({ id, g: run.grades[id] })), avg: sum / (2 * ids.length) };
+    }
+    ui.run = null; render(); window.scrollTo(0, 0);
+  }
+  function vOpenResult() {
+    const r = ui.result, weak = r.items.filter(x => x.g < 2);
+    let h = '<div class="eyebrow">Rezultat · ' + esc(r.title) + "</div>";
+    h += '<section class="card score"><div class="big">' + pc(r.avg) + '%</div><div class="stack-s"><h2>' + r.items.length + " întrebări</h2><p class=\"muted small\">" + (r.avg >= 0.8 ? "Bine. Revin după scadență; între timp, spune-le și cu exemplele tale." : "Cele neștiute și cele parțiale revin curând. Deschide grila de origine dacă vrei toată explicația.") + "</p></div></section>";
+    h += '<section class="card stack-s">' + r.items.map(x => { const q = QBY[x.id], e = S.x[x.id]; return '<div class="spread"><span class="small">' + inlineRich(EXPL[q.id].ver) + '</span><span class="row" style="flex:none"><span class="chip ' + XG[x.g][0] + '">' + XG[x.g][1] + "</span>" + leit(e ? e.b : 0) + "</span></div>"; }).join('<hr style="border:0;border-top:1px solid var(--line);margin:0">') + "</section>";
+    if (weak.length) h += '<button class="btn primary block" data-a="open-redo">Reia cele ' + weak.length + " neștiute sau parțiale</button>";
+    h += '<button class="btn block" data-a="close-result">Înapoi la oral</button>';
+    return h;
+  }
+
   // ---------- views: study ----------
-  const SEGS = [["sheets", "Fișe"], ["gloss", "Glosar"], ["katas", "Live coding"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
+  const SEGS = [["sheets", "Fișe"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
   function vStudy() {
     const st = ui.study;
     let h = '<div class="seg" role="group" aria-label="Secțiuni de studiu">' + SEGS.map(s => '<button data-a="seg" data-seg="' + s[0] + '" aria-pressed="' + (st.seg === s[0]) + '">' + s[1] + "</button>").join("") + "</div>";
     if (st.seg === "sheets") h += vSheets();
+    else if (st.seg === "intv") h += vIntv();
     else if (st.seg === "gloss") h += vGloss();
     else if (st.seg === "katas") h += st.kata ? vKata(KBY[st.kata]) : vKataList();
     else if (st.seg === "design") h += vDesign();
@@ -953,6 +1196,24 @@
   function figure(key) {
     const d = P.diagrams[key]; if (!d) return "";
     return '<figure><div class="figwrap">' + d.svg + "</div><figcaption>" + fmt(d.cap) + "</figcaption></figure>";
+  }
+  // Formulările „La interviu” din explicații, pe o singură pagină, de spus cu voce tare: P1, cele slabe sau toate.
+  const INTV_F = { p1: "P1", weak: "Greșite", all: "Toate" };
+  function vIntv() {
+    const f = ui.study.intv || "p1";
+    const pick = q => { const e = S.q[q.id]; return f === "all" ? true : f === "p1" ? MOD[q.m].p === 1 : !!e && e.b <= 1 && MOD[q.m].p < 4; };
+    const qs = MCQ.filter(q => EXPL[q.id] && EXPL[q.id].intv && pick(q));
+    let h = '<p class="muted small">Ce spui cu voce tare la interviu: formularea din fiecare explicație, pe module. Citește-le cu voce tare, cu un exemplu din proiectele tale după fiecare. Seara dinaintea interviului și în dimineața lui: doar P1 și cele greșite.</p>';
+    h += '<div class="row">' + Object.keys(INTV_F).map(k => '<button class="btn sm' + (k === f ? " primary" : "") + '" data-a="intv-f" data-f="' + k + '">' + INTV_F[k] + "</button>").join("") + '<span class="xs muted mono">' + qs.length + " formulări</span></div>";
+    if (!qs.length) return h + '<p class="small muted">Nimic aici' + (f === "weak" ? ": nicio grilă greșită rămasă în cutia 1." : ".") + "</p>";
+    const byM = {}; qs.forEach(q => { (byM[q.m] = byM[q.m] || []).push(q); });
+    for (const m of MODS) {
+      const list = byM[m.id]; if (!list) continue;
+      const tc = { seen: new Set(), skip: new Set(TERM_SKIP[m.id] || []) };
+      h += '<details class="sheet" open><summary><span class="chip">' + m.code + '</span><span class="nm">' + esc(m.short) + '</span><span class="xs muted mono">' + list.length + "</span></summary><div class=\"sheet-b intv\">" +
+        list.map(q => { const e = S.q[q.id]; return '<div class="intv-r' + (e && e.b <= 1 ? " weak" : "") + '"><span class="xs mono muted">' + esc(q.id.toUpperCase()) + (e && e.b <= 1 ? " · greșită" : "") + "</span>" + rich(EXPL[q.id].intv, tc) + "</div>"; }).join("") + "</div></details>";
+    }
+    return h;
   }
   function vSheets() {
     let h = '<p class="muted small">Ce trebuie să poți spune, pe module. Deschizi fișa, o citești, apoi faci grilele și cardurile orale ale modulului.</p>';
@@ -1043,12 +1304,19 @@
     h += '<div class="legend"><i style="background:var(--bg);border-style:dashed"></i>nevăzut<i style="background:color-mix(in srgb, var(--accent) 20%, var(--surface))"></i>început<i style="background:color-mix(in srgb, var(--accent) 60%, var(--surface))"></i>pe drum<i style="background:var(--accent)"></i>stăpânit</div>';
     const counts = [0, 0, 0, 0, 0, 0]; ORAL.forEach(c => counts[boxOf(c.id)]++);
     h += '<section class="card stack-s"><h3>Carduri orale pe cutii</h3><div class="boxes" style="grid-template-columns:repeat(6,1fr)">' + ["noi", "c. 1", "c. 2", "c. 3", "c. 4", "c. 5"].map((l, i) => '<div><div class="v">' + counts[i] + '</div><div class="l">' + l + "</div></div>").join("") + "</div></section>";
+    const xc = [0, 0, 0, 0, 0, 0]; OPEN.forEach(q => { const e = S.x[q.id]; xc[e ? e.b : 0]++; });
+    h += '<section class="card stack-s"><h3>Întrebări deschise pe cutii</h3><div class="boxes" style="grid-template-columns:repeat(6,1fr)">' + ["noi", "c. 1", "c. 2", "c. 3", "c. 4", "c. 5"].map((l, i) => '<div><div class="v">' + xc[i] + '</div><div class="l">' + l + "</div></div>").join("") + "</div></section>";
     const ks = { solo: 0, hint: 0, redo: 0 }; KATAS.forEach(k => { const s = kataStatus(k.id); if (s) ks[s]++; });
     h += '<section class="card stack-s"><h3>Live coding</h3><p class="small">' + ks.solo + " rezolvate singur · " + ks.hint + " cu indicii · " + ks.redo + " de reluat · " + (KATAS.length - ks.solo - ks.hint - ks.redo) + " neîncepute</p></section>";
+    // lacunele: grilele P1 (apoi P2) văzute și rămase în cutia 1, cele mai recente primele
+    const weak = MCQ.filter(q => MOD[q.m].p < 3 && S.q[q.id] && S.q[q.id].b <= 1).sort((a, b) => MOD[a.m].p - MOD[b.m].p || S.q[b.id].t - S.q[a.id].t).slice(0, 10);
+    if (weak.length) h += '<section class="card stack-s"><div class="spread"><h3>Lacunele de acum</h3><span class="xs muted">P1, apoi P2</span></div>' +
+      weak.map(q => '<div class="weak-r"><span class="chip">' + esc(MOD[q.m].code) + "</span><span>" + fmt(q.q) + "</span></div>").join("") +
+      '<button class="btn primary sm" data-a="redo-weak">Reia cele ' + weak.length + " grile</button></section>";
     const hist = S.h.slice().reverse();
     const mcqH = S.h.filter(e => e.kind === "mcq" && e.n);
     h += '<section class="card stack-s"><h3>Istoric</h3>' + (mcqH.length > 1 ? spark(mcqH.slice(-20).map(e => e.c / e.n)) : "") +
-      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : "grile") + '</span></span><span class="mono xs">' + (e.kind === "oral" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
+      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : "grile") + '</span></span><span class="mono xs">' + (e.kind === "oral" || e.kind === "open" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
     h += '<section class="card stack-s"><h3>Salvare</h3><p class="small" id="sync-l">' + esc(Sync.label()) + '</p><div class="row">' +
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
@@ -1056,8 +1324,17 @@
     if (ui.prog.exp) h += '<textarea class="io" id="exp-t" readonly aria-label="Progres exportat">' + esc(JSON.stringify(S)) + '</textarea><button class="btn sm" data-a="copy-exp">Copiază</button>';
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
+    h += vCfg();
     h += vAiSettings();
     return h;
+  }
+  function vCfg() {
+    const c = cfg(), iv = interviewDate();
+    const opts = [1.5, 2, 2.5, 3, 4, 5, 6].map(v => '<option value="' + v + '"' + (v === c.h ? " selected" : "") + ">" + hoursRo(v) + "</option>").join("");
+    return '<section class="card stack-s"><h3>Interviul</h3><p class="small">' + esc(cap1(dayName(iv)) + ", " + dayLabel(iv)) + " · ~" + hoursRo(c.h) + ' pe seară. Planul pe zile se reface din aceste două valori și din progres.</p>' +
+      '<div class="row"><label class="small">Data <input class="keyin" id="cfg-d" type="date" value="' + esc(c.d) + '" aria-label="Data interviului"></label>' +
+      '<label class="small">Ore/seară <select class="keyin" id="cfg-h" aria-label="Ore pe seară">' + opts + "</select></label></div>" +
+      '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button></div></section>';
   }
   function vAiSettings() {
     if (AI.sample) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">La cardurile orale, Claude compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit. Nu ai nevoie de cheie: folosește contul tău Claude, iar prima dată ți se cere permisiunea.</p><p class="xs muted">Se trimit doar întrebarea, punctele cheie și răspunsul tău.</p></section>';
@@ -1082,9 +1359,14 @@
 
   // ---------- navigation helpers ----------
   function goTask(id) {
-    const t = TBY[id]; if (!t || !t.go) return;
+    const t = taskById(id); if (!t || !t.go) return;
     const g = t.go;
     if (g.t === "diag" || g.t === "smart" || g.t === "mock" || g.t === "mistakes") startMcq(g.t);
+    else if (g.t === "due") {
+      // întâi grilele scadente, apoi cardurile, apoi întrebările deschise; dacă nu e nimic, mixul inteligent
+      if (dueQ().length) startMcq("due"); else if (dueO().length) startOral({ due: true }); else if (dueX().length) startOpen({ due: true }); else { toast("Nimic scadent: pornesc mixul inteligent."); startMcq("smart"); }
+    }
+    else if (g.t === "open") startOpen(g.due ? { due: true } : { ms: g.ms });
     else if (g.t === "mcq") startMcq("module", { ms: g.ms || [g.m] });
     else if (g.t === "sheet") openSheet(g.m);
     else if (g.t === "oral") startOral(g.due ? { due: true } : { ms: g.ms || [g.m] });
@@ -1106,6 +1388,7 @@
     Mic.stop();
     if (run.kind === "mcq" && run.mode !== "mock" && Object.keys(run.done).length) { finishMcq(); return; }
     if (run.kind === "oral" && Object.keys(run.scores).length) { finishOral(); return; }
+    if (run.kind === "open" && Object.keys(run.grades).length) { finishOpen(); return; }
     ui.run = null; render(); window.scrollTo(0, 0);
   }
   function copyText(text, fallbackEl) {
@@ -1192,6 +1475,19 @@
       case "tick": if (ui.run) { const k = +b.dataset.k; ui.run.ticks[k] = !ui.run.ticks[k]; render(); } break;
       case "oral-save": oralSave(); break;
       case "oral-redo": if (ui.result) startOral({ ids: ui.result.items.filter(x => x.p < 0.5).map(x => x.id) }); break;
+      case "open": startOpen(b.dataset.f === "due" ? { due: true } : {}); break;
+      case "open-reveal": if (ui.run && ui.run.kind === "open") { ui.run.phase = "review"; ui.run.tEnd = 0; render(); revealFeedback(); } break;
+      case "open-grade": openGrade(+b.dataset.g); break;
+      case "open-redo": if (ui.result) startOpen({ ids: ui.result.items.filter(x => x.g < 2).map(x => x.id) }); break;
+      case "redo-weak": startMcq("ids", { ids: MCQ.filter(q => MOD[q.m].p < 3 && S.q[q.id] && S.q[q.id].b <= 1).sort((a, b) => MOD[a.m].p - MOD[b.m].p || S.q[b.id].t - S.q[a.id].t).slice(0, 10).map(q => q.id), title: "Lacunele de acum" }); break;
+      case "intv-f": ui.study.intv = b.dataset.f; render(); break;
+      case "cfg-save": {
+        const d = $("#cfg-d"), hs = $("#cfg-h");
+        const iso = d ? d.value.trim() : "", h = hs ? +hs.value : 0;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || isNaN(parseIso(iso))) { toast("Alege o dată validă"); break; }
+        S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
+        break;
+      }
       case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; render(); window.scrollTo(0, 0); break;
       case "open-sheet": openSheet(b.dataset.m); break;
       case "kata": ui.study.kata = b.dataset.k; ui.study.hints = 0; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
@@ -1232,6 +1528,11 @@
     if (!gsheet.hidden) { if (e.key === "Escape") { closeTerm(); e.preventDefault(); } return; }
     if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT")) return;
     const run = ui.run; if (!run || ui.tab !== (run.kind === "mcq" ? "quiz" : "oral")) return;
+    if (run.kind === "open") {
+      if (run.phase === "ask" && e.key === "Enter") { run.phase = "review"; run.tEnd = 0; render(); revealFeedback(); e.preventDefault(); }
+      else if (run.phase === "review" && /^[1-3]$/.test(e.key)) { openGrade(+e.key - 1); e.preventDefault(); }
+      return;
+    }
     if (run.kind === "mcq") {
       if (/^[1-6]$/.test(e.key)) { answer(+e.key - 1); e.preventDefault(); }
       else if (e.key === "0") { answer(-1); e.preventDefault(); }
@@ -1268,6 +1569,7 @@
       const u = data.ui;
       if (u.run && u.run.kind === "mcq" && !(u.run.items || []).every(it => QBY[it.id])) u.run = null;
       if (u.run && u.run.kind === "oral" && !(u.run.items || []).every(id => OBY[id])) u.run = null;
+      if (u.run && u.run.kind === "open" && !(u.run.items || []).every(id => QBY[id] && EXPL[id] && EXPL[id].ver)) u.run = null;
       if (u.run && u.run.ai && u.run.ai.s === "busy") u.run.ai = null;      // o verificare întreruptă de reîncărcare
       ui = Object.assign(ui, u);
     }
@@ -1281,5 +1583,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, unlockedLvl, updQ, updO, parseVerdict, dsBody, state: () => S };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, state: () => S, setState: x => { S = x; planCache = null; } };
 })();
