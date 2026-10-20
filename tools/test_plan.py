@@ -82,7 +82,7 @@ async def main():
         print("LOGIC", json.dumps(logic, ensure_ascii=False))
         ok(logic["days"] == 3 and logic["todayFirst"] == "diag", "plan: 3 days, diagnostic first on a fresh state")
         ok(all(abs(m - 150) <= 25 for m in logic["eveningMin"]), "plan: evenings fit ~2.5 h " + str(logic["eveningMin"]))
-        ok(logic["morning"] == ["due", "study", "study", "study"] and logic["lastHasIntv"], "plan: morning warm-up and formulations on the last evening")
+        ok(logic["morning"] == ["due", "ivmock", "study", "study", "study"] and logic["lastHasIntv"], "plan: morning warm-up and formulations on the last evening")
         ok(logic["noRepeat"] and logic["firstModuleP1"] and logic["kataToday"], "plan: modules don't repeat, P1 first, one kata per evening")
         ok(logic["box1"] == 1 and logic["due1"] == 20 and logic["box2"] == 2 and logic["due2"] == 4 and logic["due3"] and logic["due4"] and logic["due5"] and logic["notDueNow"], "due dates: 20 min, 4 h, tomorrow, in two days, never")
         ok("gil-02" in logic["dueIds"] and "gil-03" not in logic["dueIds"] and logic["smartHasDue"], "due queue: wrong 30 min ago is due, right 10 min ago is not; smart mix takes due first")

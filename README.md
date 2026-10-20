@@ -13,6 +13,7 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 - **Diagnostic adaptiv** și **repetiție spațiată** cu scadențe reale: cutia 1 revine după 20 de minute, cutia 2 după 4 ore, cutia 3 a doua zi, cutia 4 peste două zile, cutia 5 niciodată. „De repetat acum” adună grilele, cardurile și întrebările deschise scadente; „Mix inteligent” ia întâi scadentele.
 - **Plan pe zile generat din progres**: data interviului și orele pe seară se setează în Progres › Interviul. Fiecare seară are aceeași rețetă (scadențe → fișă + grile pe modulele cu cea mai mare nevoie → oral → kata → greșeli), ultima seară se încheie cu formulările, iar dimineața interviului are doar încălzire. Sarcinile bifate azi rămân în listă; restul se recalculează din timpul rămas.
 - **Verificare AI la cardurile orale** (opțională): scrii sau dictezi răspunsul, iar Claude (în artifact) sau DeepSeek (în afara lui, cu cheie) îl compară cu punctele cheie și pre-bifează ce ai acoperit, cu feedback scurt. Vezi secțiunea „Verificare AI”.
+- **Intervievator** (în artifact): la un card oral, „Răspunde intervievatorului” transformă cardul într-un dialog scris. Claude pune cel mult 2 întrebări de continuare, apoi dă verdictul pe tot dialogul. Vezi „Intervievator”.
 
 ## Structura
 
@@ -44,6 +45,7 @@ python3 tools/test_teach.py
 python3 tools/test_expl.py
 python3 tools/test_terms.py
 python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample și DeepSeek simulate)
+python3 tools/test_interview.py  # intervievatorul: dialog, scor 1/0,5, memorie, rescriere, erori (sample simulat)
 python3 tools/test_plan.py   # planul generat, scadențele, întrebările deschise, formulările, setările
 ```
 
@@ -83,6 +85,20 @@ Reguli:
 - `validate.mjs` semnalează erorile (id-uri necunoscute, litere greșite, blocuri de cod neînchise) și avertizează la câmpurile prea lungi.
 
 Glosarul (`src/expl/glosar.md`) are câte o secțiune `### Termen`, cu câmpurile `Forme:` (formele flexionate după care termenul e găsit în texte; trebuie să fie unice), `Definiție:`, `Scop:`, `Exemplu:`, `Analogie:`, `Limită:` și `Vezi și:`.
+
+## Intervievator
+
+Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar fluxul „Verifică cu AI” rămâne ca înainte.
+
+1. Scrii răspunsul, apoi „Răspunde intervievatorului”. Un apel `quick` întoarce JSON `{"act":"followup","say":…}` sau `{"act":"done"}`. Intervievatorul are ton neutru, nu dă termenul răspunsului și cunoaște profilul tău (doar ca să formuleze concret). La cardurile BEH cere ce lipsește din STAR.
+2. Cel mult `IV_MAX` = 2 întrebări de continuare. „Nu știu” se trimite ca răspuns, iar „Încheie, vreau verdictul” funcționează oricând. „Done” sau un format greșit la întrebare duc direct la verdict.
+3. Verdictul (`default`) judecă tot dialogul: `covered[i]` e `spontan` (1 punct), `dupa` (acoperit abia după o întrebare, 0,5) sau `nu`. Bifele vin pre-completate, cu eticheta „după întrebare”; scorul trece prin `updO` ca înainte, din bifele tale (`tickSum`).
+4. Memorie pe card, în `S.o[id]`: `m` = indexurile punctelor neacoperite întreg (data viitoare intervievatorul le vizează primele) și `a` = ultima ta versiune bună. După verdict vezi „față de data trecută”. Cheile se scriu doar pe carduri făcute cu dialog (sau care le au deja), iar `mergeState` le păstrează ca pe restul itemului.
+5. „Rescrie-l” e opțional, după verdict și model. Reverificarea folosește verificatorul simplu, nu schimbă scorul și, la cel puțin 80% din puncte, salvează textul ca `a` (maximum 800 de caractere).
+
+6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
+
+Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
 
 ## Verificare AI
 
