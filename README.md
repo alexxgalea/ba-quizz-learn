@@ -45,6 +45,7 @@ python3 tools/test_teach.py
 python3 tools/test_expl.py
 python3 tools/test_terms.py
 python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample și DeepSeek simulate)
+python3 tools/test_gaps.py       # goluri (mc, w), teoria pe ce ai ratat, Studiu › Pentru tine
 python3 tools/test_interview.py  # intervievatorul: dialog, scor 1/0,5, memorie, rescriere, erori (sample simulat)
 python3 tools/test_plan.py   # planul generat, scadențele, întrebările deschise, formulările, setările
 ```
@@ -99,6 +100,14 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
 
 Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
+
+## Goluri și teorie
+
+Ce ratezi la oral se înregistrează pe fiecare card, în `S.o[id]`: `mc` (index punct → de câte ori l-ai ratat; +1 la un punct neacoperit întreg, −1 la unul acoperit întreg, maximum 9), `m` (punctele ratate ultima dată), `w` (cel mult 3 afirmații marcate greșite de verdict). Se actualizează la fiecare „Salvează”, cu sau fără intervievator; la cardurile vechi, `m` valorează 1 per punct. `mergeState` le îmbină ca pe restul itemului.
+
+- **Pe ecranul de verdict**: „Teorie pe ce ai ratat (N)” arată, pentru punctele neacoperite întreg (din bifele de acum), ce ai spus greșit și, pentru fiecare punct, propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu el (`relRank`, fără cuvinte de legătură și fără diacritice), plus grilele greșite din modul. Nu repetă aceeași propoziție la puncte diferite. În interviul simulat nu apare.
+- **Studiu › Pentru tine**: golurile de pe toate cardurile, cele mai grele primele (ratări × prioritatea modulului, `gapList`), cu „Exersează cardul”.
+- Test: `python3 tools/test_gaps.py`.
 
 ## Verificare AI
 

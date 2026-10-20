@@ -142,7 +142,7 @@ async def main():
         await pg.click('[data-a="oral-save"]'); await pg.wait_for_timeout(100)
         e = (await pg.evaluate("window.__prep.state().o"))[card["id"]]
         check("score = (1 + 0.5) / n", e["s"] == round(1.5 / n * 100), e)
-        check("memory: missed points saved as indexes, no rewrite saved", e.get("m") == list(range(1, n)) and "a" not in e and set(e) <= {"b", "n", "s", "t", "m"}, e)
+        check("memory: missed points saved as indexes, one miss each, no rewrite saved", e.get("m") == list(range(1, n)) and e.get("mc") == {str(i): 1 for i in range(1, n)} and "a" not in e and set(e) <= {"b", "n", "s", "t", "m", "mc", "w"}, e)
         check("next card starts clean (ask phase, empty answer, interviewer offered)", await pg.input_value('#ans-t') == "" and await pg.locator('[data-a="iv-start"]').count() == 1 and await pg.locator('.iv').count() == 0)
         await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
         if await pg.locator('[data-a="close-result"]').count(): await pg.click('[data-a="close-result"]')

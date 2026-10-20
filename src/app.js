@@ -1066,6 +1066,7 @@
       h += '<div class="kp">' + c.k.map((p, i) => '<button class="kp-i" data-a="tick" data-k="' + i + '" aria-pressed="' + !!run.ticks[i] + '"><span class="check">' + CHECK + "</span><span>" + fmt(p) +
         (run.ticks[i] && run.half && run.half[i] ? ' <span class="chip warn">după întrebare</span>' : "") + "</span></button>").join("") + "</div></section>";
       if (!run.mock) h += '<details class="model"><summary>Model de răspuns</summary><p>' + inlineRich(c.model, { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) }) + "</p></details>";
+      if (!run.mock) h += vGapTheory(run, c);
       if (run.iv && run.ai && run.ai.s === "ok" && !run.mock) h += vRewrite(run, c, prev);
       h += '<button class="btn primary block" data-a="oral-save">Salvează și ' + (run.i === total - 1 ? "termină" : "continuă") + " (" + fmtN(ticked) + "/" + c.k.length + ")</button>";
     }
@@ -1280,20 +1281,86 @@
     render();
   }
 
+  // ---------- goluri: ce ratezi, de câte ori, ce ai spus greșit ----------
+  // Pe fiecare card oral păstrăm `mc` (index punct → de câte ori l-ai ratat; o acoperire completă scade cu 1), `m` (ratate ultima dată) și `w` (afirmațiile marcate greșite).
+  // Teoria pentru un gol se asamblează din ce avem: propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu punctul ratat.
+  const MC_MAX = 9;
+  const GAP_STOP = new Set(("si sau dar din pentru care este sunt prin intre cand cum unde doar fara daca poate pot are iar tot cat cel cea cei cele lui sale ale mai dupa acest aceasta acesta apoi pana alt alta deci mult mica mare fie era acel acea").split(" "));
+  const gapToks = t => new Set((String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9_]{3,}/g) || []).filter(w => !GAP_STOP.has(w)));
+  // Elementele din `items` ordonate după cuvintele comune cu `text` (doar cele cu cel puțin unul).
+  function relRank(text, items) {
+    const t = gapToks(text);
+    return items.map((x, i) => { let n = 0; gapToks(x).forEach(w => { if (t.has(w)) n++; }); return { i, n }; }).filter(o => o.n > 0).sort((a, b) => b.n - a.n || a.i - b.i);
+  }
+  function gapCounts(e) {
+    const out = {};
+    if (!e) return out;
+    if (e.mc && typeof e.mc === "object") { for (const k of Object.keys(e.mc)) { const n = +e.mc[k]; if (n > 0) out[k] = Math.min(MC_MAX, n); } }
+    else (e.m || []).forEach(i => { out[i] = 1; });         // carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1
+    return out;
+  }
+  // Toate golurile, cele mai grele primele: ratări × prioritatea modulului.
+  function gapList() {
+    const out = [];
+    ORAL.forEach(c => { const g = gapCounts(S.o[c.id]); Object.keys(g).forEach(i => { if (c.k[i] != null) out.push({ c, i: +i, n: g[i], w: g[i] * PW[MOD[c.m].p] }); }); });
+    return out.sort((a, b) => b.w - a.w || b.n - a.n);
+  }
+  // inStudy: titlul și contorul stau deja în rezumatul din Studiu. `used`: ce s-a arătat deja în aceeași secțiune (propoziții din model, puncte din fișă), ca să nu se repete.
+  function gapTheory(c, i, n, inStudy, used) {
+    const tc = { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) };
+    const sents = c.model.split(/(?<=[.!?])\s+/).filter(Boolean), fresh = k => !used || !used.has(k);
+    const rm = relRank(c.k[i], sents), sm = rm.filter(o => fresh("s" + o.i)).slice(0, 2).map(o => o.i).sort((a, b) => a - b);
+    const sh = P.sheets[c.m], pts = sh ? sh.points : [], sp = relRank(c.k[i], pts).filter(o => fresh("p" + o.i)).slice(0, 2);
+    if (used) { sm.forEach(k => used.add("s" + k)); sp.forEach(o => used.add("p" + o.i)); }
+    let h = '<div class="gap-i">' + (inStudy ? "" : '<div class="gap-p">' + inlineRich(c.k[i], tc) + "</div>");
+    if (n > 1 && !inStudy) h += '<span class="chip bad">ratat de ' + n + " ori</span>";
+    if (sm.length) h += '<div class="xp-sec"><span class="xp-h">Din răspunsul model</span><p class="rt">' + inlineRich(sm.map(k => sents[k]).join(" "), tc) + "</p></div>";
+    else if (!rm.length && fresh("full")) { if (used) used.add("full"); h += '<div class="xp-sec"><span class="xp-h">Din răspunsul model</span><details class="model"><summary>Tot modelul de răspuns</summary><p>' + inlineRich(c.model, tc) + "</p></details></div>"; }
+    if (sp.length) h += '<div class="xp-sec"><span class="xp-h">Din fișa ' + esc(MOD[c.m].short) + '</span><ul class="pts">' + sp.map(o => "<li>" + inlineRich(pts[o.i], tc) + "</li>").join("") + "</ul></div>";
+    const nq = MCQ_BY_M[c.m].filter(q => S.q[q.id] && S.q[q.id].b <= 1).length;
+    h += '<div class="row"><button class="btn sm" data-a="open-sheet" data-m="' + c.m + '">Fișa completă</button>' + (nq ? '<button class="btn sm" data-a="mcq-mod" data-m="' + c.m + '">' + nq + " grile greșite aici</button>" : "") + "</div>";
+    return h + "</div>";
+  }
+  const missedOf = (run, c) => c.k.map((_, i) => i).filter(i => tickW(run, i) < 1);
+  // Pe ecranul de verdict: teoria pentru punctele neacoperite întreg, calculată din bifele de acum.
+  function vGapTheory(run, c) {
+    const miss = missedOf(run, c); if (!miss.length) return "";
+    if (!run.th) return '<button class="btn block" data-a="th-open">Teorie pe ce ai ratat (' + miss.length + ")</button>";
+    const g = gapCounts(S.o[c.id]), used = new Set(), wrong = run.ai && run.ai.s === "ok" ? run.ai.v.wrong || [] : [];
+    return '<section class="card stack gap"><h3>Teorie pe ce ai ratat</h3>' +
+      (wrong.length ? '<div class="ai-l bad"><b>De corectat întâi</b><ul>' + wrong.map(x => "<li>" + fmt(x) + "</li>").join("") + "</ul></div>" : "") +
+      miss.map(i => gapTheory(c, i, (g[i] || 0) + 1, false, used)).join("") + "</section>";
+  }
+  function vGaps() {
+    const list = gapList(), cards = new Set(list.map(g => g.c.id)).size;
+    let h = '<p class="muted small">Ce ratezi, nu ce știi: punctele cheie pe care le-ai ratat la oral, cele mai grele primele (de câte ori × prioritatea modulului). O acoperire completă scade contorul cu 1.</p>';
+    if (!list.length) return h + '<div class="card"><p class="small">Niciun gol încă. Fă câteva carduri orale (de preferat cu intervievatorul): ce ratezi apare aici.</p></div>';
+    h += '<div class="row"><span class="xs muted mono">' + list.length + (list.length === 1 ? " gol · " : " goluri · ") + cards + (cards === 1 ? " card" : " carduri") + "</span></div>";
+    h += list.slice(0, 15).map(g => {
+      const e = S.o[g.c.id], w = (e && e.w) || [];
+      return '<details class="gap"><summary><span class="chip">' + MOD[g.c.m].code + '</span><span class="nm">' + inlineRich(g.c.k[g.i]) + '</span><span class="chip ' + (g.n >= 2 ? "bad" : "warn") + '">×' + g.n + "</span></summary><div class=\"sheet-b\">" +
+        '<p class="xs muted">' + esc(g.c.q) + "</p>" +
+        (w.length ? '<div class="ai-l bad"><b>Ai spus greșit, ultima dată</b><ul>' + w.map(x => "<li>" + fmt(x) + "</li>").join("") + "</ul></div>" : "") +
+        gapTheory(g.c, g.i, g.n, true) + '<button class="btn sm primary" data-a="oral-card" data-id="' + g.c.id + '">Exersează cardul</button></div></details>';
+    }).join("");
+    if (list.length > 15) h += '<p class="xs muted">…și încă ' + (list.length - 15) + " mai ușoare.</p>";
+    return h;
+  }
+
   function oralSave() {
     const run = ui.run, c = OBY[run.items[run.i]];
     Mic.stop(); ivAbort();
     const p = tickSum(run, c) / c.k.length;
     updO(c.id, p); run.scores[c.id] = p;
-    // Memoria cardului: punctele neacoperite întreg (data viitoare le vizează primele) și ultima versiune bună. Nu creăm cheile pe carduri fără dialog.
-    const e = S.o[c.id];
-    if (run.iv || e.m || e.a) {
-      const missed = c.k.map((_, i) => i).filter(i => tickW(run, i) < 1);
-      if (missed.length) e.m = missed; else delete e.m;
-      if (run.keep) e.a = run.keep;
-    }
+    // Golurile cardului: contorul `mc` (+1 la un punct ratat, −1 la unul acoperit întreg), `m` (ratate acum), `w` (ce a marcat verdictul greșit) și versiunea bună.
+    const e = S.o[c.id], prev = gapCounts(e), mc = {}, missed = missedOf(run, c);
+    c.k.forEach((_, i) => { const n = missed.indexOf(i) >= 0 ? Math.min(MC_MAX, (prev[i] || 0) + 1) : Math.max(0, (prev[i] || 0) - 1); if (n) mc[i] = n; });
+    if (Object.keys(mc).length) e.mc = mc; else delete e.mc;
+    if (missed.length) e.m = missed; else delete e.m;
+    if (run.ai && run.ai.s === "ok") { const w = (run.ai.v.wrong || []).slice(0, 3); if (w.length) e.w = w; else delete e.w; }
+    if (run.keep) e.a = run.keep;
     commit();
-    if (run.i < run.items.length - 1) { run.i++; run.phase = "ask"; run.ticks = {}; run.half = {}; run.iv = null; run.rw = null; run.keep = ""; run.tEnd = 0; run.ans = ""; run.ai = null; render(); window.scrollTo(0, 0); }
+    if (run.i < run.items.length - 1) { run.i++; run.phase = "ask"; run.ticks = {}; run.half = {}; run.iv = null; run.rw = null; run.keep = ""; run.th = false; run.tEnd = 0; run.ans = ""; run.ai = null; render(); window.scrollTo(0, 0); }
     else finishOral();
   }
   function finishOral() {
@@ -1384,11 +1451,12 @@
   }
 
   // ---------- views: study ----------
-  const SEGS = [["sheets", "Fișe"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
+  const SEGS = [["sheets", "Fișe"], ["gaps", "Pentru tine"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
   function vStudy() {
     const st = ui.study;
-    let h = '<div class="seg" role="group" aria-label="Secțiuni de studiu">' + SEGS.map(s => '<button data-a="seg" data-seg="' + s[0] + '" aria-pressed="' + (st.seg === s[0]) + '">' + s[1] + "</button>").join("") + "</div>";
+    let h = '<div class="seg" role="group" aria-label="Secțiuni de studiu">' + SEGS.map(s => '<button data-a="seg" data-seg="' + s[0] + '" aria-pressed="' + (st.seg === s[0]) + '">' + s[1] + (s[0] === "gaps" && gapList().length ? " (" + gapList().length + ")" : "") + "</button>").join("") + "</div>";
     if (st.seg === "sheets") h += vSheets();
+    else if (st.seg === "gaps") h += vGaps();
     else if (st.seg === "intv") h += vIntv();
     else if (st.seg === "gloss") h += vGloss();
     else if (st.seg === "katas") h += st.kata ? vKata(KBY[st.kata]) : vKataList();
@@ -1670,6 +1738,8 @@
       case "oral-ai": oralAi(); break;
       case "iv-start": ivStart(); break;
       case "iv-mock": startIvMock(4); break;
+      case "th-open": if (ui.run) { ui.run.th = true; render(); } break;
+      case "oral-card": startOral({ ids: [b.dataset.id] }); break;
       case "iv-send": ivSend("send"); break;
       case "iv-dunno": ivSend("dunno"); break;
       case "iv-finish": ivSend("finish"); break;
@@ -1807,5 +1877,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, pickIvMock, state: () => S, setState: x => { S = x; planCache = null; } };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, pickIvMock, gapCounts, gapList, relRank, state: () => S, setState: x => { S = x; planCache = null; } };
 })();
