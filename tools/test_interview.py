@@ -259,6 +259,45 @@ async def main():
         await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(200)
         check("quit mid-request: back to the oral home, no leftover dialog", await pg.locator('.modrow').count() > 0 and await pg.locator('.iv').count() == 0)
 
+        # 5b) mock interview: 4 cards from ≥3 modules, fixed persona, no model between cards, result screen with the closing line
+        await fresh(pg)
+        spread = await pg.evaluate("Array.from({ length: 40 }, () => { const p = window.__prep.pickIvMock(4); return [p.length, new Set(p.map(c => c.id)).size, new Set(p.map(c => c.m)).size]; })")
+        check("pickIvMock: 4 distinct cards from at least 3 modules, every time", all(a == 4 and b == 4 and c >= 3 for a, b, c in spread), spread[:3])
+        await pg.click('.tab[data-tab="oral"]'); await pg.wait_for_timeout(100)
+        check("oral home offers the simulated interview", await pg.locator('[data-a="iv-mock"]').count() == 1)
+        await pg.screenshot(path=str(SHOTS / "iv8-home.png"), full_page=True)
+        await pg.click('[data-a="iv-mock"]'); await pg.wait_for_selector('#ans-t', timeout=3000)
+        check("starts at 1/4 with the greeting", "1/4" in await pg.text_content('.eyebrow') and "Bună!" in await pg.inner_text('.iv-m.int') and "Interviu simulat" in await pg.text_content('.eyebrow'))
+        check("mock ask phase: only the interviewer button (no timer, no direct check, no reveal)", await pg.locator('[data-a="iv-start"]').count() == 1 and await pg.locator('[data-a="oral-ai"], [data-a="oral-reveal"], [data-a="oral-timer"]').count() == 0)
+        await pg.screenshot(path=str(SHOTS / "iv9-mock-ask.png"))
+        order = []
+        for i in range(4):
+            if i == 1: check("transition between cards", "trecem mai departe" in await pg.inner_text('.iv-m.int'))
+            if i == 3: check("last card is announced", "Ultima întrebare" in await pg.inner_text('.iv-m.int'))
+            await queue(pg, "turn", [tj(act="done")])
+            await answer_and_start(pg); await pg.wait_for_selector('.ai-v', timeout=3000)
+            if i == 0: check("mock review: no model answer and no rewrite step", await pg.locator('details.model summary:has-text("Model de răspuns")').count() == 0 and await pg.locator('[data-a="rw-open"]').count() == 0 and await pg.locator('[data-a="oral-save"]').count() == 1)
+            await pg.click('[data-a="oral-save"]'); await pg.wait_for_timeout(120)
+        check("result screen: closing line, 4 cards, scores", "Asta a fost tot" in await pg.inner_text('main') and await pg.locator('main .score').count() == 1 and "4 carduri" in await pg.inner_text('.score'))
+        st = await pg.evaluate("({ o: Object.keys(window.__prep.state().o).length, h: window.__prep.state().h.map(e => e.title) })")
+        check("every card went through updO; history records the mock", st["o"] == 4 and st["h"][-1] == "Interviu simulat", st)
+        await pg.screenshot(path=str(SHOTS / "iv10-mock-result.png"), full_page=True)
+        calls_n = len(await calls(pg))
+        check("persona added no extra calls (one turn + one verdict per card)", calls_n == 8, calls_n)
+        await pg.click('[data-a="close-result"]'); await pg.wait_for_timeout(100)
+
+        # 5c) plan: oral task points at the interviewer; the morning warm-up starts a 2-card mock
+        P = await pg.evaluate("""() => {
+          const days = window.__prep.genPlan(), tasks = days.flatMap(d => d.tasks);
+          const m = days[days.length - 1].tasks.find(t => /-m-iv$/.test(t.id));
+          return { oral: (tasks.find(t => t.key === 'oral') || {}).text || '', m: m && { go: m.go, min: m.min } };
+        }""")
+        check("plan: oral task recommends the interviewer, morning has a 2-card warm-up", "intervievatorului" in P["oral"] and P["m"] and P["m"]["go"] == {"t": "ivmock", "n": 2} and P["m"]["min"] == 10, P)
+        await pg.click('.tab[data-tab="plan"]'); await pg.wait_for_timeout(100)
+        await pg.evaluate("document.querySelector('[data-a=\"go\"][data-id$=\"-m-iv\"]').click()"); await pg.wait_for_selector('#ans-t', timeout=3000)
+        check("warm-up task opens a 2-card interview", "1/2" in await pg.text_content('.eyebrow') and "Interviu simulat" in await pg.text_content('.eyebrow'))
+        await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
+
         # 6) dark theme shots of the dialog and the review
         await fresh(pg)
         await pg.emulate_media(color_scheme="dark")
@@ -281,6 +320,11 @@ async def main():
         await pg2.goto(PAGE); await pg2.wait_for_timeout(400)
         await pg2.click('.tab[data-tab="oral"]'); await pg2.click('[data-a="oral-mod"][data-m="gil"]'); await pg2.wait_for_selector('#ans-t')
         check("no sample: no interviewer button, plain reveal stays primary", await pg2.locator('[data-a="iv-start"]').count() == 0 and "Răspunde intervievatorului" not in await pg2.inner_text('main') and await pg2.locator('[data-a="oral-reveal"].primary').count() == 1)
+        await pg2.click('.tab[data-tab="oral"]'); await pg2.click('[data-a="tab"][data-tab="oral"]'); await pg2.wait_for_timeout(100)
+        await pg2.click('[data-a="quit"]'); await pg2.click('[data-a="quit"]'); await pg2.wait_for_timeout(100)
+        check("no sample: no simulated-interview mode on the oral home", await pg2.locator('[data-a="iv-mock"]').count() == 0)
+        P2 = await pg2.evaluate("(window.__prep.genPlan().flatMap(d => d.tasks).find(t => t.key === 'oral') || {}).text || ''")
+        check("no sample: the plan keeps the spoken wording", "voce tare" in P2 and "intervievatorului" not in P2, P2)
         check("no sample: no page errors", not errs2, errs2)
         await b.close()
     print("\nFAILED: " + ", ".join(fails) if fails else "\nALL OK")

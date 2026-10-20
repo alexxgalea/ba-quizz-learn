@@ -433,7 +433,7 @@
     else if (key === "oral") {
       const ms = (c.mods || []).filter(m => ORAL_BY_M[m.id].length);
       min = 15; go = ms.length ? { t: "oral", ms: ms.map(m => m.id) } : { t: "oral", due: true };
-      text = "Oral, cu voce tare și cronometru: " + (ms.length ? ms.map(m => m.short).join(", ") : "cardurile scadente") + ".";
+      text = (IV.ready() ? "Oral, cu „Răspunde intervievatorului”: " : "Oral, cu voce tare și cronometru: ") + (ms.length ? ms.map(m => m.short).join(", ") : "cardurile scadente") + ".";
     }
     else if (key === "open") { min = 15; const ms = (c.mods || []).map(m => m.id); text = ms.length ? "Întrebări deschise din modulele de azi, cu voce tare." : "8 întrebări deschise, cu voce tare: răspunzi, dezvălui, te notezi."; go = ms.length ? { t: "open", ms } : { t: "open" }; }
     else if (key === "smart") { min = 15; text = "Mix inteligent: 15 grile pe nivelul tău."; go = { t: "smart" }; }
@@ -497,7 +497,7 @@
         tasks });
     }
     const iso = isoLocal(iv);
-    days.push({ id: "g" + iso, date: iso, day: cap1(dayName(iv)), label: dayLabel(iv), when: "dimineața · 30–40 min", focus: "Încălzire. Nimic nou.", tasks: P.planTpl.morning.map(t => Object.assign({}, t, { id: "g" + iso + "-" + t.id })) });
+    days.push({ id: "g" + iso, date: iso, day: cap1(dayName(iv)), label: dayLabel(iv), when: "dimineața · 40–50 min", focus: "Încălzire. Nimic nou.", tasks: P.planTpl.morning.map(t => Object.assign({}, t, { id: "g" + iso + "-" + t.id })) });
     return days;
   }
   let planCache = null;
@@ -1010,6 +1010,7 @@
     h += '<div class="modes">' +
       '<button class="mode' + (due ? " hot" : "") + '" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">' + (due ? "Cardurile scadente acum, cele mai slabe primele (maximum 8)." : "Nimic scadent. Cardurile revin după 20 min, 4 h, o zi sau două, după cutie.") + '</span><span class="mm">' + (due ? due + " carduri" : "–") + "</span></button>" +
       '<button class="mode' + (due ? "" : " hot") + '" data-a="oral" data-f="smart"><span class="mt">Recomandate</span><span class="md">6 carduri, mai multe din cutiile mici și din P1.</span><span class="mm">~12 min</span></button>' +
+      (IV.ready() ? '<button class="mode wide" data-a="iv-mock"><span class="mt">Interviu simulat</span><span class="md">4 carduri din module diferite, cu intervievatorul: salut, întrebări de continuare, încheiere. Fără modelul de răspuns între carduri.</span><span class="mm">4 carduri · ~20 min</span></button>' : "") +
       '<button class="mode wide' + (dX ? " hot" : "") + '" data-a="open" data-f="smart"><span class="mt">Întrebări deschise</span><span class="md">' + OPEN.length + ' întrebări scurte, fără variante: răspunzi cu voce tare, dezvălui răspunsul, te notezi. Cel mai aproape de interviu.</span><span class="mm">8 întrebări · ~10 min' + (dX ? " · " + dX + " scadente" : xSeen ? " · " + xSeen + " văzute" : "") + "</span></button>" +
       "</div>";
     h += '<div class="sec-h"><h2>Pe module</h2><span class="xs muted">văzute · stăpânire</span></div>' + modList("oral");
@@ -1018,13 +1019,14 @@
   function startOral(opt) {
     opt = opt || {};
     let cards = [], title = "Oral";
-    if (opt.ids) { cards = opt.ids.map(id => OBY[id]).filter(Boolean); title = "Reluare"; }
+    if (opt.ids) { cards = opt.ids.map(id => OBY[id]).filter(Boolean); title = opt.title || "Reluare"; }
     else if (opt.ms) { cards = sortWeak(ORAL.filter(c => opt.ms.indexOf(c.m) >= 0), S.o); title = opt.ms.map(m => MOD[m].short).join(" + "); }
     else if (opt.due) { cards = dueO().slice(0, 8); title = "De repetat"; }
     else { cards = wsample(ORAL.filter(c => MOD[c.m].p < 4), wO, 6); title = "Recomandate"; }
     if (!cards.length) { toast(opt.due ? "Niciun card scadent acum. Încearcă „Recomandate”." : "Nu am găsit carduri."); return; }
     ui.result = null;
     ui.run = { kind: "oral", title, items: cards.map(c => c.id), i: 0, phase: "ask", ticks: {}, scores: {}, t0: now(), tEnd: 0, confirmQuit: false };
+    if (opt.mock) ui.run.mock = true;
     ui.tab = "oral"; render(); window.scrollTo(0, 0);
   }
   function vOralRun() {
@@ -1032,11 +1034,12 @@
     let h = '<div class="spread"><div class="eyebrow">' + esc(run.title) + " · " + (run.i + 1) + "/" + total + '</div><button class="btn sm ghost" data-a="quit">' + (run.confirmQuit ? "Sigur ieși?" : "Ieși") + "</button></div>";
     h += '<div class="runbar">' + bar(run.i / total) + "</div>";
     h += '<article class="icard"><div class="icard-h"><span class="row" style="gap:6px">' + prioChip(m.p) + '<span class="chip">' + esc(m.short) + "</span></span>" + leit(boxOf(c.id)) + '</div><div class="icard-b"><div class="icard-q">' + fmt(c.q) + "</div>";
-    if (run.phase === "ask") {
+    if (run.phase === "ask" && !run.mock) {
       h += '<p class="muted small">Răspunde cu voce tare, în 3–4 propoziții: definiție → mecanism → compromis → exemplu din experiența ta.</p>';
       h += '<div class="row">' + (run.tEnd ? '<span class="timer" data-timer="oral">' + mmss(run.tEnd - now()) + '</span><button class="btn sm" data-a="oral-timer">Oprește</button>' : '<button class="btn sm" data-a="oral-timer">Cronometru 90 s</button>') + "</div>";
     }
     h += "</div></article>";
+    if (run.mock && run.phase === "ask") h = h.replace('<article class="icard">', mockSay(run) + '<article class="icard">');
     if (run.phase === "ask") {
       const has = AI.ready(), busy = !!(run.ai && run.ai.s === "busy");
       h += '<section class="card stack-s"><div class="spread"><h3>Răspunsul tău</h3>' +
@@ -1048,8 +1051,10 @@
       if (has) {
         const iv = IV.ready();
         if (iv) h += '<button class="btn primary block" data-a="iv-start"' + (busy ? " disabled" : "") + ">Răspunde intervievatorului</button>";
-        h += '<button class="btn' + (iv ? "" : " primary") + ' block" data-a="oral-ai"' + (busy ? " disabled" : "") + ">" + (busy ? "Se verifică cu " + AI.name() + "…" : (iv ? "Verifică direct cu " : "Verifică cu ") + AI.name()) + "</button>";
-        h += '<button class="btn block" data-a="oral-reveal"' + (busy ? " disabled" : "") + ">Fără AI: arată punctele cheie</button>";
+        if (!run.mock) {
+          h += '<button class="btn' + (iv ? "" : " primary") + ' block" data-a="oral-ai"' + (busy ? " disabled" : "") + ">" + (busy ? "Se verifică cu " + AI.name() + "…" : (iv ? "Verifică direct cu " : "Verifică cu ") + AI.name()) + "</button>";
+          h += '<button class="btn block" data-a="oral-reveal"' + (busy ? " disabled" : "") + ">Fără AI: arată punctele cheie</button>";
+        }
       } else h += '<button class="btn primary block" data-a="oral-reveal">Am răspuns: arată punctele cheie</button>';
     } else if (run.phase === "iv") {
       h += vIvDialog(run);
@@ -1060,8 +1065,8 @@
       if (prev && prev.n && prev.s != null && (run.iv || (run.ai && run.ai.s === "ok"))) h += '<p class="small muted iv-cmp">Față de data trecută: ' + prev.s + "% → <b>" + pc(ticked / c.k.length) + "%</b></p>";
       h += '<div class="kp">' + c.k.map((p, i) => '<button class="kp-i" data-a="tick" data-k="' + i + '" aria-pressed="' + !!run.ticks[i] + '"><span class="check">' + CHECK + "</span><span>" + fmt(p) +
         (run.ticks[i] && run.half && run.half[i] ? ' <span class="chip warn">după întrebare</span>' : "") + "</span></button>").join("") + "</div></section>";
-      h += '<details class="model"><summary>Model de răspuns</summary><p>' + inlineRich(c.model, { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) }) + "</p></details>";
-      if (run.iv && run.ai && run.ai.s === "ok") h += vRewrite(run, c, prev);
+      if (!run.mock) h += '<details class="model"><summary>Model de răspuns</summary><p>' + inlineRich(c.model, { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) }) + "</p></details>";
+      if (run.iv && run.ai && run.ai.s === "ok" && !run.mock) h += vRewrite(run, c, prev);
       h += '<button class="btn primary block" data-a="oral-save">Salvează și ' + (run.i === total - 1 ? "termină" : "continuă") + " (" + fmtN(ticked) + "/" + c.k.length + ")</button>";
     }
     return h;
@@ -1220,6 +1225,24 @@
   }
   const ivTurnsHtml = turns => '<div class="iv-t">' + turns.map(t => '<div class="iv-m ' + (t.who === "int" ? "int" : "me") + '"><div class="iv-w">' + (t.who === "int" ? "Intervievator" : "Tu") + "</div><p>" + fmt(t.text) + "</p></div>").join("") + "</div>";
   const ivDialogView = iv => '<details class="model"><summary>Dialogul tău cu intervievatorul</summary>' + ivTurnsHtml(iv.turns) + "</details>";
+  const ivBubble = text => '<div class="iv-m int"><div class="iv-w">Intervievator</div><p>' + esc(text) + "</p></div>";
+  // Interviul simulat: persoana (salut, tranziții, încheiere) e text fix, fără apeluri în plus.
+  const mockSay = run => ivBubble(run.i === 0 ? "Bună! Mulțumesc că ai venit. Începem cu câteva întrebări tehnice, pe rând." : run.i === run.items.length - 1 ? "Bine. Ultima întrebare." : "Bine, trecem mai departe.");
+  // n carduri din cel puțin 3 module (sau câte sunt), cu aceleași ponderi ca „Recomandate”: slăbiciune, scadență, P1 înaintea lui P3.
+  function pickIvMock(n) {
+    n = n || 4;
+    const pool = ORAL.filter(c => MOD[c.m].p < 4), want = Math.min(3, n);
+    let pick = [];
+    for (let t = 0; t < 30; t++) {
+      pick = wsample(pool, wO, n);
+      if (pick.length === n && new Set(pick.map(c => c.m)).size >= want) break;
+    }
+    return pick;
+  }
+  function startIvMock(n) {
+    if (!IV.ready()) { toast("Interviul simulat are nevoie de Claude (în artifact)."); return; }
+    startOral({ ids: pickIvMock(n).map(c => c.id), title: "Interviu simulat", mock: true });
+  }
   function vIvDialog(run) {
     const iv = run.iv, last = iv.turns[iv.turns.length - 1];
     let h = '<section class="card stack-s iv"><div class="spread"><h3>Interviu</h3><span class="chip acc">' + iv.fu + "/" + IV_MAX + " întrebări</span></div>" + ivTurnsHtml(iv.turns);
@@ -1280,13 +1303,14 @@
       const avg = ids.reduce((s, id) => s + run.scores[id], 0) / ids.length;
       S.h.push({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
       S.h = S.h.slice(-HMAX); commit();
-      ui.result = { kind: "oral", title: run.title, items: ids.map(id => ({ id, p: run.scores[id] })), avg };
+      ui.result = { kind: "oral", title: run.title, items: ids.map(id => ({ id, p: run.scores[id] })), avg, mock: !!run.mock };
     }
     ui.run = null; render(); window.scrollTo(0, 0);
   }
   function vOralResult() {
     const r = ui.result;
     let h = '<div class="eyebrow">Rezultat oral · ' + esc(r.title) + "</div>";
+    if (r.mock) h += ivBubble("Asta a fost tot din partea mea. Mulțumesc pentru timp! Mai jos vezi cum a mers fiecare întrebare.");
     h += '<section class="card score"><div class="big">' + pc(r.avg) + '%</div><div class="stack-s"><h2>' + r.items.length + " carduri</h2><p class=\"muted small\">Media punctelor cheie acoperite. Sub 50% → cardul revine în cutia 1.</p></div></section>";
     h += '<section class="card stack-s">' + r.items.map(x => { const c = OBY[x.id]; return '<div class="spread"><span class="small">' + fmt(c.q) + '</span><span class="row" style="flex:none"><span class="chip ' + (x.p >= 0.8 ? "ok" : x.p >= 0.5 ? "warn" : "bad") + '">' + pc(x.p) + "%</span>" + leit(boxOf(c.id)) + "</span></div>"; }).join('<hr style="border:0;border-top:1px solid var(--line);margin:0">') + "</section>";
     const weak = r.items.filter(x => x.p < 0.5);
@@ -1550,6 +1574,7 @@
     else if (g.t === "mcq") startMcq("module", { ms: g.ms || [g.m] });
     else if (g.t === "sheet") openSheet(g.m);
     else if (g.t === "oral") startOral(g.due ? { due: true } : { ms: g.ms || [g.m] });
+    else if (g.t === "ivmock") { if (IV.ready()) startIvMock(g.n); else startOral({ due: true }); }
     else if (g.t === "kata") { ui.tab = "study"; ui.study.seg = "katas"; ui.study.kata = g.id; ui.study.hints = 0; render(); window.scrollTo(0, 0); }
     else if (g.t === "study") { ui.tab = "study"; ui.study.seg = g.tab; ui.study.kata = null; render(); window.scrollTo(0, 0); }
   }
@@ -1644,6 +1669,7 @@
       case "oral-reveal": if (ui.run) { Mic.stop(); ui.run.phase = "review"; ui.run.tEnd = 0; render(); } break;
       case "oral-ai": oralAi(); break;
       case "iv-start": ivStart(); break;
+      case "iv-mock": startIvMock(4); break;
       case "iv-send": ivSend("send"); break;
       case "iv-dunno": ivSend("dunno"); break;
       case "iv-finish": ivSend("finish"); break;
@@ -1781,5 +1807,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, state: () => S, setState: x => { S = x; planCache = null; } };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, pickIvMock, state: () => S, setState: x => { S = x; planCache = null; } };
 })();

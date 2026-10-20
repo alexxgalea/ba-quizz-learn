@@ -377,11 +377,12 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
   P.cfg = { interview: "2026-10-21", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
-  // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "kata" (id) | "study" (tab) }
+  // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou
     morning: [
       { id: "m-due", min: 15, text: "Cardurile și grilele scadente, cu voce tare.", go: { t: "due" } },
+      { id: "m-iv", min: 10, text: "Încălzire cu intervievatorul: 2 carduri orale, în scris.", go: { t: "ivmock", n: 2 } },
       { id: "m-intv", min: 10, text: "Formulările pentru interviu (P1), cu voce tare.", go: { t: "study", tab: "intv" } },
       { id: "m-behav", min: 10, text: "Pitch-ul și întrebările pentru ei, cu voce tare.", go: { t: "study", tab: "behav" } },
       { id: "m-log", min: 5, text: "Logistică: link sau adresă, laptop încărcat, editor deschis, apă, hârtie și pix.", go: { t: "study", tab: "tactics" } }

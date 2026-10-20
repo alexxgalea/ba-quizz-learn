@@ -96,6 +96,8 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 4. Memorie pe card, în `S.o[id]`: `m` = indexurile punctelor neacoperite întreg (data viitoare intervievatorul le vizează primele) și `a` = ultima ta versiune bună. După verdict vezi „față de data trecută”. Cheile se scriu doar pe carduri făcute cu dialog (sau care le au deja), iar `mergeState` le păstrează ca pe restul itemului.
 5. „Rescrie-l” e opțional, după verdict și model. Reverificarea folosește verificatorul simplu, nu schimbă scorul și, la cel puțin 80% din puncte, salvează textul ca `a` (maximum 800 de caractere).
 
+6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
+
 Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
 
 ## Verificare AI
