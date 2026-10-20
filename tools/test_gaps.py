@@ -9,10 +9,15 @@ SHOTS.mkdir(exist_ok=True)
 # Scripted `sample` (same idea as test_interview.py): the first turn is "done", the verdict covers point 0 spontaneously and flags a wrong claim.
 SAMPLE = """
 window.__calls = [];
+window.__gq = [];
 const sample = (prompt, opts) => new Promise(res => {
-  const kind = prompt.includes('"act":"followup"') ? 'turn' : prompt.includes('"spontan"') ? 'verdict' : 'grade';
-  window.__calls.push({ kind, prompt, tier: opts && opts.modelTier });
+  const kind = prompt.includes('Scrie o explicație scurtă') ? 'lesson' : prompt.includes('Pune O SINGURĂ întrebare nouă') ? 'ask' : prompt.includes('{"covered":true,"feedback"') ? 'gapgrade'
+    : prompt.includes('"act":"followup"') ? 'turn' : prompt.includes('"spontan"') ? 'verdict' : 'grade';
+  window.__calls.push({ kind, prompt, tier: opts && opts.modelTier, cache: opts && opts.cache, hasSignal: !!(opts && 'signal' in opts) });
   const n = (prompt.match(/^\\d+\\. /gm) || []).length;
+  if (kind === 'lesson') { setTimeout(() => res({ text: 'Ideea: GIL-ul serializează bytecode-ul.\\nUnde s-a rupt gândirea ta: ai crezut că threadurile rulează în paralel.\\nSpune-l la interviu: Pentru CPU-bound folosesc procese.', truncated: false }), 20); return; }
+  if (kind === 'ask') { setTimeout(() => res({ text: 'Ai un serviciu care redimensionează imagini: ce folosești și de ce?', truncated: false }), 20); return; }
+  if (kind === 'gapgrade') { const t = window.__gq.length ? window.__gq.shift() : JSON.stringify({ covered: true, feedback: 'Corect: procese pentru CPU-bound.' }); setTimeout(() => res({ text: t, truncated: false }), 20); return; }
   const text = kind === 'turn' ? JSON.stringify({ act: 'done' })
     : JSON.stringify({ covered: ['spontan'].concat(Array(n - 1).fill('nu')), missing: ['costul proceselor'], wrong: ['GIL nu protejează invarianții'], feedback: 'Ai acoperit începutul.' });
   setTimeout(() => res({ text, truncated: false }), 20);
@@ -154,6 +159,88 @@ async def main():
         await pg2.fill('#ans-t', "GIL-ul lasă un singur thread să execute bytecode, deci pentru CPU-bound folosesc procese.")
         await pg2.click('[data-a="iv-start"]'); await pg2.wait_for_selector('.ai-v', timeout=3000)
         check("simulated interview: no theory button between cards", await pg2.locator('[data-a="th-open"]').count() == 0)
+        # 6) Study with sample: the lesson, the targeted question, the repair (no scheduling side effects), details stay open across re-renders
+        await fresh(pg2)
+        A = await pg2.evaluate("(() => { const c = window.PREP.oral.find(c => c.m === 'gil'); return { id: c.id, k: c.k, n: c.k.length }; })()")
+        await seed(pg2, A["id"], {"b": 2, "n": 3, "s": 60, "t": 5000, "mc": {"2": 2}, "m": [2], "w": ["Cred că GIL-ul face codul thread-safe."]})
+        await pg2.click('.tab[data-tab="study"]'); await pg2.click('[data-a="seg"][data-seg="gaps"]'); await pg2.click('details.gap >> summary'); await pg2.wait_for_timeout(100)
+        await pg2.click('[data-a="th-explain"]'); await pg2.wait_for_selector('.gap-les', timeout=3000)
+        c0 = [c for c in await pg2.evaluate("window.__calls") if c["kind"] == "lesson"][0]
+        check("lesson: default tier, no cache, no signal key, point and wrong claim in the prompt, no candidate text in Study", c0["tier"] == "default" and c0["cache"] is False and not c0["hasSignal"] and A["k"][2] in c0["prompt"] and "thread-safe" in c0["prompt"] and "Ce a scris candidatul" not in c0["prompt"] and "nu avem textul lui" in c0["prompt"], c0["prompt"][:200])
+        check("lesson shown with its three labels; the block stayed open; the button is gone", await pg2.locator('.gap-les b').count() == 3 and await pg2.locator('details.gap[open]').count() == 1 and await pg2.locator('[data-a="th-explain"]').count() == 0)
+        await pg2.screenshot(path=str(SHOTS / "g4-lesson.png"), full_page=True)
+        before = await state_o(pg2, A["id"])
+        await pg2.click('[data-a="th-test"]'); await pg2.wait_for_selector('textarea[data-chk]', timeout=3000)
+        ca = [c for c in await pg2.evaluate("window.__calls") if c["kind"] == "ask"][0]
+        check("targeted question: quick tier, about the missed point", ca["tier"] == "quick" and A["k"][2] in ca["prompt"] and "nu repeta întrebarea" in ca["prompt"])
+        check("the question is shown as the interviewer's", "redimensionează imagini" in await pg2.inner_text('.gap .iv-m.int'))
+        ng = len([c for c in await pg2.evaluate("window.__calls") if c["kind"] == "gapgrade"])
+        await pg2.fill('textarea[data-chk]', "scurt"); await pg2.click('[data-a="th-send"]'); await pg2.wait_for_timeout(100)
+        check("too-short answer sends nothing", len([c for c in await pg2.evaluate("window.__calls") if c["kind"] == "gapgrade"]) == ng)
+        await pg2.evaluate("window.__gq.push(JSON.stringify({ covered: false, feedback: 'Mai lipsește costul proceselor.' }))")
+        await pg2.fill('textarea[data-chk]', "Folosesc threaduri, merge destul de bine."); await pg2.click('[data-a="th-send"]'); await pg2.wait_for_selector('.gap-ai .ai-l', timeout=3000)
+        check("wrong answer: 'Încă nu' with feedback; nothing repaired; answer kept", "Încă nu" in await pg2.inner_text('.gap-ai .ai-l') and "costul proceselor" in await pg2.inner_text('.gap-ai .ai-l') and await pg2.input_value('textarea[data-chk]') == "Folosesc threaduri, merge destul de bine." and (await state_o(pg2, A["id"])).get("mc") == {"2": 2})
+        await pg2.fill('textarea[data-chk]', "Procese, fiindcă task-ul e CPU-bound și GIL-ul blochează threadurile."); await pg2.click('[data-a="th-send"]'); await pg2.wait_for_selector('.gap-ok', timeout=3000)
+        e = await state_o(pg2, A["id"])
+        check("good answer: 'Reparat'; counter cleared, point out of `m`, merge stamp `gt` set", e.get("mc") == {} and "m" not in e and e.get("gt", 0) > 5000, e)
+        check("repair does not touch the Leitner schedule (b, n, s, t unchanged)", all(e[k] == before[k] for k in ["b", "n", "s", "t"]), (e, before))
+        check("Study keeps showing the repaired point; tab label has no count", "Reparat" in await pg2.inner_text('main') and "(" not in await pg2.inner_text('[data-seg="gaps"]'))
+        M = await pg2.evaluate("""() => {
+          const T = window.__prep, mk = o => Object.assign(T.normalize({}), { o: { x: o } });
+          const fixed = { t: 100, gt: 500, mc: {} }, stale = { t: 100, mc: { 1: 3 }, m: [1] };
+          const a = T.mergeState(mk(fixed), mk(stale)), b = T.mergeState(mk(stale), mk(fixed));
+          const pr = T.prune(Object.assign(T.normalize({}), { r: 50, o: { y: { t: 10, gt: 100 }, z: { t: 10 } } }));
+          return { a: JSON.stringify(a.state.o.x.mc), an: a.localNewer, b: JSON.stringify(b.state.o.x.mc), bn: b.remoteNewer, keep: Object.keys(pr.o) };
+        }""")
+        check("merge: the newer `gt` wins in both directions; prune keeps an item whose gt is after the reset", M["a"] == "{}" and M["an"] and M["b"] == "{}" and M["bn"] and M["keep"] == ["y"], M)
+
+        # 7) review with sample: the lesson sees what he wrote; a repaired point is not counted as missed on save
+        await fresh(pg2)
+        await start_gil(pg2)
+        cid = await pg2.evaluate("(() => { const q = document.querySelector('.icard-q').textContent.replace(/\\s+/g, ' ').trim(); return window.PREP.oral.find(c => c.m === 'gil' && c.q.replace(/`/g, '').replace(/\\s+/g, ' ').trim() === q).id; })()")
+        n = await pg2.evaluate("(id => window.PREP.oral.find(c => c.id === id).k.length)", cid)
+        MINE = "GIL-ul lasă un singur thread să execute bytecode, deci pentru CPU-bound folosesc procese."
+        await pg2.fill('#ans-t', MINE); await pg2.click('[data-a="iv-start"]'); await pg2.wait_for_selector('.ai-v', timeout=3000)
+        await pg2.click('[data-a="th-open"]'); await pg2.wait_for_selector('.gap .gap-i')
+        await pg2.click('.gap [data-a="th-explain"] >> nth=0'); await pg2.wait_for_selector('.gap-les', timeout=3000)
+        cl = [c for c in await pg2.evaluate("window.__calls") if c["kind"] == "lesson"][-1]
+        check("review lesson prompt carries what he wrote and the verdict's wrong claim", MINE in cl["prompt"] and "GIL nu protejează invarianții" in cl["prompt"] and "Ce a scris candidatul" in cl["prompt"])
+        await pg2.click('.gap [data-a="th-test"] >> nth=0'); await pg2.wait_for_selector('textarea[data-chk]')
+        await pg2.fill('textarea[data-chk]', "Procese, fiindcă task-ul e CPU-bound și GIL-ul blochează threadurile."); await pg2.click('.gap [data-a="th-send"]'); await pg2.wait_for_selector('.gap-ok', timeout=3000)
+        check("repaired in review: nothing written to the state until save", (await pg2.evaluate("window.__prep.state().o"))[cid].get("mc") if cid in await pg2.evaluate("window.__prep.state().o") else True is True)
+        await pg2.click('[data-a="oral-save"]'); await pg2.wait_for_timeout(100)
+        e = await state_o(pg2, cid)
+        check("save: the repaired point (1) has no counter and is out of `m`; the other misses count 1", e.get("mc") == {str(i): 1 for i in range(2, n)} and e.get("m") == list(range(2, n)), e)
+
+        # 8) plan task and morning warm-up appear only with gaps; weights favour cards with gaps
+        P = await pg2.evaluate("""() => {
+          const days = window.__prep.genPlan(), last = days[days.length - 1];
+          const g = days[0].tasks.find(t => t.key === 'gap');
+          return { g: g && { go: g.go, min: g.min, text: g.text }, m: last.tasks.map(t => t.id.replace(/^g[\\d-]+-/, '')), when: last.when };
+        }""")
+        check("plan: evening 'gap' task opens Pentru tine; morning has m-gap after the warm-up, label 50–60", P["g"] and P["g"]["go"] == {"t": "study", "tab": "gaps"} and "goluri" in P["g"]["text"] and "m-gap" in P["m"] and "50–60" in P["when"], P)
+        K = await pg2.evaluate("window.__prep.genPlan()[0].tasks.map(t => t.key)")
+        check("regression: adding the gap task leaves the rest of the evening recipe alone (oral present, no smart/open fallback)", "oral" in K and "smart" not in K and "open" not in K and K.count("gap") == 1, K)
+        await pg2.click('.tab[data-tab="plan"]'); await pg2.wait_for_timeout(100)
+        await pg2.evaluate('[...document.querySelectorAll(\'[data-a="go"]\')].find(b => /-gap$/.test(b.dataset.id) && !/-m-gap$/.test(b.dataset.id)).click()'); await pg2.wait_for_timeout(100)
+        check("the plan task opens Study › Pentru tine", "Ce ratezi" in await pg2.inner_text('main'))
+        W = await pg2.evaluate("""() => {
+          const T = window.__prep, s = T.state(), cs = window.PREP.oral.filter(c => window.PREP.modules.find(m => m.id === c.m).p === 1).slice(0, 3);
+          const out = {};
+          s.o = {}; T.setState(s); out.base = T.wO(cs[0]);
+          s.o[cs[0].id] = { b: 1, n: 1, s: 20, t: 1, mc: { 0: 3, 1: 3 } }; s.o[cs[1].id] = { b: 1, n: 1, s: 20, t: 1, mc: { 0: 1 } }; s.o[cs[2].id] = { b: 1, n: 1, s: 20, t: 1, mc: {} }; T.setState(s);
+          out.heavy = T.wO(cs[0]); out.light = T.wO(cs[1]); out.none = T.wO(cs[2]);
+          return out;
+        }""")
+        check("weights: no gaps ×1; a little ×1.25; heavy gaps capped at ×2", abs(W["none"] * 2 - W["heavy"]) < 1e-9 and abs(W["none"] * 1.25 - W["light"]) < 1e-9, W)
+        check("no page errors (with sample, AI steps)", not errs2, errs2)
+
+        # 9) without sample there is no AI step in the theory
+        ctx3 = await b.new_context(viewport={"width": 360, "height": 740}); pg3 = await ctx3.new_page()
+        await pg3.route("**/fonts.*", lambda r: r.abort()); await fresh(pg3)
+        await seed(pg3, A["id"], {"b": 1, "n": 1, "s": 30, "t": 1000, "mc": {"1": 2}, "m": [1]})
+        await pg3.click('.tab[data-tab="study"]'); await pg3.click('[data-a="seg"][data-seg="gaps"]'); await pg3.click('details.gap >> summary'); await pg3.wait_for_timeout(100)
+        check("no sample: theory only, no explain or targeted-question buttons", await pg3.locator('details.gap .gap-i').count() == 1 and await pg3.locator('[data-a="th-explain"], [data-a="th-test"]').count() == 0)
         check("no page errors (with sample)", not errs2, errs2)
         await b.close()
     print("\nFAILED: " + ", ".join(fails) if fails else "\nALL OK")

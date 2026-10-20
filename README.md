@@ -107,6 +107,9 @@ Ce ratezi la oral se înregistrează pe fiecare card, în `S.o[id]`: `mc` (index
 
 - **Pe ecranul de verdict**: „Teorie pe ce ai ratat (N)” arată, pentru punctele neacoperite întreg (din bifele de acum), ce ai spus greșit și, pentru fiecare punct, propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu el (`relRank`, fără cuvinte de legătură și fără diacritice), plus grilele greșite din modul. Nu repetă aceeași propoziție la puncte diferite. În interviul simulat nu apare.
 - **Studiu › Pentru tine**: golurile de pe toate cardurile, cele mai grele primele (ratări × prioritatea modulului, `gapList`), cu „Exersează cardul”.
+- **Doar cu `sample`** (în artifact), la fiecare gol: „Explică-mi pe înțelesul meu” (`default`, fără cache; pornește din ce ai scris sau, în Studiu, din afirmațiile greșite păstrate; trei părți: Ideea, Unde s-a rupt gândirea ta, Spune-l la interviu) și „Verifică-te pe acest punct” (o întrebare nouă, într-un scenariu, `quick`; răspunsul e judecat cu `default`, `{"covered", "feedback"}`). Dacă acoperi punctul, golul e reparat: `mc` revine la 0 și punctul iese din `m`, fără să schimbe cutia cardului. În review reparația se aplică la „Salvează” (`run.fixed`); în Studiu, imediat, cu `gt` (timestamp de îmbinare pentru goluri: `itemT = max(t, gt)` în `mergeState` și `prune`), ca scadența Leitner să rămână pe `t`. Stările explicațiilor și ale întrebărilor stau în `ui.les` / `ui.chk` (nu se salvează în progres).
+- **Alegerea cardurilor**: `wO` înmulțește cu `gapF` (până la ×2; fiecare ratare numără, cel mult 3 per punct), deci „Recomandate”, interviul simulat și planul favorizează cardurile cu goluri.
+- **Plan**: sarcina `gap` pe seară („Pentru tine: N goluri…”, 10 min) și `m-gap` în dimineața interviului, doar când există goluri.
 - Test: `python3 tools/test_gaps.py`.
 
 ## Verificare AI

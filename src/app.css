@@ -504,3 +504,9 @@ details.gap[open] { box-shadow: var(--shadow); }
 details.gap > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
 details.gap > summary::-webkit-details-marker { display: none; }
 details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 1.4; }
+.gap-ai { align-self: stretch; padding-top: 4px; }
+.gap-ai .btn { align-self: flex-start; }
+.gap-les { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 4px 12px 12px 4px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.gap-les .xp-h { color: var(--accent); }
+.gap-ok { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.card.gap-ok { border-left: 4px solid var(--ok); }
