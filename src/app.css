@@ -464,6 +464,19 @@ input.keyin { min-height: 44px; font-family: var(--font-mono); font-size: 16px; 
 .ai-l b { font-size: 14px; color: var(--warn); }
 .ai-l.bad b { color: var(--bad); }
 
+/* intervievator: dialogul scris, rescrierea */
+.iv-t { display: flex; flex-direction: column; gap: 10px; }
+.iv-m { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
+.iv-m.int { background: var(--accent-soft); border-color: transparent; }
+.iv-m p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.iv-w { font: 600 11.5px/1.3 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.iv-m.int .iv-w { color: var(--accent); }
+.iv-wait { color: var(--muted); margin: 0; }
+details.model .iv-t { padding: 0 14px 14px; }
+details.model .iv-m p { padding: 0; font-size: 15px; }
+.iv-cmp { margin: 0; }
+.kp-i .chip { margin-left: 4px; vertical-align: 1px; }
+
 /* ---- de repetat acum (plan), întrebări deschise, formulări, lacune, setări ---- */
 .card.due { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); }
 .card.due .spread { align-items: center; gap: 10px; }
