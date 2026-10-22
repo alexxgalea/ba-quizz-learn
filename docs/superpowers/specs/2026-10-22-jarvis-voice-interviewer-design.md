@@ -116,7 +116,7 @@ Invarianți și erori:
 - Reluarea: doar dacă a primit un handle; până la 3 încercări (0,5 / 1 / 2 s). Altfel `closed` cu `network`.
 - După `closed`, nimic nu mai emite evenimente.
 
-Ascunde: URL-ul și cheia, mesajul de setup (din VAD, doar `silenceDurationMs`), Base64, mesajele primite ca `Blob`, id-urile apelurilor de funcții, `sessionResumption` și `contextWindowCompression`, `GoAway`, maparea codurilor de închidere pe motive.
+Ascunde: URL-ul și cheia, mesajul de setup (din VAD, doar `silenceDurationMs`; restul câmpurilor de VAD nu se trimit, fiindcă nu avem nevoie de ele), Base64, mesajele primite ca `Blob`, id-urile apelurilor de funcții, `sessionResumption` și `contextWindowCompression`, `GoAway`, maparea codurilor de închidere pe motive.
 
 Cusătură internă (nu face parte din interfață): `GeminiLive.create({ WebSocket })`, cu `FakeSocket` în testele lui.
 
@@ -344,7 +344,7 @@ Rulată pe telefonul lui Alex (Android, Chrome), pe 22 octombrie 2026, cu pagina
 
 **Constatări care schimbă designul:**
 - **Microfonul căștilor.** Cu căști Bluetooth, microfonul a dat tăcere (0,000) la prima pornire; după „Repornește microfonul” a dat nivel normal (maxim 0,393) și serverul a întrerupt. Chrome a listat doar `Default`, `Speakerphone` și `Headset earpiece`. Rezultat: selector de microfon și mesajul „Nu te aud” (§6, §8).
-- **Setări VAD în plus.** Cu `prefixPaddingMs: 20`, `startOfSpeechSensitivity: START_SENSITIVITY_HIGH` și `activityHandling` în setup, sesiunea n-a mai răspuns deloc (probabil setup respins; jurnalul n-a arătat codul de închidere). Nu le trimitem. Doar `silenceDurationMs` e verificat: setup-ul a fost acceptat, iar latența urmărește pragul.
+- **Setările de sesiune.** Un test separat (22 octombrie, pagina de probă, runda 4) a arătat că serverul acceptă pe `gemini-3.8-live` toate cele cinci setup-uri încercate: cel de bază, `sessionResumption`, `contextWindowCompression`, ambele împreună și varianta „VAD sensibil” (`prefixPaddingMs: 20`, `startOfSpeechSensitivity: START_SENSITIVITY_HIGH`, `activityHandling` explicit). Reluarea și compresia din §4.1 se pot folosi. Tăcerea variantei „sensibil” din runda 2 nu venea dintr-un setup respins; cauza rămâne necunoscută (probabil nu mai vorbea nimeni în fereastra de întrerupere). Nu trimitem câmpurile de VAD în plus, fiindcă n-avem nevoie de ele: doar `silenceDurationMs` e verificat și în folosire.
 - **Oprirea locală** (aplicația golește redarea când aude vorbire) n-a fost necesară și n-a fost exersată. Rămâne în afara scopului.
 - **Conexiunea.** Setup-ul durează ~0,5 s. O singură „eroare WebSocket” în toate rundele; tratamentul rămâne cel din §8.
 - **Limite ale probei.** Nu avem un test curat al căștilor pe fereastra de întrerupere, și nici o sesiune lungă (15 minute). Le verifică Alex în folosire.
