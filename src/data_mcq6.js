@@ -128,4 +128,131 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       ctx: "Open/closed: codul e deschis pentru extindere (reguli noi), dar închis pentru modificare (motorul nu se schimbă).",
       e: "Cu o interfață comună și un registru, o regulă nouă e un fișier nou. Motorul și regulile vechi rămân neatinse, iar fiecare regulă se testează separat." }
   ]);
+  Q("asyncio", [
+    { id: "aio-01", lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
+      "O corutină rulează până la un `await`; abia atunci bucla poate trece la alta",
+      "Corutinele rulează în paralel, pe mai multe core-uri",
+      "Sistemul de operare întrerupe corutinele oricând, ca pe threaduri",
+      "Fiecare corutină primește propriul thread"],
+      ctx: "La threaduri, sistemul de operare decide când comută. În asyncio există un singur thread și o buclă de evenimente care rulează corutinele pe rând.",
+      e: "Bucla poate comuta doar când corutina curentă cedează controlul, la un `await` pe ceva care chiar așteaptă (I/O, timer). Între două `await`-uri, corutina rulează singură." },
+    { id: "aio-02", lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
+    time.sleep(2)
+    return "ok"`, o: [
+      "~200 s: `time.sleep` blochează bucla, cererile se servesc pe rând",
+      "~2 s: toate așteaptă în paralel",
+      "~2 s, pentru că `async def` face apelul non-blocant",
+      "Nimic: `time.sleep` aruncă eroare într-o corutină"],
+      ctx: "`time.sleep` blochează threadul care îl apelează. `asyncio.sleep` e o corutină care cedează controlul buclei cât așteaptă.",
+      e: "`time.sleep` nu cedează controlul: bucla stă blocată 2 s pe fiecare cerere, deci cererile se servesc una după alta. Cu `await asyncio.sleep(2)` toate ar aștepta în paralel, ~2 s în total." },
+    { id: "aio-03", lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
+      "Rulează funcția sincronă într-un thread al executorului implicit, fără să blocheze bucla",
+      "Rulează funcția într-un proces separat, pe alt core",
+      "Transformă funcția într-o corutină care cedează controlul la fiecare linie",
+      "Rulează funcția direct pe bucla evenimentelor, cu prioritate"],
+      ctx: "Uneori trebuie să apelezi dintr-o corutină cod sincron: un SDK fără variantă async, un driver blocant, o funcție de parsare.",
+      e: "`asyncio.to_thread` (3.9+) trimite funcția într-un thread și întoarce o corutină pe care o aștepți. Bucla rămâne liberă cât rulează funcția." },
+    { id: "aio-04", lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
+    await asyncio.gather(
+        a(), b(), c())
+except ValueError:
+    ...`, o: [
+      "Continuă să ruleze; `gather` doar propagă prima excepție",
+      "Sunt anulate automat",
+      "Sunt anulate, iar excepția devine `ExceptionGroup`",
+      "`gather` așteaptă să termine toate, apoi ridică excepția"],
+      ctx: "`asyncio.gather` și `asyncio.TaskGroup` rulează amândouă corutine concurent, dar tratează diferit prima eroare.",
+      e: "Fără `return_exceptions=True`, `gather` propagă imediat prima excepție, dar nu anulează celelalte task-uri: ele continuă în fundal. Dacă vrei anulare, folosești `TaskGroup`." },
+    { id: "aio-05", lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
+      "Anulează celelalte task-uri din grup, așteaptă să se oprească și ridică `ExceptionGroup`",
+      "Ignoră eroarea și continuă cu celelalte",
+      "Întoarce eroarea ca valoare, ca `return_exceptions=True`",
+      "Repornește task-ul care a eșuat"],
+      ctx: "`async with asyncio.TaskGroup() as tg:` (3.11+) creează task-uri cu `tg.create_task(...)`; blocul se termină abia când s-au terminat toate.",
+      e: "TaskGroup implementează concurența structurată: la prima eroare anulează frații, iar la ieșirea din bloc ridică toate excepțiile într-un `ExceptionGroup`, prinse cu `except*`." },
+    { id: "aio-06", lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
+    data = await fetch(url)`, o: [
+      "După 5 s task-ul e anulat, iar blocul ridică `TimeoutError`",
+      "`fetch` continuă în fundal, iar `data` devine `None`",
+      "În afara blocului primești `CancelledError`",
+      "Programul așteaptă toate cele 10 s, apoi ridică `TimeoutError`"],
+      ctx: "`asyncio.timeout` (3.11+) e un context manager. Intern, la expirare anulează task-ul curent și transformă anularea în altă excepție la ieșire.",
+      e: "La expirare, task-ul primește `CancelledError` în `fetch`, iar la ieșirea din bloc ea devine `TimeoutError`. `fetch` e oprit, nu lăsat în fundal." },
+    { id: "aio-07", lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
+    while True:
+        try:
+            await job()
+        except BaseException:
+            log.exception("failed")`, o: [
+      "Prinde `CancelledError` și continuă bucla: task-ul nu mai poate fi oprit",
+      "Nicio problemă: `except BaseException` e modul corect de a prinde tot",
+      "`log.exception` nu funcționează în corutine",
+      "Bucla consumă 100% CPU"],
+      ctx: "Anularea unui task (`task.cancel()`, timeout, oprirea aplicației) se face aruncând `CancelledError` în el, la următorul `await`.",
+      e: "`CancelledError` e `BaseException` (din 3.8), deci `except BaseException` o înghite, iar bucla continuă. Corect: `except Exception`, iar dacă prinzi anularea pentru cleanup, o ridici din nou." },
+    { id: "aio-08", lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
+      "Task-ul poate fi colectat de GC înainte să termine, iar excepțiile lui se pierd",
+      "Corutina nu pornește până nu faci `await` pe ea",
+      "Rulează sincron și blochează apelantul",
+      "Pornește un thread nou pentru fiecare task"],
+      ctx: "`create_task` programează corutina pe buclă și întoarce un obiect `Task`. Bucla ține doar o referință slabă la el.",
+      e: "Documentația cere explicit să păstrezi o referință: fără ea task-ul poate dispărea la jumătate, iar o excepție rămâne doar un warning „Task exception was never retrieved”." },
+    { id: "aio-09", lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
+      "`loop.call_soon_threadsafe(q.put_nowait, ev)`",
+      "`q.put_nowait(ev)` direct: `asyncio.Queue` e thread-safe",
+      "`await q.put(ev)` din thread",
+      "O `queue.Queue` citită cu `get()` direct în corutină"],
+      ctx: "Primitivele din `asyncio` (`Queue`, `Lock`, `Event`) sunt gândite pentru corutinele aceleiași bucle, nu pentru threaduri diferite.",
+      e: "`asyncio.Queue` nu e thread-safe. `call_soon_threadsafe` programează apelul în threadul buclei și o trezește. Pentru o corutină: `asyncio.run_coroutine_threadsafe`." }
+  ]);
+
+  Q("gil", [
+    { id: "gil-15", lvl: 2, q: "Un producător și 4 consumatori, în threaduri. Ce folosești drept coadă de lucru?", o: [
+      "`queue.Queue`: thread-safe, cu `get()` blocant și `task_done()` / `join()`",
+      "O listă cu `append` și `pop(0)`, protejată de GIL",
+      "`asyncio.Queue`, pentru că e mai rapidă",
+      "Un `dict` global și un `while True` care verifică dacă are elemente"],
+      ctx: "Producer/consumer: un thread pune lucru, alții îl iau. Ai nevoie de sincronizare și de un mod de a aștepta fără să consumi CPU.",
+      e: "`queue.Queue` are lock-urile în ea, iar `get()` doarme până apare un element. `task_done()` și `join()` îți spun când s-a terminat tot lucrul." },
+    { id: "gil-16", lvl: 2, q: "Ce se întâmplă la `outer()`?", code: R`lock = Lock()
+
+def outer():
+    with lock:
+        inner()
+
+def inner():
+    with lock:
+        ...`, o: [
+      "Deadlock: același thread încearcă să ia din nou un `Lock` pe care îl ține",
+      "Merge: același thread poate lua de mai multe ori un lock",
+      "`RuntimeError`: lock deja luat",
+      "`inner` sare peste blocul `with`"],
+      ctx: "`threading.Lock` nu ține minte cine l-a luat. `threading.RLock` (reentrant) ține minte threadul proprietar și un contor.",
+      e: "Un `Lock` simplu blochează pe oricine îl cere a doua oară, inclusiv threadul care îl ține. Fix: `RLock`, sau, mai curat, o funcție internă care presupune lock-ul deja luat." },
+    { id: "gil-17", lvl: 2, q: "În ce ordine se afișează rezultatele?", code: R`with ThreadPoolExecutor(8) as ex:
+    fs = [ex.submit(fetch, u)
+          for u in urls]
+    for f in as_completed(fs):
+        print(f.result())`, o: [
+      "În ordinea în care termină cererile",
+      "În ordinea din `urls`",
+      "Aleator, fără legătură cu durata",
+      "Toate deodată, după ce termină ultima"],
+      ctx: "`executor.map` întoarce rezultatele în ordinea intrărilor. `concurrent.futures.as_completed` întoarce viitoarele (futures) pe măsură ce se termină.",
+      e: "`as_completed` dă fiecare future imediat ce e gata, deci cererile rapide apar primele. `f.result()` ridică din nou excepția dacă sarcina a eșuat." },
+    { id: "gil-18", lvl: 1, q: "La ce folosești `threading.Event`?", o: [
+      "Un semnal pe care un thread îl setează (`set()`) și altele îl așteaptă (`wait()`)",
+      "Un lock pe care același thread îl poate lua de mai multe ori",
+      "O coadă de mesaje între threaduri",
+      "Un timer care pornește o funcție după un interval"],
+      ctx: "Exemplu tipic: oprirea curată a workerilor. Firul principal anunță „oprește-te”, iar workerii verifică semnalul între sarcini.",
+      e: "`Event` e un flag sincronizat: `set()` îl pornește, `wait()` blochează până e pornit, `is_set()` îl citește. E modul simplu de a cere workerilor să se oprească." },
+    { id: "gil-19", lvl: 3, q: "Ce face `cond.wait()` într-un `threading.Condition`?", o: [
+      "Eliberează lock-ul asociat, așteaptă un `notify()`, apoi îl reia înainte să revină",
+      "Așteaptă un `notify()` ținând lock-ul luat",
+      "Așteaptă un interval fix, apoi verifică singur condiția",
+      "Blochează toate threadurile până la `notify_all()`"],
+      ctx: "Un `Condition` combină un lock cu o listă de așteptare: un thread așteaptă o stare („coada nu e goală”), altul o schimbă și îl anunță.",
+      e: "`wait()` trebuie apelat cu lock-ul luat. Îl eliberează cât doarme, ca alții să poată schimba starea, și îl reia la trezire. Verifici condiția într-o buclă sau cu `wait_for(predicat)`." }
+  ]);
 })(window.PREP);

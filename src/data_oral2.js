@@ -266,4 +266,44 @@ def test_notify(m):
       "Configurare per client (activ/inactiv, praguri) ca date, nu ca `if`-uri în cod"],
       model: "Aș defini o interfață mică pentru o regulă, cu `matches(event)` și `alert(event)`, ca `Protocol` sau ABC. Fiecare regulă e o clasă separată, înregistrată într-un registru, de exemplu cu un decorator, iar motorul doar parcurge registrul și aplică regulile pe fiecare eveniment. Așa o regulă nouă înseamnă un fișier nou și un test nou, fără să ating motorul sau regulile existente. Regulile nu țin stare globală; ce variază per client, cum ar fi pragurile sau activarea, vine din configurare, ca date. Motorul îl testez cu o listă explicită de reguli false, ca să nu depind de registrul real." }
   ]);
+  O("asyncio", [
+    { id: "o-aio-1", q: "Explică event loop-ul din asyncio și ce înseamnă „să blochezi bucla”.", k: [
+      "Un singur thread rulează bucla; corutinele rulează pe rând",
+      "O corutină cedează controlul doar la `await` (I/O, timer); atunci bucla trece la alta",
+      "Un apel blocant (`time.sleep`, `requests`, driver sincron, calcul greu) oprește toate corutinele",
+      "Soluții: biblioteci async, `asyncio.to_thread` pentru I/O sincron, procese pentru CPU",
+      "Detectare: modul debug (callback-uri peste 100 ms), latență care crește pe toate rutele deodată"],
+      model: "Bucla de evenimente rulează pe un singur thread și execută corutinele pe rând. O corutină rulează până la un `await` pe ceva care așteaptă, un socket sau un timer; atunci e suspendată și bucla trece la alta. Asta permite mii de conexiuni deschise într-un singur worker. „Să blochezi bucla” înseamnă să faci într-o corutină un apel care nu cedează controlul: `time.sleep`, `requests.get`, un driver de bază de date sincron sau un calcul lung. Cât durează, nicio altă cerere nu avansează. Folosesc biblioteci async, mut I/O-ul sincron în `asyncio.to_thread` și calculul greu în procese. În producție se vede ca o latență care crește pe toate rutele deodată, iar modul debug din asyncio loghează pașii mai lenți de 100 ms." },
+    { id: "o-aio-2", q: "`gather`, `TaskGroup` sau `as_completed`: când îl alegi pe fiecare?", k: [
+      "`gather`: rezultate în ordinea intrărilor; la prima eroare o propagă, dar NU anulează restul",
+      "`gather(return_exceptions=True)`: vrei toate rezultatele, inclusiv erorile, ca valori",
+      "`TaskGroup` (3.11+): la prima eroare anulează restul și ridică `ExceptionGroup` (concurență structurată)",
+      "`as_completed`: procesezi fiecare rezultat imediat ce e gata",
+      "Pentru volum mare: limită de concurență (`Semaphore`) și timeout per operație"],
+      model: "`gather` rulează corutinele concurent și îmi dă rezultatele în ordinea în care le-am dat; la prima excepție o ridică, dar celelalte task-uri continuă în fundal. Dacă vreau toate rezultatele, chiar și eșecurile, pun `return_exceptions=True` și le separ după. `TaskGroup`, din 3.11, e varianta structurată: la prima eroare anulează restul și ridică un `ExceptionGroup`, deci niciun task nu rămâne orfan; îl prefer când operațiile depind una de alta. `as_completed` îl folosesc când vreau să procesez fiecare rezultat imediat, de exemplu să salvez scanările pe măsură ce se termină. La sute sau mii de operații adaug un `Semaphore` și un timeout per operație." },
+    { id: "o-aio-3", q: "Pentru un serviciu care scanează mii de hosturi și apoi analizează rezultatele: asyncio, threads sau procese?", k: [
+      "Partea de rețea e I/O-bound: asyncio (mii de conexiuni, un thread) sau un thread pool, dacă bibliotecile sunt sincrone",
+      "Analiza grea în Python pur e CPU-bound: procese (`ProcessPoolExecutor`), din cauza GIL-ului",
+      "Limită de concurență și timeout per host, ca să nu supraîncarci ținte sau propriile resurse",
+      "Combinare: bucla async face I/O, iar calculul pleacă în procese (`run_in_executor`)",
+      "La scară: împarți munca pe workeri separați prin coadă (Celery/RabbitMQ)"],
+      model: "Despart după tipul muncii. Scanarea înseamnă mai ales așteptare pe rețea, deci e I/O-bound: cu asyncio țin mii de conexiuni într-un singur thread, cu un `Semaphore` ca limită și un timeout per host; dacă biblioteca de scanare e sincronă, un thread pool face același lucru. Analiza rezultatelor, dacă e calcul greu în Python pur, e CPU-bound, iar acolo threadurile nu ajută din cauza GIL-ului, deci o trimit într-un `ProcessPoolExecutor`, eventual cu `run_in_executor` din bucla async. Dacă volumul crește peste o mașină, separ cele două etape în workeri diferiți, legați printr-o coadă, RabbitMQ cu Celery, și le scalez independent." }
+  ]);
+
+  O("gil", [
+    { id: "o-gil-4", q: "Ai un producător și mai mulți workeri în threaduri. Cum îi oprești curat?", k: [
+      "Coada de lucru: `queue.Queue` (thread-safe, `get()` blocant)",
+      "Semnal de oprire: câte o santinelă (`None`) pe worker, `threading.Event`, sau `Queue.shutdown()` (3.13+)",
+      "Workerul termină sarcina curentă și nu mai ia alta; nu omori threaduri din afară",
+      "`q.join()` / `task_done()` ca să știi că tot lucrul s-a terminat; apoi `join()` pe threaduri",
+      "Timeout-uri la I/O, ca un worker blocat să observe oprirea"],
+      model: "Folosesc o `queue.Queue` pentru lucru. Când producătorul termină, pun câte o santinelă, `None`, pentru fiecare worker; din Python 3.13 pot folosi și `q.shutdown()`. Fiecare worker termină sarcina curentă și iese când primește santinela, pentru că în Python nu poți omorî un thread din afară. Dacă vreau oprire la semnal, de exemplu la SIGTERM, folosesc un `threading.Event` verificat între sarcini. Cu `q.join()` și `task_done()` știu că tot lucrul a fost procesat, apoi fac `join()` pe threaduri. Operațiile I/O au timeout, ca un worker blocat într-un apel să observe oprirea." },
+    { id: "o-gil-5", q: "Ce e un race condition și cum îl previi în Python?", k: [
+      "Rezultatul depinde de ordinea în care se intercalează threadurile (citește-modifică-scrie, verifică-apoi-acționează)",
+      "GIL-ul nu protejează operațiile compuse",
+      "Prevenire: fără stare partajată (rezultate separate, cozi), sau lock-uri în jurul secțiunii critice",
+      "În baze de date: operații atomice (`UPDATE ... SET x = x + 1`, `SELECT ... FOR UPDATE`, constrângeri unice)",
+      "Testare: greu de reprodus; repetări multe, stres, analiza codului"],
+      model: "Un race condition apare când rezultatul depinde de ordinea în care se intercalează threadurile sau procesele. Exemplul clasic e citește-modifică-scrie, ca `counter += 1`, sau verifică-apoi-acționează: verific că utilizatorul nu există, apoi îl creez. GIL-ul nu ajută, pentru că protejează doar instrucțiuni individuale de bytecode. Prima opțiune e să elimin starea partajată: fiecare thread produce rezultate separate sau comunică prin cozi. Altfel pun un lock în jurul secțiunii critice. Când starea e în baza de date, mut atomicitatea acolo: `UPDATE ... SET x = x + 1`, `SELECT ... FOR UPDATE` sau o constrângere unică. Sunt greu de reprodus în teste, deci contează analiza codului." }
+  ]);
 })(window.PREP);
