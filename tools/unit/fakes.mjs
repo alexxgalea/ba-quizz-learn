@@ -54,3 +54,46 @@ export function fakeAudioContext() {
   };
   return ctx;
 }
+
+// Live fals: respectă contractul lui GeminiLive (open → sesiune; close() emite `closed`; după `closed` nu mai emite nimic).
+// Pentru test: `emit(e)` e ce trimite serverul, `sent` e ce a trimis clientul, `failOpen = "auth"` face open să pice.
+export function fakeLive() {
+  const live = { cfg: null, sent: [], closed: false, failOpen: null, emit: () => {}, session: null };
+  live.open = async (cfg, onEvent) => {
+    live.cfg = cfg;
+    if (live.failOpen) throw Object.assign(new Error(live.failOpen), { reason: live.failOpen, code: 0, detail: "" });
+    live.emit = e => { if (!live.closed) onEvent(e); };
+    live.session = {
+      audio: pcm => { if (live.closed) return false; live.sent.push({ audio: Array.from(pcm) }); return true; },
+      text: text => { if (live.closed) return false; live.sent.push({ text }); return true; },
+      close: () => { if (live.closed) return; live.emit({ type: "closed", reason: "user", code: 1000, detail: "" }); live.closed = true; }
+    };
+    return live.session;
+  };
+  return live;
+}
+
+// Audio fals: respectă contractul lui BrowserAudio. Pentru test: `frame(pcm)` și `level(v)` vin de la microfon, `drain()` e sfârșitul firesc al redării.
+export function fakeAudio() {
+  const a = { opts: null, started: false, stopped: false, stops: 0, played: [], flushes: 0, playing: false, failStart: null };
+  const setPlaying = v => { if (a.playing !== v) { a.playing = v; a.opts.onPlaying(v); } };
+  a.start = async opts => {
+    if (a.failStart) throw Object.assign(new Error(a.failStart), { reason: a.failStart });
+    a.opts = opts; a.started = true;
+    return { label: "Microfon de test" };
+  };
+  a.stop = async () => { a.stopped = true; a.stops++; };
+  a.play = pcm => { a.played.push(Array.from(pcm)); setPlaying(true); };
+  a.flush = () => { a.flushes++; setPlaying(false); };
+  a.mics = async () => [{ id: "m1", label: "Microfon de test" }];
+  a.frame = pcm => a.opts.onFrame(pcm);
+  a.level = v => a.opts.onLevel(v);
+  a.drain = () => setPlaying(false);
+  return a;
+}
+
+// Ceas fals: `now()` stă pe loc până la `advance(ms)`.
+export function fakeClock(start = 1000) {
+  const c = { t: start, now: () => c.t, advance: ms => { c.t += ms; } };
+  return c;
+}

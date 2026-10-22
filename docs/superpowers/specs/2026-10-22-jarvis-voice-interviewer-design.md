@@ -155,7 +155,7 @@ Reguli:
 - `thinking`: de la sfârșitul vocii lui Alex (nivelul sub prag), sau cât rulează o funcție, până la primul audio.
 - `halfDuplex`: niciun cadru către Live cât `onPlaying` e adevărat.
 - `pause`: cadrele nu mai pleacă și redarea se golește; microfonul rămâne deschis. `resume` revine în `listening`.
-- `mic-silent`: nivelul sub 0,002 timp de 4 s cât e `listening`; se șterge la primul nivel peste 0,01.
+- `mic-silent`: nivelul practic zero (sub 0,0005) timp de 4 s cât e `listening`; se șterge la primul cadru cu semnal. O cameră liniștită, dar cu semnal, nu declanșează avertismentul.
 - Pornirea: `audio.start` și `live.open` în paralel; dacă una cade, cealaltă se închide. `start` se respinge cu motivul (`denied`, `no-mic`, `auth`, `quota`, `rejected`, `network`).
 - `end()` închide Live și Audio și emite `ended`. Un `closed` neașteptat de la Live emite `ended` cu motivul.
 
@@ -252,7 +252,7 @@ app.log({ title, n, c, dur })              // un rând în S.h, cu kind: "jarvis
   - Pe difuzor, cu anularea ecoului și reducerea zgomotului din Chrome (implicit), întreruperea merge și nu apar auto-întreruperi (§11). Full-duplex e implicit.
   - Setarea manuală „Întrerupere doar cu căști” activează `halfDuplex`, pentru un telefon al cărui difuzor produce ecou.
   - **Selector de microfon** în Progres › Jarvis. Pe Android, microfonul căștilor Bluetooth poate da tăcere (nivel 0,000) la prima pornire.
-  - **„Nu te aud”:** dacă nivelul microfonului rămâne sub 0,002 timp de 4 secunde cât ascultă, ecranul spune asta și oferă selectorul și „Repornește microfonul”.
+  - **„Nu te aud”:** dacă nivelul microfonului rămâne practic zero (sub 0,0005) timp de 4 secunde cât ascultă, ecranul spune asta și oferă selectorul și „Repornește microfonul”.
 - **Ieșirea din aplicație sau ecranul stins:** pauză, apoi reluare prin handle-ul de reluare.
 - **Ecranul**, la 360 px, în light și dark, doar cu tokenii de culoare existenți:
   - sus: cardul și codul (format compact, 11 px);
@@ -287,7 +287,7 @@ app.log({ title, n, c, dur })              // un rând în S.h, cu kind: "jarvis
 |---|---|
 | Fără cheie | Ecranul Jarvis arată pașii de configurare |
 | Microfon refuzat | Mesaj clar; conversația continuă cu „Scriu în loc să vorbesc” |
-| Microfon mut (nivel sub 0,002 timp de 4 s) | „Nu te aud”: selectorul de microfon și „Repornește microfonul” |
+| Microfon mut (nivel sub 0,0005 timp de 4 s) | „Nu te aud”: selectorul de microfon și „Repornește microfonul” |
 | 429 / limita gratuită / server indisponibil | Sesiunea se oprește cu mesaj; cardurile terminate sunt deja salvate |
 | Limita de 15 minute sau rețea căzută | Reluare automată cu handle-ul; dacă eșuează, sesiunea se închide cu rezumatul de până atunci |
 | `record_result` invalid | Răspuns de eroare către model; după a doua încercare greșită, cardul rămâne neînregistrat și se trece mai departe |
