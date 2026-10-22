@@ -1,6 +1,6 @@
 # Jarvis: intervievator vocal nativ (design)
 
-Data: 2026-10-22. Autor: Claude, cu Alex. Stare: aprobat pe secțiuni în chat. Proba de 10 minute a fost rulată pe telefonul lui Alex, iar rezultatele sunt fixate în §11.
+Data: 2026-10-22. Autor: Claude, cu Alex. Stare: aprobat pe secțiuni în chat. Proba de 10 minute a fost rulată pe telefonul lui Alex (rezultatele în §11), iar interfețele modulelor sunt fixate în §4.
 
 ## 1. Scop
 
@@ -51,7 +51,7 @@ Pe deasupra: răspuns rapid (b) și posibilitatea de a-l întrerupe (c), pentru 
   - Textul se poate trimite în timpul sesiunii (`sendRealtimeInput`).
   - Sesiunile doar audio au 15 minute; vocea se alege prin `speechConfig`.
 - **Sesiuni lungi.** Reluarea se face prin `sessionResumption`; token-urile de reluare sunt valabile 2 ore după terminarea sesiunii. `contextWindowCompression` permite sesiuni nelimitate, iar `GoAway` anunță închiderea, cu `timeLeft`. (https://ai.google.dev/gemini-api/docs/live-session)
-- **Apelarea funcțiilor.** Tabelul de suport acoperă doar 3.1 Flash Live Preview (doar sincron) și 2.5 Flash Live Preview (sincron și asincron). Pentru `gemini-3.8-live` nu e confirmată în documentație, dar proba din §11 a arătat că o apelează. Clientul trimite răspunsurile manual (`sendToolResponse`). (https://ai.google.dev/gemini-api/docs/live-tools)
+- **Apelarea funcțiilor.** Tabelul de suport acoperă doar 3.1 Flash Live Preview (doar sincron) și 2.5 Flash Live Preview (sincron și asincron). Pentru `gemini-3.8-live` nu e confirmată în documentație, dar proba din §11 a arătat că o apelează. Clientul trimite răspunsurile manual; `GeminiLive` o face din funcția `run` a fiecărei unelte (§4.1). (https://ai.google.dev/gemini-api/docs/live-tools)
 - **Transcrierea.** Câmpurile `inputAudioTranscription` / `outputAudioTranscription` apar în configurații. Proba din §11 a arătat că `gemini-3.8-live` le trimite.
 - **Token-urile temporare** (pentru după interviu): le emite un backend cu cheia API; expiră implicit după 30 de minute, cu 1 minut pentru a porni sesiunea. Se pot lega de model și configurație. (https://ai.google.dev/gemini-api/docs/ephemeral-tokens)
 - **Modele text gratuite** (pentru funcțiile AI în afara artifactului): `gemini-3.8-flash` („most intelligent Flash”) și `gemini-3.5-flash-lite` („cost-efficient”), ambele „Free of charge”.
@@ -63,54 +63,119 @@ Pe deasupra: răspuns rapid (b) și posibilitatea de a-l întrerupe (c), pentru 
 
 ## 4. Arhitectura
 
-Aceeași sursă (`src/`), același build. Patru module noi, fiecare cu un singur rol și o interfață mică:
+Vocabularul vine din skillul `codebase-design`. **Modul** = orice are interfață și implementare. **Interfață** = tot ce trebuie să știe cine îl folosește: semnături, ordine, invarianți, erori. **Cusătură** (seam) = locul unde stă interfața și unde poți schimba comportamentul fără să editezi acolo. **Adaptor** = ce satisface interfața la o cusătură. O cusătură e reală doar când are două adaptoare (producție și test).
+
+Trei cusături reale, fiecare cu un adaptor de producție și unul fals:
+
+| Cusătura | Adaptor de producție | Adaptor de test | Categorie |
+|---|---|---|---|
+| `Live` (serverul vocal) | `GeminiLive` (`src/live.js`) | `FakeLive` | extern, al unui terț |
+| `Audio` (microfon, difuzor) | `BrowserAudio` (`src/audio.js`) | `FakeAudio` | local, specific browserului |
+| `PrepApp` (conținut și progres) | `app.js` | un stub în memorie | în proces |
+
+Pe deasupra, două module fără cusătură proprie: `Call` (`src/call.js`) și `Jarvis` (`src/jarvis.js`). Testele lor trec prin interfețele lor, peste adaptoarele false.
 
 ```text
-telefon (Chrome / PWA)
-  jarvis.js  ── regizorul sesiunii, ecranul Jarvis
-    │  folosește
-    ├─ live.js   ── WebSocket Gemini Live (protocol, reluare)
-    ├─ audio.js  ── microfon 16 kHz, redare 24 kHz, wake lock
-    └─ PrepApp   ── API-ul mic expus de app.js
-  app.js ── progres, carduri, scor, goluri, aiText(...)
+app.js ── vJarvis (doar vedere, citește getState())
+  │
+jarvis.js ── Jarvis: sesiunea (moduri, persona, funcții, scor, rezumat)
+  │ folosește
+call.js ── Call: apelul vocal (stări, transcriere, întrerupere, microfon mut)
+  ├─ Live      ── GeminiLive   | FakeLive
+  └─ Audio     ── BrowserAudio | FakeAudio
+Jarvis folosește și PrepApp ── app.js | stub
 ```
 
-### 4.1 `src/live.js`: clientul Gemini Live
+**Formatul fișierelor.** Fiecare `src/*.js` nou merge în două medii: în pagină (concatenat înaintea lui `app.js`, ca declarații globale) și în Node (`module.exports`, pentru testele de unitate). Nu are importuri între fișiere: dependențele se primesc ca parametri.
 
-Interfață:
-- `connect({ key, model, system, tools, voice, silenceMs, resumeHandle })` → `session`.
-- Evenimente: `audio(pcm24)`, `transcript(role, text)` (dacă e disponibilă), `toolCall(calls)`, `interrupted()`, `turnComplete()`, `goAway(timeLeft)`, `resumeHandle(h)`, `error(code)`, `closed()`.
-- Metode: `sendAudio(pcm16)`, `sendText(text)`, `sendToolResponse(responses)`, `close()`.
+### 4.1 `Live`: serverul vocal (`src/live.js`, adaptor `GeminiLive`)
 
-Ascunde:
-- protocolul WebSocket (`v1beta`);
-- configurarea VAD: doar `silenceDurationMs`; `prefixPaddingMs`, `startOfSpeechSensitivity` și `activityHandling` nu se trimit (§11);
-- `sessionResumption` și `contextWindowCompression`;
-- reconectarea la `GoAway` folosind ultimul handle de reluare.
+```text
+GeminiLive.open(cfg, onEvent) → Promise<Session>
+  cfg = { key, model, voice, silenceMs, system,
+          tools: [{ name, description, parameters, run(args) → Promise<object> }] }
+  Session = { audio(pcm16), text(str), close() }
+```
 
-### 4.2 `src/audio.js`: microfon și difuzor
+Evenimentele (`onEvent(e)`, după `e.type`):
 
-Interfață:
-- `listMics()`; `startMic({ deviceId?, onFrame(pcm16), onLevel(x) })` / `stopMic()`; `micLabel()` (dispozitivul activ);
-- `play(pcm24)`, `flush()`, `level()` (pentru animație);
-- `halfDuplex(on)` (opțional, implicit oprit);
-- `wake(on)`.
+| Tip | Conținut |
+|---|---|
+| `audio` | `{ pcm }`: `Int16Array`, 24 kHz |
+| `interrupted` | serverul a oprit generarea |
+| `turnComplete` | tura modelului s-a încheiat |
+| `transcript` | `{ who: "me" \| "model", text }`: o bucată nouă |
+| `tool` | `{ name, args, result }` sau `{ name, args, error }`, după ce răspunsul a plecat |
+| `reconnecting`, `live` | reluare după `GoAway` sau cădere |
+| `closed` | `{ reason: "user" \| "auth" \| "quota" \| "rejected" \| "network", code, detail }` |
 
-Detalii:
-- `getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } })`.
-- Un `AudioWorklet` face downsampling la 16 kHz și conversia Float32 → Int16. Bucățile au ~40 ms.
-- Redarea dintr-o coadă la 24 kHz; `flush()` oprește instantaneu tot ce e programat.
-- `halfDuplex(true)` nu trimite cadre de microfon cât se redă audio (modul „întrerupere doar cu căști”, pentru un difuzor care produce ecou).
-- Cadrele se numără ca trimise doar dacă socketul e deschis.
-- `wake(true)` cere `navigator.wakeLock` și îl reia la `visibilitychange`.
+Invarianți și erori:
+- `open` se rezolvă după `setupComplete` și se respinge cu un `closed`-reason (`auth`, `quota`, `rejected`, `network`).
+- `audio(pcm16)` primește `Int16Array`, 16 kHz, și întoarce `true` doar dacă a plecat. În timpul unei reluări e ignorat (`false`). La fel `text`.
+- `run` e apelat o dată pe apel de funcție, în ordinea sosirii. O excepție devine `{ error }` către model. Dacă serverul anulează apelul (`toolCallCancellation`), rezultatul se aruncă.
+- Reluarea: doar dacă a primit un handle; până la 3 încercări (0,5 / 1 / 2 s). Altfel `closed` cu `network`.
+- După `closed`, nimic nu mai emite evenimente.
 
-### 4.3 `src/jarvis.js`: regizorul sesiunii
+Ascunde: URL-ul și cheia, mesajul de setup (din VAD, doar `silenceDurationMs`), Base64, mesajele primite ca `Blob`, id-urile apelurilor de funcții, `sessionResumption` și `contextWindowCompression`, `GoAway`, maparea codurilor de închidere pe motive.
 
-Interfață: `Jarvis.start({ mode, module })`, `pause()`, `resume()`, `stop()`, `typeInstead(text)`, `interrupt()` (golește redarea și trimite textul „Stai.”; proba a arătat că serverul răspunde cu `interrupted` în aceeași secundă).
+Cusătură internă (nu face parte din interfață): `GeminiLive.create({ WebSocket })`, cu `FakeSocket` în testele lui.
 
-Stări: `idle → connecting → listening ⇄ speaking / thinking → paused → ended`.
+### 4.2 `Audio`: microfon și difuzor (`src/audio.js`, adaptor `BrowserAudio`)
 
-**Construiește instrucțiunile de sistem:**
+```text
+audio.start({ micId?, onFrame(pcm16), onLevel(rms), onPlaying(bool) }) → Promise<{ label }>
+audio.stop()
+audio.play(pcm24)         // în coadă, fără goluri
+audio.flush()             // oprește imediat tot ce e programat
+audio.mics() → Promise<[{ id, label }]>
+```
+
+Invarianți și erori:
+- `start` se cheamă dintr-un gest al utilizatorului (politica de autoplay). Se respinge cu `denied`, `no-mic` sau `failed`.
+- `onFrame` primește cadre de ~40 ms, `Int16Array`, 16 kHz, indiferent de rata dispozitivului.
+- `onPlaying(true)` la primul fragment după tăcere; `onPlaying(false)` când coada s-a golit sau după `flush()`, nu la `turnComplete`.
+- `stop` e idempotent. `play` după `stop` nu face nimic.
+
+Ascunde: `getUserMedia` cu anularea ecoului, reducerea zgomotului și AGC pornite; `AudioWorklet` încărcat dintr-un Blob, o singură dată; downsampling de la orice rată la 16 kHz și conversia Float32 → Int16; programarea redării la 24 kHz; `wakeLock`, reluat la `visibilitychange`; măsurarea nivelului.
+
+### 4.3 `Call`: apelul vocal (`src/call.js`)
+
+```text
+Call.start({ live, audio, config, micId?, halfDuplex?, clock?, onEvent }) → Promise<call>
+  config = cfg-ul lui Live (cheie, model, voce, silenceMs, system, tools)
+call.pause() · call.resume() · call.interrupt() · call.say(text) · call.end()
+```
+
+Evenimentele: `state` (`listening` | `speaking` | `thinking` | `paused` | `ended`), `transcript` (`{ who, text }`, cumulat pe tură, înlocuit pe loc), `level` (`{ v }`), `warn` (`mic-silent` | `reconnecting` | `null`), `tool`, `ended` (`{ reason }`).
+
+Reguli:
+- `interrupted` de la Live: `audio.flush()` imediat, starea trece în `listening`.
+- `interrupt()`: `audio.flush()` și `live.text("Stai.")`.
+- `speaking` cât se redă audio; revine în `listening` când redarea s-a golit și tura s-a încheiat sau după `flush`.
+- `thinking`: de la sfârșitul vocii lui Alex (nivelul sub prag), sau cât rulează o funcție, până la primul audio.
+- `halfDuplex`: niciun cadru către Live cât `onPlaying` e adevărat.
+- `pause`: cadrele nu mai pleacă și redarea se golește; microfonul rămâne deschis. `resume` revine în `listening`.
+- `mic-silent`: nivelul sub 0,002 timp de 4 s cât e `listening`; se șterge la primul nivel peste 0,01.
+- Pornirea: `audio.start` și `live.open` în paralel; dacă una cade, cealaltă se închide. `start` se respinge cu motivul (`denied`, `no-mic`, `auth`, `quota`, `rejected`, `network`).
+- `end()` închide Live și Audio și emite `ended`. Un `closed` neașteptat de la Live emite `ended` cu motivul.
+
+Ascunde: legarea cadrelor microfonului de Live și a audio-ului de la Live de redare, mașina de stări, asamblarea transcrierii pe tură, detectarea microfonului mut, gestul de pauză.
+
+### 4.4 `Jarvis`: sesiunea (`src/jarvis.js`)
+
+```text
+Jarvis.create({ app, live, audio, storage?, clock?, onChange }) → jarvis
+jarvis.start({ mode, module? }) → Promise      // mode: "train" | "mock" | "topic"
+jarvis.pause() · resume() · stop() · interrupt() · say(text)
+jarvis.getState() → { phase, card, transcript, level, warn, error, results, startedAt, needKey }
+jarvis.settings.get() / .set(patch)            // { key, voice, patience, halfDuplex, micId }
+jarvis.mics() → [{ id, label }]
+jarvis.checkKey() → { ok, reason? }
+```
+
+`getState()` întoarce date simple, iar `onChange` anunță schimbarea; ecranul din `app.js` doar le desenează.
+
+Construiește instrucțiunile de sistem (funcție pură, exportată pentru teste):
 - persona;
 - modul (antrenament, simulat, temă);
 - profilul lui Alex (`IV_PROFILE`);
@@ -118,26 +183,43 @@ Stări: `idle → connecting → listening ⇄ speaking / thinking → paused �
 
 Regulile pe card (`ivRules`) și memoria cardului vin în răspunsul la `next_card`, nu în instrucțiuni, ca să se schimbe de la un card la altul.
 
-**Funcțiile oferite modelului:**
+**Funcțiile oferite modelului** (declarate aici, rulate peste `PrepApp`):
 
 | Funcție | Ce face în aplicație | Ce întoarce modelului |
 |---|---|---|
-| `next_card({ mode?, module?, difficulty? })` | Alege cardul (antrenament: scadente, goluri și `wO`; simulat: sloturile `pickTechMock`; temă: modulul). Afișează întrebarea și codul. | `card_id`, întrebarea, codul, punctele cheie, modelul de răspuns, `ivRules(card)` (maximum de întrebări, reguli de design sau snippet), ce a ratat data trecută |
-| `record_result({ card_id, points[], wrong[], feedback })` | Validează (`points` are exact `k.length` valori din `spontan` / `dupa` / `nu`) și salvează prin aceeași funcție ca intervievatorul scris | Scorul, comparația cu data trecută, textul punctelor ratate; sau o eroare de validare |
+| `next_card({ module?, difficulty? })` | `app.next(...)`. Afișează întrebarea și codul. | `card_id`, întrebarea, codul, punctele cheie, modelul de răspuns, `rules` (maximum de întrebări, reguli de design sau snippet), ce a ratat data trecută; sau „nu mai sunt carduri” |
+| `record_result({ card_id, points[], wrong[], feedback })` | `app.record(...)` | Scorul, comparația cu data trecută, textul punctelor ratate; sau o eroare de validare |
 | `skip_card()` | Trece la următorul card, fără scor | Confirmare |
-| `explain_missed({ card_id })` | Doar în antrenament: teoria golurilor (aceleași surse ca `gapTheory`) | Text scurt, din care Jarvis explică |
-| `progress_summary()` | Pregătirea, golurile principale, zilele rămase | Text scurt |
-| `pause_session()` | Oprește microfonul; se reia cu un tap | Confirmare |
-| `end_session()` | Închide sesiunea și arată rezumatul | Rezultatele pe carduri |
+| `explain_missed({ card_id })` | `app.theory(id)`, doar în antrenament | Text scurt, din care Jarvis explică |
+| `progress_summary()` | `app.summary()` | Text scurt |
+| `pause_session()` | `call.pause()` | Confirmare |
+| `end_session()` | `call.end()`, rezumatul | Rezultatele pe carduri |
 
 „Repetă” și „nu știu” le tratează modelul singur.
 
-**Interfața (API-ul) `PrepApp` din `app.js`.** E expusă pe `window`, ca `jarvis.js` (alt fișier, altă IIFE) să o poată folosi:
-- `pickCard(opts)`, `cardPayload(id)`;
-- `recordOral(id, verdict)`: funcție comună, scoasă din `oralSave`, folosită și de intervievatorul scris;
-- `gapSummary()`, `progressSummary()`, `theoryFor(id)`;
-- `aiText(prompt, tier)`;
-- `settings()`.
+Ascunde: alegerea și parcurgerea cardurilor, validarea și re-încercarea verdictului (după a doua greșeală cardul rămâne neînregistrat), starea cardului curent, rezumatul de final și rândul din istoric, citirea și scrierea setărilor (cheia în `localStorage` `onapsis-gemini-v1`, restul în `onapsis-jarvis-v1`).
+
+### 4.5 `PrepApp`: conținut și progres (cusătură; implementat în `app.js`)
+
+```text
+app.next({ mode, module?, done[], difficulty? }) → card | null
+  card = { id, module, q, code?, points[], model, rules: { max, turn, verdict }, missed[], best? }
+app.record(id, { points[], wrong?[], feedback? }) → { ok: true, score, prev, box, missed[] } | { ok: false, error }
+app.theory(id) → text simplu
+app.summary() → { readiness, daysLeft, gaps[] }
+app.log({ title, n, c, dur })              // un rând în S.h, cu kind: "jarvis"
+```
+
+- `mode: "mock"` urmează sloturile din `pickTechMock`; `done.length` e indexul slotului, iar după al șaselea întoarce `null`. `train` folosește ponderile `wO`; `topic` ia din modulul cerut, tot cu ponderile.
+- `record` e logica din `oralSave` scoasă din starea ecranului: `updO`, golurile (`mc`, `m`, `w`), `commit()`. `points` are exact `k.length` valori din `spontan` / `dupa` / `nu`; altfel `{ ok: false }`. `oralSave` o folosește și el.
+- Ascunde: ponderile, scadențele Leitner, matematica golurilor, persistența.
+
+### Alternative respinse
+
+- **`toolCall` ca eveniment, cu răspunsul dat de Jarvis.** Id-urile, anulările, erorile și ordinea ar fi ajuns la fiecare apelant. Cu `run` în `cfg`, interfața lui Live e mai mică.
+- **`Call` înăuntrul lui `Jarvis`.** Mecanica de timp real (cozi, praguri, stări) s-ar amesteca cu logica sesiunii (carduri, scor). Testul de ștergere: fără `Call`, mecanica ar reapărea în `Jarvis`.
+- **`FakeCall`.** Testele lui `Jarvis` trec prin `Call` real, peste `FakeLive` și `FakeAudio`. O cusătură în plus ar fi doar ipotetică.
+- **`WebSocket` ca cusătură publică.** Rămâne internă lui `GeminiLive`.
 
 ## 5. Sesiunea
 
@@ -153,7 +235,7 @@ Regulile pe card (`ivRules`) și memoria cardului vin în răspunsul la `next_ca
   4. Cel mult `ivRules(card).max` întrebări de continuare (2; la design 3), pe punctele lipsă, fără indicii.
   5. `record_result`, salvat imediat.
   6. În antrenament: feedback în 1–2 propoziții. Din pasul 4 al livrării, și „vrei să-ți explic ce ai ratat?” (`explain_missed`).
-- **Scorul:** spontan = 1, `dupa` = 0,5, `nu` = 0, prin `recordOral`, adică aceeași logică de Leitner, `mc`, `m` și `w` ca acum. Nu se mai confirmă bifele de mână (prioritatea „mâini libere”); un scor contestat se rezolvă refăcând cardul.
+- **Scorul:** spontan = 1, `dupa` = 0,5, `nu` = 0, prin `PrepApp.record`, adică aceeași logică de Leitner, `mc`, `m` și `w` ca acum. Nu se mai confirmă bifele de mână (prioritatea „mâini libere”); un scor contestat se rezolvă refăcând cardul.
 - **Sfârșitul:** rezumat vorbit, de 2–3 propoziții, plus ecranul de rezultate pe carduri. În `S.h` intră un singur rând, cu `kind: "jarvis"` (afișat în istoric ca „Jarvis”). Transcrierea nu se salvează.
 
 **Persona** (rezumatul instrucțiunilor):
@@ -213,27 +295,30 @@ Regulile pe card (`ivRules`) și memoria cardului vin în răspunsul la `next_ca
 
 ## 9. Testare
 
-**Înlocuitori falși la fiecare legătură cu exteriorul** (fiecare are două adaptoare, deci legătura e reală):
-- `FakeLive`: scenarii de evenimente de la server;
-- `FakeAudio`: cadre de liniște; reține ce s-a redat și apelurile `flush`;
-- un răspuns fals pentru `aiText`.
+Testele trec prin interfețele din §4 și descriu comportament, nu implementare. Se scriu pe rând, câte un comportament, cu skillul `tdd`.
 
-**Teste pure:** conversia Float32 → Int16 la 16 kHz, construcția instrucțiunilor, declarațiile funcțiilor, validarea verdictului.
+**Teste de unitate, în Node** (`node --test tools/unit`, fără dependențe), câte unul pe interfață:
+- `live.test.mjs`: `GeminiLive` peste `FakeSocket` (setup acceptat și respins, audio în ambele sensuri, funcții cu `run`, anulări, transcrieri, întrerupere, reluare cu handle, maparea închiderilor);
+- `audio.test.mjs`: partea pură (downsampling, conversii, nivelul);
+- `call.test.mjs`: `Call` peste `FakeLive` și `FakeAudio`, cu un ceas fals (stările, golirea la `interrupted`, `interrupt()`, `halfDuplex`, pauza, `mic-silent`, pornirea în paralel, închiderea);
+- `jarvis.test.mjs`: `Jarvis` peste `Call` real, `FakeLive`, `FakeAudio` și un `PrepApp` stub (funcțiile, validarea verdictului, punctele cheie care nu ajung în stare, modul simulat fără feedback, rezumatul și rândul din istoric).
 
-**`tools/test_jarvis.py`** (Playwright, la 360 px, light și dark), verifică:
-- pornirea;
+Înlocuitorii falși stau în `tools/unit/fakes.mjs`. `FakeLive` știe să emită evenimente și să apeleze `run`-urile din `cfg`; `FakeAudio` reține ce s-a redat și câte `flush` au fost; `FakeSocket` simulează `Blob`-uri și coduri de închidere.
+
+**`PrepApp` din `app.js`**, în Playwright, cu `window.__prep`: `record` dă aceeași stare ca `oralSave` pentru același verdict; `next` respectă modurile.
+
+**`tools/test_jarvis.py`** (Playwright, la 360 px, light și dark), cu `FakeLive` și `FakeAudio` injectate înainte de încărcare:
+- pornirea și cheia lipsă;
 - că punctele cheie nu apar niciodată pe ecran;
 - `record_result`, valid și invalid;
-- golirea cozii la `interrupted`;
+- „Stai”, „Pauză”, „Nu te aud”;
 - că modul simulat nu dă feedback între carduri;
-- comenzile;
-- reluarea după `GoAway`;
-- 429, lipsa cheii, microfonul refuzat;
+- reluarea după `GoAway`, 429, microfonul refuzat;
 - că nu apar erori de consolă.
 
 **Suita existentă** trebuie să treacă pe artifact, iar un test scurt verifică PWA-ul (manifest și înregistrarea service worker-ului).
 
-**Pe telefon, doar Alex poate testa:** proba și câte o sesiune completă, cu căști și pe difuzor.
+**Pe telefon, doar Alex poate testa:** `BrowserAudio` și `GeminiLive` cu serverul real, într-o sesiune completă, cu căști și pe difuzor. Proba din §11 a validat deja protocolul de bază.
 
 ## 10. Livrarea (fiecare pas e testat, publicat și urmat de un mesaj către Alex)
 
