@@ -33,3 +33,24 @@ export const tick = () => new Promise(r => setTimeout(r, 0));
 
 // Câteva tick-uri la rând: pentru lanțuri de promisiuni și decodări de Blob.
 export async function settle(n = 4) { for (let i = 0; i < n; i++) await tick(); }
+
+// Un AudioContext fals, cât să programeze redarea: `sources` păstrează sursele create, în ordine.
+export function fakeAudioContext() {
+  const ctx = { currentTime: 0, destination: {}, sources: [] };
+  ctx.createBuffer = (channels, length, rate) => {
+    const data = new Float32Array(length);
+    return { duration: length / rate, data, copyToChannel(f32) { data.set(f32); } };
+  };
+  ctx.createBufferSource = () => {
+    const s = {
+      buffer: null, startedAt: null, stopped: false, onended: null,
+      connect() {},
+      start(t) { s.startedAt = t; },
+      stop() { s.stopped = true; queueMicrotask(() => { if (s.onended) s.onended(); }); },     // ca în browser: `ended` vine și după stop()
+      end() { if (s.onended) s.onended(); }                                                    // sfârșitul firesc, declanșat de test
+    };
+    ctx.sources.push(s);
+    return s;
+  };
+  return ctx;
+}
