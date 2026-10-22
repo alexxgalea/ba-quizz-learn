@@ -392,3 +392,32 @@ test("the session is started with the instructions for its mode", async () => {
   await t.jarvis.start({ mode: "mock" });
   assert.equal(t.live.cfg.system, Jarvis.buildSystem({ mode: "mock", module: undefined, summary: SUMMARY }));
 });
+
+test("the state says when the session started", async () => {
+  const t = setup();
+  t.clock.advance(5000);
+  await t.jarvis.start({ mode: "train" });
+  assert.equal(t.state().startedAt, 6000);
+});
+
+test("reset after the end brings the screen back to idle with the results cleared", async () => {
+  const t = setup();
+  await t.jarvis.start({ mode: "train" });
+  await twoCardsDone(t);
+  await t.jarvis.stop();
+  t.jarvis.reset();
+  assert.deepEqual([t.state().phase, t.state().results, t.state().endedReason], ["idle", [], null]);
+});
+
+test("reset does nothing while a session is running", async () => {
+  const t = setup();
+  await listening(t);
+  t.jarvis.reset();
+  assert.equal(t.state().phase, "listening");
+});
+
+test("the state tells the mode and the module of the session", async () => {
+  const t = setup();
+  await t.jarvis.start({ mode: "topic", module: "asyncio" });
+  assert.deepEqual([t.state().mode, t.state().module], ["topic", "asyncio"]);
+});

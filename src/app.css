@@ -107,7 +107,7 @@ main > * { min-width: 0; }
   padding-left: max(8px, env(safe-area-inset-left, 0px));
   padding-right: max(8px, env(safe-area-inset-right, 0px));
 }
-.tabs-in { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+.tabs-in { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); }
 .tab {
   appearance: none; border: 0; background: none; cursor: pointer;
   height: var(--tabbar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -513,3 +513,25 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 
 /* snippet pe cardul oral: 38 de caractere încap pe un telefon de 360 px */
 .icard pre.code { font-size: 11px; padding: 10px; }
+
+/* Jarvis: ecranul vocal. Orbul arată starea (culoare) și nivelul vocii (--lv, 0..1); fără mișcare la prefers-reduced-motion (regula globală de mai sus). */
+.jv-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 26px 14px 18px; }
+.jv-orb { --lv: 0; --c: var(--accent); width: 124px; height: 124px; border-radius: 50%; background: var(--c);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 62%, color-mix(in srgb, var(--c) 72%, #000));
+  box-shadow: 0 0 0 calc(5px + var(--lv) * 30px) color-mix(in srgb, var(--c) 16%, transparent), 0 0 calc(14px + var(--lv) * 44px) color-mix(in srgb, var(--c) 38%, transparent);
+  transition: box-shadow .12s linear, background .3s; }
+.jv-orb.speaking { --c: var(--ok); animation: jv-pulse 1.4s ease-in-out infinite; }
+.jv-orb.thinking { --c: var(--warn); animation: jv-pulse 0.9s ease-in-out infinite; }
+.jv-orb.paused, .jv-orb.connecting { --c: var(--line-strong); }
+@keyframes jv-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.jv-state { font: 700 17px/1.2 var(--font-display); }
+.jv-warn, .jv-err { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 14px; line-height: 1.4; }
+.jv-err { background: var(--bad-soft); color: var(--bad); }
+.jv-warn { align-self: stretch; }
+.jv-ctl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.jv-ctl .btn { padding-inline: 4px; }
+.jv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.jv-set { display: grid; gap: 10px; }
+.jv-set label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.jv-set .chk { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+.jv-set .chk input { width: 20px; height: 20px; }

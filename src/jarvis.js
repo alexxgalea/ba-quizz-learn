@@ -66,7 +66,7 @@ const Jarvis = (() => {
 
   function create(env) {
     const storage = env.storage, callApi = env.call || (typeof Call !== "undefined" ? Call : null);
-    const FRESH = { error: null, card: null, results: [], transcript: [], level: 0, warn: null, endedReason: null };
+    const FRESH = { error: null, card: null, results: [], transcript: [], level: 0, warn: null, endedReason: null, startedAt: 0, mode: null, module: null };
     let state = Object.assign({ phase: "idle", needKey: false }, FRESH);
     const change = patch => { state = Object.assign({}, state, patch); if (env.onChange) env.onChange(); };
 
@@ -147,7 +147,7 @@ const Jarvis = (() => {
       const st = settings.get();
       if (!st.key) { change({ needKey: true, phase: "idle" }); return false; }
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false };
-      change(Object.assign({ needKey: false, phase: "connecting" }, FRESH));
+      change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       const summary = env.app.summary();
       const config = { key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) };
       const onEvent = e => {
@@ -180,6 +180,8 @@ const Jarvis = (() => {
     }
     return {
       start, stop, settings, checkKey,
+      // După sfârșit, ecranul revine la alegerea modului; în timpul unei sesiuni nu face nimic.
+      reset() { if (state.phase === "ended") change(Object.assign({ phase: "idle", needKey: false }, FRESH)); },
       interrupt() { if (sess && sess.call) sess.call.interrupt(); },
       say(text) { if (sess && sess.call) sess.call.say(text); },
       pause() { if (sess && sess.call) sess.call.pause(); },

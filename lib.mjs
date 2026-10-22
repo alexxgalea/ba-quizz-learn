@@ -4,6 +4,9 @@ import vm from "node:vm";
 
 export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js"];
 
+// Modulele vocale (Live, Audio, Call, Jarvis): declarații globale, încărcate înaintea lui app.js. Aceleași fișiere rulează și în Node, în tools/unit.
+export const LIB_FILES = ["live.js", "audio.js", "call.js", "jarvis.js"];
+
 export function loadData(root) {
   const ctx = { window: {} };
   vm.createContext(ctx);

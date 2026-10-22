@@ -1,6 +1,6 @@
 // Inlines CSS, data, explanations, glossary, tested kata solutions and app code into one self-contained page.
 import fs from "node:fs";
-import { DATA_FILES, loadData, buildExplanations } from "./lib.mjs";
+import { DATA_FILES, LIB_FILES, loadData, buildExplanations } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const read = p => fs.readFileSync(new URL(p, root), "utf8");
@@ -19,7 +19,7 @@ const data = DATA_FILES.map(f => read("./src/" + f)).join("\n") +
   "\nwindow.PREP.kataCode = " + JSON.stringify(kataCode) + ";\n" +
   "window.PREP.expl = " + JSON.stringify(expl) + ";\n" +
   "window.PREP.gloss = " + JSON.stringify(gloss) + ";\n";
-const app = read("./src/app.js");
+const app = LIB_FILES.map(f => read("./src/" + f)).join("\n") + "\n" + read("./src/app.js");
 
 for (const [name, js] of [["data", data], ["app", app]]) if (/<\/script/i.test(js)) throw new Error("</script inside " + name);
 
