@@ -243,4 +243,27 @@ def test_notify(m):
       "Configurare din mediu (`pydantic-settings`), fără stare globală; teste unitare pe domeniu, de integrare cu `TestClient`"],
       model: "Aș separa pe straturi: routerele FastAPI doar traduc HTTP în apeluri, serviciile conțin logica de detecție, iar repository-urile și clienții externi vorbesc cu baza de date și cu sistemele SAP. Logica de domeniu nu importă FastAPI sau SQLAlchemy, deci o testez rapid, cu obiecte simple. Dependențele intră prin constructor sau prin `Depends`, iar pentru sistemele externe definesc contracte mici cu `Protocol`, ca în teste să pun implementări false. Configurarea vine din mediu cu `pydantic-settings`, fără stare globală. Testele unitare acoperă domeniul, iar câteva teste de integrare cu `TestClient` și o bază de test verifică legăturile." }
   ]);
+  O("oop", [
+    { id: "o-oop-1", q: "Compoziție sau moștenire: când alegi fiecare? Dă un exemplu din proiectele tale.", k: [
+      "Moștenire pentru „este un”, cu un contract stabil (subclasa respectă tot ce promite părintele)",
+      "Compoziție pentru „are un” / „folosește un”: colaboratorii vin din afară, în constructor",
+      "Compoziția se testează mai ușor (fake-uri) și se schimbă fără să atingi clasa",
+      "Moștenirea adâncă leagă subclasele de detaliile părintelui (fragile base class)",
+      "Exemplu concret: un serviciu care primește notificatorul sau clientul extern, nu îl moștenește"],
+      model: "Implicit aleg compoziția: clasa primește colaboratorii, un notificator sau un client extern, în constructor. Așa îi înlocuiesc cu fake-uri în teste și adaug o implementare nouă fără să modific clasa. Moștenirea o folosesc pentru o relație reală „este un”, cu un contract stabil, ca o clasă de bază din framework: în DRF extind `BasePermission` sau un `ViewSet`. Ierarhiile adânci le evit, pentru că o schimbare în părinte strică subclase la distanță. De exemplu, la un serviciu de procesare cu Celery, task-ul primea parserul și clientul de stocare ca dependențe, deci în teste puneam variante în memorie." },
+    { id: "o-oop-2", q: "ABC sau `Protocol`: când alegi fiecare?", k: [
+      "ABC: contract nominal, trebuie moștenit; verificat la instanțiere (`TypeError` dacă lipsește o metodă abstractă)",
+      "ABC poate aduce și implementare comună (metode concrete)",
+      "`Protocol`: contract structural, verificat static de mypy/pyright; nu cere moștenire",
+      "`Protocol` e bun la granițe: dependențe externe, fake-uri în teste, cod din biblioteci pe care nu le controlezi",
+      "`@runtime_checkable` verifică la `isinstance` doar existența metodelor, nu semnătura"],
+      model: "Un ABC e un contract nominal: clasa trebuie să-l moștenească, iar Python verifică la instanțiere că toate metodele abstracte sunt implementate. În plus, poate aduce cod comun. Un `Protocol` descrie doar forma obiectului: orice clasă cu metodele potrivite îl satisface, iar verificarea o face mypy, static. Folosesc ABC când vreau o ierarhie proprie cu cod comun și verificare la runtime. Folosesc `Protocol` la granițe, pentru dependențe pe care le înlocuiesc în teste sau pentru clase din biblioteci pe care nu le pot modifica. `@runtime_checkable` verifică doar că metodele există, nu și semnăturile." },
+    { id: "o-oop-3", q: "Cum ai proiecta clasele unui motor de reguli de detecție, ca să adaugi reguli noi fără să modifici motorul?", k: [
+      "O interfață comună pentru reguli (`matches(event)`, `alert(event)`), ca ABC sau `Protocol`",
+      "Registru: regulile se înregistrează (decorator sau listă explicită), motorul le parcurge",
+      "Open/closed: o regulă nouă e un fișier nou; motorul nu se schimbă",
+      "Regulile sunt obiecte mici, fără stare globală, testate separat",
+      "Configurare per client (activ/inactiv, praguri) ca date, nu ca `if`-uri în cod"],
+      model: "Aș defini o interfață mică pentru o regulă, cu `matches(event)` și `alert(event)`, ca `Protocol` sau ABC. Fiecare regulă e o clasă separată, înregistrată într-un registru, de exemplu cu un decorator, iar motorul doar parcurge registrul și aplică regulile pe fiecare eveniment. Așa o regulă nouă înseamnă un fișier nou și un test nou, fără să ating motorul sau regulile existente. Regulile nu țin stare globală; ce variază per client, cum ar fi pragurile sau activarea, vine din configurare, ca date. Motorul îl testez cu o listă explicită de reguli false, ca să nu depind de registrul real." }
+  ]);
 })(window.PREP);

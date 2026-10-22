@@ -156,8 +156,8 @@ async def main():
         weak = await pg.evaluate("() => document.querySelectorAll('.intv-r.weak').length")
         ok(weak >= 1, "formulations: weak filter shows the wrong one (" + str(weak) + ")")
         await pg.click('[data-a="intv-f"][data-f="all"]'); await pg.wait_for_timeout(100)
-        alln = await pg.evaluate("() => document.querySelectorAll('.intv-r').length")
-        ok(alln == 221, "formulations: all = 221")
+        alln = await pg.evaluate("() => [document.querySelectorAll('.intv-r').length, window.PREP.mcq.filter(q => window.PREP.expl[q.id] && window.PREP.expl[q.id].intv).length]")
+        ok(alln[0] == alln[1] and alln[0] > 0, "formulations: all shows every explanation with a 'La interviu' line " + str(alln))
         await pg.click('[data-a="intv-f"][data-f="p1"]'); await pg.wait_for_timeout(100)
         await pg.screenshot(path=str(SHOTS / "9-intv.png"), full_page=False)
 
