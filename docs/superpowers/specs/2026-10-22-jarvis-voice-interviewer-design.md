@@ -1,6 +1,6 @@
 # Jarvis: intervievator vocal nativ (design)
 
-Data: 2026-10-22. Autor: Claude, cu Alex. Stare: aprobat pe secțiuni în chat, în așteptarea review-ului acestui document.
+Data: 2026-10-22. Autor: Claude, cu Alex. Stare: aprobat pe secțiuni în chat. Proba de 10 minute a fost rulată pe telefonul lui Alex, iar rezultatele sunt fixate în §11.
 
 ## 1. Scop
 
@@ -51,8 +51,8 @@ Pe deasupra: răspuns rapid (b) și posibilitatea de a-l întrerupe (c), pentru 
   - Textul se poate trimite în timpul sesiunii (`sendRealtimeInput`).
   - Sesiunile doar audio au 15 minute; vocea se alege prin `speechConfig`.
 - **Sesiuni lungi.** Reluarea se face prin `sessionResumption`; token-urile de reluare sunt valabile 2 ore după terminarea sesiunii. `contextWindowCompression` permite sesiuni nelimitate, iar `GoAway` anunță închiderea, cu `timeLeft`. (https://ai.google.dev/gemini-api/docs/live-session)
-- **Apelarea funcțiilor.** Tabelul de suport acoperă doar 3.1 Flash Live Preview (doar sincron) și 2.5 Flash Live Preview (sincron și asincron). Pentru `gemini-3.8-live` nu e confirmată în documentație. Clientul trimite răspunsurile manual (`sendToolResponse`). (https://ai.google.dev/gemini-api/docs/live-tools)
-- **Transcrierea.** Câmpurile `inputAudioTranscription` / `outputAudioTranscription` apar în configurații. Există însă raportări că unele modele preview nu trimit evenimentele de transcriere.
+- **Apelarea funcțiilor.** Tabelul de suport acoperă doar 3.1 Flash Live Preview (doar sincron) și 2.5 Flash Live Preview (sincron și asincron). Pentru `gemini-3.8-live` nu e confirmată în documentație, dar proba din §11 a arătat că o apelează. Clientul trimite răspunsurile manual (`sendToolResponse`). (https://ai.google.dev/gemini-api/docs/live-tools)
+- **Transcrierea.** Câmpurile `inputAudioTranscription` / `outputAudioTranscription` apar în configurații. Proba din §11 a arătat că `gemini-3.8-live` le trimite.
 - **Token-urile temporare** (pentru după interviu): le emite un backend cu cheia API; expiră implicit după 30 de minute, cu 1 minut pentru a porni sesiunea. Se pot lega de model și configurație. (https://ai.google.dev/gemini-api/docs/ephemeral-tokens)
 - **Modele text gratuite** (pentru funcțiile AI în afara artifactului): `gemini-3.8-flash` („most intelligent Flash”) și `gemini-3.5-flash-lite` („cost-efficient”), ambele „Free of charge”.
 - **Limitele nivelului gratuit pentru Live nu sunt publicate.** Le vezi în AI Studio, pe proiect. (https://ai.google.dev/gemini-api/docs/rate-limits)
@@ -84,28 +84,29 @@ Interfață:
 
 Ascunde:
 - protocolul WebSocket (`v1beta`);
-- configurarea VAD;
+- configurarea VAD: doar `silenceDurationMs`; `prefixPaddingMs`, `startOfSpeechSensitivity` și `activityHandling` nu se trimit (§11);
 - `sessionResumption` și `contextWindowCompression`;
 - reconectarea la `GoAway` folosind ultimul handle de reluare.
 
 ### 4.2 `src/audio.js`: microfon și difuzor
 
 Interfață:
-- `startMic({ onFrame(pcm16), onLevel(x) })` / `stopMic()`;
+- `listMics()`; `startMic({ deviceId?, onFrame(pcm16), onLevel(x) })` / `stopMic()`; `micLabel()` (dispozitivul activ);
 - `play(pcm24)`, `flush()`, `level()` (pentru animație);
-- `halfDuplex(on)`;
+- `halfDuplex(on)` (opțional, implicit oprit);
 - `wake(on)`.
 
 Detalii:
 - `getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } })`.
 - Un `AudioWorklet` face downsampling la 16 kHz și conversia Float32 → Int16. Bucățile au ~40 ms.
 - Redarea dintr-o coadă la 24 kHz; `flush()` oprește instantaneu tot ce e programat.
-- `halfDuplex(true)` nu trimite cadre de microfon cât se redă audio (modul „întrerupere doar cu căști”).
+- `halfDuplex(true)` nu trimite cadre de microfon cât se redă audio (modul „întrerupere doar cu căști”, pentru un difuzor care produce ecou).
+- Cadrele se numără ca trimise doar dacă socketul e deschis.
 - `wake(true)` cere `navigator.wakeLock` și îl reia la `visibilitychange`.
 
 ### 4.3 `src/jarvis.js`: regizorul sesiunii
 
-Interfață: `Jarvis.start({ mode, module })`, `pause()`, `resume()`, `stop()`, `typeInstead(text)`.
+Interfață: `Jarvis.start({ mode, module })`, `pause()`, `resume()`, `stop()`, `typeInstead(text)`, `interrupt()` (golește redarea și trimite textul „Stai.”; proba a arătat că serverul răspunde cu `interrupted` în aceeași secundă).
 
 Stări: `idle → connecting → listening ⇄ speaking / thinking → paused → ended`.
 
@@ -166,14 +167,16 @@ Regulile pe card (`ivRules`) și memoria cardului vin în răspunsul la `next_ca
 
 - **Pragul de liniște** e setarea „Răbdare”: scurtă 0,8 s, normală 1,2 s (implicit), lungă 2 s. Se aplică la pornirea sesiunii (`silenceDurationMs`).
 - **Difuzor sau căști:**
-  - Pe căști, întreruperea e completă.
-  - Pe difuzor, depinde de anularea ecoului din Chrome. Setarea manuală „Întrerupere doar cu căști” activează `halfDuplex`, pentru cazul în care difuzorul produce auto-întreruperi.
+  - Pe difuzor, cu anularea ecoului și reducerea zgomotului din Chrome (implicit), întreruperea merge și nu apar auto-întreruperi (§11). Full-duplex e implicit.
+  - Setarea manuală „Întrerupere doar cu căști” activează `halfDuplex`, pentru un telefon al cărui difuzor produce ecou.
+  - **Selector de microfon** în Progres › Jarvis. Pe Android, microfonul căștilor Bluetooth poate da tăcere (nivel 0,000) la prima pornire.
+  - **„Nu te aud”:** dacă nivelul microfonului rămâne sub 0,002 timp de 4 secunde cât ascultă, ecranul spune asta și oferă selectorul și „Repornește microfonul”.
 - **Ieșirea din aplicație sau ecranul stins:** pauză, apoi reluare prin handle-ul de reluare.
 - **Ecranul**, la 360 px, în light și dark, doar cu tokenii de culoare existenți:
   - sus: cardul și codul (format compact, 11 px);
   - în centru: un cerc animat care reflectă starea și nivelul vocii (fără animație la `prefers-reduced-motion`);
   - transcrierea ultimelor replici, care se poate ascunde;
-  - butoanele „Pauză / Reia”, „Stop”, „Scriu în loc să vorbesc”;
+  - butoanele „Stai” (`interrupt()`), „Pauză / Reia”, „Stop”, „Scriu în loc să vorbesc”;
   - contorul cardurilor și timpul;
   - o vibrație scurtă la schimbarea turei.
 
@@ -202,6 +205,7 @@ Regulile pe card (`ivRules`) și memoria cardului vin în răspunsul la `next_ca
 |---|---|
 | Fără cheie | Ecranul Jarvis arată pașii de configurare |
 | Microfon refuzat | Mesaj clar; conversația continuă cu „Scriu în loc să vorbesc” |
+| Microfon mut (nivel sub 0,002 timp de 4 s) | „Nu te aud”: selectorul de microfon și „Repornește microfonul” |
 | 429 / limita gratuită / server indisponibil | Sesiunea se oprește cu mesaj; cardurile terminate sunt deja salvate |
 | Limita de 15 minute sau rețea căzută | Reluare automată cu handle-ul; dacă eșuează, sesiunea se închide cu rezumatul de până atunci |
 | `record_result` invalid | Răspuns de eroare către model; după a doua încercare greșită, cardul rămâne neînregistrat și se trece mai departe |
@@ -237,24 +241,28 @@ Regulile pe card (`ivRules`) și memoria cardului vin în răspunsul la `next_ca
 |---|---|---|
 | 1 | PWA + GitHub Pages + setarea cheii + `probe.html` (de aruncat) | Pagina se instalează pe Android; proba răspunde la cele patru întrebări din §11 |
 | 2 | `aiText` cu Gemini text + mutarea progresului | Verificarea și intervievatorul scris merg în PWA; progresul importat apare corect |
-| 3 | Jarvis v1: antrenament, bucla, `record_result`, scorul, ecranul, comenzile de bază (`next_card`, `skip_card`, `pause_session`, `end_session`) | O sesiune de antrenament completă, fără atingeri, cu rezultatele în Leitner și goluri |
+| 3 | Jarvis v1: antrenament, bucla, `record_result`, scorul, ecranul (cu „Stai”, selectorul de microfon și „Nu te aud”), comenzile de bază (`next_card`, `skip_card`, `pause_session`, `end_session`) | O sesiune de antrenament completă, fără atingeri, cu rezultatele în Leitner și goluri |
 | 4 | Jarvis v2: simulat (ton neutru), `progress_summary`, `explain_missed`, parametrii `difficulty` / `module` ai lui `next_card` („mai greu”, „schimbă tema”), „Răbdare”, „Întrerupere doar cu căști” | Un interviu tehnic simulat complet, cu rezumatul de final |
 
 Ținta: pașii 1–3 până luni, pasul 4 dacă e timp.
 
-## 11. Ce stabilește proba (pasul 1) și ce facem în fiecare caz
+## 11. Rezultatul probei (pasul 1) și ce rezultă
 
-1. **`gemini-3.8-live` apelează funcții?**
-   - Da: îl folosim.
-   - Nu: folosim `gemini-2.5-flash-native-audio-preview-12-2025` (2.5 Flash Live, listat cu apelare sincronă și asincronă).
-   - Dacă niciunul nu le apelează în practică, ne oprim și revizuim designul cu Alex, înainte de pasul 3.
-2. **Vin evenimentele de transcriere?**
-   - Da: ecranul arată transcrierea.
-   - Nu: ecranul arată doar starea. Scorul nu depinde de transcriere, pentru că vine prin `record_result`.
-3. **Merge întreruperea pe difuzor?**
-   - Da: implicit full-duplex.
-   - Nu: „Întrerupere doar cu căști” devine implicit pe difuzor.
-4. **Cum sună vocea în română și cât durează până răspunde?** Dacă vocea nu e acceptabilă pentru Alex, ne oprim și revizuim alegerea furnizorului.
+Rulată pe telefonul lui Alex (Android, Chrome), pe 22 octombrie 2026, cu pagina `docs/prototype-jarvis-probe.html` (de aruncat), vocea Charon, în trei runde.
+
+| # | Întrebare | Rezultat | Decizie |
+|---|---|---|---|
+| 1 | `gemini-3.8-live` apelează funcții? | **Da.** A apelat `next_card` și `record_result`, cu `points` ca listă de 4 valori. `gemini-2.5-flash-native-audio-preview-12-2025` le-a apelat și el, dar a fost „extrem de lent” și a blocat conducta după primul răspuns. | Folosim `gemini-3.8-live`. Planul de rezervă cu 2.5 cade. |
+| 2 | Vin evenimentele de transcriere? | **Da**, pentru ambele sensuri (`inputTranscription`, `outputTranscription`). | Ecranul arată transcrierea. |
+| 3 | Merge întreruperea pe difuzor? | **Da.** Cu anularea ecoului și reducerea zgomotului pornite: 15 s de tăcere cât vorbea Jarvis, zero auto-întreruperi (nivelul microfonului 0,011, față de ~0,5 când vorbește Alex). Alex l-a întrerupt de mai multe ori vorbind peste el, iar serverul a trimis `interrupted`. Textul „Stai.” a produs `interrupted` în aceeași secundă. | Full-duplex implicit. `halfDuplex` rămâne opțiune. Butonul „Stai” intră în v1. |
+| 4 | Voce și latență | Vocea sună **natural**. Latența mediană: ~1,3–1,4 s după ultima vorbă, din care 1,2 s e pragul de liniște, deci modelul adaugă ~0,1–0,2 s. | Furnizorul rămâne. „Răbdare” 0,8 s dă ~1 s în total; 1,2 s rămâne implicit, ca să nu-l întrerupă când gândește. |
+
+**Constatări care schimbă designul:**
+- **Microfonul căștilor.** Cu căști Bluetooth, microfonul a dat tăcere (0,000) la prima pornire; după „Repornește microfonul” a dat nivel normal (maxim 0,393) și serverul a întrerupt. Chrome a listat doar `Default`, `Speakerphone` și `Headset earpiece`. Rezultat: selector de microfon și mesajul „Nu te aud” (§6, §8).
+- **Setări VAD în plus.** Cu `prefixPaddingMs: 20`, `startOfSpeechSensitivity: START_SENSITIVITY_HIGH` și `activityHandling` în setup, sesiunea n-a mai răspuns deloc (probabil setup respins; jurnalul n-a arătat codul de închidere). Nu le trimitem. Doar `silenceDurationMs` e verificat: setup-ul a fost acceptat, iar latența urmărește pragul.
+- **Oprirea locală** (aplicația golește redarea când aude vorbire) n-a fost necesară și n-a fost exersată. Rămâne în afara scopului.
+- **Conexiunea.** Setup-ul durează ~0,5 s. O singură „eroare WebSocket” în toate rundele; tratamentul rămâne cel din §8.
+- **Limite ale probei.** Nu avem un test curat al căștilor pe fereastra de întrerupere, și nici o sesiune lungă (15 minute). Le verifică Alex în folosire.
 
 ## 12. În afara scopului (sub-proiecte separate, după interviu)
 
