@@ -1345,12 +1345,18 @@
     return out.sort((a, b) => b.w - a.w || b.n - a.n);
   }
   // inStudy: titlul și contorul stau deja în rezumatul din Studiu. `used`: ce s-a arătat deja în aceeași secțiune (propoziții din model, puncte din fișă), ca să nu se repete.
-  function gapTheory(c, i, n, inStudy, used) {
-    const tc = { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) };
+  // Ce din model și din fișă se leagă de un punct ratat: până la 2 propoziții din răspunsul model și 2 puncte din fișă (cele cu cele mai multe cuvinte comune).
+  // `used` ține minte ce s-a arătat deja în aceeași secțiune. Folosit de gapTheory (HTML) și de PrepApp.theory (text pentru Jarvis).
+  function gapSources(c, i, used) {
     const sents = c.model.split(/(?<=[.!?])\s+/).filter(Boolean), fresh = k => !used || !used.has(k);
     const rm = relRank(c.k[i], sents), sm = rm.filter(o => fresh("s" + o.i)).slice(0, 2).map(o => o.i).sort((a, b) => a - b);
     const sh = P.sheets[c.m], pts = sh ? sh.points : [], sp = relRank(c.k[i], pts).filter(o => fresh("p" + o.i)).slice(0, 2);
     if (used) { sm.forEach(k => used.add("s" + k)); sp.forEach(o => used.add("p" + o.i)); }
+    return { sents, rm, sm, pts, sp };
+  }
+  function gapTheory(c, i, n, inStudy, used) {
+    const tc = { seen: new Set(), skip: new Set(TERM_SKIP[c.m] || []) }, fresh = k => !used || !used.has(k);
+    const { sents, rm, sm, pts, sp } = gapSources(c, i, used);
     let h = '<div class="gap-i">' + (inStudy ? "" : '<div class="gap-p">' + inlineRich(c.k[i], tc) + "</div>");
     if (n > 1 && !inStudy) h += '<span class="chip bad">ratat de ' + n + " ori</span>";
     if (sm.length) h += '<div class="xp-sec"><span class="xp-h">Din răspunsul model</span><p class="rt">' + inlineRich(sm.map(k => sents[k]).join(" "), tc) + "</p></div>";
@@ -1483,21 +1489,30 @@
     return h;
   }
 
-  function oralSave() {
-    const run = ui.run, c = OBY[run.items[run.i]];
-    Mic.stop(); ivAbort();
+  // Salvează rezultatul unui card oral: scorul și cutia Leitner (updO), golurile cardului și, dacă există, versiunea bună a răspunsului.
+  // `r` = { ticks, half, fixed, wrong, keep }: ticks/half pe index de punct cheie (half = acoperit abia după o întrebare, valorează 0,5); `fixed` = punctele reparate cu
+  // întrebarea țintită (nu mai cresc contorul și ies din `m`); `wrong` = afirmațiile greșite din verdict, sau nedefinit ca să nu atingă `w`; `keep` = versiunea bună.
+  // Folosit de oralSave (ecranul) și de PrepApp.record (Jarvis): același scor, aceleași goluri.
+  function recordOral(c, r) {
+    const run = { ticks: r.ticks || {}, half: r.half || {} };
     const p = tickSum(run, c) / c.k.length;
-    updO(c.id, p); run.scores[c.id] = p;
+    updO(c.id, p);
     // Golurile cardului: contorul `mc` (+1 la un punct ratat, −1 la unul acoperit întreg), `m` (ratate acum), `w` (ce a marcat verdictul greșit) și versiunea bună.
-    // Un punct reparat cu întrebarea țintită (run.fixed) nu mai crește contorul și iese din `m`.
-    const e = S.o[c.id], prev = gapCounts(e), mc = {}, missed = missedOf(run, c), fx = run.fixed || {}, open = missed.filter(i => !fx[i]);
+    const e = S.o[c.id], prev = gapCounts(e), mc = {}, missed = missedOf(run, c), fx = r.fixed || {}, open = missed.filter(i => !fx[i]);
     c.k.forEach((_, i) => { const n = fx[i] ? 0 : missed.indexOf(i) >= 0 ? Math.min(MC_MAX, (prev[i] || 0) + 1) : Math.max(0, (prev[i] || 0) - 1); if (n) mc[i] = n; });
     e.mc = mc;                                                    // și gol ({}): fără el, `m` ar fi citit ca date vechi
     if (open.length) e.m = open; else delete e.m;
     ["les", "chk"].forEach(nm => Object.keys(ui[nm] || {}).forEach(k => { if (k.indexOf(c.id + ":") === 0) delete ui[nm][k]; }));      // explicațiile și întrebările țintite ale cardului nu rămân în urmă
-    if (run.ai && run.ai.s === "ok") { const w = (run.ai.v.wrong || []).slice(0, 3); if (w.length) e.w = w; else delete e.w; }
-    if (run.keep) e.a = run.keep;
+    if (r.wrong) { const w = r.wrong.slice(0, 3); if (w.length) e.w = w; else delete e.w; }
+    if (r.keep) e.a = r.keep;
     commit();
+    return { p, missed };
+  }
+  function oralSave() {
+    const run = ui.run, c = OBY[run.items[run.i]];
+    Mic.stop(); ivAbort();
+    const r = recordOral(c, { ticks: run.ticks, half: run.half, fixed: run.fixed, wrong: run.ai && run.ai.s === "ok" ? run.ai.v.wrong || [] : undefined, keep: run.keep });
+    run.scores[c.id] = r.p;
     if (run.i < run.items.length - 1) { run.i++; run.phase = "ask"; run.ticks = {}; run.half = {}; run.iv = null; run.rw = null; run.keep = ""; run.th = false; run.fixed = {}; run.tEnd = 0; run.ans = ""; run.ai = null; render(); window.scrollTo(0, 0); }
     else finishOral();
   }
@@ -1726,7 +1741,7 @@
     const hist = S.h.slice().reverse();
     const mcqH = S.h.filter(e => e.kind === "mcq" && e.n);
     h += '<section class="card stack-s"><h3>Istoric</h3>' + (mcqH.length > 1 ? spark(mcqH.slice(-20).map(e => e.c / e.n)) : "") +
-      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : "grile") + '</span></span><span class="mono xs">' + (e.kind === "oral" || e.kind === "open" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
+      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : e.kind === "jarvis" ? "Jarvis" : "grile") + '</span></span><span class="mono xs">' + (e.kind === "oral" || e.kind === "open" || e.kind === "jarvis" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
     h += '<section class="card stack-s"><h3>Salvare</h3><p class="small" id="sync-l">' + esc(Sync.label()) + '</p><div class="row">' +
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
@@ -2021,5 +2036,45 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
+  // ---------- PrepApp: ce vede Jarvis din aplicație (spec §4.5) ----------
+  // Conținut și progres, fără ecran: alege cardul, salvează verdictul (aceeași logică ca oralSave), dă teoria golurilor, rezumatul pregătirii și rândul din istoric.
+  let techPlan = null;                                       // sloturile interviului simulat, alese o dată pe sesiune
+  const PrepApp = {
+    // mode: train (ponderile `wO`), topic (un modul) sau mock (sloturile din pickTechMock); `done` = cardurile deja trecute în sesiune. `difficulty` încă nu se folosește.
+    next(o) {
+      const done = o.done || [];
+      let c;
+      if (o.mode === "mock") { if (!done.length || !techPlan) techPlan = pickTechMock(); c = techPlan.filter(x => done.indexOf(x.id) < 0)[0]; }
+      else c = wsample(ORAL.filter(x => done.indexOf(x.id) < 0 && (o.mode === "topic" ? x.m === o.module : MOD[x.m].p < 4)), wO, 1)[0];
+      if (!c) return null;
+      const e = S.o[c.id] || {};
+      return { id: c.id, module: c.m, moduleName: MOD[c.m].short, q: c.q, code: c.code || "", points: c.k.slice(), model: c.model, rules: ivRules(c), missed: (e.m || []).map(i => c.k[i]).filter(Boolean), best: e.a || "" };
+    },
+    // points: câte o valoare spontan | dupa | nu pentru fiecare punct cheie, în ordine.
+    record(id, v) {
+      const c = OBY[id];
+      if (!c) return { ok: false, error: "card necunoscut: " + id };
+      const pts = v && v.points;
+      if (!Array.isArray(pts) || pts.length !== c.k.length || !pts.every(x => IV_COV.indexOf(x) >= 0)) return { ok: false, error: "points trebuie să aibă exact " + c.k.length + " valori din spontan, dupa, nu" };
+      const prev = S.o[id] && S.o[id].s != null ? S.o[id].s / 100 : null, ticks = {}, half = {};
+      pts.forEach((x, i) => { if (x !== "nu") { ticks[i] = true; if (x === "dupa") half[i] = true; } });
+      const r = recordOral(c, { ticks, half, wrong: aiList(v.wrong) });
+      return { ok: true, score: r.p, prev, box: S.o[id].b, missed: r.missed.map(i => c.k[i]) };
+    },
+    // Aceleași surse ca gapTheory (propoziții din model, puncte din fișă), ca text simplu pentru Jarvis. Fără goluri: modelul de răspuns.
+    theory(id) {
+      const c = OBY[id]; if (!c) return "";
+      const g = gapCounts(S.o[id]), idx = Object.keys(g).map(Number).sort((a, b) => g[b] - g[a] || a - b).slice(0, 3), used = new Set(), clean = t => String(t).replace(/`/g, "");
+      if (!idx.length) return clean(c.model).slice(0, 900);
+      const parts = idx.map(i => {
+        const src = gapSources(c, i, used);
+        return "Punct ratat: " + clean(c.k[i]) + (src.sm.length ? "\nDin modelul de răspuns: " + clean(src.sm.map(k => src.sents[k]).join(" ")) : "") + (src.sp.length ? "\nDin fișa " + MOD[c.m].short + ": " + src.sp.map(o => clean(src.pts[o.i])).join(" ") : "");
+      });
+      return parts.join("\n\n").slice(0, 900);
+    },
+    summary() { return { readiness: readiness().ready, daysLeft: daysLeft(), gaps: gapList().slice(0, 3).map(x => MOD[x.c.m].short + ": " + x.c.k[x.i]), role: P.cfg.role, profile: IV_PROFILE }; },
+    log(e) { S.h.push({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }); S.h = S.h.slice(-HMAX); commit(); }
+  };
+  window.PrepApp = PrepApp;
   window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, wO, state: () => S, setState: x => { S = x; planCache = null; } };
 })();
