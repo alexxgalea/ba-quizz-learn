@@ -18,18 +18,24 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 ## Structura
 
 ```text
-build.mjs          construiește dist/pregatire-onapsis.html
+build.mjs          construiește dist/pregatire-onapsis.html (artifact) și dist/app (PWA)
 lib.mjs            încarcă datele și parsează explicațiile (Markdown)
 validate.mjs       verifică datele, explicațiile și glosarul
 package.json       scripturi (validate, build, teste)
 src/
   shell.html       scheletul paginii
   app.js, app.css  aplicația, fără dependențe externe
+  live.js          Jarvis: serverul vocal (Gemini Live), protocolul și reluarea
+  audio.js         Jarvis: microfon și difuzor în browser
+  call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, „Nu te aud”)
+  jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări)
+  pwa/             iconița, service worker-ul
   data_*.js        module, grile, context, carduri orale, fișe, exerciții, setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
   expl/glosar.md   glosarul
 katas/             exercițiile de live coding și testele lor (pytest)
-tools/             teste de interfață (Playwright) și utilitare pentru explicații
+tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
+docs/              spec-ul Jarvis (docs/superpowers/specs), proba de aruncat și PWA-ul publicat pe Pages (docs/app)
 export/            generatorul brief-ului trimis la Perplexity
 ```
 
@@ -48,9 +54,14 @@ python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample ș
 python3 tools/test_gaps.py       # goluri (mc, w), teoria pe ce ai ratat, Studiu › Pentru tine
 python3 tools/test_interview.py  # intervievatorul: dialog, scor 1/0,5, memorie, rescriere, erori (sample simulat)
 python3 tools/test_plan.py   # planul generat, scadențele, întrebările deschise, formulările, setările
+node --test "tools/unit/*.test.mjs"   # Jarvis: Live, Audio (partea pură), Call, Jarvis, peste adaptoare false
+python3 tools/test_audio.py      # BrowserAudio în Chromium cu microfon fals
+python3 tools/test_prepapp.py    # PrepApp: record dă aceleași urme ca oralSave, next, theory, summary, log
+python3 tools/test_jarvis.py     # ecranul Jarvis la 360 px, light și dark, cu Live și Audio false
+python3 tools/test_pwa.py        # manifest, iconițe, service worker, offline
 ```
 
-Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:ui`.
+Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:unit`, `npm run test:ui`, iar `npm run pages` copiază PWA-ul în `docs/app`.
 
 Data implicită a interviului și orele pe seară stau în `P.cfg` (`src/data_core.js`); `P.planTpl` are sarcinile din dimineața interviului și ordinea exercițiilor în plan. Utilizatorul le poate schimba din aplicație (se salvează în progres, cheia `c`).
 
@@ -139,3 +150,14 @@ La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dicteaz
 Aplicația e publicată ca artifact Claude privat: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT
 
 Progresul stă în baza de date a artefactului, într-un document per utilizator (`data/users/<uid>/progress`), plus o copie locală în browser. Republicarea la același link păstrează progresul. Cheile stării: `q` grile, `o` carduri orale, `x` întrebări deschise, `k` exerciții, `p` sarcini bifate, `h` istoric, `c` setări. Dintr-o sesiune Claude: rulezi build-ul, apoi publici `dist/pregatire-onapsis.html` cu `url` setat la link-ul de mai sus.
+
+## Jarvis (interviu vorbit)
+
+Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/app/): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini stă în `localStorage` (`onapsis-gemini-v1`), niciodată în starea aplicației, în export sau în brief.
+
+Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Pe scurt:
+
+- **Trei cusături**: `Live` (GeminiLive | FakeLive), `Audio` (BrowserAudio | FakeAudio), `PrepApp` (app.js | stub). `Call` și `Jarvis` stau peste ele. Fiecare fișier merge în pagină (declarații globale) și în Node (`module.exports`), fără importuri între ele.
+- **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`. Rândurile din istoric au `kind: "jarvis"`.
+- **Teste**: `tools/unit` (Node, câte un fișier pe modul), `tools/test_audio.py`, `tools/test_prepapp.py`, `tools/test_jarvis.py` (înlocuitorii din `tools/jarvis_fakes.js` se injectează prin `window.__jarvisFakes`).
+- **Publicare PWA**: `npm run build && npm run pages`, apoi commit și push. GitHub Pages servește `docs/app` din ramură (Settings › Pages › Deploy from a branch › `/docs`).
