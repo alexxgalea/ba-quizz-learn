@@ -404,7 +404,7 @@ const ProbeCore = (() => {
       ["Pune-i 3 întrebări scurte, una după alta", () => run("mark")],
       ["Notează vocea: natural / acceptabil / robotic (în butoanele libere)", () => run("mark")],
       ["Copiază rezultatele și lipește-le în chat", () => run("copy")]] },
-    { name: "5. Oprire v2", desc: "Runda 2: în prima rundă nu s-a oprit când i-ai cerut. Încercăm 4 variante, pe rând. Cere-i monologul, apoi spune tare „Stai!” de 2–3 ori peste el. Setările se pun singure la primul pas al fiecărei variante.", steps: [
+    { name: "5. Oprire v2", desc: "Runda 2: în prima rundă nu s-a oprit când i-ai cerut. Încercăm 4 variante, pe rând. Cere-i monologul, apoi spune tare „Stai!” de 2–3 ori peste el. Modelul (3.8) și setările se pun singure la primul pas al fiecărei variante.", steps: [
       ["A. Difuzor, setări implicite: conectează și pornește microfonul", variant("difuzor", "1", "1", "", "0")],
       ["Cere-i monologul lung", () => run("askMonologue")],
       ["Apasă, apoi spune tare „Stai!” de 2–3 ori peste el (20 s)", () => phaseWindow("interrupt", 20000)],
@@ -425,7 +425,7 @@ const ProbeCore = (() => {
   const waitConn = async () => { for (let i = 0; i < 50 && S.conn !== "conectat"; i++) await new Promise(r => setTimeout(r, 100)); };
   function variant(out, aec, ns, vad, lb) {
     return async () => {
-      $("#aec").value = aec; $("#ns").value = ns; $("#vad").value = vad; $("#lb").value = lb;
+      $("#model").value = "3.8"; $("#aec").value = aec; $("#ns").value = ns; $("#vad").value = vad; $("#lb").value = lb;
       await run("connect"); dispatch({ type: "output", output: out }); await waitConn(); await run("micOn");
     };
   }
