@@ -35,7 +35,7 @@
 </head>
 <body>
 <main>
-  <div class="banner">PROTOTIP: de aruncat după ce răspunde la întrebări. Nu e aplicația.</div>
+  <div class="banner">PROTOTIP: de aruncat după ce răspunde la întrebări. Nu e aplicația. · versiune: runda 2c</div>
   <div>
     <h1>Proba Jarvis: poate Gemini Live să fie vocea intervievatorului?</h1>
     <p class="muted small">Răspunde la cele 4 întrebări din spec (§11), pe telefonul tău: (1) modelul apelează funcțiile aplicației? (2) trimite transcrierea a ce spui tu și a ce spune el? (3) îl poți întrerupe pe difuzor sau doar cu căști? (4) cum sună în română și cât durează până răspunde? La final apeși „Copiază rezultatele” și le lipești în chat.</p>
@@ -46,15 +46,15 @@
     <div class="row"><input id="key" type="password" placeholder="Cheia Gemini (din Google AI Studio)" autocomplete="off"><button id="saveKey">Salvează</button></div>
     <p class="small muted">Cheia rămâne doar în acest browser (aceeași cheie o va folosi aplicația). Pe nivelul gratuit, Google poate folosi conversațiile.</p>
     <div class="row">
-      <label class="small">Model <select id="model"><option value="3.8">gemini-3.8-live</option><option value="3.8x">gemini-3.8-live-extended-thinking</option><option value="2.5">gemini-2.5 native audio</option></select></label>
-      <label class="small">Voce <select id="voice"><option>Charon</option><option>Orus</option><option>Fenrir</option><option>Puck</option><option>Kore</option><option>Aoede</option></select></label>
-      <label class="small">Răbdare <select id="silence"><option value="800">0,8 s</option><option value="1200" selected>1,2 s</option><option value="2000">2 s</option></select></label>
+      <label class="small">Model <select autocomplete="off" id="model"><option value="3.8">gemini-3.8-live</option><option value="3.8x">gemini-3.8-live-extended-thinking</option><option value="2.5">gemini-2.5 native audio</option></select></label>
+      <label class="small">Voce <select autocomplete="off" id="voice"><option>Charon</option><option>Orus</option><option>Fenrir</option><option>Puck</option><option>Kore</option><option>Aoede</option></select></label>
+      <label class="small">Răbdare <select autocomplete="off" id="silence"><option value="800">0,8 s</option><option value="1200" selected>1,2 s</option><option value="2000">2 s</option></select></label>
     </div>
     <div class="row">
-      <label class="small">VAD <select id="vad"><option value="">implicit</option><option value="sens">sensibil</option></select></label>
-      <label class="small">Ecou <select id="aec"><option value="1">AEC da</option><option value="0">AEC nu</option></select></label>
-      <label class="small">Zgomot <select id="ns"><option value="1">reducere da</option><option value="0">reducere nu</option></select></label>
-      <label class="small">Oprire locală <select id="lb"><option value="0">nu</option><option value="1">da</option></select></label>
+      <label class="small">VAD <select autocomplete="off" id="vad"><option value="">implicit</option><option value="sens">sensibil</option></select></label>
+      <label class="small">Ecou <select autocomplete="off" id="aec"><option value="1">AEC da</option><option value="0">AEC nu</option></select></label>
+      <label class="small">Zgomot <select autocomplete="off" id="ns"><option value="1">reducere da</option><option value="0">reducere nu</option></select></label>
+      <label class="small">Oprire locală <select autocomplete="off" id="lb"><option value="0">nu</option><option value="1">da</option></select></label>
     </div>
   </section>
 
@@ -444,6 +444,7 @@ const ProbeCore = (() => {
   });
   $("#saveKey").onclick = () => { const k = $("#key").value.trim(); if (k) { localStorage.setItem("onapsis-gemini-v1", k); $("#key").value = ""; $("#key").placeholder = "Cheie salvată (…" + k.slice(-4) + ")"; log("cheie salvată"); } };
   const saved = localStorage.getItem("onapsis-gemini-v1"); if (saved) $("#key").placeholder = "Cheie salvată (…" + saved.slice(-4) + ")";
+  $("#model").value = "3.8"; $("#aec").value = "1"; $("#ns").value = "1"; $("#vad").value = ""; $("#lb").value = "0";
   render(false); renderScenario();
 })();
 </script>
