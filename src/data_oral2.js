@@ -306,4 +306,54 @@ def test_notify(m):
       "Testare: greu de reprodus; repetări multe, stres, analiza codului"],
       model: "Un race condition apare când rezultatul depinde de ordinea în care se intercalează threadurile sau procesele. Exemplul clasic e citește-modifică-scrie, ca `counter += 1`, sau verifică-apoi-acționează: verific că utilizatorul nu există, apoi îl creez. GIL-ul nu ajută, pentru că protejează doar instrucțiuni individuale de bytecode. Prima opțiune e să elimin starea partajată: fiecare thread produce rezultate separate sau comunică prin cozi. Altfel pun un lock în jurul secțiunii critice. Când starea e în baza de date, mut atomicitatea acolo: `UPDATE ... SET x = x + 1`, `SELECT ... FOR UPDATE` sau o constrângere unică. Sunt greu de reprodus în teste, deci contează analiza codului." }
   ]);
+  O("python", [
+    { id: "o-py-3", q: "Ce face `yield from` și ce poți face cu `send()` pe un generator?", k: [
+      "`yield from sub` deleagă iterarea: transmite valorile (și `send`/`throw`) către subgenerator",
+      "Expresia `yield from` întoarce valoarea din `return`-ul subgeneratorului (PEP 380)",
+      "`send(v)` reia generatorul, iar `yield` din interior primește `v`",
+      "Primul pas e `next(g)` (sau `send(None)`), ca generatorul să ajungă la primul `yield`",
+      "Folosiri: compunerea generatorilor (pipeline-uri), stare între evenimente; azi corutinele sunt `async`/`await`"],
+      model: "`yield from` deleagă iterarea către alt generator: îi transmite valorile mai departe, iar `send` și `throw` ajung direct la el. Expresia întoarce valoarea din `return`-ul subgeneratorului, deci pot compune generatori care calculează și un rezultat final. `send(v)` reia generatorul și face ca `yield`-ul la care stătea să întoarcă `v`; primul pas trebuie să fie `next`, ca generatorul să ajungă la primul `yield`. Cu `send` pot ține stare între evenimente, de exemplu o medie mobilă, fără o clasă. Din mecanismul ăsta au crescut corutinele, care azi se scriu cu `async` și `await`." },
+    { id: "o-py-4", q: "Cum scrii un context manager cu `@contextmanager` și ce garantează?", k: [
+      "O funcție generator cu un singur `yield`: înainte e setup-ul, după e cleanup-ul",
+      "Valoarea din `yield` e ce primești în `as`",
+      "Cleanup-ul garantat stă în `try/finally` în jurul lui `yield` (altfel o excepție îl sare)",
+      "O excepție din blocul `with` e aruncată în generator, la `yield`; o poți trata sau lăsa să treacă",
+      "Exemple: tranzacție DB (commit/rollback), lock, timer, director temporar"],
+      model: "Scriu o funcție generator cu un singur `yield` și o decorez cu `@contextmanager`. Codul de dinainte de `yield` e setup-ul, valoarea dată de `yield` e ce primesc în `as`, iar codul de după e cleanup-ul. Ca să fie garantat, pun `yield` într-un `try/finally`: dacă blocul `with` aruncă, excepția e ridicată în generator chiar la `yield`, iar fără `finally` cleanup-ul ar fi sărit. Pot prinde excepția acolo, de exemplu ca să fac rollback la o tranzacție și s-o ridic din nou. Îl folosesc pentru tranzacții, lock-uri, cronometrare sau directoare temporare." }
+  ]);
+
+  O("pytest", [
+    { id: "o-pt-3", q: "Cum ai testa un endpoint FastAPI care scrie o alertă în DB și trimite o notificare?", k: [
+      "`TestClient` (sau client async cu `@pytest.mark.anyio`) pe aplicația reală",
+      "Baza de date: DB de test (de exemplu Postgres în container) cu rollback per test, prin `dependency_overrides` pe `get_db`",
+      "Notificarea: notificator fals injectat (override), verifici ce a primit, fără rețea",
+      "Cazuri: succes (201 + rând + notificare), validare (422), duplicat (409), notificator care pică",
+      "Logica de domeniu testată separat, unitar; endpoint-ul doar în câteva teste de integrare"],
+      model: "Aș folosi `TestClient` pe aplicația reală și aș înlocui dependențele cu `dependency_overrides`. Pentru baza de date, o bază de test, de preferat același Postgres ca în producție, pornit într-un container, cu o fixture care deschide o tranzacție și face rollback după fiecare test. Notificatorul îl înlocuiesc cu unul fals care ține mesajele într-o listă, deci verific ce s-ar fi trimis, fără rețea. Acopăr succesul, adică 201, rândul din bază și o singură notificare, apoi validarea cu 422, duplicatul cu 409 și cazul în care notificatorul pică. Logica de detecție o testez separat, unitar, iar endpoint-ul doar în câteva teste de integrare." },
+    { id: "o-pt-4", q: "Unit, integrare, end-to-end: ce testezi la fiecare nivel într-un serviciu de detecție și cum eviți testele flaky?", k: [
+      "Unit: logica de domeniu (reguli de detecție, parsare), rapidă, fără I/O, multe cazuri cu `parametrize`",
+      "Integrare: API + DB reală de test, broker, cu dependențe externe false",
+      "End-to-end: puține, pe fluxurile critice, într-un mediu apropiat de producție",
+      "Anti-flaky: fără `sleep` (ceas injectat, polling cu timeout), fără stare partajată, date deterministe",
+      "Izolare: rollback per test, `tmp_path`, `monkeypatch`; ordinea aleatoare scoate dependențele la iveală"],
+      model: "La bază pun multe teste unitare pe logica de domeniu: regulile de detecție și parsarea, fără I/O, cu `parametrize` pe cazurile de margine. Deasupra, teste de integrare care pornesc API-ul cu o bază de test reală și, unde contează, brokerul, cu sistemele externe înlocuite de fake-uri. End-to-end păstrez puține, doar pe fluxurile critice. Testele flaky vin de obicei din timp, stare partajată sau rețea: în loc de `sleep` injectez ceasul sau aștept o condiție cu timeout, izolez fiecare test cu rollback, `tmp_path` și `monkeypatch`, iar datele sunt deterministe. Rularea în ordine aleatoare scoate la iveală dependențele ascunse dintre teste." }
+  ]);
+
+  O("asgi", [
+    { id: "o-asgi-3", q: "Cum gestionezi resursele partajate (client HTTP, pool DB, configurare) într-o aplicație FastAPI?", k: [
+      "`lifespan` (`@asynccontextmanager`): creezi la pornire, închizi la oprire; `on_event` e depreciat",
+      "Le expui prin `app.state` sau prin dependențe (`Depends`), nu prin globale importate",
+      "Sesiunea DB per cerere: dependență cu `yield` (commit/rollback, închidere)",
+      "Configurare din mediu cu `pydantic-settings`, citită o dată (și înlocuibilă în teste)",
+      "Fiecare worker (proces) are propriile resurse: pool-uri dimensionate pe numărul de workeri"],
+      model: "Resursele care trăiesc cât aplicația, clientul HTTP, engine-ul cu pool-ul de conexiuni sau un model încărcat, le creez în `lifespan`: înainte de `yield` la pornire, după `yield` le închid. Le expun prin `app.state` sau prin dependențe, nu prin globale importate, ca să le pot înlocui în teste. Sesiunea de bază de date e per cerere, printr-o dependență cu `yield` care face commit sau rollback și o închide. Configurarea vine din mediu, cu `pydantic-settings`. Și țin cont că fiecare worker Gunicorn sau Uvicorn e un proces separat, cu propriul pool, deci dimensionez pool-ul înmulțit cu numărul de workeri față de limita bazei de date." },
+    { id: "o-asgi-4", q: "Munca de după răspuns: `BackgroundTasks`, `asyncio.create_task` sau Celery? Când folosești fiecare?", k: [
+      "`BackgroundTasks`: după răspuns, în același proces; mic și pierdabil (log secundar, invalidare de cache)",
+      "`asyncio.create_task`: concurență în proces; păstrezi referința, tratezi erorile, anulezi la oprire",
+      "Celery/RabbitMQ: lucru important sau lung; coadă durabilă, retry, workeri separați, scalare independentă",
+      "Lucrul important trebuie să fie idempotent (at-least-once)",
+      "API-ul răspunde 202 + id pentru joburi lungi; starea se citește separat"],
+      model: "Aleg după cât de grav e să pierd lucrul și cât durează. `BackgroundTasks` rulează după răspuns, în același proces, fără coadă și fără retry, deci îl folosesc doar pentru lucruri mici, pe care le pot pierde, cum ar fi un log secundar. `asyncio.create_task` e pentru concurență în interiorul procesului, cu condiția să păstrez referința la task, să-i tratez erorile și să-l anulez la oprire. Pentru tot ce contează, o alertă sau o scanare lungă, folosesc Celery cu RabbitMQ: coadă durabilă, retry, workeri separați pe care îi scalez independent, cu procesare idempotentă. Pentru joburile lungi, API-ul răspunde 202 cu un id, iar starea se citește separat." }
+  ]);
 })(window.PREP);

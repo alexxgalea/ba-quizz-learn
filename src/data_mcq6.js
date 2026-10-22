@@ -255,4 +255,147 @@ def inner():
       ctx: "Un `Condition` combină un lock cu o listă de așteptare: un thread așteaptă o stare („coada nu e goală”), altul o schimbă și îl anunță.",
       e: "`wait()` trebuie apelat cu lock-ul luat. Îl eliberează cât doarme, ca alții să poată schimba starea, și îl reia la trezire. Verifici condiția într-o buclă sau cu `wait_for(predicat)`." }
   ]);
+  Q("python", [
+    { id: "py-14", lvl: 1, q: "Ce afișează?", code: R`gen = (x * 2 for x in range(3))
+print(list(gen))
+print(list(gen))`, o: ["[0, 2, 4], apoi []", "[0, 2, 4] de două ori", "[], apoi [0, 2, 4]", "TypeError la al doilea `list`"],
+      ctx: "O expresie între paranteze rotunde, `(... for ...)`, e un generator, nu un tuplu și nici o listă.",
+      e: "Un generator se parcurge o singură dată. Primul `list` îl consumă complet, iar al doilea primește un generator epuizat, deci o listă goală." },
+    { id: "py-15", lvl: 2, q: "Ce afișează?", code: R`def inner():
+    yield 1
+    yield 2
+    return "done"
+
+def outer():
+    r = yield from inner()
+    yield r
+
+print(list(outer()))`, o: ["[1, 2, 'done']", "[1, 2]", "['done']", "[1, 2, None]"],
+      ctx: "`yield from` (PEP 380) deleagă iterarea către alt generator. Un generator poate avea și `return`, cu o valoare.",
+      e: "`yield from inner()` transmite valorile 1 și 2 mai departe, iar expresia `yield from` primește valoarea returnată de `inner`, „done”, pe care `outer` o produce apoi." },
+    { id: "py-16", lvl: 2, q: "Ce afișează?", code: R`def avg():
+    total = n = 0
+    x = yield
+    while True:
+        total += x
+        n += 1
+        x = yield total / n
+
+g = avg()
+next(g)
+g.send(10)
+print(g.send(20))`, o: ["15.0", "20", "10.0", "TypeError"],
+      ctx: "`g.send(v)` reia generatorul, iar `yield` din interior primește valoarea `v`. Primul pas se face cu `next(g)` (sau `send(None)`), ca generatorul să ajungă la primul `yield`.",
+      e: "`next` duce generatorul la primul `yield`. `send(10)` dă media 10.0, iar `send(20)` adună 20 și întoarce (10 + 20) / 2 = 15.0." },
+    { id: "py-17", lvl: 3, q: "Ce se întâmplă?", code: R`def parse(lines):
+    for l in lines:
+        yield int(l)
+
+nums = parse(["1", "x", "3"])
+print("creat")
+print(sum(nums))`, o: [
+      "Afișează „creat”, apoi `ValueError` la `sum`",
+      "`ValueError` la `parse(...)`, înainte de „creat”",
+      "Afișează „creat” și 4, sărind peste „x”",
+      "Afișează „creat” și 0"],
+      ctx: "Apelul unei funcții generator nu execută corpul ei: întoarce un obiect generator. Corpul rulează abia când ceri valori.",
+      e: "`parse(...)` doar creează generatorul. `int(\"x\")` rulează abia când `sum` cere a doua valoare, deci eroarea apare acolo, departe de locul în care ai creat generatorul." },
+    { id: "py-18", lvl: 1, q: "Ce afișează?", code: R`def ids():
+    n = 0
+    while True:
+        n += 1
+        yield n
+
+print(list(islice(ids(), 3)))`, o: ["[1, 2, 3]", "Nimic: rulează la nesfârșit", "[0, 1, 2]", "TypeError: generatorul nu are lungime"],
+      ctx: "Un generator poate fi infinit, pentru că produce valorile la cerere. `itertools.islice` ia doar primele elemente dintr-un iterabil.",
+      e: "`islice(..., 3)` cere exact trei valori și se oprește, deci generatorul infinit nu e parcurs mai departe." }
+  ]);
+
+  Q("pytest", [
+    { id: "pt-11", lvl: 1, q: "Când trece testul?", code: R`def test_bad_port():
+    with pytest.raises(
+            ValueError, match="port"):
+        parse_port("abc")`, o: [
+      "Dacă `parse_port` aruncă `ValueError` cu un mesaj care conține „port”",
+      "Dacă aruncă orice excepție",
+      "Dacă nu aruncă nimic",
+      "Doar dacă mesajul e exact „port”"],
+      ctx: "`pytest.raises` verifică că blocul aruncă o excepție de un anumit tip; `match` verifică și mesajul.",
+      e: "Testul trece doar dacă blocul aruncă `ValueError` (sau o subclasă) și dacă `re.search(\"port\", mesaj)` găsește ceva. Fără excepție, testul pică." },
+    { id: "pt-12", lvl: 3, q: "Scrii `async def test_alert()` și rulezi pytest 9 fără pytest-asyncio sau anyio. Ce se întâmplă?", o: [
+      "Testul pică: pytest nu rulează singur corutinele, are nevoie de un plugin async",
+      "Trece: pytest rulează automat corutinele",
+      "E sărit cu un warning, deci suita pare verde",
+      "Rulează sincron, ignorând `await`"],
+      ctx: "pytest e sincron. Pentru teste `async def` ai nevoie de un plugin (pytest-asyncio, sau anyio cu `@pytest.mark.anyio`, ca în documentația FastAPI).",
+      e: "Din pytest 8.4, un test `async def` fără plugin pică explicit („async def functions are not natively supported”). Înainte era doar sărit cu un warning, ceea ce ascundea teste nerulate." },
+    { id: "pt-13", lvl: 2, q: "Câte teste rulează?", code: R`@pytest.mark.parametrize(
+    "a", [1, 2, 3])
+@pytest.mark.parametrize(
+    "b", ["x", "y"])
+def test_grid(a, b):
+    ...`, o: ["6", "5", "3", "2"],
+      ctx: "Fiecare `parametrize` multiplică testul cu valorile lui. Două decoratoare puse unul peste altul se combină.",
+      e: "Decoratoarele `parametrize` suprapuse fac produsul cartezian: 3 valori pentru `a` × 2 pentru `b` = 6 teste." },
+    { id: "pt-14", lvl: 1, q: "Testezi o funcție care scrie un raport pe disc. Ce folosești?", o: [
+      "Fixture-ul `tmp_path`: un director temporar, unic pentru fiecare test",
+      "Un fișier fix, `/tmp/report.txt`",
+      "Un mock pe `open` în fiecare test",
+      "Directorul proiectului, curățat de mână la final"],
+      ctx: "Testele care scriu fișiere în același loc se calcă pe picioare, mai ales când rulează în paralel sau când unul pică la jumătate.",
+      e: "`tmp_path` dă fiecărui test un `pathlib.Path` către un director nou, deci testele nu împart fișiere și nu lasă gunoi în proiect." },
+    { id: "pt-15", lvl: 2, q: "Un test trece singur, dar pică atunci când rulează toată suita. Cauza cea mai probabilă?", o: [
+      "Stare partajată între teste (DB, variabile globale, fixture cu scope larg) care depinde de ordine",
+      "pytest rulează implicit testele în paralel",
+      "pytest păstrează rezultatele testelor de la o rulare la alta",
+      "Testul e prea lent pentru suita completă"],
+      ctx: "Un test bun nu depinde de alte teste: nici de ordinea lor, nici de ce au lăsat în urmă.",
+      e: "Dacă rezultatul depinde de ce rulează înainte, un test anterior lasă stare în urmă: rânduri în DB, un singleton modificat, un mock nedesfăcut. Soluția e izolarea: rollback per test, fixture-uri cu scope `function`, `monkeypatch`." }
+  ]);
+
+  Q("asgi", [
+    { id: "asgi-12", lvl: 2, q: "Unde creezi un `httpx.AsyncClient` partajat de toată aplicația și unde îl închizi?", o: [
+      "În funcția `lifespan` (un `@asynccontextmanager` dat la `FastAPI(lifespan=...)`): îl creezi înainte de `yield` și îl închizi după",
+      "În fiecare endpoint, la fiecare cerere",
+      "Într-o variabilă globală creată la import, fără închidere",
+      "În `@app.on_event(\"startup\")`, modul recomandat acum"],
+      ctx: "Un client HTTP sau un pool de conexiuni se creează o dată, la pornire, și se închide la oprire. FastAPI are un singur loc pentru amândouă.",
+      e: "`lifespan` rulează codul de dinainte de `yield` la pornire și pe cel de după la oprire. `on_event` e depreciat în favoarea lui." },
+    { id: "asgi-13", lvl: 2, q: "Ce garantează `BackgroundTasks` din FastAPI?", o: [
+      "Rulează funcția după trimiterea răspunsului, în același proces; dacă procesul moare, sarcina se pierde",
+      "Pune sarcina într-o coadă durabilă, cu retry",
+      "Rulează sarcina într-un proces separat",
+      "Întârzie răspunsul până termină sarcina"],
+      ctx: "Uneori vrei să răspunzi repede și să faci după aceea ceva mic: un email, un log de audit, o invalidare de cache.",
+      e: "`BackgroundTasks` e convenabil pentru lucruri mici: clientul primește răspunsul, apoi sarcina rulează în același worker. Nu are coadă, retry sau persistență; pentru lucru care nu are voie să se piardă folosești Celery." },
+    { id: "asgi-14", lvl: 1, q: "Ce face prima linie din test?", code: R`app.dependency_overrides[get_db] = (
+    lambda: fake_db)
+client = TestClient(app)
+r = client.get("/alerts")`, o: [
+      "Endpoint-urile care cer `Depends(get_db)` primesc `fake_db`, fără schimbări în cod",
+      "Înlocuiește `get_db` peste tot în proces, și în afara FastAPI",
+      "Dezactivează dependența: endpoint-ul primește `None`",
+      "Pornește o bază de date de test"],
+      ctx: "`Depends` e mecanismul de dependency injection al FastAPI. `dependency_overrides` e un dicționar pe aplicație.",
+      e: "La fiecare cerere, FastAPI caută dependența în `dependency_overrides` și, dacă e acolo, apelează înlocuitorul. Codul endpoint-ului rămâne neschimbat; după test golești dicționarul." },
+    { id: "asgi-15", lvl: 2, q: "Funcția întoarce `{\"id\": 1, \"secret\": \"x\"}`. Ce primește clientul?", code: R`class AlertOut(BaseModel):
+    id: int
+
+@app.get("/a", response_model=AlertOut)
+def get_alert():
+    return {"id": 1, "secret": "x"}`, o: [
+      "`{\"id\": 1}`: `response_model` validează și filtrează ieșirea",
+      "`{\"id\": 1, \"secret\": \"x\"}`: modelul doar documentează schema",
+      "422, pentru că există un câmp în plus",
+      "500, pentru că dict-ul nu e un `AlertOut`"],
+      ctx: "Modelul Pydantic de la intrare validează ce trimite clientul; `response_model` controlează ce trimite serverul.",
+      e: "FastAPI trece valoarea întoarsă prin `AlertOut`: câmpurile care nu sunt în model sunt scoase. Așa nu expui din greșeală câmpuri interne." },
+    { id: "asgi-16", lvl: 3, q: "Un endpoint cere două dependențe, iar fiecare cere `Depends(get_db)`. De câte ori rulează `get_db` într-o cerere?", o: [
+      "O dată: FastAPI ține minte rezultatul unei dependențe pe durata cererii",
+      "De două ori, câte o sesiune pentru fiecare dependență",
+      "De trei ori, inclusiv pentru endpoint",
+      "O dată pentru toată aplicația"],
+      ctx: "Dependențele pot depinde la rândul lor de alte dependențe, deci aceeași dependență apare des de mai multe ori în același arbore.",
+      e: "Implicit, o dependență e calculată o singură dată pe cerere și refolosită, deci toate primesc aceeași sesiune. Cu `Depends(get_db, use_cache=False)` ai fi primit sesiuni separate." }
+  ]);
 })(window.PREP);
