@@ -35,7 +35,7 @@
 </head>
 <body>
 <main>
-  <div class="banner">PROTOTIP: de aruncat după ce răspunde la întrebări. Nu e aplicația. · versiune: runda 3a</div>
+  <div class="banner">PROTOTIP: de aruncat după ce răspunde la întrebări. Nu e aplicația. · versiune: runda 4a</div>
   <div>
     <h1>Proba Jarvis: poate Gemini Live să fie vocea intervievatorului?</h1>
     <p class="muted small">Răspunde la cele 4 întrebări din spec (§11), pe telefonul tău: (1) modelul apelează funcțiile aplicației? (2) trimite transcrierea a ce spui tu și a ce spune el? (3) îl poți întrerupe pe difuzor sau doar cu căști? (4) cum sună în română și cât durează până răspunde? La final apeși „Copiază rezultatele” și le lipești în chat.</p>
@@ -88,7 +88,7 @@
       <button data-act="rateOk">Acceptabil</button>
       <button data-act="rateRobotic">Robotic</button>
     </div>
-    <div class="row"><button class="primary" data-act="copy">Copiază rezultatele</button><button data-act="reset">Șterge constatările</button></div>
+    <div class="row"><button data-act="setupTests">Testează setările de sesiune (30 s)</button><button class="primary" data-act="copy">Copiază rezultatele</button><button data-act="reset">Șterge constatările</button></div>
   </section>
 
   <section class="card">
@@ -123,8 +123,8 @@ const ProbeCore = (() => {
     key_points: ["GIL: un singur thread execută bytecode Python la un moment dat", "I/O-bound: threads sau asyncio", "CPU-bound: procese sau cod nativ", "Costul proceselor: memorie, pickling"] };
 
   const wsUrl = key => WS_BASE + "?key=" + encodeURIComponent(key);
-  function setupMessage({ model, voice, silenceMs, vad }) {
-    return { setup: {
+  function setupMessage({ model, voice, silenceMs, vad, extra }) {
+    return { setup: Object.assign({
       model: MODELS[model] || MODELS["3.8"],
       generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
       systemInstruction: { parts: [{ text: SYSTEM }] },
@@ -134,7 +134,7 @@ const ProbeCore = (() => {
         : { automaticActivityDetection: { silenceDurationMs: silenceMs } },
       inputAudioTranscription: {},
       outputAudioTranscription: {}
-    } };
+    }, extra || {}) };
   }
   const audioMessage = b64 => ({ realtimeInput: { audio: { data: b64, mimeType: "audio/pcm;rate=16000" } } });
   const textMessage = text => ({ realtimeInput: { text } });
@@ -191,7 +191,7 @@ const ProbeCore = (() => {
   const initialState = () => ({ conn: "deconectat", model: "", setupMs: null, connectAt: 0, mic: false, output: "difuzor", speaking: "nimeni",
     lastVoiceAt: 0, awaitingReply: false, latencies: [], silenceMs: 1200,
     toolCalls: { "3.8": 0, "3.8x": 0, "2.5": 0 }, setupOk: { "3.8": false, "3.8x": false, "2.5": false }, lastTools: [],
-    inTexts: 0, outTexts: 0, lastIn: "", lastOut: "", phase: "none", trials: [], cur: null, micLabel: "", micDevices: [], micLevel: 0, frames: 0, maxMicJ: 0, localStops: 0, latByModel: {},
+    inTexts: 0, outTexts: 0, lastIn: "", lastOut: "", phase: "none", trials: [], cur: null, micLabel: "", micDevices: [], setupTests: [], micLevel: 0, frames: 0, maxMicJ: 0, localStops: 0, latByModel: {},
     interrupts: { difuzor: { user: 0, self: 0, other: 0 }, "căști": { user: 0, self: 0, other: 0 } }, voice: "", rating: "", errors: [] });
   function reduce(st, e) {
     const s = Object.assign({}, st);
@@ -216,6 +216,7 @@ const ProbeCore = (() => {
         if (s.speaking === "Jarvis") s.maxMicJ = Math.max(s.maxMicJ, e.max);
         if (s.cur) s.cur = Object.assign({}, s.cur, { maxMic: Math.max(s.cur.maxMic, e.max) });
         return s;
+      case "setupTests": s.setupTests = e.lines; return s;
       case "micInfo": s.micLabel = e.label; s.micDevices = e.devices; return s;
       case "localStop":
         s.localStops++; s.speaking = "nimeni";
@@ -260,6 +261,7 @@ const ProbeCore = (() => {
       (s.lastTools.length ? "\nultimele funcții: " + s.lastTools.join(" ; ") : "") +
       "\nmicrofon: " + s.frames + " cadre trimise, nivel maxim cât vorbea el: " + s.maxMicJ.toFixed(3) + ", opriri locale în total: " + s.localStops +
       "\nmicrofon activ: " + (s.micLabel || "?") + " · dispozitive: " + (s.micDevices.join(" | ") || "?") + " · conexiune: " + s.conn +
+      (s.setupTests.length ? "\nteste de setup:\n" + s.setupTests.map(l => "- " + l).join("\n") : "") +
       (trials.length ? "\nîncercări de întrerupere:\n" + trials.map(t => "- " + t.kind + " [" + t.cfg + "]: server a întrerupt de " + t.server + " ori, opriri locale " + t.local + ", nivel mic max " + t.maxMic.toFixed(3)).join("\n") : "") +
       (logLines && logLines.length ? "\njurnal:\n" + logLines.join("\n") : "");
   }
@@ -280,7 +282,7 @@ const ProbeCore = (() => {
 
   function render(answersChanged) {
     const dl = [["Conexiune", S.conn], ["Model", S.model || "-"], ["Microfon", S.mic ? "pornit" : "oprit"], ["Ascult pe", S.output], ["Vorbește", S.speaking],
-      ["Microfon activ", S.micLabel || "-"], ["Nivel microfon", "▮".repeat(Math.min(10, Math.round(S.micLevel * 60))) + " · " + S.frames + " cadre"], ["Nivel max cât vorbea el", S.maxMicJ.toFixed(3) + (S.localStops ? " · opriri locale: " + S.localStops : "")], ["Ultima transcriere a ta", S.lastIn || "-"], ["Ultima transcriere a lui", S.lastOut || "-"], ["Ultimele funcții", S.lastTools.join(" ; ") || "-"], ["Erori", S.errors.join(" | ") || "-"]];
+      ["Teste de setup", S.setupTests.join(" · ") || "-"], ["Microfon activ", S.micLabel || "-"], ["Nivel microfon", "▮".repeat(Math.min(10, Math.round(S.micLevel * 60))) + " · " + S.frames + " cadre"], ["Nivel max cât vorbea el", S.maxMicJ.toFixed(3) + (S.localStops ? " · opriri locale: " + S.localStops : "")], ["Ultima transcriere a ta", S.lastIn || "-"], ["Ultima transcriere a lui", S.lastOut || "-"], ["Ultimele funcții", S.lastTools.join(" ; ") || "-"], ["Erori", S.errors.join(" | ") || "-"]];
     $("#state").innerHTML = dl.map(([k, v]) => "<dt>" + k + "</dt><dd>" + String(v).replace(/</g, "&lt;") + "</dd>").join("");
     $("#answers").innerHTML = ProbeCore.answers(S).map(a => '<div class="q"><span class="mark ' + (a.ok === true ? "yes" : a.ok === false ? "no" : "unk") + '">' + (a.ok === true ? "✓" : a.ok === false ? "✗" : "?") + "</span><div><b>" + a.q + "</b><br><span class=\"small\">" + a.text + "</span></div></div>").join("");
     if (answersChanged) { $("#answers").classList.add("changed"); setTimeout(() => $("#answers").classList.remove("changed"), 900); }
@@ -382,6 +384,26 @@ const ProbeCore = (() => {
     rateRobotic: () => dispatch({ type: "rate", rating: "robotic" }),
     copy: async () => { const t = ProbeCore.report(S, logLines.slice(-40)); try { await navigator.clipboard.writeText(t); log("rezultate copiate"); } catch (e) { prompt("Copiază de aici:", t); } },
     reset: () => { dispatch({ type: "reset" }); framesSent = 0; },
+    setupTests: async () => {
+      const key = localStorage.getItem("onapsis-gemini-v1") || $("#key").value.trim();
+      if (!key) { log("Lipsește cheia."); return; }
+      disconnect();
+      const variants = [["de bază", {}, ""], ["sessionResumption", { sessionResumption: {} }, ""], ["contextWindowCompression", { contextWindowCompression: { slidingWindow: {} } }, ""],
+        ["ambele", { sessionResumption: {}, contextWindowCompression: { slidingWindow: {} } }, ""], ["VAD sensibil (ca în runda 2)", {}, "sens"]];
+      const lines = []; dispatch({ type: "setupTests", lines: ["rulează…"] });
+      for (const [name, extra, vad] of variants) {
+        lines.push(await new Promise(resolve => {
+          const w = new WebSocket(ProbeCore.wsUrl(key)); let done = false, tm = null;
+          const fin = r => { if (done) return; done = true; clearTimeout(tm); w.onclose = w.onmessage = null; try { w.close(); } catch (e) { /* închis */ } resolve(name + ": " + r); };
+          tm = setTimeout(() => fin("fără răspuns în 6 s"), 6000);
+          w.onopen = () => w.send(JSON.stringify(ProbeCore.setupMessage({ model: "3.8", voice: "Charon", silenceMs: 1200, vad, extra })));
+          w.onmessage = async m => { const t = typeof m.data === "string" ? m.data : await m.data.text(); let o = {}; try { o = JSON.parse(t); } catch (e) { /* nu e JSON */ } if (o.setupComplete) fin("acceptat"); };
+          w.onclose = e => fin("respins (cod " + e.code + (e.reason ? ": " + e.reason.slice(0, 160) : "") + ")");
+        }));
+        dispatch({ type: "setupTests", lines: lines.slice() }); log("setup: " + lines[lines.length - 1]);
+        await new Promise(r => setTimeout(r, 700));
+      }
+    },
     stopHim: () => { phaseWindow("button", 8000); dropAudio = true; flush(); send(ProbeCore.textMessage("Stai.")); },
     mark: () => {}
   };
