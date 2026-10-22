@@ -1,5 +1,5 @@
 # Checks the generated plan, the Leitner due dates, the open questions, the "Formulări" page and the interview settings.
-import asyncio, json, pathlib
+import asyncio, datetime, json, pathlib
 from playwright.async_api import async_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -144,8 +144,14 @@ async def main():
         await pg.click('.tab[data-tab="study"]')
         await pg.click('[data-a="seg"][data-seg="intv"]')
         await pg.wait_for_timeout(150)
-        intv = await pg.evaluate("""() => ({ n: document.querySelectorAll('.intv-r').length, mods: document.querySelectorAll('details.sheet').length, label: document.querySelector('.row .xs.muted.mono').textContent })""")
-        ok(intv["n"] == 101 and intv["mods"] == 8, "formulations: P1 shows 101 lines in 8 modules " + json.dumps(intv, ensure_ascii=False))
+        intv = await pg.evaluate("""() => {
+          const P = window.PREP, p1 = new Set(P.modules.filter(m => m.p === 1).map(m => m.id));
+          const exp = P.mcq.filter(q => p1.has(q.m) && P.expl[q.id] && P.expl[q.id].intv);
+          return { n: document.querySelectorAll('.intv-r').length, mods: document.querySelectorAll('details.sheet').length, label: document.querySelector('.row .xs.muted.mono').textContent,
+            expN: exp.length, expMods: new Set(exp.map(q => q.m)).size };
+        }""")
+        # expected counts come from the data: P1 modules change as priorities move
+        ok(intv["n"] == intv["expN"] and intv["mods"] == intv["expMods"] and intv["n"] > 0 and str(intv["n"]) in intv["label"], "formulations: P1 shows every P1 line, grouped by module " + json.dumps(intv, ensure_ascii=False))
         await pg.click('[data-a="intv-f"][data-f="weak"]'); await pg.wait_for_timeout(100)
         weak = await pg.evaluate("() => document.querySelectorAll('.intv-r.weak').length")
         ok(weak >= 1, "formulations: weak filter shows the wrong one (" + str(weak) + ")")
@@ -158,13 +164,18 @@ async def main():
         # progress: settings change the header and the plan
         await pg.click('.tab[data-tab="progress"]')
         await pg.wait_for_timeout(100)
-        await pg.fill('#cfg-d', '2026-10-24')
+        # four days from today, so the check does not depend on the date the suite runs
+        target = datetime.date.today() + datetime.timedelta(days=4)
+        days_ro = ["luni", "marți", "miercuri", "joi", "vineri", "sâmbătă", "duminică"]
+        months_ro = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"]
+        hdr_exp = days_ro[target.weekday()][:3] + " " + str(target.day) + " " + months_ro[target.month - 1]
+        await pg.fill('#cfg-d', target.isoformat())
         await pg.select_option('#cfg-h', '2')
         await pg.click('[data-a="cfg-save"]')
         await pg.wait_for_timeout(150)
         cfg = await pg.evaluate("() => ({ hdr: document.querySelector('#hdr-k').textContent, c: window.__prep.state().c, days: window.__prep.genPlan().length, weak: !!document.querySelector('[data-a=redo-weak]') })")
         print("cfg:", json.dumps(cfg, ensure_ascii=False))
-        ok("sâm 24 oct" in cfg["hdr"] and cfg["c"]["h"] == 2 and cfg["days"] == 6 and cfg["weak"], "settings: date + hours saved, header and plan follow, weak-spots card present")
+        ok(hdr_exp in cfg["hdr"] and cfg["c"]["h"] == 2 and cfg["days"] == 5 and cfg["weak"], "settings: date + hours saved, header and plan follow, weak-spots card present")
         await pg.emulate_media(color_scheme="dark")
         await pg.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await pg.wait_for_timeout(100)

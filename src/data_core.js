@@ -5,31 +5,34 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
 
   // p: 1 = critic, 2 = important, 3 = util, 4 = bonus (în afara scorului)
   P.modules = [
-    { id: "gil", code: "GIL", name: "Concurență: GIL, threads, procese, asyncio", short: "GIL & concurență", p: 1, src: "Lacună Lateral" },
-    { id: "runtime", code: "RT", name: "Cum rulează Python", short: "Runtime Python", p: 1, src: "Lacună Lateral" },
-    { id: "asgi", code: "ASGI", name: "WSGI/ASGI, Gunicorn, Uvicorn, FastAPI", short: "WSGI/ASGI", p: 1, src: "Lacună Lateral" },
-    { id: "index", code: "IDX", name: "Indexuri în baze de date", short: "Indexuri", p: 1, src: "Lacună Lateral" },
-    { id: "python", code: "PY", name: "Python de senior", short: "Python core", p: 1, src: "Onapsis" },
-    { id: "sqlalchemy", code: "SQA", name: "SQLAlchemy 2.0 & Alembic", short: "SQLAlchemy", p: 1, src: "Onapsis" },
-    { id: "postgres", code: "PG", name: "PostgreSQL în producție", short: "PostgreSQL", p: 1, src: "Onapsis" },
-    { id: "celery", code: "CEL", name: "Celery", short: "Celery", p: 1, src: "Lateral + Onapsis" },
-    { id: "rabbitmq", code: "RMQ", name: "RabbitMQ & mesagerie", short: "RabbitMQ", p: 2, src: "Onapsis" },
-    { id: "redis", code: "RD", name: "Redis", short: "Redis", p: 2, src: "Onapsis" },
-    { id: "pytest", code: "PT", name: "Pytest & testare", short: "Pytest", p: 2, src: "Onapsis" },
+    { id: "gil", code: "GIL", name: "Concurență: GIL, threads, procese", short: "GIL & threads", p: 1, src: "Interviu manager" },
+    { id: "asyncio", code: "AIO", name: "asyncio: event loop, task-uri, anulare", short: "asyncio", p: 1, src: "Interviu manager" },
+    { id: "python", code: "PY", name: "Python de senior: generatori, idiomuri", short: "Python core", p: 1, src: "Interviu manager" },
+    { id: "oop", code: "OOP", name: "OOP în Python: design de clase", short: "OOP", p: 1, src: "Interviu manager" },
+    { id: "pytest", code: "PT", name: "Pytest & testare", short: "Pytest", p: 1, src: "Interviu manager" },
+    { id: "asgi", code: "ASGI", name: "FastAPI, WSGI/ASGI, Gunicorn, Uvicorn", short: "FastAPI/ASGI", p: 1, src: "Interviu manager" },
+    { id: "design", code: "DES", name: "System design & microservicii", short: "System design", p: 1, src: "Interviu manager" },
+    { id: "sqlalchemy", code: "SQA", name: "SQLAlchemy 2.0 & Alembic", short: "SQLAlchemy", p: 2, src: "Onapsis" },
+    { id: "postgres", code: "PG", name: "PostgreSQL în producție", short: "PostgreSQL", p: 2, src: "Onapsis" },
+    { id: "celery", code: "CEL", name: "Celery", short: "Celery", p: 2, src: "Lateral + Onapsis" },
+    { id: "index", code: "IDX", name: "Indexuri în baze de date", short: "Indexuri", p: 2, src: "Lacună Lateral" },
+    { id: "runtime", code: "RT", name: "Cum rulează Python", short: "Runtime Python", p: 2, src: "Lacună Lateral" },
     { id: "security", code: "SEC", name: "Securitate în backend (AppSec)", short: "Securitate", p: 2, src: "Onapsis" },
-    { id: "design", code: "DES", name: "System design & microservicii", short: "System design", p: 2, src: "Onapsis" },
-    { id: "dbmodels", code: "DBM", name: "Relațional vs nerelațional", short: "SQL vs NoSQL", p: 2, src: "Lacună Lateral" },
-    { id: "docker", code: "DK", name: "Docker & orchestrare", short: "Docker", p: 2, src: "Onapsis" },
-    { id: "domain", code: "DOM", name: "Onapsis, SAP & detecție", short: "Domeniu Onapsis", p: 2, src: "Onapsis" },
-    { id: "behav", code: "BEH", name: "Comportamental: pitch, motivație, povești", short: "Comportamental", p: 2, src: "Onapsis" },
+    { id: "rabbitmq", code: "RMQ", name: "RabbitMQ & mesagerie", short: "RabbitMQ", p: 3, src: "Onapsis" },
+    { id: "redis", code: "RD", name: "Redis", short: "Redis", p: 3, src: "Onapsis" },
+    { id: "docker", code: "DK", name: "Docker & orchestrare", short: "Docker", p: 3, src: "Onapsis" },
+    { id: "domain", code: "DOM", name: "Onapsis, SAP & detecție", short: "Domeniu Onapsis", p: 3, src: "Onapsis" },
     { id: "perf", code: "PF", name: "Performanță & pipeline-uri de date", short: "Performanță", p: 3, src: "Onapsis" },
-    { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 3, src: "Onapsis" },
-    { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 3, src: "Onapsis" },
     { id: "ops", code: "OBS", name: "Observabilitate & GitLab CI", short: "Observabilitate", p: 3, src: "Onapsis" },
     { id: "linux", code: "LX", name: "Linux pentru backend", short: "Linux", p: 3, src: "Onapsis" },
-    { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 3, src: "Experiența ta" },
+    { id: "behav", code: "BEH", name: "Comportamental: pitch, motivație, povești", short: "Comportamental", p: 3, src: "Onapsis" },
+    { id: "dbmodels", code: "DBM", name: "Relațional vs nerelațional", short: "SQL vs NoSQL", p: 4, src: "Lacună Lateral" },
+    { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 4, src: "Onapsis" },
+    { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 4, src: "Onapsis" },
+    { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 4, src: "Experiența ta" },
     { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 4, src: "Bonus Lateral" }
   ];
+
 
   P.sheets = {
     gil: {
@@ -376,7 +379,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
   // ---------- interviu & plan ----------
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
-  P.cfg = { interview: "2026-10-21", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
+  P.cfg = { interview: "2026-10-26", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
   // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou

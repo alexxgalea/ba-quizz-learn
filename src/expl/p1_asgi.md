@@ -142,7 +142,7 @@ endpoint gata sau excepție
 ```
 Aplicare: În teste înlocuiești dependența, ca endpointul să folosească o sesiune de test fără să-i schimbi codul: `app.dependency_overrides[get_db] = lambda: test_session`.
 Legătură: E echivalentul unui `with Session() as s:` în jurul fiecărui request. În Django, framework-ul gestionează singur conexiunea per request.
-Limită: Sesiunea trăiește doar cât request-ul. Unui background task sau task Celery îi dai id-uri, iar el își deschide propria sesiune.
+Limită: Sesiunea trăiește doar cât request-ul. Unui background task sau task Celery îi dai id-uri, iar el își deschide propria sesiune. Momentul exact s-a schimbat între versiuni: din FastAPI 0.118, codul de după `yield` rulează după ce răspunsul a fost trimis (implicit `scope="request"`); cu `Depends(get_db, scope="function")` (0.121+) rulează înainte. Dacă prinzi o excepție în dependență, o ridici din nou.
 La interviu: „O dependență cu `yield` face setup înainte de `yield` și cleanup după. Cu `try`/`finally`, fiecare request primește propria sesiune, închisă chiar și la eroare. În teste o înlocuiesc cu `dependency_overrides`.”
 Verificare: Scoți `try`/`finally` și lași doar `yield db`, urmat de `db.close()`. Ce se întâmplă când endpointul aruncă excepție?
 Răspuns verificare: Excepția e aruncată în generator, la `yield`, deci `db.close()` nu mai rulează: sesiunea rămâne deschisă până o colectează garbage collector-ul. De aceea e nevoie de `finally`.

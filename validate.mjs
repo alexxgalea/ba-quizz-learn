@@ -42,6 +42,11 @@ for (const c of P.oral) {
   if (!mods.has(c.m)) errors.push(c.id + ": unknown module " + c.m);
   if (!Array.isArray(c.k) || c.k.length < 3) errors.push(c.id + ": key points");
   if (!c.model || c.model.length < 80) errors.push(c.id + ": model answer missing");
+  // snippet: codul se citește pe telefon (38 de caractere încap la 360 px), deci fără rânduri lungi
+  if (c.code !== undefined) {
+    if (typeof c.code !== "string" || !c.code.trim()) errors.push(c.id + ": empty code");
+    else c.code.split("\n").forEach((l, i) => { if (l.length > 38) errors.push(c.id + ": code line " + (i + 1) + " longer than 38 (" + l.length + ")"); });
+  }
 }
 for (const m of P.modules) if (!P.sheets[m.id]) errors.push("no sheet for " + m.id);
 for (const [k, s] of Object.entries(P.sheets)) if (s.diagram && !P.diagrams[s.diagram]) errors.push("missing diagram " + s.diagram);

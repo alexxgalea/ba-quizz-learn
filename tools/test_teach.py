@@ -51,7 +51,7 @@ async def main():
           const T = window.__prep; return null; }""")
         # answer "Nu știu" on questions until we hit a P1 module, then check its round-2 partner is level 1
         swapped = None
-        for i in range(22):
+        for i in range(logic["diagLen"] - logic["round2Count"]):          # round 1, sized from pickDiag (it changes with module priorities)
             st = await pg.evaluate("""() => { const r = document.querySelector('.eyebrow').textContent; return r; }""")
             mod = await pg.evaluate("""() => document.querySelectorAll('.row .chip')[1] ? document.querySelectorAll('.row .chip')[1].textContent : ''""")
             await pg.click('[data-a="dunno"]'); await pg.wait_for_timeout(120)
@@ -60,7 +60,7 @@ async def main():
             await pg.click('[data-a="next"]'); await pg.wait_for_timeout(80)
         # now we are in round 2: every item should be level 1 (all round-1 answers were "nu știu")
         r2 = []
-        for i in range(8):
+        for i in range(logic["round2Count"]):
             lv = await pg.evaluate("""() => document.querySelector('.chip.lvl').dataset.l""")
             r2.append(lv)
             await pg.click('[data-a="dunno"]'); await pg.wait_for_timeout(80)

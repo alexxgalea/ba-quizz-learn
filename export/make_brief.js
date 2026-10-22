@@ -6,7 +6,7 @@ const [progressPath, outPath] = process.argv.slice(2);
 
 const ctx = { window: {} };
 vm.createContext(ctx);
-for (const f of ["data_core.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_ctx.js", "data_oral.js", "data_katas.js"])
+for (const f of ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js"])
   vm.runInContext(fs.readFileSync(path.join(root, "src", f), "utf8"), ctx, { filename: f });
 const P = ctx.window.PREP;
 P.mcq.forEach(q => { const c = (P.qctx || {})[q.id]; if (c) { q.lvl = q.lvl || c[0]; q.ctx = q.ctx || c[1]; } q.lvl = q.lvl || 2; });

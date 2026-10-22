@@ -510,3 +510,6 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .gap-les .xp-h { color: var(--accent); }
 .gap-ok { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .card.gap-ok { border-left: 4px solid var(--ok); }
+
+/* snippet pe cardul oral: 38 de caractere încap pe un telefon de 360 px */
+.icard pre.code { font-size: 11px; padding: 10px; }
