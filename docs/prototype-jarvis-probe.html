@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PROTOTIP: proba Jarvis</title>
+<style>
+  :root { --bg: #f4f6fa; --card: #fff; --ink: #141a27; --muted: #5b667c; --line: #d2d9e5; --acc: #2c4fd3; --on-acc: #fff; --ok: #1a7a4b; --bad: #c2382d; --warn: #9a5800; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e121a; --card: #161c27; --ink: #e6eaf2; --muted: #9aa5ba; --line: #2a3445; --acc: #8ea2ff; --on-acc: #0e121a; --ok: #55cf92; --bad: #ff8a7e; --warn: #f3b54e; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .banner { background: var(--warn); color: var(--bg); font-weight: 700; padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+  h1 { font-size: 21px; margin: 0; } h2 { font-size: 16px; margin: 0 0 8px; }
+  p { margin: 0; } .muted { color: var(--muted); } .small { font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { font: inherit; font-weight: 600; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+  button:disabled { opacity: .45; }
+  input, select { font: inherit; min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  input { flex: 1 1 200px; min-width: 0; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+  dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
+  .q { display: grid; grid-template-columns: 26px 1fr; gap: 6px; align-items: start; }
+  .mark { font-weight: 800; } .mark.yes { color: var(--ok); } .mark.no { color: var(--bad); } .mark.unk { color: var(--muted); }
+  .changed { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 4px; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; }
+  .tabs button[aria-pressed="true"] { background: var(--acc); color: var(--on-acc); border-color: var(--acc); }
+  ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  ol.steps li.done { color: var(--muted); text-decoration: line-through; }
+  ol.steps li.now button { outline: 2px solid var(--acc); }
+  pre.log { margin: 0; max-height: 180px; overflow: auto; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 8px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">PROTOTIP: de aruncat după ce răspunde la întrebări. Nu e aplicația.</div>
+  <div>
+    <h1>Proba Jarvis: poate Gemini Live să fie vocea intervievatorului?</h1>
+    <p class="muted small">Răspunde la cele 4 întrebări din spec (§11), pe telefonul tău: (1) modelul apelează funcțiile aplicației? (2) trimite transcrierea a ce spui tu și a ce spune el? (3) îl poți întrerupe pe difuzor sau doar cu căști? (4) cum sună în română și cât durează până răspunde? La final apeși „Copiază rezultatele” și le lipești în chat.</p>
+  </div>
+
+  <section class="card">
+    <h2>Cheia și setările</h2>
+    <div class="row"><input id="key" type="password" placeholder="Cheia Gemini (din Google AI Studio)" autocomplete="off"><button id="saveKey">Salvează</button></div>
+    <p class="small muted">Cheia rămâne doar în acest browser (aceeași cheie o va folosi aplicația). Pe nivelul gratuit, Google poate folosi conversațiile.</p>
+    <div class="row">
+      <label class="small">Model <select id="model"><option value="3.8">gemini-3.8-live</option><option value="3.8x">gemini-3.8-live-extended-thinking</option><option value="2.5">gemini-2.5 native audio</option></select></label>
+      <label class="small">Voce <select id="voice"><option>Charon</option><option>Orus</option><option>Fenrir</option><option>Puck</option><option>Kore</option><option>Aoede</option></select></label>
+      <label class="small">Răbdare <select id="silence"><option value="800">0,8 s</option><option value="1200" selected>1,2 s</option><option value="2000">2 s</option></select></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Starea acum</h2>
+    <dl id="state"></dl>
+    <div id="answers"></div>
+  </section>
+
+  <section class="card">
+    <h2>Butoane libere</h2>
+    <div class="row">
+      <button class="primary" data-act="connect">Conectează</button>
+      <button data-act="disconnect">Deconectează</button>
+      <button data-act="micOn">Pornește microfonul</button>
+      <button data-act="micOff">Oprește microfonul</button>
+    </div>
+    <div class="row">
+      <button data-act="askQuestion">Cere-i o întrebare (text)</button>
+      <button data-act="askMonologue">Cere-i un monolog lung (text)</button>
+    </div>
+    <div class="row">
+      <button data-act="outSpeaker">Ascult pe difuzor</button>
+      <button data-act="outPhones">Ascult cu căști</button>
+    </div>
+    <div class="row">
+      <button data-act="rateNatural">Vocea sună natural</button>
+      <button data-act="rateOk">Acceptabil</button>
+      <button data-act="rateRobotic">Robotic</button>
+    </div>
+    <div class="row"><button class="primary" data-act="copy">Copiază rezultatele</button><button data-act="reset">Șterge constatările</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Teste ghidate</h2>
+    <div class="tabs" id="tabs"></div>
+    <p id="scDesc" class="small"></p>
+    <ol class="steps" id="steps"></ol>
+  </section>
+
+  <section class="card">
+    <h2>Ultimele evenimente</h2>
+    <pre class="log" id="log"></pre>
+  </section>
+</main>
+
+<!-- Logica de păstrat: modul pur, fără DOM, fără WebSocket. Trece în src/live.js și src/audio.js. -->
+<script>
+const ProbeCore = (() => {
+  const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+  const MODELS = { "3.8": "models/gemini-3.8-live", "3.8x": "models/gemini-3.8-live-extended-thinking", "2.5": "models/gemini-2.5-flash-native-audio-preview-12-2025" };
+  const SYSTEM = "Ești Jarvis, asistentul lui Alex, care se pregătește pentru un interviu tehnic de Python backend. Vorbești doar în română; termenii tehnici rămân în engleză. Ești politicos și sec, cu umor discret, și răspunzi scurt. " +
+    "Când Alex îți cere o întrebare de interviu, apelează funcția next_card și pune-i întrebarea primită, cu vorbele tale; nu citi punctele cheie. " +
+    "După ce Alex răspunde, apelează record_result, cu câte o valoare pentru fiecare punct cheie, în ordine: spontan, dupa sau nu. Apoi spune-i pe scurt cum a fost. " +
+    "Dacă îți cere să explici ceva pe larg, vorbește cât îți cere.";
+  const TOOLS = [{ functionDeclarations: [
+    { name: "next_card", description: "Dă următorul card de interviu: întrebarea de pus lui Alex și punctele cheie (doar pentru tine, nu le citi).",
+      parameters: { type: "OBJECT", properties: { topic: { type: "STRING", description: "Tema dorită (opțional)" } } } },
+    { name: "record_result", description: "Salvează evaluarea răspunsului lui Alex la cardul curent. points are câte o valoare pentru fiecare punct cheie: spontan, dupa sau nu.",
+      parameters: { type: "OBJECT", properties: { card_id: { type: "STRING" }, points: { type: "ARRAY", items: { type: "STRING" } }, feedback: { type: "STRING" } }, required: ["card_id", "points"] } }
+  ] }];
+  const CARD = { card_id: "o-gil-1", question: "Am un task CPU-bound și unul I/O-bound. Ce folosesc pentru fiecare și de ce?",
+    key_points: ["GIL: un singur thread execută bytecode Python la un moment dat", "I/O-bound: threads sau asyncio", "CPU-bound: procese sau cod nativ", "Costul proceselor: memorie, pickling"] };
+
+  const wsUrl = key => WS_BASE + "?key=" + encodeURIComponent(key);
+  function setupMessage({ model, voice, silenceMs }) {
+    return { setup: {
+      model: MODELS[model] || MODELS["3.8"],
+      generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      tools: TOOLS,
+      realtimeInputConfig: { automaticActivityDetection: { silenceDurationMs: silenceMs } },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {}
+    } };
+  }
+  const audioMessage = b64 => ({ realtimeInput: { audio: { data: b64, mimeType: "audio/pcm;rate=16000" } } });
+  const textMessage = text => ({ realtimeInput: { text } });
+  // Răspunsurile false ale „aplicației” la funcțiile cerute de model.
+  function toolResponses(calls) {
+    return { toolResponse: { functionResponses: calls.map(c => ({ id: c.id, name: c.name,
+      response: c.name === "next_card" ? { result: CARD } : { result: { saved: true, score_pct: 75 } } })) } };
+  }
+  // Un mesaj de la server → evenimente de domeniu.
+  function parseServer(msg, at) {
+    const ev = [];
+    if (msg.setupComplete) ev.push({ type: "setupComplete", at });
+    if (msg.toolCall && msg.toolCall.functionCalls) ev.push({ type: "toolCall", calls: msg.toolCall.functionCalls.map(c => ({ id: c.id, name: c.name, args: c.args || {} })), at });
+    if (msg.toolCallCancellation) ev.push({ type: "toolCancel", ids: msg.toolCallCancellation.ids || [], at });
+    if (msg.goAway) ev.push({ type: "goAway", timeLeft: msg.goAway.timeLeft, at });
+    const sc = msg.serverContent;
+    if (sc) {
+      if (sc.interrupted) ev.push({ type: "interrupted", at });
+      if (sc.inputTranscription && sc.inputTranscription.text) ev.push({ type: "inputText", text: sc.inputTranscription.text, at });
+      if (sc.outputTranscription && sc.outputTranscription.text) ev.push({ type: "outputText", text: sc.outputTranscription.text, at });
+      const parts = (sc.modelTurn && sc.modelTurn.parts) || [];
+      for (const p of parts) if (p.inlineData && p.inlineData.data) ev.push({ type: "audioOut", data: p.inlineData.data, at });
+      if (sc.turnComplete) ev.push({ type: "turnComplete", at });
+    }
+    if (msg.error) ev.push({ type: "error", message: JSON.stringify(msg.error), at });
+    return ev;
+  }
+  // Float32 la rata dispozitivului → PCM 16 biți la 16 kHz (medie pe fereastră, ca filtru simplu).
+  function downsampleTo16k(f32, inRate) {
+    const ratio = inRate / 16000, n = Math.floor(f32.length / ratio), out = new Int16Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(i * ratio), b = Math.min(f32.length, Math.floor((i + 1) * ratio));
+      let s = 0; for (let j = a; j < b; j++) s += f32[j];
+      const v = Math.max(-1, Math.min(1, s / Math.max(1, b - a)));
+      out[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+    }
+    return out;
+  }
+  function int16ToBase64(i16) {
+    const u8 = new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength); let s = "";
+    for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+  function base64ToFloat32(b64) {
+    const bin = atob(b64), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const i16 = new Int16Array(u8.buffer, 0, u8.length >> 1), f = new Float32Array(i16.length);
+    for (let i = 0; i < i16.length; i++) f[i] = i16[i] / 0x8000;
+    return f;
+  }
+  const rms = f32 => { let s = 0; for (let i = 0; i < f32.length; i++) s += f32[i] * f32[i]; return Math.sqrt(s / Math.max(1, f32.length)); };
+
+  // Constatările probei: un reducer pur.
+  const initialState = () => ({ conn: "deconectat", model: "", setupMs: null, connectAt: 0, mic: false, output: "difuzor", speaking: "nimeni",
+    lastVoiceAt: 0, awaitingReply: false, latencies: [], silenceMs: 1200,
+    toolCalls: { "3.8": 0, "3.8x": 0, "2.5": 0 }, setupOk: { "3.8": false, "3.8x": false, "2.5": false }, lastTools: [],
+    inTexts: 0, outTexts: 0, lastIn: "", lastOut: "", phase: "none",
+    interrupts: { difuzor: { user: 0, self: 0, other: 0 }, "căști": { user: 0, self: 0, other: 0 } }, voice: "", rating: "", errors: [] });
+  function reduce(st, e) {
+    const s = Object.assign({}, st);
+    switch (e.type) {
+      case "connecting": return Object.assign(s, { conn: "se conectează", model: e.model, connectAt: e.at, silenceMs: e.silenceMs, voice: e.voice });
+      case "setupComplete": s.conn = "conectat"; s.setupMs = e.at - s.connectAt; s.setupOk = Object.assign({}, s.setupOk, { [s.model]: true }); return s;
+      case "closed": return Object.assign(s, { conn: "deconectat (" + e.code + (e.reason ? ": " + e.reason : "") + ")", mic: false, speaking: "nimeni", awaitingReply: false, phase: "none" });
+      case "error": s.errors = s.errors.concat(e.message).slice(-3); return s;
+      case "mic": s.mic = e.on; return s;
+      case "output": s.output = e.output; return s;
+      case "userVoice": if (s.speaking !== "Jarvis") { s.lastVoiceAt = e.at; s.speaking = "tu"; s.awaitingReply = true; } return s;
+      case "audioOut":
+        if (s.awaitingReply && s.lastVoiceAt) { s.latencies = s.latencies.concat(e.at - s.lastVoiceAt).slice(-10); s.awaitingReply = false; }
+        s.speaking = "Jarvis"; return s;
+      case "turnComplete": s.speaking = "nimeni"; return s;
+      case "phase": s.phase = e.phase; return s;
+      case "interrupted": {
+        const who = s.phase === "silent" ? "self" : s.phase === "interrupt" ? "user" : "other";
+        s.interrupts = Object.assign({}, s.interrupts, { [s.output]: Object.assign({}, s.interrupts[s.output], { [who]: s.interrupts[s.output][who] + 1 }) });
+        s.speaking = "nimeni"; return s;
+      }
+      case "toolCall": s.toolCalls = Object.assign({}, s.toolCalls, { [s.model]: s.toolCalls[s.model] + e.calls.length }); s.lastTools = e.calls.map(c => c.name + " " + JSON.stringify(c.args)).slice(-3); return s;
+      case "inputText": s.inTexts++; s.lastIn = (s.lastIn + e.text).slice(-160); return s;
+      case "outputText": s.outTexts++; s.lastOut = (s.lastOut + e.text).slice(-160); return s;
+      case "rate": s.rating = e.rating; return s;
+      case "reset": return Object.assign(initialState(), { output: s.output });
+      default: return s;
+    }
+  }
+  // Răspunsurile la cele 4 întrebări, din constatări.
+  function answers(s) {
+    const med = a => { if (!a.length) return null; const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+    const fc = m => (s.toolCalls[m] > 0 ? "da" : s.setupOk[m] ? "încă nu" : "netestat");
+    const sp = s.interrupts.difuzor, hp = s.interrupts["căști"];
+    const lat = med(s.latencies);
+    return [
+      { q: "1. Apelează funcții?", ok: s.toolCalls["3.8"] > 0 || s.toolCalls["2.5"] > 0 || s.toolCalls["3.8x"] > 0 ? true : null,
+        text: "3.8: " + fc("3.8") + " · 3.8 thinking: " + fc("3.8x") + " · 2.5: " + fc("2.5") },
+      { q: "2. Transcriere?", ok: s.inTexts > 0 && s.outTexts > 0 ? true : (s.inTexts + s.outTexts) > 0 ? null : null,
+        text: "a ce spui tu: " + (s.inTexts ? "da" : "încă nu") + " · a ce spune el: " + (s.outTexts ? "da" : "încă nu") },
+      { q: "3. Întrerupere?", ok: sp.user > 0 && sp.self === 0 ? true : sp.self > 0 ? false : null,
+        text: "difuzor: " + sp.user + " reușite, " + sp.self + " auto-întreruperi · căști: " + hp.user + " reușite, " + hp.self + " auto-întreruperi" + (sp.other + hp.other ? " · în afara testelor: " + (sp.other + hp.other) : "") },
+      { q: "4. Voce și latență?", ok: s.rating === "natural" ? true : s.rating === "robotic" ? false : null,
+        text: "voce " + (s.voice || "?") + ": " + (s.rating || "nenotată") + " · răspunde în ~" + (lat == null ? "?" : (lat / 1000).toFixed(1) + " s") + " după ultima ta vorbă (din care " + (s.silenceMs / 1000).toFixed(1) + " s e pragul de liniște)" }
+    ];
+  }
+  function report(s) {
+    return "Proba Jarvis\n" + answers(s).map(a => a.q + " " + a.text).join("\n") +
+      "\nconectare: " + (s.setupMs == null ? "?" : s.setupMs + " ms") + (s.errors.length ? "\nerori: " + s.errors.join(" | ") : "") +
+      (s.lastTools.length ? "\nultimele funcții: " + s.lastTools.join(" ; ") : "");
+  }
+  return { wsUrl, setupMessage, audioMessage, textMessage, toolResponses, parseServer, downsampleTo16k, int16ToBase64, base64ToFloat32, rms, initialState, reduce, answers, report, MODELS };
+})();
+</script>
+
+<!-- Învelișul de aruncat: WebSocket, microfon, redare, butoane. -->
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const now = () => performance.now();
+  let S = ProbeCore.initialState(), ws = null, ctx = null, micNode = null, micStream = null, wake = null;
+  let buf = [], bufLen = 0, playAt = 0, sources = [], workletReady = false, lastVoiceDispatch = 0, phaseTimer = null;
+  const logLines = [];
+  const log = t => { logLines.push(new Date().toLocaleTimeString() + "  " + t); if (logLines.length > 40) logLines.shift(); $("#log").textContent = logLines.slice().reverse().join("\n"); };
+  function dispatch(e) { const before = JSON.stringify(ProbeCore.answers(S)); S = ProbeCore.reduce(S, e); render(before !== JSON.stringify(ProbeCore.answers(S))); }
+
+  function render(answersChanged) {
+    const dl = [["Conexiune", S.conn], ["Model", S.model || "-"], ["Microfon", S.mic ? "pornit" : "oprit"], ["Ascult pe", S.output], ["Vorbește", S.speaking],
+      ["Ultima transcriere a ta", S.lastIn || "-"], ["Ultima transcriere a lui", S.lastOut || "-"], ["Ultimele funcții", S.lastTools.join(" ; ") || "-"], ["Erori", S.errors.join(" | ") || "-"]];
+    $("#state").innerHTML = dl.map(([k, v]) => "<dt>" + k + "</dt><dd>" + String(v).replace(/</g, "&lt;") + "</dd>").join("");
+    $("#answers").innerHTML = ProbeCore.answers(S).map(a => '<div class="q"><span class="mark ' + (a.ok === true ? "yes" : a.ok === false ? "no" : "unk") + '">' + (a.ok === true ? "✓" : a.ok === false ? "✗" : "?") + "</span><div><b>" + a.q + "</b><br><span class=\"small\">" + a.text + "</span></div></div>").join("");
+    if (answersChanged) { $("#answers").classList.add("changed"); setTimeout(() => $("#answers").classList.remove("changed"), 900); }
+  }
+
+  async function ensureCtx() { if (!ctx) ctx = new AudioContext(); if (ctx.state !== "running") await ctx.resume(); }
+  function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+  async function connect() {
+    const key = localStorage.getItem("onapsis-gemini-v1") || $("#key").value.trim();
+    if (!key) { log("Lipsește cheia."); return; }
+    disconnect();
+    await ensureCtx();
+    try { wake = await navigator.wakeLock.request("screen"); } catch (e) { /* opțional */ }
+    const model = $("#model").value, voice = $("#voice").value, silenceMs = +$("#silence").value;
+    dispatch({ type: "connecting", model, voice, silenceMs, at: now() });
+    const sock = new WebSocket(ProbeCore.wsUrl(key));
+    ws = sock;
+    sock.onopen = () => { send(ProbeCore.setupMessage({ model, voice, silenceMs })); log("setup trimis (" + ProbeCore.MODELS[model] + ")"); };
+    sock.onmessage = async m => {
+      let txt = m.data; if (typeof txt !== "string") txt = await m.data.text();
+      if (ws !== sock) return;
+      let msg; try { msg = JSON.parse(txt); } catch (e) { log("mesaj necunoscut"); return; }
+      for (const e of ProbeCore.parseServer(msg, now())) {
+        if (e.type === "audioOut") play(e.data);
+        if (e.type === "interrupted") { flush(); log("întrerupt (" + S.phase + ")"); }
+        if (e.type === "toolCall") { log("funcții: " + e.calls.map(c => c.name).join(", ")); send(ProbeCore.toolResponses(e.calls)); }
+        if (e.type !== "audioOut" && e.type !== "inputText" && e.type !== "outputText" && e.type !== "interrupted") log(e.type);
+        dispatch(e);
+      }
+    };
+    sock.onclose = e => { if (ws !== sock) return; ws = null; dispatch({ type: "closed", code: e.code, reason: e.reason, at: now() }); log("închis " + e.code + " " + e.reason); stopMic(); };
+    sock.onerror = () => { if (ws === sock) dispatch({ type: "error", message: "eroare WebSocket", at: now() }); };
+  }
+  function disconnect() {
+    if (ws) { const w = ws; ws = null; w.onclose = w.onmessage = w.onerror = null; try { w.close(); } catch (e) { /* închis */ } dispatch({ type: "closed", code: 1000, reason: "deconectat de tine", at: now() }); }
+    stopMic(); flush(); if (wake) { wake.release().catch(() => {}); wake = null; }
+  }
+
+  const WORKLET = "class P extends AudioWorkletProcessor { process(i) { const c = i[0] && i[0][0]; if (c) this.port.postMessage(c.slice(0)); return true; } } registerProcessor('probe-mic', P);";
+  async function startMic() {
+    await ensureCtx();
+    if (micNode) return;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    if (!workletReady) { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" }))); workletReady = true; }
+    const src = ctx.createMediaStreamSource(micStream);
+    micNode = new AudioWorkletNode(ctx, "probe-mic", { numberOfOutputs: 0 });
+    micNode.port.onmessage = ev => {
+      const f = ev.data;
+      const t = now(); if (ProbeCore.rms(f) > 0.03 && t - lastVoiceDispatch > 60) { lastVoiceDispatch = t; dispatch({ type: "userVoice", at: t }); }
+      buf.push(f); bufLen += f.length;
+      if (bufLen >= ctx.sampleRate * 0.04) {
+        const all = new Float32Array(bufLen); let o = 0; for (const b of buf) { all.set(b, o); o += b.length; }
+        buf = []; bufLen = 0;
+        send(ProbeCore.audioMessage(ProbeCore.int16ToBase64(ProbeCore.downsampleTo16k(all, ctx.sampleRate))));
+      }
+    };
+    src.connect(micNode);
+    dispatch({ type: "mic", on: true });
+    log("microfon pornit (" + ctx.sampleRate + " Hz)");
+  }
+  function stopMic() { if (micNode) { micNode.disconnect(); micNode = null; } if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; } if (S.mic) dispatch({ type: "mic", on: false }); }
+
+  function play(b64) {
+    const f = ProbeCore.base64ToFloat32(b64);
+    const ab = ctx.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
+    const s = ctx.createBufferSource(); s.buffer = ab; s.connect(ctx.destination);
+    playAt = Math.max(playAt, ctx.currentTime); s.start(playAt); playAt += ab.duration;
+    sources.push(s); s.onended = () => { sources = sources.filter(x => x !== s); };
+  }
+  function flush() { for (const s of sources) { try { s.stop(); } catch (e) { /* deja oprit */ } } sources = []; playAt = 0; }
+
+  function phaseWindow(phase, ms) {
+    clearTimeout(phaseTimer);
+    dispatch({ type: "phase", phase });
+    log("fereastra „" + phase + "” pentru " + ms / 1000 + " s");
+    phaseTimer = setTimeout(() => { dispatch({ type: "phase", phase: "none" }); log("fereastra s-a închis"); }, ms);
+  }
+  const ACTIONS = {
+    connect, disconnect, micOn: startMic, micOff: stopMic,
+    askQuestion: () => send(ProbeCore.textMessage("Jarvis, dă-mi o întrebare de interviu.")),
+    askMonologue: () => send(ProbeCore.textMessage("Explică-mi pe larg, cam un minut și jumătate, cum funcționează GIL-ul și de ce există.")),
+    outSpeaker: () => dispatch({ type: "output", output: "difuzor" }),
+    outPhones: () => dispatch({ type: "output", output: "căști" }),
+    rateNatural: () => dispatch({ type: "rate", rating: "natural" }),
+    rateOk: () => dispatch({ type: "rate", rating: "acceptabil" }),
+    rateRobotic: () => dispatch({ type: "rate", rating: "robotic" }),
+    copy: async () => { const t = ProbeCore.report(S); try { await navigator.clipboard.writeText(t); log("rezultate copiate"); } catch (e) { prompt("Copiază de aici:", t); } },
+    reset: () => dispatch({ type: "reset" }),
+    mark: () => {}
+  };
+  async function run(act) { try { await ACTIONS[act](); } catch (e) { dispatch({ type: "error", message: String(e && e.message || e), at: now() }); log("eroare: " + (e && e.message)); } }
+
+  const SCENARIOS = [
+    { name: "1. Funcții", desc: "Verifici dacă modelul cere singur funcțiile aplicației (next_card, record_result). Urmărește „Ultimele funcții” și întrebarea 1.", steps: [
+      ["Alege modelul gemini-3.8-live și conectează-te", () => { $("#model").value = "3.8"; return run("connect"); }],
+      ["Pornește microfonul", () => run("micOn")],
+      ["Spune: „Jarvis, dă-mi o întrebare.” (sau apasă aici ca să-i scrii)", () => run("askQuestion")],
+      ["Răspunde-i la întrebare cu vocea, apoi așteaptă verdictul", () => run("mark")],
+      ["Dacă la 1 apare „încă nu”: încearcă modelul 2.5", () => { $("#model").value = "2.5"; return run("connect"); }],
+      ["Cu 2.5: pornește microfonul și cere o întrebare", async () => { await run("micOn"); return run("askQuestion"); }]] },
+    { name: "2. Transcriere", desc: "Verifici dacă vin transcrierile: ce spui tu și ce spune el. Se vede la „Ultima transcriere”.", steps: [
+      ["Conectează-te (modelul ales)", () => run("connect")],
+      ["Pornește microfonul", () => run("micOn")],
+      ["Spune ceva, de exemplu: „Bună seara, Jarvis, cum mă auzi?”", () => run("mark")],
+      ["Uită-te la „Ultima transcriere a ta” și „a lui”", () => run("mark")]] },
+    { name: "3. Întrerupere", desc: "Pe difuzor, apoi cu căști: îl pui să vorbească mult, taci 10 secunde (nu trebuie să se întrerupă singur), apoi îl întrerupi (trebuie să tacă imediat).", steps: [
+      ["Fără căști: marchează „difuzor”", () => run("outSpeaker")],
+      ["Conectează-te și pornește microfonul", async () => { await run("connect"); return run("micOn"); }],
+      ["Cere-i monologul lung", () => run("askMonologue")],
+      ["Apasă și taci 10 secunde: dacă se oprește singur, e auto-întrerupere", () => phaseWindow("silent", 10000)],
+      ["Apasă, apoi întrerupe-l: „Stai, stai, Jarvis.” (trebuie să tacă imediat)", () => phaseWindow("interrupt", 20000)],
+      ["Pune căștile și marchează „căști”", () => run("outPhones")],
+      ["Cere-i din nou monologul", () => run("askMonologue")],
+      ["Apasă și taci 10 secunde (cu căști)", () => phaseWindow("silent", 10000)],
+      ["Apasă, apoi întrerupe-l (cu căști)", () => phaseWindow("interrupt", 20000)]] },
+    { name: "4. Voce și latență", desc: "Asculți vocea și vezi cât durează până îți răspunde. Încearcă 2–3 voci dacă vrei. Latența se măsoară singură.", steps: [
+      ["Alege vocea și conectează-te", () => run("connect")],
+      ["Pornește microfonul", () => run("micOn")],
+      ["Pune-i 3 întrebări scurte, una după alta", () => run("mark")],
+      ["Notează vocea: natural / acceptabil / robotic (în butoanele libere)", () => run("mark")],
+      ["Copiază rezultatele și lipește-le în chat", () => run("copy")]] }
+  ];
+  let scIdx = 0, stepIdx = 0;
+  function renderScenario() {
+    $("#tabs").innerHTML = SCENARIOS.map((s, i) => '<button aria-pressed="' + (i === scIdx) + '" data-sc="' + i + '">' + s.name + "</button>").join("");
+    const sc = SCENARIOS[scIdx];
+    $("#scDesc").textContent = sc.desc;
+    $("#steps").innerHTML = sc.steps.map((st, i) => '<li class="' + (i < stepIdx ? "done" : i === stepIdx ? "now" : "") + '"><button data-step="' + i + '"' + (i > stepIdx ? " disabled" : "") + ">" + st[0] + "</button></li>").join("");
+  }
+  document.addEventListener("click", async e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.act) return run(b.dataset.act);
+    if (b.dataset.sc) { scIdx = +b.dataset.sc; stepIdx = 0; renderScenario(); return; }
+    if (b.dataset.step) { const i = +b.dataset.step; await SCENARIOS[scIdx].steps[i][1](); stepIdx = Math.max(stepIdx, i + 1); renderScenario(); }
+  });
+  $("#saveKey").onclick = () => { const k = $("#key").value.trim(); if (k) { localStorage.setItem("onapsis-gemini-v1", k); $("#key").value = ""; $("#key").placeholder = "Cheie salvată (…" + k.slice(-4) + ")"; log("cheie salvată"); } };
+  const saved = localStorage.getItem("onapsis-gemini-v1"); if (saved) $("#key").placeholder = "Cheie salvată (…" + saved.slice(-4) + ")";
+  render(false); renderScenario();
+})();
+</script>
+</body>
+</html>
