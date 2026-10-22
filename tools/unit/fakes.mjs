@@ -97,3 +97,30 @@ export function fakeClock(start = 1000) {
   const c = { t: start, now: () => c.t, advance: ms => { c.t += ms; } };
   return c;
 }
+
+// Stocare falsă (ca localStorage): `data` e conținutul.
+export function memoryStorage(initial = {}) {
+  const data = Object.assign({}, initial);
+  return { data, getItem: k => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = String(v); }, removeItem: k => { delete data[k]; } };
+}
+
+// Un card ca îl dă PrepApp (spec §4.5). `points` are trei puncte cheie.
+export const CARD_A = { id: "o-gil-1", module: "gil", q: "Ce folosești pentru CPU-bound și pentru I/O-bound?", code: "", points: ["GIL: un singur thread rulează bytecode", "I/O-bound: threads sau asyncio", "CPU-bound: procese"], model: "Pentru I/O-bound threads sau asyncio; pentru CPU-bound procese, din cauza GIL.", rules: { max: 2, turn: "", verdict: "" }, missed: [], best: "" };
+export const CARD_B = { id: "o-asy-2", module: "asyncio", q: "Ce se întâmplă dacă blochezi event loop-ul?", code: "async def f():\n    time.sleep(5)", points: ["Event loop-ul nu rulează alte corutine", "Soluția: await asyncio.sleep sau executor"], model: "Blochează tot; folosești asyncio.sleep sau run_in_executor.", rules: { max: 2, turn: "snippet", verdict: "" }, missed: ["Soluția: await asyncio.sleep sau executor"], best: "" };
+
+// PrepApp în memorie: păstrează în `recorded` și `logged` ce primește.
+export function stubApp(cards = [CARD_A, CARD_B]) {
+  const app = { recorded: [], logged: [], nextCalls: [] };
+  app.next = o => { app.nextCalls.push(o); return cards.find(c => !(o.done || []).includes(c.id) && (!o.module || c.module === o.module)) || null; };
+  app.record = (id, v) => {
+    const c = cards.find(x => x.id === id);
+    if (!c || !Array.isArray(v.points) || v.points.length !== c.points.length || !v.points.every(p => ["spontan", "dupa", "nu"].includes(p))) return { ok: false, error: "puncte invalide" };
+    app.recorded.push({ id, v });
+    const score = v.points.reduce((s, p) => s + (p === "spontan" ? 1 : p === "dupa" ? 0.5 : 0), 0) / c.points.length;
+    return { ok: true, score, prev: null, box: 2, missed: c.points.filter((_, i) => v.points[i] === "nu") };
+  };
+  app.theory = id => "Teorie pentru " + id;
+  app.summary = () => ({ readiness: 0.42, daysLeft: 4, gaps: ["GIL: costul proceselor"], role: "Software Engineer – Python", profile: "Profilul candidatului: Django, Celery." });
+  app.log = entry => { app.logged.push(entry); };
+  return app;
+}
