@@ -29,6 +29,8 @@ src/
   audio.js         Jarvis: microfon și difuzor în browser
   call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, „Nu te aud”)
   jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări)
+  ask.js           „Întreabă despre asta”: prompt, limite și verdict „în temă”
+  gemini_text.js   un apel de text către Gemini (REST), pentru PWA
   pwa/             iconița, service worker-ul
   data_*.js        module, grile, context, carduri orale, fișe, exerciții, setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
@@ -59,6 +61,7 @@ python3 tools/test_audio.py      # BrowserAudio în Chromium cu microfon fals
 python3 tools/test_prepapp.py    # PrepApp: record dă aceleași urme ca oralSave, next, theory, summary, log
 python3 tools/test_jarvis.py     # ecranul Jarvis la 360 px, light și dark, cu Live și Audio false
 python3 tools/test_pwa.py        # manifest, iconițe, service worker, offline
+python3 tools/test_ask.py        # „Întreabă despre asta”: grilă, fișă, gol; sample, Gemini, DeepSeek
 ```
 
 Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:unit`, `npm run test:ui`, iar `npm run pages` copiază PWA-ul în `docs/app`.
@@ -161,3 +164,12 @@ Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/spec
 - **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`. Rândurile din istoric au `kind: "jarvis"`.
 - **Teste**: `tools/unit` (Node, câte un fișier pe modul), `tools/test_audio.py`, `tools/test_prepapp.py`, `tools/test_jarvis.py` (înlocuitorii din `tools/jarvis_fakes.js` se injectează prin `window.__jarvisFakes`).
 - **Publicare PWA**: `npm run build && npm run pages`, apoi commit și push. GitHub Pages servește `docs/app` din ramură (Settings › Pages › Deploy from a branch › `/docs`).
+
+## Întreabă despre asta
+
+Sub explicația unei grile, într-o fișă din Studiu și la fiecare gol din „Pentru tine” (inclusiv în review-ul unui card oral) apare butonul „Întreabă despre asta”: o conversație scurtă cu modelul, limitată la tema zonei de teorie.
+
+- **Limitare**: `src/ask.js` pune materialul zonei în instrucțiuni și cere răspuns JSON `{on_topic, answer}`. Dacă `on_topic` e fals, ecranul arată o frază fixă („Aici răspund doar despre …”), niciodată textul modelului. Întrebarea intră ca date între `<<<` și `>>>`, fără acești markeri, cu cel mult 400 de caractere; cel mult 6 schimburi pe context, iar „Întrebare nouă” resetează.
+- **Context** (`askCtx` în `app.js`): `mcq:<id>` (grila, variantele, explicația, ce ai ales), `sheet:<modul>` (fișa) și `gap:<card>:<punct>` (cardul, punctul ratat, răspunsul model, afirmațiile marcate greșite).
+- **Sursă**: `sample` în artifact (Claude), altfel Gemini cu cheia de la Jarvis (`gemini-3.8-flash`, REST), altfel DeepSeek. Fără nicio cheie, blocul spune ce să adaugi.
+- **Nu se salvează**: conversația stă în `ui.ask`, nu în progres, export sau sincronizare.

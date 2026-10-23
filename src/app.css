@@ -535,3 +535,15 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-set label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
 .jv-set .chk { display: flex; align-items: center; gap: 10px; color: var(--ink); }
 .jv-set .chk input { width: 20px; height: 20px; }
+
+/* Întreabă despre asta: conversație scurtă, în subiectul zonei de teorie. */
+.ask { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+.ask-h { font: 650 15px/1.3 var(--font-display); margin: 0; }
+.ask .iv-m p { white-space: pre-wrap; }
+.ask .iv-m.off { background: var(--warn-soft); }
+.ask .iv-m.off .iv-w { color: var(--warn); }
+.ask-sug { display: flex; flex-wrap: wrap; gap: 4px; }
+.ask-hint { margin: 8px 0 0; }
+.ask-open { margin-top: 8px; }
+.ask textarea.ans { min-height: 64px; }
+.ask-sug .btn.ghost { border: 1px solid var(--line-strong); background: var(--surface); padding-inline: 10px; }

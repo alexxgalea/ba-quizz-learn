@@ -532,7 +532,8 @@
     study: { seg: "sheets", open: null, kata: null, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
-    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [] }
+    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [] },
+    ask: {}
   };
 
   function snapshotUi() { try { return JSON.parse(JSON.stringify(ui)); } catch (e) { return null; } }
@@ -762,6 +763,7 @@
       h += '<div class="explain ' + (ok ? "ok" : dunno ? "dk" : "bad") + '" id="fb"><div class="ttl">' + ttl + "</div>" + vExpl(q, st, { seen: new Set(), skip: skipFor(q) }) +
         (note ? '<div class="xs fb-note">' + note + "</div>" : "") +
         (ok && !guessed ? '<button class="btn ghost sm guess-btn" data-a="guess">Am ghicit – vreau s-o revăd</button>' : "") + "</div>";
+      h += vAsk("mcq:" + q.id, { pickOi: st.pickOi });
     }
     const last = run.i === total - 1;
     if (mock) {
@@ -1366,7 +1368,7 @@
     if (sp.length) h += '<div class="xp-sec"><span class="xp-h">Din fișa ' + esc(MOD[c.m].short) + '</span><ul class="pts">' + sp.map(o => "<li>" + inlineRich(pts[o.i], tc) + "</li>").join("") + "</ul></div>";
     const nq = MCQ_BY_M[c.m].filter(q => S.q[q.id] && S.q[q.id].b <= 1).length;
     h += '<div class="row"><button class="btn sm" data-a="open-sheet" data-m="' + c.m + '">Fișa completă</button>' + (nq ? '<button class="btn sm" data-a="mcq-mod" data-m="' + c.m + '">' + nq + " grile greșite aici</button>" : "") + "</div>";
-    return h + gapAi(c, i) + "</div>";
+    return h + gapAi(c, i) + vAsk("gap:" + c.id + ":" + i) + "</div>";
   }
   // ---------- teoria care se adaptează: explicația „pe înțelesul tău” și întrebarea țintită (doar cu `sample`) ----------
   // Explicația pornește din ce ai scris tu (sau, în Studiu, din afirmațiile greșite păstrate). Întrebarea țintită pune un scenariu nou pe punctul ratat;
@@ -1657,7 +1659,7 @@
             (s.avoid ? '<div class="avoid"><b>De evitat la interviu</b>' + s.avoid.map(x => "<span>" + fmt(x) + "</span>").join("") + "</div>" : "") +
             '<div class="row">' + (nq ? '<button class="btn primary sm" data-a="mcq-mod" data-m="' + m.id + '">Grile (' + nq + ")</button>" : "") +
             (no ? '<button class="btn sm" data-a="oral-mod" data-m="' + m.id + '">Oral (' + no + ")</button>" : "") +
-            (s.page ? '<button class="btn sm" data-a="seg" data-seg="' + s.page + '">Deschide pagina</button>' : "") + "</div></div>";
+            (s.page ? '<button class="btn sm" data-a="seg" data-seg="' + s.page + '">Deschide pagina</button>' : "") + "</div>" + vAsk("sheet:" + m.id) + "</div>";
         }
         h += "</details>";
       });
@@ -1866,6 +1868,7 @@
     const a = b.dataset.a;
     switch (a) {
       case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-mics": jvAct(a, b); break;
+      case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
       case "go": goTask(b.dataset.id); break;
       case "plan-toggle": { const id = b.dataset.id; S.p[id] = { d: isDone(id) ? 0 : 1, t: now() }; commit(); render(); break; }
@@ -1973,7 +1976,8 @@
   });
   document.addEventListener("input", e => {
     const t = e.target;
-    if (t && t.id === "jv-t") ui.jv.draft = t.value;
+    if (t && t.dataset && t.dataset.ask && ui.ask[t.dataset.ask]) ui.ask[t.dataset.ask].draft = t.value;
+    else if (t && t.id === "jv-t") ui.jv.draft = t.value;
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;
@@ -2044,6 +2048,105 @@
     log(e) { S.h.push({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }); S.h = S.h.slice(-HMAX); commit(); }
   };
   window.PrepApp = PrepApp;
+
+  // ---------- Întreabă despre asta: întrebări deschise, limitate la tema zonei de teorie ----------
+  // Componenta stă sub explicația unei grile, într-o fișă și la fiecare gol din „Pentru tine”. Promptul, limitele și verdictul „în temă” sunt în src/ask.js;
+  // aici sunt sursa răspunsului, contextul fiecărui loc și ecranul. Conversația nu se salvează în progres.
+  const ASK_MAX = 6;
+  const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
+  const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey });
+  // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
+  const AskModel = {
+    ready: () => !!(AI.sample || geminiKey() || AI.get()),
+    name: () => (AI.sample ? "Claude" : geminiKey() ? "Gemini" : "DeepSeek"),
+    async generate(req) {
+      if (AI.sample) return sampleText(req.system + "\n\n" + req.user, "default");      // `sample` nu are prompt de sistem
+      if (geminiKey()) return gemText.generate(req);
+      return dsCall({ model: DS_MODEL, messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get());
+    }
+  };
+  const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
+  const ASK_MSG = Object.assign({}, AI_MSG, {
+    nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel."
+  });
+  const ASK_SUG = {
+    mcq: ["Explică mai simplu", "Dă-mi un exemplu", "De ce nu celelalte variante?", "Cum o spun la interviu?"],
+    sheet: ["Explică mai simplu", "Dă-mi un exemplu", "Ce se întreabă de obicei la interviu?"],
+    gap: ["Explică mai simplu", "Dă-mi un exemplu", "Cum o spun la interviu?"]
+  };
+  const XFIELDS = [["scurt", "Pe scurt"], ["scop", "Scop"], ["mec", "Mecanism"], ["pas", "Pas cu pas"], ["apl", "Aplicare"], ["leg", "Legătură"], ["lim", "Limită"], ["intv", "La interviu"]];
+  const askClip = (t, n) => { t = String(t == null ? "" : t); return t.length > n ? t.slice(0, n) + "…" : t; };
+  // Contextul unui loc: { topic, material }. Cheia: mcq:<id>, sheet:<modul> sau gap:<card>:<punct>.
+  function askCtx(key) {
+    const [kind, a, b] = key.split(":");
+    let topic, lines;
+    if (kind === "mcq") {
+      const q = QBY[a]; if (!q) return null;
+      const x = EXPL[q.id] || {}, st = ui.ask[key] || {}, sh = P.sheets[q.m];
+      topic = MOD[q.m].short;
+      lines = ["Grila " + q.id.toUpperCase() + ": " + q.q];
+      if (q.ctx) lines.push("Context: " + q.ctx);
+      if (q.code) lines.push("Cod:\n" + q.code);
+      lines.push("Răspunsul corect: " + q.o[q.a], "Variante greșite: " + q.o.filter((_, i) => i !== q.a).join(" | "));
+      if (st.pickOi != null && st.pickOi !== q.a) lines.push("Candidatul a ales: " + q.o[st.pickOi]);
+      XFIELDS.forEach(([f, l]) => { if (x[f]) lines.push(l + ": " + x[f]); });
+      Object.keys(x.gr || {}).forEach(i => lines.push("De ce nu „" + q.o[i] + "”: " + x.gr[i]));
+      if (sh) lines.push("Fișa modulului: " + sh.points.slice(0, 10).join(" "));
+    } else if (kind === "sheet") {
+      const m = MOD[a], sh = P.sheets[a]; if (!m || !sh) return null;
+      topic = m.short;
+      lines = ["Fișa „" + m.name + "”: " + sh.lead, "Puncte: " + sh.points.join(" ")];
+      if (sh.avoid) lines.push("De evitat la interviu: " + sh.avoid.join(" "));
+    } else if (kind === "gap") {
+      const c = OBY[a], i = +b; if (!c || c.k[i] == null) return null;
+      const e = S.o[c.id] || {}, src = gapSources(c, i);
+      topic = MOD[c.m].short;
+      lines = ["Cardul oral: " + c.q];
+      if (c.code) lines.push("Cod:\n" + c.code);
+      lines.push("Punctul pe care candidatul l-a ratat: " + c.k[i], "Răspunsul model: " + c.model);
+      if (src.sp.length) lines.push("Din fișa modulului: " + src.sp.map(o => src.pts[o.i]).join(" "));
+      if (e.w && e.w.length) lines.push("Afirmații marcate greșite în răspunsurile lui: " + e.w.join("; "));
+    } else return null;
+    return { topic, material: askClip(lines.join("\n"), 3500) };
+  }
+  function vAsk(key, extra) {
+    const st = ui.ask[key] || (ui.ask[key] = { open: false, draft: "", hist: [], busy: false, err: null });
+    if (extra) Object.assign(st, extra);            // același obiect la fiecare randare: askSend îl modifică în timp ce se așteaptă răspunsul
+    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
+    const k = esc(key);
+    if (!st.open) return '<button class="btn sm ask-open" data-a="ask-open" data-k="' + k + '">Întreabă despre asta</button>';
+    const kind = key.split(":")[0], full = st.hist.length >= ASK_MAX, ctx = askCtx(key), topic = ctx ? ctx.topic : "";
+    let h = '<div class="ask stack-s"><div class="spread"><h4 class="ask-h">Întreabă despre „' + esc(topic) + '”</h4><span class="xs muted mono">' + st.hist.length + "/" + ASK_MAX + "</span></div>";
+    h += st.hist.map(t => '<div class="iv-m me"><div class="iv-w">Tu</div><p>' + esc(t.q) + '</p></div><div class="iv-m int' + (t.kind === "off" ? " off" : "") + '"><div class="iv-w">' + (t.kind === "off" ? "În afara temei" : esc(AskModel.name())) + "</div><p>" + fmt(t.a) + "</p></div>").join("");
+    if (full) h += '<p class="small muted">Ai atins limita de ' + ASK_MAX + ' întrebări pe temă. Apasă „Întrebare nouă”.</p>';
+    else {
+      if (!st.busy) h += '<div class="ask-sug">' + (ASK_SUG[kind] || []).map((s, i) => '<button class="btn sm ghost" data-a="ask-sug" data-k="' + k + '" data-i="' + i + '">' + esc(s) + "</button>").join("") + "</div>";
+      h += '<textarea class="ans" rows="2" maxlength="400" data-ask="' + k + '" placeholder="Întreabă ceva despre această temă" aria-label="Întrebarea ta"' + (st.busy ? " disabled" : "") + ">" + esc(st.draft) + "</textarea>";
+      if (st.err) h += '<p class="ai-err small" role="alert">' + esc(ASK_MSG[st.err] || ASK_MSG.network) + "</p>";
+      h += '<button class="btn sm primary" data-a="ask-send" data-k="' + k + '"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Se gândește…" : "Întreabă") + "</button>";
+    }
+    return h + '<div class="row">' + (st.hist.length ? '<button class="btn sm ghost" data-a="ask-new" data-k="' + k + '">Întrebare nouă</button>' : "") + '<button class="btn sm ghost" data-a="ask-close" data-k="' + k + '">Închide</button></div></div>';
+  }
+  async function askSend(key, text) {
+    const st = ui.ask[key]; if (!st || st.busy) return;
+    const q = String(text != null ? text : st.draft).trim();
+    if (!q) { st.err = "empty"; render(); return; }
+    const ctx = askCtx(key); if (!ctx) return;
+    st.busy = true; st.err = null; st.draft = q; render();
+    const r = await askEngine.ask(ctx, q, st.hist.filter(t => t.kind === "answer").map(t => ({ q: t.q, a: t.a })));
+    st.busy = false;
+    if (r.kind === "error") st.err = r.code; else { st.hist.push({ q, a: r.text, kind: r.kind }); st.draft = ""; }
+    render();
+  }
+  function askAct(a, b) {
+    const key = b.dataset.k, st = ui.ask[key]; if (!st) return;
+    if (a === "ask-open") { st.open = true; render(); const t = document.querySelector('[data-ask="' + key + '"]'); if (t) t.focus(); }
+    else if (a === "ask-close") { st.open = false; render(); }
+    else if (a === "ask-new") { st.hist = []; st.draft = ""; st.err = null; render(); }
+    else if (a === "ask-send") askSend(key);
+    else if (a === "ask-sug") askSend(key, (ASK_SUG[key.split(":")[0]] || [])[+b.dataset.i]);
+  }
 
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
