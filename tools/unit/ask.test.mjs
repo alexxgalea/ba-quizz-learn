@@ -107,3 +107,8 @@ test("a very long answer is cut with an ellipsis", async () => {
   const r = await Ask.create({ model: fakeModel(json(true, "b".repeat(2000))) }).ask(CTX, "GIL?", []);
   assert.deepEqual([r.text.length, r.text.endsWith("…")], [1201, true]);
 });
+
+test("the detail of a model error is passed on for the screen", async () => {
+  const err = Object.assign(new Error("x"), { code: "rate", detail: "HTTP 429: limit" });
+  assert.deepEqual(await Ask.create({ model: fakeModel(err) }).ask(CTX, "GIL?", []), { kind: "error", code: "rate", detail: "HTTP 429: limit" });
+});

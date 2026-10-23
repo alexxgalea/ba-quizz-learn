@@ -5082,7 +5082,7 @@ const Ask = (() => {
         const user = (earlier ? "Schimburile de până acum (date):\n" + earlier + "\n\n" : "") + "Întrebarea candidatului (între <<< și >>>):\n<<<\n" + q + "\n>>>";
         let raw;
         try { raw = await env.model.generate({ system: systemOf(ctx, role), user }); }
-        catch (err) { return { kind: "error", code: (err && err.code) || "unavail" }; }
+        catch (err) { const r = { kind: "error", code: (err && err.code) || "unavail" }; if (err && err.detail) r.detail = err.detail; return r; }
         const j = parse(raw);
         if (!j) return { kind: "error", code: "format" };
         if (j.on_topic === false) return { kind: "off", text: "Aici răspund doar despre „" + ctx.topic + "”. Pentru altceva, folosește celelalte părți ale aplicației." };
@@ -5099,12 +5099,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = Ask;
 // `fetch` și cheia se primesc prin `create`. În pagină e o declarație globală, în Node un modul.
 const GeminiText = (() => {
   const BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
-  const fail = code => Object.assign(new Error(code), { code });
+  const fail = (code, detail) => Object.assign(new Error(code), { code, detail: detail || "" });
 
   function create(env) {
-    const model = env.model || "gemini-3.8-flash", timeoutMs = env.timeoutMs || 30000;
+    const model = env.model || "gemini-3.5-flash-lite", timeoutMs = env.timeoutMs || 30000;
     return {
-      // req = { system, user }; întoarce textul răspunsului sau aruncă o eroare cu `code`: nokey, auth, rate, server, http, network, timeout, refused, format.
+      // req = { system, user }; întoarce textul răspunsului sau aruncă o eroare cu `code` (nokey, auth, rate, server, http, network, timeout, refused, format) și `detail` (text scurt pentru depanare).
       async generate(req) {
         const key = env.getKey();
         if (!key) throw fail("nokey");
@@ -5117,19 +5117,22 @@ const GeminiText = (() => {
               body: JSON.stringify({
                 systemInstruction: { parts: [{ text: req.system }] },
                 contents: [{ role: "user", parts: [{ text: req.user }] }],
-                generationConfig: { temperature: 0.3, maxOutputTokens: 900, responseMimeType: "application/json" }
+                generationConfig: { temperature: 0.3, maxOutputTokens: 1500, responseMimeType: "application/json" }
               })
             });
-          } catch (err) { throw fail(err && err.name === "AbortError" ? "timeout" : "network"); }
+          } catch (err) { throw err && err.name === "AbortError" ? fail("timeout", "fără răspuns în " + String(timeoutMs / 1000).replace(".", ",") + " s") : fail("network", String((err && err.message) || err)); }
           let j;
-          try { j = await r.json(); } catch (err) { throw fail(err && err.name === "AbortError" ? "timeout" : "format"); }
+          try { j = await r.json(); } catch (err) { throw err && err.name === "AbortError" ? fail("timeout", "fără răspuns în " + String(timeoutMs / 1000).replace(".", ",") + " s") : fail("format", "răspuns care nu e JSON"); }
           if (!r.ok) {
             const msg = String((j && j.error && j.error.message) || "");
-            throw fail(r.status === 401 || r.status === 403 || (r.status === 400 && /api key/i.test(msg)) ? "auth" : r.status === 429 ? "rate" : r.status >= 500 ? "server" : "http");
+            throw fail(r.status === 401 || r.status === 403 || (r.status === 400 && /api key/i.test(msg)) ? "auth" : r.status === 429 ? "rate" : r.status >= 500 ? "server" : "http", "HTTP " + r.status + (msg ? ": " + msg.slice(0, 160) : ""));
           }
           const parts = (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
           const text = parts.map(p => (typeof p.text === "string" ? p.text : "")).join("");
-          if (!text.trim()) throw fail(j && j.promptFeedback && j.promptFeedback.blockReason ? "refused" : "format");
+          if (!text.trim()) {
+            const block = j && j.promptFeedback && j.promptFeedback.blockReason, why = block || (j && j.candidates && j.candidates[0] && j.candidates[0].finishReason) || "fără candidați";
+            throw fail(block ? "refused" : "format", "răspuns gol (" + why + ")");
+          }
           return text;
         } finally { clearTimeout(tm); }
       }
@@ -7195,7 +7198,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   // aici sunt sursa răspunsului, contextul fiecărui loc și ecranul. Conversația nu se salvează în progres.
   const ASK_MAX = 6;
   const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
-  const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey });
+  const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey, model: "gemini-3.5-flash-lite" });      // cel mai rapid model gratuit: răspunsurile sunt scurte
   // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
   const AskModel = {
     ready: () => !!(AI.sample || geminiKey() || AI.get()),
@@ -7209,7 +7212,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
   const ASK_MSG = Object.assign({}, AI_MSG, {
     nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
-    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel."
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel.",
+    timeout: "Modelul n-a răspuns la timp. Reîncearcă.", format: "Răspunsul modelului n-a avut formatul așteptat. Reîncearcă."
   });
   const ASK_SUG = {
     mcq: ["Explică mai simplu", "Dă-mi un exemplu", "De ce nu celelalte variante?", "Cum o spun la interviu?"],
@@ -7264,7 +7268,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     else {
       if (!st.busy) h += '<div class="ask-sug">' + (ASK_SUG[kind] || []).map((s, i) => '<button class="btn sm ghost" data-a="ask-sug" data-k="' + k + '" data-i="' + i + '">' + esc(s) + "</button>").join("") + "</div>";
       h += '<textarea class="ans" rows="2" maxlength="400" data-ask="' + k + '" placeholder="Întreabă ceva despre această temă" aria-label="Întrebarea ta"' + (st.busy ? " disabled" : "") + ">" + esc(st.draft) + "</textarea>";
-      if (st.err) h += '<p class="ai-err small" role="alert">' + esc(ASK_MSG[st.err] || ASK_MSG.network) + "</p>";
+      if (st.err) h += '<p class="ai-err small" role="alert">' + esc(ASK_MSG[st.err] || ASK_MSG.network) + "</p>" + (st.detail ? '<p class="xs muted ask-detail">Detalii: ' + esc(st.detail) + "</p>" : "");
       h += '<button class="btn sm primary" data-a="ask-send" data-k="' + k + '"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Se gândește…" : "Întreabă") + "</button>";
     }
     return h + '<div class="row">' + (st.hist.length ? '<button class="btn sm ghost" data-a="ask-new" data-k="' + k + '">Întrebare nouă</button>' : "") + '<button class="btn sm ghost" data-a="ask-close" data-k="' + k + '">Închide</button></div></div>';
@@ -7274,10 +7278,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const q = String(text != null ? text : st.draft).trim();
     if (!q) { st.err = "empty"; render(); return; }
     const ctx = askCtx(key); if (!ctx) return;
-    st.busy = true; st.err = null; st.draft = q; render();
+    st.busy = true; st.err = null; st.detail = ""; st.draft = q; render();
     const r = await askEngine.ask(ctx, q, st.hist.filter(t => t.kind === "answer").map(t => ({ q: t.q, a: t.a })));
     st.busy = false;
-    if (r.kind === "error") st.err = r.code; else { st.hist.push({ q, a: r.text, kind: r.kind }); st.draft = ""; }
+    if (r.kind === "error") { st.err = r.code; st.detail = r.detail || ""; } else { st.hist.push({ q, a: r.text, kind: r.kind }); st.draft = ""; }
     render();
   }
   function askAct(a, b) {

@@ -25,7 +25,7 @@ test("generate sends the system and user text and returns the model's text", asy
   assert.deepEqual(
     [text, call.url, call.init.method, body.systemInstruction, body.contents, body.generationConfig.responseMimeType],
     ['{"on_topic":true,"answer":"ok"}',
-     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=KEY",
+     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=KEY",
      "POST",
      { parts: [{ text: "Ești tutore." }] },
      [{ role: "user", parts: [{ text: "Ce face GIL?" }] }],
@@ -82,4 +82,31 @@ test("a request that takes too long is aborted", async () => {
   const f = { fetch: (url, init) => new Promise((_, rej) => { signal = init.signal; init.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" }))); }) };
   const code = await failsWith(f, { timeoutMs: 20 });
   assert.deepEqual([code, signal.aborted], ["timeout", true]);
+});
+
+test("the default model is the fast one, and the output budget leaves room for any thinking", async () => {
+  const f = fakeFetch(ok("x"));
+  await gen(f).generate({ system: "s", user: "u" });
+  assert.deepEqual([f.calls[0].url.includes("/gemini-3.5-flash-lite:"), JSON.parse(f.calls[0].init.body).generationConfig.maxOutputTokens], [true, 1500]);
+});
+
+const detailOf = async (f, opts) => gen(f, opts).generate({ system: "s", user: "u" }).then(() => null, e => e.detail);
+
+test("an HTTP failure carries the status and the server's message as detail", async () => {
+  const d = await detailOf(fakeFetch({ status: 429, body: { error: { message: "Resource exhausted: free tier limit" } } }));
+  assert.equal(d, "HTTP 429: Resource exhausted: free tier limit");
+});
+
+test("a network failure carries the browser's message as detail", async () => {
+  assert.equal(await detailOf(fakeFetch(new TypeError("Failed to fetch"))), "Failed to fetch");
+});
+
+test("a timeout says how long it waited", async () => {
+  const f = { fetch: (url, init) => new Promise((_, rej) => init.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" })))) };
+  assert.equal(await detailOf(f, { timeoutMs: 20 }), "fără răspuns în 0,02 s");
+});
+
+test("an answer cut off before any text says why", async () => {
+  const d = await detailOf(fakeFetch({ status: 200, body: { candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }] } }));
+  assert.equal(d, "răspuns gol (MAX_TOKENS)");
 });

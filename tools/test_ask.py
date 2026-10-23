@@ -102,13 +102,13 @@ async def main():
             await route.fulfill(status=200, content_type="application/json", body=json.dumps({"candidates": [{"content": {"parts": [{"text": json.dumps({"on_topic": True, "answer": "Răspuns de la Gemini."})}]}}]}))
         await pg.route("https://generativelanguage.googleapis.com/**", gemini)
         await answered_mcq(pg); await pg.click('.ask-open'); await send(pg, "Explică mai simplu")
-        check("in the PWA the question goes to Gemini with the Jarvis key", len(calls) == 1 and "models/gemini-3.8-flash:generateContent" in calls[0][0] and "key=GKEY123" in calls[0][0] and "Răspuns de la Gemini." in await pg.locator('.ask').inner_text(), calls[:1])
+        check("in the PWA the question goes to Gemini with the Jarvis key", len(calls) == 1 and "models/gemini-3.5-flash-lite:generateContent" in calls[0][0] and "key=GKEY123" in calls[0][0] and "Răspuns de la Gemini." in await pg.locator('.ask').inner_text(), calls[:1])
         check("the topic rules travel as the system instruction, the question as data", "Răspunzi NUMAI" in calls[0][1]["systemInstruction"]["parts"][0]["text"] and "<<<\nExplică mai simplu\n>>>" in calls[0][1]["contents"][0]["parts"][0]["text"])
         # a rejected key
         async def refuse(route): await route.fulfill(status=400, content_type="application/json", body=json.dumps({"error": {"status": "INVALID_ARGUMENT", "message": "API key not valid. Please pass a valid API key."}}))
         await pg.unroute("https://generativelanguage.googleapis.com/**"); await pg.route("https://generativelanguage.googleapis.com/**", refuse)
         await send(pg, "încă una")
-        check("a rejected key is explained", "Cheia nu e validă" in await pg.locator('.ask .ai-err').inner_text())
+        check("a rejected key is explained, with the server's detail", "Cheia nu e validă" in await pg.locator('.ask .ai-err').inner_text() and "HTTP 400" in await pg.locator('.ask-detail').inner_text())
         check("no page errors (pwa)", not pg.errs, pg.errs)
         await ctx.close()
 

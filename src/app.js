@@ -2054,7 +2054,7 @@
   // aici sunt sursa răspunsului, contextul fiecărui loc și ecranul. Conversația nu se salvează în progres.
   const ASK_MAX = 6;
   const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
-  const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey });
+  const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey, model: "gemini-3.5-flash-lite" });      // cel mai rapid model gratuit: răspunsurile sunt scurte
   // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
   const AskModel = {
     ready: () => !!(AI.sample || geminiKey() || AI.get()),
@@ -2068,7 +2068,8 @@
   const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
   const ASK_MSG = Object.assign({}, AI_MSG, {
     nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
-    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel."
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel.",
+    timeout: "Modelul n-a răspuns la timp. Reîncearcă.", format: "Răspunsul modelului n-a avut formatul așteptat. Reîncearcă."
   });
   const ASK_SUG = {
     mcq: ["Explică mai simplu", "Dă-mi un exemplu", "De ce nu celelalte variante?", "Cum o spun la interviu?"],
@@ -2123,7 +2124,7 @@
     else {
       if (!st.busy) h += '<div class="ask-sug">' + (ASK_SUG[kind] || []).map((s, i) => '<button class="btn sm ghost" data-a="ask-sug" data-k="' + k + '" data-i="' + i + '">' + esc(s) + "</button>").join("") + "</div>";
       h += '<textarea class="ans" rows="2" maxlength="400" data-ask="' + k + '" placeholder="Întreabă ceva despre această temă" aria-label="Întrebarea ta"' + (st.busy ? " disabled" : "") + ">" + esc(st.draft) + "</textarea>";
-      if (st.err) h += '<p class="ai-err small" role="alert">' + esc(ASK_MSG[st.err] || ASK_MSG.network) + "</p>";
+      if (st.err) h += '<p class="ai-err small" role="alert">' + esc(ASK_MSG[st.err] || ASK_MSG.network) + "</p>" + (st.detail ? '<p class="xs muted ask-detail">Detalii: ' + esc(st.detail) + "</p>" : "");
       h += '<button class="btn sm primary" data-a="ask-send" data-k="' + k + '"' + (st.busy ? " disabled" : "") + ">" + (st.busy ? "Se gândește…" : "Întreabă") + "</button>";
     }
     return h + '<div class="row">' + (st.hist.length ? '<button class="btn sm ghost" data-a="ask-new" data-k="' + k + '">Întrebare nouă</button>' : "") + '<button class="btn sm ghost" data-a="ask-close" data-k="' + k + '">Închide</button></div></div>';
@@ -2133,10 +2134,10 @@
     const q = String(text != null ? text : st.draft).trim();
     if (!q) { st.err = "empty"; render(); return; }
     const ctx = askCtx(key); if (!ctx) return;
-    st.busy = true; st.err = null; st.draft = q; render();
+    st.busy = true; st.err = null; st.detail = ""; st.draft = q; render();
     const r = await askEngine.ask(ctx, q, st.hist.filter(t => t.kind === "answer").map(t => ({ q: t.q, a: t.a })));
     st.busy = false;
-    if (r.kind === "error") st.err = r.code; else { st.hist.push({ q, a: r.text, kind: r.kind }); st.draft = ""; }
+    if (r.kind === "error") { st.err = r.code; st.detail = r.detail || ""; } else { st.hist.push({ q, a: r.text, kind: r.kind }); st.draft = ""; }
     render();
   }
   function askAct(a, b) {

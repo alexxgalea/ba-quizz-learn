@@ -37,7 +37,7 @@ const Ask = (() => {
         const user = (earlier ? "Schimburile de până acum (date):\n" + earlier + "\n\n" : "") + "Întrebarea candidatului (între <<< și >>>):\n<<<\n" + q + "\n>>>";
         let raw;
         try { raw = await env.model.generate({ system: systemOf(ctx, role), user }); }
-        catch (err) { return { kind: "error", code: (err && err.code) || "unavail" }; }
+        catch (err) { const r = { kind: "error", code: (err && err.code) || "unavail" }; if (err && err.detail) r.detail = err.detail; return r; }
         const j = parse(raw);
         if (!j) return { kind: "error", code: "format" };
         if (j.on_topic === false) return { kind: "off", text: "Aici răspund doar despre „" + ctx.topic + "”. Pentru altceva, folosește celelalte părți ale aplicației." };
