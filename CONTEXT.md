@@ -27,5 +27,17 @@ Unitatea unei lecții: un punct din fișă, dezvoltat de Jarvis cu un exemplu, f
 _Avoid_: segment, chunk, pas
 
 **Poziția lecției**:
-Prima bucată a unui modul pe care Alex n-a ascultat-o până la capăt; de acolo continuă lecția următoare.
+Prima bucată a unui modul pe care Alex n-a ascultat-o până la capăt; de acolo continuă lecția următoare, după o propoziție de recapitulare. Revine la început când fișa e ascultată toată.
 _Avoid_: progresul lecției, bookmark
+
+**Fereastra de ascultare**:
+Cele câteva secunde de după o bucată, anunțate de un sunet scurt, în care Jarvis ascultă o comandă sau o întrebare; dacă Alex tace, lecția merge mai departe.
+_Avoid_: pauza dintre bucăți (se confundă cu Pauza)
+
+**Pauză**:
+Oprirea lecției la cererea lui Alex, din buton, din căști sau prin voce, până când o reia.
+_Avoid_: stop, oprire
+
+**Mut**:
+Lecție în care microfonul nu ajunge la Jarvis: fără fereastra de ascultare, bucățile curg una după alta, iar Alex o controlează doar din butoane și din căști.
+_Avoid_: silențios, doar ascultare
