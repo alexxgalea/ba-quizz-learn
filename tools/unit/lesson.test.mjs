@@ -582,6 +582,59 @@ test("hearing the closing finishes the lesson: the position goes back to zero, t
   assert.deepEqual([before, t.app.pos.asyncio, t.app.doneLessons, t.state().phase], [4, 0, ["asyncio"], "ended"]);
 });
 
+// Capcanele au început să se audă, dar nu s-au terminat.
+async function toClosingPlaying(t) {
+  for (let i = 0; i < 4; i++) { await deliver(t); t.clock.advance(3100); }
+  await t.tool("next_chunk");
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+}
+
+test("a next_chunk asked after the end gets the goodbye and the app ends the lesson by itself, instead of asking for more chunks", async () => {
+  const t = await begin(setup());
+  await toClosingPlaying(t);
+  t.jarvis.skip();                                       // Sari taie capcanele: nu s-au auzit toate
+  const asked = t.texts().length;
+  const r = await t.tool("next_chunk");
+  speak(t);                                              // rămas-bunul
+  t.clock.advance(10000);
+  assert.deepEqual([r.done, t.state().phase, t.state().endedReason, t.texts().length], [true, "ended", "user", asked]);
+});
+
+test("ending past the end does not count the skipped closing as heard: the position stays and the date is not noted", async () => {
+  const t = await begin(setup());
+  await toClosingPlaying(t);
+  t.jarvis.skip();
+  await t.tool("next_chunk");
+  speak(t);
+  assert.deepEqual([t.app.pos.asyncio, t.app.doneLessons], [4, []]);
+});
+
+test("on Mut, a next_chunk asked after the end also ends the lesson after the goodbye", async () => {
+  const t = setup();
+  t.jarvis.setMuted(true);
+  await begin(t);
+  await toClosingPlaying(t);
+  t.jarvis.skip();
+  const asked = t.texts().length;
+  await t.tool("next_chunk");
+  speak(t);
+  assert.deepEqual([t.state().phase, t.texts().length], ["ended", asked]);
+});
+
+test("a question asked with Vorbește during the closing, answered with 'mai departe', ends the lesson instead of replaying the closing", async () => {
+  const t = setup();
+  t.jarvis.setMuted(true);
+  await begin(t);
+  await toClosingPlaying(t);
+  t.jarvis.talk(true);
+  t.jarvis.talk(false);
+  t.live.emit({ type: "interrupted" });
+  const asked = t.texts().length;
+  await t.tool("next_chunk");
+  speak(t);
+  assert.deepEqual([t.state().phase, t.texts().length], ["ended", asked]);
+});
+
 test("stopping before the closing keeps the position where it was", async () => {
   const t = await begin(setup());
   await deliver(t); t.clock.advance(3100); await deliver(t);

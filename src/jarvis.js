@@ -256,7 +256,8 @@ const Jarvis = (() => {
     // Bucata dată modelului. Prima dată vine cu ideea principală și numărul de bucăți (sau cu recapitularea, dacă lecția continuă dintr-o poziție).
     function deliver(n, again) {
       const sh = lz.sheet, total = lz.total, first = !lz.started;
-      if (n > total + 1) return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun." };
+      // Cerută dincolo de final (de ex. Sari pe capcane): lecția se încheie după rămas-bun, altfel fereastra și MSG.next ar cere bucăți la nesfârșit.
+      if (n > total + 1) { quiet(); lz.endRequested = true; return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun în două propoziții; aplicația încheie sesiunea, deci nu mai apela nicio funcție." }; }
       lz.started = true; lz.idx = n; lz.cur = { n, delivering: true }; lz.redo = false;
       let r;
       if (n <= total) r = { kind: "chunk", n, total, module: lz.name, text: sh.points[n - 1], instruction: "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi." };

@@ -5651,7 +5651,8 @@ const Jarvis = (() => {
     // Bucata dată modelului. Prima dată vine cu ideea principală și numărul de bucăți (sau cu recapitularea, dacă lecția continuă dintr-o poziție).
     function deliver(n, again) {
       const sh = lz.sheet, total = lz.total, first = !lz.started;
-      if (n > total + 1) return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun." };
+      // Cerută dincolo de final (de ex. Sari pe capcane): lecția se încheie după rămas-bun, altfel fereastra și MSG.next ar cere bucăți la nesfârșit.
+      if (n > total + 1) { quiet(); lz.endRequested = true; return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun în două propoziții; aplicația încheie sesiunea, deci nu mai apela nicio funcție." }; }
       lz.started = true; lz.idx = n; lz.cur = { n, delivering: true }; lz.redo = false;
       let r;
       if (n <= total) r = { kind: "chunk", n, total, module: lz.name, text: sh.points[n - 1], instruction: "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi." };
@@ -8131,7 +8132,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/app/";
-  const BUILD = "3b69532";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
+  const BUILD = "139217d";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };

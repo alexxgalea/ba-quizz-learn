@@ -1,6 +1,6 @@
 // Service worker: pagina și iconițele stau în cache, ca aplicația să se deschidă și fără rețea.
 // Navigarea merge întâi pe rețea (ca să vină versiunea nouă), apoi pe cache. Cererile către alte origini (API-uri, fonturi) nu trec pe aici.
-const CACHE = "pregatire-d6c936c95b";
+const CACHE = "pregatire-7c0b32e975";
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
