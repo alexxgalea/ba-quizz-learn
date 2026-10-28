@@ -39,5 +39,9 @@ Oprirea lecției la cererea lui Alex, din buton, din căști sau prin voce, pân
 _Avoid_: stop, oprire
 
 **Mut**:
-Lecție în care microfonul nu ajunge la Jarvis: fără fereastra de ascultare, bucățile curg una după alta, iar Alex o controlează doar din butoane și din căști.
+Lecție în care microfonul ajunge la Jarvis doar cât Alex ține apăsat „Vorbește”: fără fereastra de ascultare, bucățile curg una după alta, iar restul se controlează din butoane și din căști.
 _Avoid_: silențios, doar ascultare
+
+**Vorbește**:
+Butonul ținut apăsat (push-to-talk) prin care Alex dă o comandă sau pune o întrebare pe Mut; cât e apăsat, Jarvis tace și ascultă.
+_Avoid_: push-to-talk (în interfață), microfon
