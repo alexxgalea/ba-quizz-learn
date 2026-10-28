@@ -1,21 +1,21 @@
 # Fapte verificate pentru interviu (Python, asyncio, FastAPI, pytest)
 
-Verificat la: **2026-10-22**, doar din surse primare (docs.python.org și sursele lor din `python/cpython`, fastapi.tiangolo.com și `fastapi/fastapi`, Starlette docs și sursă, AnyIO docs, docs.pytest.org și `pytest-dev/*`, docs.pydantic.dev, pypi.org).
+Verificat la: **2026-10-22** (versiunile și secțiunea 7: **2026-10-28**), doar din surse primare (docs.python.org și sursele lor din `python/cpython`, fastapi.tiangolo.com și `fastapi/fastapi`, Starlette docs și sursă, AnyIO docs, docs.pytest.org și `pytest-dev/*`, docs.pydantic.dev, pypi.org).
 
 Legendă: ✅ corect · ⚠️ corect, dar depinde de versiune sau are o nuanță · ❌ greșit sau depășit.
 
-## Versiuni stabile curente (2026-10-22)
+## Versiuni stabile curente (2026-10-28)
 
 | Proiect | Ultima versiune | Data | Requires-Python |
 |---|---|---|---|
 | Python | **3.15.1** (seria 3.15, bugfix) | 2026-10-21 | – |
 | Python 3.14 | 3.14.9 (bugfix) | 2026-10-21 | – |
 | Python 3.13 | 3.13.17 (doar security) | 2026-10-21 | – |
-| FastAPI | **0.159.1** | 2026-10-21 | >=3.10 |
-| Starlette | **1.9.0** | 2026-10-18 | >=3.11 |
+| FastAPI | **0.162.0** | 2026-10-23 | >=3.10 |
+| Starlette | **1.10.0** | 2026-10-24 | >=3.11 |
 | Pydantic | **2.14.1** | 2026-10-11 | >=3.10 |
-| pytest | **9.1.1** | 2026-06-19 | >=3.10 |
-| pytest-asyncio | 1.4.0 | 2026-05-26 | >=3.10 |
+| pytest | **9.2.0** | 2026-10-27 | >=3.10 |
+| pytest-asyncio | 1.4.1 | 2026-10-25 | >=3.10 |
 | AnyIO | 4.15.1 | 2026-09-05 | >=3.10 |
 | httpx / httpx2 | 0.28.1 / 2.16.0 | 2024-12-06 / 2026-10-21 | – |
 
@@ -224,7 +224,7 @@ Legendă: ✅ corect · ⚠️ corect, dar depinde de versiune sau are o nuanț�
   - **0.110.0**: dacă prinzi o excepție cu `except` într-o dependență cu `yield` și nu o re-ridici, nu se mai propagă automat. Regula: **re-ridici mereu** (`raise`).
   - **0.118.0** (2025-09-29): s-a revenit, iar exit code-ul rulează **după** trimiterea răspunsului.
   - **0.121.0** (2025-11-03): a apărut **`Depends(scope="function")`** (exit înainte de răspuns) și `scope="request"`, care e **implicit** (exit după răspuns).
-  - Comportament curent (0.159.1): implicit după răspuns; cu `scope="function"`, înainte.
+  - Comportament verificat pe 0.159.1: implicit după răspuns; cu `scope="function"`, înainte.
   - O dependență cu `scope="request"` nu poate depinde de una cu `scope="function"`.
   - Sursă: https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope și https://fastapi.tiangolo.com/advanced/advanced-dependencies/#dependencies-with-yield-httpexception-except-and-background-tasks
 - ⚠️ **Lifespan**: `@asynccontextmanager async def lifespan(app): ...; yield; ...` și `FastAPI(lifespan=lifespan)`. A apărut în FastAPI **0.93.0** (2023-03-07).
@@ -244,7 +244,7 @@ Legendă: ✅ corect · ⚠️ corect, dar depinde de versiune sau are o nuanț�
   - FastAPI are `httpx2` în extras (0.143.4) și în dependențele de test (0.137.0).
   - Pentru teste async: `httpx.AsyncClient(transport=ASGITransport(app=app), ...)` cu `@pytest.mark.anyio`. `AsyncClient` nu pornește lifespan-ul; pentru asta docs recomandă `asgi-lifespan` (`LifespanManager`).
   - Sursă: https://fastapi.tiangolo.com/tutorial/testing/, https://fastapi.tiangolo.com/advanced/async-tests/, https://github.com/encode/starlette/blob/1.9.0/starlette/testclient.py
-- ✅ **Versiunea FastAPI curentă**: 0.159.1 (2026-10-21). Încă e 0.x (ZeroVer), spre deosebire de Starlette, care a trecut la 1.x.
+- ✅ **Versiunea FastAPI curentă**: 0.162.0 (2026-10-23). Încă e 0.x (ZeroVer), spre deosebire de Starlette, care a trecut la 1.x.
 - ⚠️ **Pydantic v2 vs v1**:
 
   | v1 | v2 |
@@ -268,7 +268,7 @@ Legendă: ✅ corect · ⚠️ corect, dar depinde de versiune sau are o nuanț�
   - FastAPI **a renunțat la Pydantic v1 în 0.126.0** (2025-12-20) și la `pydantic.v1` în **0.128.0** (2025-12-27). Acum cere `pydantic>=2.9.0`.
   - Sursă: https://docs.pydantic.dev/latest/migration/, https://fastapi.tiangolo.com/release-notes/, https://github.com/fastapi/fastapi/blob/master/pyproject.toml
 
-## 6. pytest (9.1.1)
+## 6. pytest (faptele verificate pe 9.1.1; curent 9.2.0)
 
 - ✅ **Scope-uri de fixture**: `function` (implicit), `class`, `module`, `package`, `session`.
   - `package`: fixture-ul e distrus la teardown-ul ultimului test din pachetul în care e definit, inclusiv subpachetele.
@@ -303,6 +303,19 @@ Legendă: ✅ corect · ⚠️ corect, dar depinde de versiune sau are o nuanț�
   - Sursă: https://docs.pytest.org/en/stable/changelog.html (8.4.0, #11372), https://pytest-asyncio.readthedocs.io/en/stable/concepts.html, https://pytest-asyncio.readthedocs.io/en/stable/reference/configuration.html
 
 ---
+
+## 7. Pentru rolul SDET (RO-1186): HTTP, testare, frontend
+
+Analiza completă și sursele pentru fiecare afirmație sunt în `research/job-8805551002-gaps.md`. Aici sunt doar faptele folosite în grile.
+
+- ✅ **HTTP (RFC 9110)**: GET, HEAD, OPTIONS și TRACE sunt safe; PUT, DELETE și metodele safe sunt idempotente. PATCH nu e nici safe, nici idempotent (RFC 5789). 401 cere `WWW-Authenticate`; 403 = cerere înțeleasă, dar refuzată; 409 = conflict cu starea resursei; 422 = Unprocessable Content; 429 = rate limiting (RFC 6585). Surse: https://www.rfc-editor.org/rfc/rfc9110, https://www.rfc-editor.org/rfc/rfc5789, https://www.rfc-editor.org/rfc/rfc6585
+- ✅ **pytest-xdist**: fiecare worker își face colectarea, deci un fixture `session` rulează în fiecare worker; `worker_id` e `gw0`, `gw1` … sau `master`; pentru o singură creare, lock pe fișier. Sursă: https://pytest-xdist.readthedocs.io/en/stable/how-to.html
+- ✅ **Playwright**: `expect` reîncearcă, cu timeout implicit de 5 s; `locator.is_visible()` nu așteaptă. Surse: https://playwright.dev/python/docs/test-assertions, https://playwright.dev/python/docs/api/class-locator#locator-is-visible
+- ✅ **React**: state ca snapshot și updater function (https://react.dev/learn/queueing-a-series-of-state-updates); Strict Mode rulează în dev un ciclu setup + cleanup în plus (https://react.dev/reference/react/useEffect); React Compiler 1.0 pe 2025-10-07 (https://react.dev/blog/2025/10/07/react-compiler-1); React 19.3 pe 2026-09-09, cu `<ViewTransition>` stabil (https://react.dev/blog/2026/09/09/react-19-3).
+- ✅ **TypeScript 7**: port nativ, „10x faster”. Sursă: https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
+- ✅ **OAuth în browser**: RFC 9700 cere PKCE pentru clienții publici, descurajează implicit grant și interzice password grant. RFC 10017 (august 2026) prezintă BFF, token-mediating backend și client în browser „in decreasing order of security”; BFF e „strongly recommended for business applications”. Surse: https://www.rfc-editor.org/rfc/rfc9700, https://www.rfc-editor.org/rfc/rfc10017
+- ✅ **Onapsis**: Control e „the only SAP-endorsed automated SAP application security testing software”; Defend are „over 2,600 detection rules”; OVERPASS e CVE-2026-44756. Surse: https://onapsis.com/platform/control/, https://onapsis.com/platform/defend/, https://onapsis.com/blog/sap-overpass-remediation/
+- ⚠️ **CoderPad**: pagina Python 3 spune CPython 3.10, iar docs-ul CoderPad Screen spune 3.11.5. Rulezi `sys.version` la început. Surse: https://coderpad.io/languages/python-3/, https://coderpad.io/resources/docs/screen/more-screen-resources/supported-languages-frameworks-technologies/what-compiler-does-my-test-run-on/
 
 ## Rezumat: ce era greșit sau depinde de versiune
 

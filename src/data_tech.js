@@ -13,7 +13,8 @@
       "ABC + `@abstractmethod`: contract nominal; o subclasă care nu implementează metoda nu poate fi instanțiată (`TypeError`). `typing.Protocol`: contract structural, verificat static (duck typing); `@runtime_checkable` verifică la `isinstance` doar că metodele există.",
       "`@dataclass`: generează `__init__`, `__repr__`, `__eq__`. `frozen=True` → imutabil și hashable; `slots=True` (3.10+) → fără `__dict__`, mai puțină memorie; `kw_only=True` (3.10+) → argumente doar cu nume.",
       "SOLID, pythonic: o responsabilitate pe clasă; extinzi prin strategii injectate, nu prin `if tip == ...`; o subclasă respectă contractul părintelui (Liskov: aceeași semnătură, fără precondiții mai stricte); depinzi de abstracții primite în constructor, deci testezi cu fake-uri.",
-      "Fără clase inutile: o strategie poate fi o funcție (`sorted(key=...)`), cleanup-ul garantat e un context manager (`with`), iar un modul e deja un „singleton”."
+      "Fără clase inutile: o strategie poate fi o funcție (`sorted(key=...)`), cleanup-ul garantat e un context manager (`with`), iar un modul e deja un „singleton”.",
+      "Patterns de recunoscut: Adapter (interfață comună peste SIEM-uri diferite), Observer (ascultători la „alertă creată”), Strategy + registry (reguli interschimbabile, k12), Unit of Work (`Session` din SQLAlchemy), Factory (`@classmethod from_dict`). În Python multe devin funcții sau module."
     ],
     avoid: ["„Moștenirea e principalul mod de reutilizare a codului.”", "„Fac getter și setter pentru fiecare atribut.”", "„`super()` cheamă mereu clasa părinte directă.”", "„Pun o listă goală ca atribut de clasă, ca valoare implicită.”"]
   };

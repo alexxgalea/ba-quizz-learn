@@ -344,7 +344,15 @@
       "A: ai urmărit mecanismul (dict-uri serializate, nu stringuri) → fără JSON injection prin match",
       "A: ai găsit riscurile reale: validarea UUID-ului camerei pe server, erori propagate către client",
       "R: remediere prioritizată după risc; lecția: judeci după mecanism"],
-      model: "Aveam o căutare de supraveghere a vehiculelor care construia un query Elasticsearch din input de la utilizator, iar întrebarea era dacă poate fi injectat. În loc să presupun, am urmărit cum se construia query-ul: era alcătuit din dicționare Python serializate, niciodată prin concatenare de stringuri, deci o valoare nu putea ieși din clauza match. Analiza a scos însă la iveală două probleme reale: UUID-ul camerei nu era validat pe server, iar mesajele de eroare brute din Elasticsearch ajungeau la client. Pe acelea le-am prioritizat. Lecția pe care o păstrez: judeci după mecanism, ca efortul să meargă spre riscul real." }
+      model: "Aveam o căutare de supraveghere a vehiculelor care construia un query Elasticsearch din input de la utilizator, iar întrebarea era dacă poate fi injectat. În loc să presupun, am urmărit cum se construia query-ul: era alcătuit din dicționare Python serializate, niciodată prin concatenare de stringuri, deci o valoare nu putea ieși din clauza match. Analiza a scos însă la iveală două probleme reale: UUID-ul camerei nu era validat pe server, iar mesajele de eroare brute din Elasticsearch ajungeau la client. Pe acelea le-am prioritizat. Lecția pe care o păstrez: judeci după mecanism, ca efortul să meargă spre riscul real." },
+    { id: "o-beh-5", q: "„Dă-mi un exemplu concret în care AI-ul te-a ajutat să livrezi mai repede. Ce ai verificat tu?”", k: [
+      "Situația: aplicația de pregătire, construită cu Claude Code, cu termen scurt",
+      "Cum ai lucrat: specificație întâi, TDD (test, apoi cod), task-uri mici, review pe fiecare diff",
+      "Plasa de siguranță: validare pe date, teste Playwright, teste de unitate, soluții testate cu pytest",
+      "Ce ai verificat manual: faptele (versiuni, valori implicite) pe surse primare, nu din model",
+      "AI în produs: LLM API-uri cu JSON parsat strict, rezervă între furnizori, chei ținute local",
+      "Lecția: AI-ul accelerează scrisul; calitatea vine din teste, review și surse"],
+      model: "Cel mai concret exemplu e aplicația cu care m-am pregătit pentru interviul ăsta. Aveam puțin timp și un stack larg, așa că am construit-o cu Claude Code. Am lucrat cu specificații scrise întâi și cu TDD: întâi testul la interfață, apoi codul, în pași mici pe care îi citeam ca într-un code review. Plasa de siguranță a fost esențială: un validator pe date, treisprezece suite Playwright, teste de unitate și soluții de live coding testate cu pytest. Ce n-am lăsat pe seama modelului au fost faptele: versiuni, valori implicite, RFC-uri le-am verificat pe sursele primare și le-am notat separat. În aplicație am integrat și LLM API-uri, pentru verificarea răspunsurilor orale: modelul întoarce JSON, pe care îl parsez strict, cu rezervă între furnizori și cheile ținute doar local. Lecția mea: AI-ul îmi scurtează mult scrisul, dar calitatea vine din teste, review și verificarea surselor. Asta aș aduce și în echipă." }
   ]);
 
   O("frontend", [

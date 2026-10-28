@@ -384,3 +384,131 @@ Răspuns verificare: Construiești motorul cu o listă explicită de reguli fals
 Varianta greșită B: Mutarea `if/elif` într-un alt modul nu schimbă nimic: fiecare regulă nouă tot modifică același cod.
 Varianta greșită C: O clasă cu câte o metodă pe regulă se modifică la fiecare regulă nouă și crește la nesfârșit.
 Varianta greșită D: `eval` pe stringuri e un risc de securitate (execuție de cod) și nu poate fi testat sau tipat.
+
+### oop-15
+Pe scurt: Adapter. Fiecare SIEM primește o clasă care traduce `send(alert)` în API-ul lui.
+Scop: Codul de detecție nu trebuie să știe ce SIEM are clientul. Un SIEM nou înseamnă o clasă nouă, nu modificări în tot codul.
+Mecanism: Definești interfața pe care o vrei (`send(alert)`), de exemplu ca `Protocol` sau clasă abstractă. Fiecare adapter o implementează și face traducerea: formatul alertei, autentificarea, endpoint-ul. Codul care trimite primește un obiect cu `send` și nu știe ce e în spate. Alegerea adapterului se face o singură dată, din configurare.
+Pas cu pas:
+```text
+Engine -> siem.send(alert)
+  SplunkAdapter   -> HEC, JSON
+  SentinelAdapter -> Log Ingestion
+  QRadarAdapter   -> syslog / LEEF
+alegerea: din config, o dată
+```
+Aplicare:
+```python
+class Siem(Protocol):
+    def send(self, alert: Alert): ...
+
+class SplunkAdapter:
+    def __init__(self, client):
+        self.client = client
+    def send(self, alert):
+        self.client.post_event(
+            to_splunk(alert))
+```
+Legătură: Ai făcut asta la integrarea Milestone: un endpoint separat ascundea API-ul Milestone de restul backendului. E și principiul din OOP-14: depinzi de o interfață, nu de implementări concrete.
+Limită: Adapterul ascunde diferențele de format, nu pe cele de comportament: un SIEM poate avea rate limit sau livrare asincronă. Acolo ai nevoie de retry și coadă, nu doar de traducere.
+La interviu: „Un Adapter pe SIEM: codul de detecție vede doar `send(alert)`, iar fiecare adapter traduce formatul și autentificarea. Un SIEM nou e o clasă nouă, aleasă din configurare.”
+Verificare: Cum testezi codul care trimite alerte, fără un SIEM real?
+Răspuns verificare: Îi dai un adapter fals care ține alertele într-o listă și verifici lista. Interfața comună face înlocuirea ușoară.
+Varianta greșită B: Singleton controlează câte instanțe există. Nu rezolvă faptul că cele trei API-uri sunt diferite.
+Varianta greșită C: Observer distribuie un eveniment la mai mulți ascultători. Aici problema e traducerea către API-uri diferite.
+Varianta greșită D: Template Method fixează pașii unui algoritm într-o clasă de bază. Nu te ajută să adaptezi API-uri externe pe care nu le controlezi.
+
+### oop-16
+Pe scurt: Observer. `AlertService` anunță evenimentul, iar emailul, SIEM-ul și dashboard-ul se abonează singure.
+Scop: Reacțiile la un eveniment se schimbă des. Fără Observer, fiecare reacție nouă înseamnă o modificare în serviciul care creează alerta.
+Mecanism: Serviciul ține o listă de ascultători (callback-uri sau obiecte cu `on_alert`). La crearea alertei îi apelează pe rând. Ascultătorii se înregistrează la pornire, deci serviciul nu-i cunoaște. Între procese, același pattern devine publish/subscribe printr-un broker (RabbitMQ, Redis).
+Pas cu pas:
+```text
+pornire: subscribe(email)
+         subscribe(siem)
+         subscribe(dashboard)
+create(alert)
+  -> pentru fiecare ascultător:
+       on_alert(alert)
+```
+Aplicare:
+```python
+class AlertService:
+    def __init__(self):
+        self._subs = []
+    def subscribe(self, fn):
+        self._subs.append(fn)
+    def create(self, alert):
+        save(alert)
+        for fn in self._subs:
+            fn(alert)
+```
+Legătură: Semnalele Django (`post_save`) sunt un Observer în proces. Între servicii devine un fanout exchange RabbitMQ (RMQ-08), fiecare consumator cu coada lui.
+Limită: În proces, un ascultător lent sau care aruncă excepție blochează sau strică `create`. Prinzi excepțiile per ascultător sau muți reacțiile într-o coadă (Celery, broker).
+La interviu: „Observer: serviciul publică „alertă creată”, iar email, SIEM și dashboard se abonează. O reacție nouă nu atinge serviciul. Între servicii fac același lucru cu un broker.”
+Verificare: Trimiterea în SIEM durează 2 s. Ce se întâmplă cu `create` și cum rezolvi?
+Răspuns verificare: `create` durează și el 2 s, pentru că ascultătorii rulează sincron. Muți trimiterea într-un task Celery sau o publici pe o coadă.
+Varianta greșită B: Adapter traduce o interfață în alta. Nu decuplează producătorul evenimentului de lista reacțiilor.
+Varianta greșită C: Factory creează obiecte. Aici problema e cine e anunțat când apare alerta, nu cum se construiesc destinațiile.
+Varianta greșită D: Trei decoratori pe serviciu tot ar trebui adăugați în codul care construiește serviciul și n-ar putea fi activați separat ușor. Observer e făcut exact pentru reacții la evenimente.
+
+### oop-17
+Pe scurt: Un registry folosit ca factory: decoratorul pune fiecare clasă în `RULES`, iar motorul le creează după id, fără să le știe numele.
+Scop: Adaugi reguli de detecție des. Cu registry, o regulă nouă e un fișier nou, fără modificări în motor (open/closed).
+Mecanism: Un decorator de clasă rulează când e definită clasa, adică la import. `register` adaugă clasa în dict și o întoarce neschimbată. Motorul iterează `RULES.values()` și instanțiază fiecare regulă. Codul motorului nu conține niciun nume de regulă.
+Pas cu pas:
+```text
+import rules.login
+  -> @register: RULES["LOGIN-002"]
+import rules.priv
+  -> @register: RULES["PRIV-001"]
+Engine.default()
+  -> [cls() for cls in RULES.values()]
+```
+Aplicare:
+```python
+class Engine:
+    @classmethod
+    def default(cls):
+        return cls(r() for r in
+                   RULES.values())
+```
+Legătură: E soluția din exercițiul k12 și continuarea lui OOP-14 (Strategy). Pluginurile pytest și rutele FastAPI (`@app.get`) se înregistrează la fel, printr-un decorator.
+Limită: Regulile apar în registry doar dacă modulul lor e importat. Uiți un import și regula lipsește fără nicio eroare; de aceea importi explicit pachetul de reguli sau folosești entry points.
+La interviu: „E un registry: decoratorul înregistrează clasa la import, iar motorul instanțiază tot ce e în registry. O regulă nouă e un fișier nou, iar motorul rămâne neschimbat.”
+Verificare: De ce `register` întoarce `cls`?
+Răspuns verificare: Decoratorul înlocuiește numele clasei cu ce întoarce. Fără `return cls`, `OffHours` ar deveni `None` în modul.
+Varianta greșită B: Singleton limitează o clasă la o instanță. Aici registry-ul ține clase, iar motorul poate crea câte instanțe vrea.
+Varianta greșită C: Decorator-ul GoF împachetează un obiect ca să-i extindă comportamentul. `register` nu schimbă clasa; doar o notează.
+Varianta greșită D: Nimic nu ascultă modificările din `RULES`. Dict-ul e citit o dată, când motorul își creează regulile.
+
+### oop-18
+Pe scurt: Unit of Work. Sesiunea ține evidența obiectelor noi, modificate și șterse și le scrie împreună, într-o tranzacție, la `commit()`.
+Scop: Schimbările care țin de aceeași operație ajung în bază toate sau deloc, iar codul de domeniu nu scrie SQL pentru fiecare modificare.
+Mecanism: `session.add(obj)` marchează obiectul ca nou. Modificările pe obiectele încărcate sunt observate automat. La flush, sesiunea calculează ordinea și trimite INSERT, UPDATE și DELETE; la `commit()` confirmă tranzacția, la `rollback()` renunță la tot. Identity map-ul garantează un singur obiect Python per rând, în aceeași sesiune.
+Pas cu pas:
+```text
+s.add(alert)        -> nou
+rule.enabled = False -> modificat
+s.delete(old)       -> șters
+s.commit():
+  INSERT, UPDATE, DELETE
+  într-o singură tranzacție
+```
+Aplicare:
+```python
+with Session(engine) as s, s.begin():
+    s.add(Alert(rule_id="R1"))
+    rule = s.get(Rule, 7)
+    rule.hits += 1
+# commit la ieșire, rollback la
+# excepție
+```
+Legătură: E ce ai văzut în SQA-14 și SQA-01 (identity map). Diferența față de Django: acolo fiecare `obj.save()` scrie imediat (Active Record); aici sesiunea strânge tot și scrie la final.
+Limită: O sesiune nu e thread-safe și nu trebuie ținută mult timp: una pe request sau pe task. Cu cât trăiește mai mult, cu atât ține mai multe obiecte în memorie și date mai vechi.
+La interviu: „`Session` e un Unit of Work cu identity map: adună modificările și le scrie într-o tranzacție la commit. Spre deosebire de Active Record din Django, obiectele nu se salvează singure.”
+Verificare: Modifici un obiect încărcat, dar nu chemi `commit()`, iar sesiunea se închide. Ce se întâmplă?
+Răspuns verificare: Modificarea se pierde: tranzacția e anulată la închidere. Nimic nu ajunge în bază fără commit.
+Varianta greșită B: Sesiunea nu e o conexiune globală: o creezi pe request sau pe task, iar conexiunile vin dintr-un pool separat.
+Varianta greșită C: Active Record e modelul din Django ORM (`obj.save()`). În SQLAlchemy obiectele nu se salvează singure.
+Varianta greșită D: Sesiunea are stare: identity map-ul și lista de modificări. Tocmai starea asta face posibil Unit of Work.

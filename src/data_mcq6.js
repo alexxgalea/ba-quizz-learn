@@ -492,4 +492,94 @@ function label(x: State) {
       ctx: "`Promise.all` așteaptă mai multe promisiuni în paralel. Există și `Promise.allSettled`, care nu respinge niciodată.",
       e: "`Promise.all` respinge la primul eșec, dar o promisiune nu se poate anula, deci A și C își termină treaba. Ca să aștepți toate rezultatele, folosești `allSettled`; ca să le oprești, `AbortController`." }
   ]);
+  Q("asgi", [
+    { id: "asgi-17", lvl: 1, q: "Tokenul JWT e valid, dar userul nu are acces la tenantul cerut. Ce status întorci?", o: [
+      "403 Forbidden",
+      "401 Unauthorized",
+      "422 Unprocessable Content",
+      "409 Conflict"],
+      ctx: "Autentificarea răspunde la „cine ești?”, autorizarea la „ai voie?”. HTTP are coduri diferite pentru fiecare.",
+      e: "Serverul știe cine e userul (tokenul e valid), dar refuză accesul: 403. 401 înseamnă că lipsesc credențialele sau nu sunt valide și vine cu headerul `WWW-Authenticate`." },
+    { id: "asgi-18", lvl: 2, q: "Ce metode HTTP sunt idempotente după RFC 9110?", o: [
+      "GET, HEAD, OPTIONS, TRACE, PUT și DELETE",
+      "GET, POST, PUT și DELETE",
+      "Doar GET și HEAD",
+      "Toate, dacă serverul folosește tranzacții"],
+      ctx: "O operație e idempotentă dacă efectul a N cereri identice e același ca al uneia. Contează pentru retry-urile automate ale clienților și proxy-urilor.",
+      e: "Metodele safe (GET, HEAD, OPTIONS, TRACE) nu schimbă nimic, deci sunt idempotente; PUT și DELETE sunt idempotente fără să fie safe. POST și PATCH nu sunt." },
+    { id: "asgi-19", lvl: 2, q: "Un `POST /alerts` primește timeout, fără răspuns. Clientul poate reîncerca în siguranță?", o: [
+      "Doar dacă API-ul acceptă o cheie de idempotență (`Idempotency-Key`)",
+      "Da, POST e idempotent după standard",
+      "Da, dacă reîncearcă în mai puțin de 30 de secunde",
+      "Nu, un POST nu se poate reîncerca niciodată"],
+      ctx: "La un timeout, clientul nu știe dacă serverul a primit cererea și a creat alerta sau nu.",
+      e: "POST nu e idempotent: un retry poate crea a doua alertă. Cu o cheie trimisă de client, serverul recunoaște cererea repetată și întoarce același răspuns (exercițiul k13)." },
+    { id: "asgi-20", lvl: 2, q: "Body-ul e valid, dar o alertă cu același `external_id` există deja. Ce status întorci?", o: [
+      "409 Conflict",
+      "422 Unprocessable Content",
+      "400 Bad Request",
+      "500 Internal Server Error"],
+      ctx: "Unele erori vin din forma cererii, altele din starea curentă a resursei de pe server.",
+      e: "Cererea e corectă, dar intră în conflict cu starea resursei: 409. FastAPI folosește 422 pentru body-uri care nu trec validarea Pydantic." }
+  ]);
+
+  Q("oop", [
+    { id: "oop-15", lvl: 1, q: "Trimiți alerte în Splunk, Sentinel sau QRadar, fiecare cu alt API. Vrei ca restul codului să apeleze doar `siem.send(alert)`. Ce pattern folosești?", o: [
+      "Adapter: câte o clasă care traduce interfața comună în API-ul fiecărui SIEM",
+      "Singleton: o singură instanță globală de client SIEM",
+      "Observer: SIEM-urile se abonează la crearea alertelor",
+      "Template Method: o clasă de bază cu pașii ficși ai trimiterii"],
+      ctx: "Codul tău are deja o interfață (`send(alert)`), iar sistemele externe au API-uri diferite pe care nu le poți schimba.",
+      e: "Adapter-ul aduce un API străin la interfața pe care o așteaptă codul tău. Restul aplicației depinde de `send(alert)`, iar un SIEM nou înseamnă o clasă nouă." },
+    { id: "oop-16", lvl: 2, q: "La crearea unei alerte vrei să trimiți email, să scrii în SIEM și să actualizezi un dashboard, fără ca `AlertService` să știe de ele. Ce pattern?", o: [
+      "Observer: ascultătorii se înregistrează la evenimentul „alertă creată”",
+      "Adapter: traduci alerta pentru fiecare destinație",
+      "Factory: creezi destinațiile după tipul alertei",
+      "Decorator: împachetezi `AlertService` de trei ori"],
+      ctx: "Vrei să adaugi reacții noi la un eveniment fără să modifici codul care produce evenimentul.",
+      e: "Cu Observer, `AlertService` doar anunță evenimentul, iar ascultătorii se abonează singuri. O reacție nouă înseamnă un ascultător nou, nu o modificare în serviciu." },
+    { id: "oop-17", lvl: 2, q: "Ce pattern vezi aici?", code: R`RULES = {}
+
+def register(cls):
+    RULES[cls.rule_id] = cls
+    return cls
+
+@register
+class OffHours(Rule):
+    rule_id = "LOGIN-002"`, o: [
+      "Registry folosit ca factory: clasele se înregistrează singure, iar motorul le creează după id",
+      "Singleton: există o singură regulă de fiecare tip",
+      "Decorator în sensul GoF: adaugă comportament la apelurile metodelor",
+      "Observer: regulile ascultă modificările din `RULES`"],
+      ctx: "Un decorator de clasă primește clasa după ce e definită și întoarce ceva în locul ei; aici întoarce chiar clasa.",
+      e: "La import, fiecare regulă se adaugă în `RULES`. Motorul le instanțiază din dict, fără să le știe numele: o regulă nouă nu cere modificări în motor (open/closed)." },
+    { id: "oop-18", lvl: 3, q: "Ce pattern implementează `Session` din SQLAlchemy?", o: [
+      "Unit of Work: adună modificările și le scrie într-o tranzacție la `commit()`",
+      "Singleton: o conexiune unică pentru toată aplicația",
+      "Active Record: fiecare obiect se salvează singur cu `.save()`",
+      "Facade fără stare peste driverul bazei de date"],
+      ctx: "În Django scrii `obj.save()`. În SQLAlchemy faci `session.add(obj)` și, la final, `session.commit()`.",
+      e: "Sesiunea ține evidența obiectelor noi, modificate și șterse și le scrie împreună la flush sau commit. Django ORM folosește Active Record: obiectul se salvează singur." }
+  ]);
+
+  Q("pytest", [
+    { id: "pt-16", lvl: 2, q: "Rulezi `pytest -n 4` (pytest-xdist). Un fixture cu `scope=\"session\"` creează datele de test. De câte ori rulează?", o: [
+      "De 4 ori: o dată în fiecare proces worker",
+      "O singură dată pentru toată rularea",
+      "O dată pentru fiecare test",
+      "Niciodată: xdist ignoră fixture-urile de sesiune"],
+      ctx: "pytest-xdist rulează testele în paralel, în procese separate (`gw0`, `gw1` …). Fiecare proces își face propria colectare.",
+      e: "„Sesiunea” e sesiunea fiecărui worker, deci fixture-ul rulează în fiecare proces. Datele partajate le creezi o dată cu un lock pe fișier sau le izolezi după `worker_id`." },
+    { id: "pt-17", lvl: 2, q: "Testul Playwright pică din când în când. De ce și cum îl repari?", code: R`page.get_by_role(
+    "button", name="Salvează").click()
+time.sleep(2)
+assert page.locator(
+    ".toast").is_visible()`, o: [
+      "`is_visible()` nu așteaptă; folosești `expect(locator).to_be_visible()`, care reîncearcă",
+      "`sleep(2)` e prea scurt; îl mărești la 5 secunde",
+      "`click()` nu așteaptă butonul; adaugi un `sleep` înainte",
+      "Selectorul CSS e lent; îl înlocuiești cu XPath"],
+      ctx: "Playwright așteaptă singur înainte de acțiuni (click, fill). Pentru aserții are funcția `expect`, cu timeout implicit de 5 secunde.",
+      e: "`is_visible()` răspunde imediat, deci testul depinde de cât de repede apare toast-ul. `expect(...).to_be_visible()` reîncearcă până la timeout, iar `sleep` dispare." }
+  ]);
 })(window.PREP);

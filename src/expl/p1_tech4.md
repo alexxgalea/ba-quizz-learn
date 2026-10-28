@@ -380,3 +380,189 @@ Răspuns verificare: Ceri dependența cu `use_cache=False` sau o dependență se
 Varianta greșită B: Ar fi adevărat doar cu `use_cache=False`. Implicit, rezultatul e refolosit în cerere.
 Varianta greșită C: Endpoint-ul nu cere direct `get_db`, iar chiar dacă ar cere-o, ar primi aceeași valoare din cache.
 Varianta greșită D: Cache-ul ține o cerere, nu toată aplicația; fiecare cerere primește sesiunea ei.
+
+### asgi-17
+Pe scurt: 403 Forbidden. Serverul știe cine e userul, dar refuză accesul la tenant.
+Scop: Codul corect îi spune clientului ce să facă: la 401 se autentifică din nou, la 403 n-are rost să reîncerce.
+Mecanism: 401 înseamnă că lipsesc credențiale valide: token absent, expirat sau cu semnătură greșită. RFC 9110 cere atunci headerul `WWW-Authenticate`, care spune cum să se autentifice. 403 înseamnă că serverul a înțeles cererea și știe cine o face, dar o refuză. Un frontend tratează diferit cele două: la 401 face refresh la token sau login, la 403 arată „n-ai acces”.
+Pas cu pas:
+```text
+fără token / token expirat
+  -> 401 + WWW-Authenticate
+token valid, tenant străin
+  -> 403
+token valid, acces permis
+  -> 200
+```
+Aplicare:
+```python
+def require_tenant(
+    tenant_id: str,
+    user=Depends(current_user),
+):
+    if tenant_id not in user.tenants:
+        raise HTTPException(403)
+    return user
+```
+Legătură: E diferența dintre autentificare și autorizare de la Keycloak (SEC-03, SEC-04): JWT-ul valid rezolvă autentificarea, rolurile și tenantul rezolvă autorizarea.
+Limită: Unele API-uri întorc 404 în loc de 403, ca să nu confirme că resursa există (de exemplu un repository privat). E o alegere de securitate, nu o regulă HTTP.
+La interviu: „401 când lipsesc credențiale valide, cu `WWW-Authenticate`; 403 când știu cine e userul, dar n-are voie. La resurse sensibile pot întoarce 404, ca să nu confirm că există.”
+Verificare: Tokenul a expirat cu o secundă înainte de cerere. Ce status primești?
+Răspuns verificare: 401: credențialele nu mai sunt valide. Clientul face refresh la token și reîncearcă.
+Varianta greșită B: 401 e pentru credențiale lipsă sau invalide. Aici tokenul e valid, deci problema e de autorizare.
+Varianta greșită C: 422 e pentru un body care nu trece validarea. Cererea e corectă; doar accesul e refuzat.
+Varianta greșită D: 409 descrie un conflict cu starea resursei, de exemplu un duplicat. Nu are legătură cu drepturile userului.
+
+### asgi-18
+Pe scurt: GET, HEAD, OPTIONS și TRACE (safe), plus PUT și DELETE. POST și PATCH nu sunt idempotente.
+Scop: Clienții HTTP, proxy-urile și load balancerele reîncearcă automat doar metodele idempotente. Dacă un endpoint încalcă semantica, un retry poate dubla efecte.
+Mecanism: „Safe” înseamnă că cererea nu schimbă starea serverului. „Idempotent” înseamnă că N cereri identice au același efect ca una. `PUT /alerts/7` cu același body lasă resursa la fel, iar un al doilea `DELETE` găsește resursa deja ștearsă. POST creează ceva nou la fiecare apel, iar PATCH poate fi relativ („adaugă 1”), deci nu sunt idempotente.
+Pas cu pas:
+```text
+safe: GET HEAD OPTIONS TRACE
+idempotent: safe + PUT DELETE
+neidempotent: POST PATCH
+PUT x3 -> resursa = body
+POST x3 -> 3 resurse noi
+```
+Aplicare:
+```python
+@app.put("/alerts/{id}/status")
+def set_status(id: int, s: Status):
+    # setezi, nu incrementezi:
+    # sigur la retry
+    store.set_status(id, s.value)
+```
+Legătură: E idempotența din DES-08 și din task-urile Celery (CEL-03), aplicată la nivel de HTTP.
+Limită: Idempotent se referă la efectul pe server, nu la răspuns: al doilea `DELETE` poate întoarce 404, iar efectul (resursa ștearsă) e același. Și e o promisiune a implementării: un `PUT` scris greșit poate să nu fie idempotent.
+La interviu: „GET, HEAD, OPTIONS sunt safe; PUT și DELETE sunt idempotente; POST și PATCH nu. De aceea un retry automat e sigur pe PUT, iar pe POST am nevoie de o cheie de idempotență.”
+Verificare: `DELETE /alerts/7` întoarce 204, iar al doilea, 404. E încă idempotent?
+Răspuns verificare: Da. Idempotența privește starea serverului: după ambele cereri, alerta 7 nu există. Răspunsul poate diferi.
+Varianta greșită B: POST nu e idempotent: fiecare cerere poate crea o resursă nouă.
+Varianta greșită C: Lista e prea scurtă: OPTIONS și TRACE sunt safe, iar PUT și DELETE sunt idempotente fără să fie safe.
+Varianta greșită D: Tranzacțiile fac o cerere atomică, dar nu împiedică a doua cerere să creeze încă o resursă.
+
+### asgi-19
+Pe scurt: Doar dacă API-ul acceptă o cheie de idempotență. Fără ea, un retry poate crea o a doua alertă.
+Scop: Timeout-ul e cel mai ambiguu rezultat: cererea poate să fi eșuat sau să fi reușit fără ca răspunsul să ajungă. Codul de retry trebuie să fie sigur în ambele cazuri.
+Mecanism: Clientul generează o cheie unică (UUID) pentru operație și o trimite în `Idempotency-Key`. Serverul ține `cheie → răspuns`. La prima cerere execută și salvează răspunsul; la un retry cu aceeași cheie întoarce răspunsul salvat, fără să creeze din nou. Aceeași cheie cu alt body e o greșeală a clientului (409 sau 422).
+Pas cu pas:
+```text
+POST + key=abc -> creează #7
+  răspunsul se pierde (timeout)
+POST + key=abc (retry)
+  -> serverul vede abc
+  -> întoarce #7, fără duplicat
+```
+Aplicare:
+```python
+seen = store.by_key.get(key)
+if seen:
+    return seen.response
+alert = store.create(body)
+store.by_key[key] = Saved(body, alert)
+```
+Legătură: Exact exercițiul k13. În bază, cheia primește o constrângere unică, ca la inserturile idempotente din SQA-09.
+Limită: Două cereri cu aceeași cheie pot ajunge simultan pe workeri diferiți. Verificarea „există cheia?” urmată de insert nu ajunge: ai nevoie de o constrângere unică sau de un lock. Cheile se păstrează doar o perioadă (de exemplu 24 h).
+La interviu: „POST nu e idempotent, deci la timeout nu reîncerc orbește. Clientul trimite un `Idempotency-Key`, serverul ține cheia cu răspunsul, iar un retry primește același rezultat. În bază pun o constrângere unică pe cheie, pentru cereri simultane.”
+Verificare: Clientul reîncearcă cu aceeași cheie, dar cu alt body. Ce faci?
+Răspuns verificare: Refuzi (de obicei 409 sau 422): cheia identifică o operație deja făcută, iar un body diferit înseamnă o greșeală a clientului.
+Varianta greșită B: RFC 9110 nu definește POST ca idempotent. Fiecare cerere poate crea o resursă nouă.
+Varianta greșită C: Timpul scurs nu schimbă nimic: serverul poate să fi creat deja alerta în primele milisecunde.
+Varianta greșită D: Se poate reîncerca în siguranță, cu condiția ca serverul să deduplice după cheie.
+
+### asgi-20
+Pe scurt: 409 Conflict. Cererea e corectă, dar intră în conflict cu starea curentă a resursei.
+Scop: Clientul trebuie să poată deosebi „ai trimis date greșite” (corectezi cererea) de „datele sunt bune, dar resursa există deja” (o folosești pe cea existentă).
+Mecanism: 422 Unprocessable Content înseamnă că body-ul e bine format, dar conținutul nu trece regulile de validare; FastAPI îl întoarce automat când Pydantic respinge datele. 409 Conflict înseamnă că cererea ar fi validă, dar contrazice starea serverului: un duplicat, o versiune veche (optimistic locking), o tranziție de stare interzisă.
+Pas cu pas:
+```text
+body fără rule_id -> 422 (Pydantic)
+JSON stricat      -> 422 la FastAPI
+                     (400 în altele)
+external_id există -> 409
+versiune veche     -> 409 (sau 412)
+```
+Aplicare:
+```python
+try:
+    db.add(Alert(**body.model_dump()))
+    db.commit()
+except IntegrityError:
+    db.rollback()
+    raise HTTPException(409,
+        "external_id există deja")
+```
+Legătură: 422 e răspunsul automat din ASGI-08. 409 apare natural când o constrângere unică din Postgres respinge un insert (SQA-09).
+Limită: Granița nu e strictă între API-uri: unele întorc 400 pentru orice eroare de client. Contează să fii consecvent și să documentezi codurile în OpenAPI.
+La interviu: „422 când body-ul nu trece validarea, ceea ce FastAPI face automat; 409 când datele sunt bune, dar intră în conflict cu starea resursei, de exemplu un duplicat prins de o constrângere unică.”
+Verificare: Doi useri editează aceeași alertă; al doilea trimite o versiune mai veche. Ce cod întorci?
+Răspuns verificare: 409 Conflict (sau 412 Precondition Failed, dacă versiunea vine în `If-Match`): cererea contrazice starea curentă.
+Varianta greșită B: 422 e pentru conținut invalid. Aici body-ul trece validarea; problema e starea serverului.
+Varianta greșită C: 400 e o eroare generală de client. Există un cod mai precis pentru conflictul cu starea resursei.
+Varianta greșită D: 500 înseamnă că serverul a greșit. Un duplicat e un caz așteptat, pe care îl raportezi clientului.
+
+### pt-16
+Pe scurt: De 4 ori. Fiecare worker xdist e un proces separat, cu sesiunea lui, deci fixture-ul de sesiune rulează o dată în fiecare.
+Scop: Suitele mari se rulează în paralel ca să încapă în CI. Dacă presupui că fixture-ul de sesiune rulează o singură dată, workerii își calcă unul altuia datele.
+Mecanism: `pytest -n 4` pornește patru procese (`gw0` … `gw3`). Fiecare colectează testele și primește un subset de la procesul principal. Scope-ul `session` e relativ la proces: fiecare worker creează și distruge propria instanță. Dacă fixture-ul creează aceeași bază sau aceleași înregistrări, workerii intră în conflict.
+Pas cu pas:
+```text
+pytest -n 4
+  gw0: session fixture -> create_db
+  gw1: session fixture -> create_db
+  gw2: session fixture -> create_db
+  gw3: session fixture -> create_db
+fix: o bază per worker
+  test_db_gw0, test_db_gw1, ...
+```
+Aplicare:
+```python
+@pytest.fixture(scope="session")
+def db_url(worker_id):
+    # worker_id: "gw0"… sau "master"
+    name = f"test_{worker_id}"
+    create_database(name)
+    yield f"postgresql:///{name}"
+    drop_database(name)
+```
+Legătură: E aceeași idee ca la workerii Celery sau Gunicorn: procese separate nu împart memoria (GIL-01), deci starea comună trebuie izolată sau mutată într-un loc partajat.
+Limită: Fixture-ul se creează doar în workerii care primesc un test care îl cere, deci „de 4 ori” e maximul. Când vrei o singură creare (un container scump), documentația xdist recomandă un lock pe fișier (`filelock`).
+La interviu: „Sub xdist, fiecare worker are sesiunea lui, deci fixture-ul de sesiune rulează în fiecare proces. Izolez datele după `worker_id`, de exemplu o bază per worker, sau folosesc un lock pe fișier dacă resursa trebuie creată o singură dată.”
+Verificare: Două teste pe workeri diferiți creează amândouă userul `admin`. Ce se întâmplă și cum eviți?
+Răspuns verificare: Al doilea insert poate pica pe constrângerea unică sau testele își schimbă datele unul altuia. Generezi date unice per test (factories, sufix aleator) sau izolezi baza per worker.
+Varianta greșită B: Asta s-ar întâmpla fără xdist. Cu `-n 4` există patru sesiuni, una pe proces.
+Varianta greșită C: Scope-ul `function` rulează per test. `session` rulează o dată per proces.
+Varianta greșită D: xdist nu ignoră fixture-urile de sesiune; le rulează în fiecare worker.
+
+### pt-17
+Pe scurt: `is_visible()` verifică o singură dată, imediat. Dacă toast-ul apare după 2,1 s, testul pică. `expect(...).to_be_visible()` reîncearcă până la timeout (5 s implicit).
+Scop: Testele UI instabile sunt cea mai scumpă problemă dintr-o suită E2E: oamenii încetează să mai creadă în ele. `sleep` e cauza clasică.
+Mecanism: Acțiunile Playwright (`click`, `fill`) așteaptă singure ca elementul să fie vizibil, stabil și activ. Aserțiile web-first (`expect(locator)`) reîncearcă până se îndeplinește condiția sau expiră timeout-ul. Metodele care întorc o valoare (`is_visible`, `inner_text`) nu așteaptă: dau starea din acel moment, deci rezultatul depinde de viteza aplicației.
+Pas cu pas:
+```text
+click -> așteaptă butonul, apasă
+sleep(2) -> pierzi 2 s mereu
+is_visible() -> o singură privire
+  toast la 2,1 s -> False -> pică
+expect(...).to_be_visible()
+  verifică repetat până la 5 s
+  toast la 2,1 s -> trece
+```
+Aplicare:
+```python
+from playwright.sync_api import expect
+
+page.get_by_role(
+    "button", name="Salvează").click()
+expect(page.get_by_role("status")
+       ).to_be_visible()
+```
+Legătură: E aceeași idee ca `findBy` din Testing Library (FE-09): aștepți o condiție, nu un timp fix. Și ca la k14: un timeout pe condiție, nu un `sleep`.
+Limită: `expect` nu repară o aplicație lentă. Dacă un ecran durează constant 8 s, mărești timeout-ul doar pentru aserția respectivă (`timeout=10_000`) și investighezi de ce e lent.
+La interviu: „`is_visible()` nu așteaptă, iar `sleep` doar ghicește. Folosesc aserțiile web-first, `expect(locator).to_be_visible()`, care reîncearcă până la timeout, și locatori după rol. Fără `sleep` în teste.”
+Verificare: Cum verifici că un spinner a dispărut după încărcare?
+Răspuns verificare: `expect(spinner).to_be_hidden()`: reîncearcă până dispare. Un `assert not spinner.is_visible()` ar putea trece prea devreme, înainte să apară spinnerul.
+Varianta greșită B: Un `sleep` mai lung face testul mai lent și tot nu garantează nimic pe un CI încărcat.
+Varianta greșită C: `click()` așteaptă deja singur ca butonul să fie vizibil și activ; un `sleep` în plus doar încetinește.
+Varianta greșită D: Viteza selectorului nu e problema. Problema e că aserția nu așteaptă; XPath ar face selectorul și mai fragil.

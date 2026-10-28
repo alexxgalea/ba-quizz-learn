@@ -76,7 +76,8 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         "Punct de plecare pentru workeri sync: 2 × core + 1. Apoi măsori sub încărcare.",
         "Nginx sau un load balancer în față: TLS, fișiere statice, buffering pentru clienții lenți.",
         "FastAPI: endpoint `def` → threadpool AnyIO (implicit, cel mult 40 de apeluri sincrone în paralel); `async def` → direct pe event loop. Cod blocant în `async def` blochează tot workerul.",
-        "FastAPI = Starlette + Pydantic: validare din type hints (422 automat), `Depends` pentru injecție (cu `yield` pentru teardown), OpenAPI generat automat."
+        "FastAPI = Starlette + Pydantic: validare din type hints (422 automat), `Depends` pentru injecție (cu `yield` pentru teardown), OpenAPI generat automat.",
+        "HTTP: GET, HEAD, OPTIONS sunt safe; PUT și DELETE sunt și idempotente; POST și PATCH nu, deci un retry sigur cere `Idempotency-Key`. 401 = credențiale lipsă sau invalide, 403 = știu cine ești, dar n-ai voie, 409 = conflict cu starea resursei, 422 = validare eșuată (FastAPI), 429 = rate limit."
       ]
     },
     index: {
@@ -205,7 +206,10 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         "DB: Postgres real în Docker (service în CI sau testcontainers), tranzacție + rollback per test, factory_boy pentru date.",
         "Celery: testezi funcția direct; `task_always_eager` doar pentru unit; worker real pentru integrare.",
         "Timp: freezegun/time-machine sau un clock injectat. Niciodată `sleep` ca sincronizare.",
-        "Utile: `-x`, `-k`, `--lf`, markers (`-m \"not slow\"`), `pytest-xdist -n auto`, `pytest-cov`."
+        "Utile: `-x`, `-k`, `--lf`, markers (`-m \"not slow\"`), `pytest-xdist -n auto`, `pytest-cov`.",
+        "xdist (`-n auto`): fiecare worker e un proces separat, deci un fixture `session` rulează o dată per worker; izolezi datele după `worker_id`.",
+        "Framework de teste: straturi (teste → pași de domeniu → clienți API / page objects → drivere), configurare pe mediu cu `pytest_addoption`, date din factories curățate cu `yield`, raport JUnit în CI.",
+        "Playwright: locatori după rol (`get_by_role`), acțiunile așteaptă singure, iar `expect(locator)` reîncearcă (5 s implicit). `is_visible()` nu așteaptă, deci fără `sleep` și fără `assert` pe el."
       ]
     },
     security: {
@@ -274,7 +278,9 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         "Defend = monitorizare continuă și detecție pentru SAP: un sistem de avertizare timpurie pentru schimbări neautorizate, abuz sau atacuri.",
         "Defend: peste 2.600 de reguli de detecție (după pagina produsului), inclusiv zero-day, pe ABAP, Java, HANA, SAProuter, plus cloud (RISE, BTP); scoruri de anomalie și analiză de comportament.",
         "Alertele SAP ajung în SIEM-ul clientului (SOC). „Pre-patch protection” = monitorizezi exploatarea unei vulnerabilități înainte să aplici patch-ul.",
-        "Onapsis e singura platformă de securitate din programul SAP Endorsed Apps. Vulnerabilități celebre raportate de Onapsis: RECON (2020) și ICMAD (2022).",
+        "Platforma e „SAP-endorsed”; după onapsis.com, Control e „the only SAP-endorsed automated SAP application security testing software”. Vulnerabilități celebre raportate de Onapsis: RECON (2020) și ICMAD (2022).",
+        "Actual (sept. 2026): OVERPASS, CVE-2026-44756, vulnerabilitate CVSS 10 în kernelul SAP, exploatabilă de la distanță fără autentificare, descoperită de Onapsis Research Labs; Defend detecta încercările de exploatare înainte de patch. Exemplul tău pentru „pre-patch protection”.",
+        "Platforma de azi: Assess (vulnerabilități), Defend (detecție), Control (cod și transporturi), Security Advisor (ghidare cu AI), iar peste ele „Agentic AI Fabric”. Anunțul cere explicit AI în livrare: Cursor, Copilot, Claude Code, LLM APIs.",
         "SAP = ERP: finanțe, supply chain, HR. ABAP e limbajul SAP; S/4HANA e generația curentă.",
         "Vocabular SOC: SIEM, IoC, MITRE ATT&CK, false positive, alert fatigue, MTTD/MTTR.",
         "Inginerie: ingestie de loguri → normalizare → reguli → alerte → integrare SIEM; ordine per sistem, idempotență, multi-tenant, reguli testate pe loguri reale anonimizate."
@@ -519,6 +525,13 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         t: "Audit tehnic complet înainte de publicare.",
         a: "Ai găsit două bug-uri blocante: o cheie de status nepotrivită în `get_or_create` și retry-uri Celery care nu făceau nimic. Ai planificat remedierea în pași mici.",
         r: "Lecția pe care o spui: retry-urile și idempotența se testează explicit, nu se presupun."
+      },
+      {
+        h: "AI în livrare: aplicația de pregătire, construită cu Claude Code",
+        s: "Aveai puțin timp pentru un interviu pe un stack larg și voiai o aplicație de exersat pe telefon, nu notițe.",
+        t: "Să construiești repede o aplicație corectă: sute de grile verificate, exerciții testate, sincronizare și un intervievator AI.",
+        a: "Ai lucrat cu Claude Code pe specificații scrise întâi (docs/superpowers/specs), cu TDD: test la interfață, apoi cod. Plasa de siguranță: `validate.mjs` pe date, 13 suite Playwright, teste de unitate în Node și pytest pe soluții. Faptele le-ai verificat pe surse primare (`research/`), nu le-ai luat de la model. În produs ai integrat LLM API-uri: verdict JSON parsat strict, rezervă între furnizori, cheile doar în `localStorage`, răspunsurile „în afara temei” înlocuite cu un text fix.",
+        r: "Aplicație folosită zilnic: peste 270 de grile cu explicații, peste 70 de carduri orale, 16 exerciții de live coding cu soluții testate. Lecția: AI-ul accelerează scrisul, dar calitatea vine din teste, review și verificarea faptelor. Completează: cât timp ți-a luat și un bug concret prins de teste."
       }
     ],
     extra: [
@@ -542,7 +555,11 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       "Cum e împărțită munca între București și celelalte centre de inginerie?",
       "Cum folosiți Grafana și New Relic în fiecare zi? Există o rotație de on-call?",
       "Cât de aproape lucrează inginerii cu Onapsis Research Labs?",
-      "Cum ar arăta succesul în rolul ăsta după trei–șase luni?"
+      "Cum ar arăta succesul în rolul ăsta după trei–șase luni?",
+      "Cât lucrez pe funcționalități noi (backend, frontend) și cât pe automatizarea testelor? Cine scrie testele E2E?",
+      "Ce stack de frontend folosiți: React cu TypeScript, ce bibliotecă pentru date, ce teste?",
+      "Cum folosește echipa azi uneltele AI și ce așteptați de la cineva care „drives AI adoption”?",
+      "Ce rulează în CI la fiecare merge request și care e cel mai mare punct de durere: viteza, testele instabile sau mediile?"
     ]
   };
 
