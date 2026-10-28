@@ -225,7 +225,7 @@ app.log({ title, n, c, dur })              // un rând în S.h, cu kind: "jarvis
 
 - **Moduri:**
   - Antrenament: feedback după fiecare card și ofertă de explicație.
-  - Interviu tehnic simulat: 6 sloturi, ton neutru, fără feedback până la final.
+  - Interviu tehnic simulat: 7 sloturi (din 2026-10-28 și unul de frontend), ton neutru, fără feedback până la final.
   - Pe o temă: modulul ales pe ecran sau prin voce.
 - **Pornirea:** un singur tap pe „Începe”, pentru politica de autoplay și microfon. Salutul folosește `gapSummary()`.
 - **Bucla:**

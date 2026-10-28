@@ -124,7 +124,7 @@ După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` 
 - **Snippet-uri orale** (`src/data_oral2.js`, câmpul `code`): vezi codul sub întrebare, spui ce e greșit, ce se întâmplă sub încărcare, cum ai repara și cum ai testa. Codul intră în promptul intervievatorului și al verificării. Rânduri de cel mult 38 de caractere (verificat de `validate.mjs`), cod la 11 px pe card.
 - **Scenarii de design** (modulul `design`): intervievatorul cere clarificări, trade-off-uri, puncte de eșec și scalare și pune până la 3 întrebări de continuare. Verdictul tratează punctele cheie ca criterii de raționament.
 - `ivRules(card)` e singurul loc unde se decid regulile pe tip de card.
-- **Interviu tehnic simulat** (Oral): 6 carduri, câte unul pe slot, în ordinea probei: threading/asyncio, OOP, testing/generatori, FastAPI, un snippet, un scenariu de design (`pickTechMock`, cu ponderile `wO`). Persoana anunță snippet-ul și designul.
+- **Interviu tehnic simulat** (Oral): 7 carduri, câte unul pe slot, în ordinea probei: threading/asyncio, OOP, testing/generatori, FastAPI, frontend (React/TS), un snippet, un scenariu de design (`pickTechMock`, cu ponderile `wO`). Persoana anunță snippet-ul și designul.
 - Faptele verificate pe surse primare: `research/interview-facts.md`.
 
 ## Goluri și teorie
