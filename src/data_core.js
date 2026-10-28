@@ -379,7 +379,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
   // ---------- interviu & plan ----------
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
-  P.cfg = { interview: "2026-10-26", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
+  P.cfg = { interview: "2026-11-03", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
   // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou
