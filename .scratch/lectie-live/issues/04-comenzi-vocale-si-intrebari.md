@@ -8,10 +8,14 @@
 
 **Status:** ready-for-agent
 
-- [ ] Funcțiile noi ale modelului sunt oferite în lecție, cu descriere și parametri, și nu apar în celelalte moduri.
-- [ ] „Sari” trece la bucata următoare fără să marcheze bucata sărită ca ascultată.
-- [ ] „Repetă” reia bucata curentă de la început.
-- [ ] „Gata” încheie lecția cu rezumat, ca butonul Gata.
-- [ ] Instrucțiunile de sistem fixează regulile pentru „mai simplu”, „exemplu” și întrebări libere (sub ~30 s, „nu sunt sigur”, revenirea la lecție).
-- [ ] Butoanele Repetă și Sari de pe ecran fac același lucru ca vocea.
-- [ ] Întrebările libere nu apar în starea salvată, nici în istoric, nici în export.
+- [x] Funcțiile noi ale modelului sunt oferite în lecție, cu descriere și parametri, și nu apar în celelalte moduri.
+- [x] „Sari” trece la bucata următoare fără să marcheze bucata sărită ca ascultată.
+- [x] „Repetă” reia bucata curentă de la început.
+- [x] „Gata” încheie lecția cu rezumat, ca butonul Gata.
+- [x] Instrucțiunile de sistem fixează regulile pentru „mai simplu”, „exemplu” și întrebări libere (sub ~30 s, „nu sunt sigur”, revenirea la lecție).
+- [x] Butoanele Repetă și Sari de pe ecran fac același lucru ca vocea.
+- [x] Întrebările libere nu apar în starea salvată, nici în istoric, nici în export.
+
+## Comments
+
+Implementat. Funcțiile `next_chunk`, `repeat_chunk`, `pause_session`, `end_session` apar doar în lecție. Butoanele Repetă și Sari folosesc `Call.interrupt(text)`, iar restul unei ture tăiate se aruncă până răspunde modelul cu un apel de funcție.

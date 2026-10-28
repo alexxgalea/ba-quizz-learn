@@ -536,6 +536,32 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-set .chk { display: flex; align-items: center; gap: 10px; color: var(--ink); }
 .jv-set .chk input { width: 20px; height: 20px; }
 
+/* Lecție: butonul recomandat, bucata curentă și comenzile mari, pentru o singură mână. */
+.jv-rec { flex-direction: column; gap: 2px; min-height: 64px; }
+.jv-rec-t { font: 700 17px/1.2 var(--font-display); }
+.jv-rec-s { font-size: 14px; font-weight: 500; opacity: .9; }
+.jv-lessons > summary { cursor: pointer; padding: 6px 0; color: var(--accent); }
+.jv-chunk-card { gap: 10px; }
+.jv-pos { font-size: 15px; font-weight: 700; color: var(--accent); }
+.jv-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.jv-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.jv-chunk { font-size: 16px; line-height: 1.5; }
+.jv-chunk p { margin: 8px 0 0; }
+#jv-lesson { display: flex; flex-direction: column; gap: 10px; }
+#jv-lesson .jv-stage { flex-direction: row; justify-content: center; gap: 14px; padding: 10px 14px; }
+#jv-lesson .jv-orb { width: 44px; height: 44px; flex: none; }
+#jv-lesson .jv-stage .jv-warn { flex: 1; }
+.jv-chunk-card .jv-chunk { max-height: 34vh; overflow-y: auto; }
+#jv-lesson.is-mut .jv-chunk { max-height: 22vh; }
+#jv-lesson .jv-ctl { grid-template-columns: 1.3fr 1fr 1fr; }
+#jv-lesson .jv-ctl .btn, #jv-lesson .jv-mutes .btn { min-height: 56px; font-size: 16px; }
+.jv-mutes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jv-mutes .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.jv-talk { flex-direction: column; gap: 2px; min-height: 76px; font-size: 19px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.jv-talk .xs { font-weight: 500; opacity: .85; }
+.jv-talk.on { background: var(--ok); border-color: var(--ok); color: var(--on-accent); }
+#jv-trd > summary { cursor: pointer; padding: 4px 0; }
+
 /* Întreabă despre asta: conversație scurtă, în subiectul zonei de teorie. */
 .ask { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
 .ask-h { font: 650 15px/1.3 var(--font-display); margin: 0; }

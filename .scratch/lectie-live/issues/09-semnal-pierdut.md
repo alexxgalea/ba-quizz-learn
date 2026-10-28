@@ -8,8 +8,12 @@
 
 **Status:** ready-for-agent
 
-- [ ] Testele cu serviciul vocal fals și ceas fals arată reîncercări în intervalul de ~60 s în lecție, fără să schimbe politica celorlalte moduri.
-- [ ] După reconectare, bucata întreruptă se reia de la început, cu „Reiau de unde am rămas”.
-- [ ] La epuizarea intervalului, lecția intră pe Pauză și adaptorul audio fals înregistrează sunetul de avertizare.
-- [ ] Bucata întreruptă de pierderea conexiunii nu avansează poziția.
-- [ ] O sesiune de peste 15 minute continuă prin reluarea sesiunii fără ca Alex să observe (test pe reluare).
+- [x] Testele cu serviciul vocal fals și ceas fals arată reîncercări în intervalul de ~60 s în lecție, fără să schimbe politica celorlalte moduri.
+- [x] După reconectare, bucata întreruptă se reia de la început, cu „Reiau de unde am rămas”.
+- [x] La epuizarea intervalului, lecția intră pe Pauză și adaptorul audio fals înregistrează sunetul de avertizare.
+- [x] Bucata întreruptă de pierderea conexiunii nu avansează poziția.
+- [x] O sesiune de peste 15 minute continuă prin reluarea sesiunii fără ca Alex să observe (test pe reluare).
+
+## Comments
+
+Implementat. `cfg.retryMs` (~60 s) în `GeminiLive`, doar pentru lecție. `Call` cu `survive` rămâne pe pauză după o pierdere definitivă (`lost`) și redeschide sesiunea la `resume`; Jarvis redă `audio.beep("warn")` și, la revenire, cere bucata cu „Reiau de unde am rămas”. Reluarea după `GoAway` e acoperită de testele `goAway` din `live.test.mjs` și de cel din `lesson.test.mjs`.

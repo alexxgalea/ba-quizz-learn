@@ -8,12 +8,16 @@
 
 **Status:** ready-for-agent
 
-- [ ] Pornirea unei lecții fără cheie trimite la câmpul cheii, ca la celelalte moduri.
-- [ ] Testele (Jarvis cu serviciul vocal, audio și ceas false, aplicația stub extinsă) arată că modelul primește bucățile în ordine, cu numărul bucății și totalul, și că cere bucata următoare după ce audio-ul s-a redat.
-- [ ] Prima replică a lecției conține ideea principală și numărul de bucăți; ultima conține capcanele (doar dacă fișa are formulări de evitat), recapitularea și rămas-bunul.
-- [ ] Instrucțiunile de sistem cer exemple legate de experiența lui Alex, fără fapte noi, fără liste și markdown, cu termeni tehnici în engleză și persona Jarvis în rol de explicator.
-- [ ] Microfonul nu trimite sunet cât se redă audio-ul lui Jarvis.
-- [ ] Ecranul arată textul bucății curente, „n/total”, Pauză, Gata și transcrierea restrânsă, lizibil la 360 px în light și dark.
-- [ ] Rândul din istoric apare doar dacă s-a ascultat cel puțin o bucată și nu scade din bugetul de azi al planului.
-- [ ] Scorul, cutiile Leitner și golurile rămân neschimbate după o lecție.
-- [ ] Modul „Lecție” nu apare în artifact.
+- [x] Pornirea unei lecții fără cheie trimite la câmpul cheii, ca la celelalte moduri.
+- [x] Testele (Jarvis cu serviciul vocal, audio și ceas false, aplicația stub extinsă) arată că modelul primește bucățile în ordine, cu numărul bucății și totalul, și că cere bucata următoare după ce audio-ul s-a redat.
+- [x] Prima replică a lecției conține ideea principală și numărul de bucăți; ultima conține capcanele (doar dacă fișa are formulări de evitat), recapitularea și rămas-bunul.
+- [x] Instrucțiunile de sistem cer exemple legate de experiența lui Alex, fără fapte noi, fără liste și markdown, cu termeni tehnici în engleză și persona Jarvis în rol de explicator.
+- [x] Microfonul nu trimite sunet cât se redă audio-ul lui Jarvis.
+- [x] Ecranul arată textul bucății curente, „n/total”, Pauză, Gata și transcrierea restrânsă, lizibil la 360 px în light și dark.
+- [x] Rândul din istoric apare doar dacă s-a ascultat cel puțin o bucată și nu scade din bugetul de azi al planului.
+- [x] Scorul, cutiile Leitner și golurile rămân neschimbate după o lecție.
+- [x] Modul „Lecție” nu apare în artifact.
+
+## Comments
+
+Implementat. Modul `lesson` în `src/jarvis.js` (`makeLessonTools`, `buildLessonSystem`, controlerul `lz`), `PrepApp.sheet` în `src/app.js`, ecranul `vLessonActive` / `vLessonEnded`. Teste: `tools/unit/lesson.test.mjs`, `tools/test_lesson.py` (360 px, light și dark). `next_chunk` dă la prima apelare ideea principală și totalul (`intro`); sfârșitul (`closing`) dă capcanele și textul pentru recapitulare.

@@ -8,9 +8,13 @@
 
 **Status:** ready-for-agent
 
-- [ ] Testele cu ceas fals arată reluarea exactă sub ~10 minute, cu conexiune deschisă.
-- [ ] După ~10 minute, sau după o conexiune pierdută, bucata se reia de la început.
-- [ ] Cât timp e pe Pauză, microfonul nu trimite nimic și fereastra de ascultare nu pornește.
-- [ ] O bucată întreruptă de Pauză nu avansează numărul bucăților ascultate.
-- [ ] Butonul Pauză devine Reia pe ecran și invers.
-- [ ] Adaptorul audio (real și fals) păstrează coada la pauză și o reia la „reia”, cu teste în suita audio.
+- [x] Testele cu ceas fals arată reluarea exactă sub ~10 minute, cu conexiune deschisă.
+- [x] După ~10 minute, sau după o conexiune pierdută, bucata se reia de la început.
+- [x] Cât timp e pe Pauză, microfonul nu trimite nimic și fereastra de ascultare nu pornește.
+- [x] O bucată întreruptă de Pauză nu avansează numărul bucăților ascultate.
+- [x] Butonul Pauză devine Reia pe ecran și invers.
+- [x] Adaptorul audio (real și fals) păstrează coada la pauză și o reia la „reia”, cu teste în suita audio.
+
+## Comments
+
+Implementat. `audio.pause()` / `audio.resume()` (`Pcm.player` îngheață contextul; verificat și în Chromium real, `tools/test_audio.py`). `Call.pause({ keep: true })` păstrează coada și primește în continuare audio; `resume({ fresh })` o aruncă după ~10 minute sau după o pierdere. O pauză luată în fereastră revine cu fereastră nouă (sub 10 minute) sau trece la bucata următoare (peste 10 minute), fiindcă bucata se auzise deja.

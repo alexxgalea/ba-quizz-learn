@@ -27,8 +27,8 @@ src/
   app.js, app.css  aplicația, fără dependențe externe
   live.js          Jarvis: serverul vocal (Gemini Live), protocolul și reluarea
   audio.js         Jarvis: microfon și difuzor în browser
-  call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, „Nu te aud”)
-  jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări)
+  call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, poarta microfonului, „Nu te aud”)
+  jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări, modul Lecție)
   ask.js           „Întreabă despre asta”: prompt, limite și verdict „în temă”
   gemini_text.js   un apel de text către Gemini (REST), pentru PWA
   pwa/             iconița, service worker-ul
@@ -38,7 +38,8 @@ src/
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
                    katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, verificat cu vitest în afara repo-ului)
 tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
-docs/              spec-ul Jarvis (docs/superpowers/specs), proba de aruncat și PWA-ul publicat pe Pages (docs/app)
+docs/              spec-ul Jarvis (docs/superpowers/specs), probele de aruncat (prototype-jarvis-probe.html, probe-lectie-metrou.html) și PWA-ul publicat pe Pages (docs/app)
+.scratch/          spec-urile și tichetele locale (de exemplu .scratch/lectie-live)
 export/            generatorul brief-ului trimis la Perplexity
 ```
 
@@ -62,6 +63,7 @@ node --test "tools/unit/*.test.mjs"   # Jarvis: Live, Audio (partea pură), Call
 python3 tools/test_audio.py      # BrowserAudio în Chromium cu microfon fals
 python3 tools/test_prepapp.py    # PrepApp: record dă aceleași urme ca oralSave, next, theory, summary, log
 python3 tools/test_jarvis.py     # ecranul Jarvis la 360 px, light și dark, cu Live și Audio false
+python3 tools/test_lesson.py     # Lecție: poziția și recomandarea în aplicație, butoanele, vederea lecției (360 px, light și dark)
 python3 tools/test_pwa.py        # manifest, iconițe, service worker, offline
 python3 tools/test_ask.py        # „Întreabă despre asta”: grilă, fișă, gol; sample, Gemini, DeepSeek
 ```
@@ -154,7 +156,7 @@ La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dicteaz
 
 Aplicația e publicată ca artifact Claude privat: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT
 
-Progresul stă în baza de date a artefactului, într-un document per utilizator (`data/users/<uid>/progress`), plus o copie locală în browser. Republicarea la același link păstrează progresul. Cheile stării: `q` grile, `o` carduri orale, `x` întrebări deschise, `k` exerciții, `p` sarcini bifate, `h` istoric, `c` setări. Dintr-o sesiune Claude: rulezi build-ul, apoi publici `dist/pregatire-onapsis.html` cu `url` setat la link-ul de mai sus.
+Progresul stă în baza de date a artefactului, într-un document per utilizator (`data/users/<uid>/progress`), plus o copie locală în browser. Republicarea la același link păstrează progresul. Cheile stării: `q` grile, `o` carduri orale, `x` întrebări deschise, `k` exerciții, `p` sarcini bifate, `l` poziția lecției pe modul, `h` istoric, `c` setări. Dintr-o sesiune Claude: rulezi build-ul, apoi publici `dist/pregatire-onapsis.html` cu `url` setat la link-ul de mai sus.
 
 ## Jarvis (interviu vorbit)
 
@@ -163,9 +165,23 @@ Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivel
 Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Pe scurt:
 
 - **Trei cusături**: `Live` (GeminiLive | FakeLive), `Audio` (BrowserAudio | FakeAudio), `PrepApp` (app.js | stub). `Call` și `Jarvis` stau peste ele. Fiecare fișier merge în pagină (declarații globale) și în Node (`module.exports`), fără importuri între ele.
-- **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`. Rândurile din istoric au `kind: "jarvis"`.
+- **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`, iar pentru Lecție `sheet`, `lessonHeard`, `lessonDone`, `lessonRec`. Rândurile din istoric au `kind: "jarvis"`; cele de lecție au și `lesson: true`.
 - **Teste**: `tools/unit` (Node, câte un fișier pe modul), `tools/test_audio.py`, `tools/test_prepapp.py`, `tools/test_jarvis.py` (înlocuitorii din `tools/jarvis_fakes.js` se injectează prin `window.__jarvisFakes`).
 - **Publicare PWA**: `npm run build && npm run pages`, apoi commit și push. GitHub Pages servește `docs/app` din ramură (Settings › Pages › Deploy from a branch › `/docs`).
+
+## Lecție (Jarvis explică o fișă)
+
+În tab-ul Jarvis, „Ascultă lecția recomandată” (și lista tuturor modulelor) pornește o lecție: Jarvis explică fișa modulului cu voce tare, **bucată** cu bucată, iar Alex doar ascultă. Pe fiecare fișă din Studiu apare butonul „Ascultă”. Ambele există doar în PWA. Vocabularul (Lecție, Bucată, Poziția lecției, Fereastra de ascultare, Pauză, Mut, Vorbește) e în `CONTEXT.md`, decizia „live, nu audio pregenerat” în `docs/adr/0001-lectie-live-nu-audio-pregenerat.md`, iar spec-ul și tichetele în `.scratch/lectie-live/`.
+
+- **Bucăți**: sursa e fișa (`PrepApp.sheet`). O bucată e un punct. Ideea principală deschide lecția („Asyncio, în 10 idei. Prima: …”), formulările de evitat o încheie ca „capcane la interviu”, apoi recapitulare și rămas-bun. Modelul primește bucățile prin `next_chunk` și `repeat_chunk`; punctele nu intră în instrucțiunile de sistem, deci ordinea și poziția rămân ale aplicației. Funcțiile lecției: `next_chunk`, `repeat_chunk`, `pause_session`, `end_session` („mai simplu” și „exemplu” sunt reexplicări, fără funcție).
+- **Fereastra de ascultare**: după ce o bucată s-a redat toată (`spoken` din `Call`), aplicația redă un sunet scurt (`audio.beep("window")`) și deschide microfonul 3 s (`clock.after`). Tăcere → `Bucata următoare`; voce → trecerea automată se anulează până răspunde Jarvis, apoi se deschide o fereastră nouă. Ceasul îl ține aplicația, nu modelul. Cât vorbește Jarvis, microfonul nu ajunge la server (`halfDuplex` forțat în lecție).
+- **Mut și Vorbește**: pe Mut nu există fereastră, bucățile curg una după alta, iar microfonul ajunge la server doar cât e ținut apăsat „Vorbește” (apăsarea oprește redarea; eliberarea trimite `audioStreamEnd`). Mut-ul se ține minte în `onapsis-jarvis-v1` (setările Jarvis), nu în starea de progres. Poarta microfonului stă în `Call` (`mic`, `talk`).
+- **Pauză**: `audio.pause()` îngheață contextul, deci coada rămâne; sub ~10 minute redarea continuă din aceeași secundă, altfel (sau după o conexiune pierdută) bucata se reia de la început. Pauza vine din buton sau prin voce.
+- **Semnal pierdut**: în lecție reîncercările durează ~60 s (`retryMs`); după reconectare Jarvis spune „Reiau de unde am rămas” și reia bucata. Dacă nu revine, `Call` (cu `survive`) rămâne pe pauză, `audio.beep("warn")` avertizează, iar „Reia” redeschide sesiunea.
+- **Poziția lecției**: `S.l[modul] = { n, d, t }` (bucata ascultată cel mai departe, data ultimei terminări, timestamp), îmbinată pe modul după `t`; un reset o șterge. Avansează doar când o bucată s-a redat toată (nu la Sari, nu la o bucată întreruptă). Recomandarea (`PrepApp.lessonRec`): lecția începută, altfel modulul cu cea mai mare nevoie dintre cele neterminate în ultimele 2 zile, fără Bonus și fără „Comportamental”.
+- **Ce nu face**: nu scrie în scor, cutiile Leitner, goluri sau întrebările deschise; rândul din istoric (`lesson: true`) nu scade din bugetul serii; întrebările libere nu se salvează nicăieri.
+- **Neterminat, în așteptarea probei din metrou** (`docs/probe-lectie-metrou.html`, tichetul 01): ecranul stins (tichetul 10) și butoanele căștilor prin Media Session (tichetul 11). Până atunci ecranul stins rămâne pauză, iar controlul se face din butoanele de pe ecran și din voce.
+- **Teste**: `tools/unit/lesson.test.mjs` (Jarvis peste `Call` real), `call.test.mjs`, `audio.test.mjs`, `live.test.mjs`, `tools/test_lesson.py` (aplicația și ecranele), `tools/test_audio.py` (pauza și sunetele într-un Chromium real).
 
 ## Întreabă despre asta
 

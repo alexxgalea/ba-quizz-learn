@@ -8,10 +8,14 @@
 
 **Status:** ready-for-agent
 
-- [ ] Testele pe aplicație arată: poziția avansează doar după redarea completă, nu la Sari, nu la o bucată întreruptă.
-- [ ] La terminarea fișei, poziția revine la zero și se notează data.
-- [ ] Îmbinarea a două dispozitive păstrează poziția cea mai nouă pe fiecare modul; un reset o șterge.
-- [ ] Recomandarea respectă ordinea din spec (lecția începută, apoi nevoia cea mai mare dintre modulele nefăcute în 2 zile, fără Bonus și comportamental).
-- [ ] Butonul recomandat arată numele modulului și poziția.
-- [ ] La reluare, prima replică a lui Jarvis conține o recapitulare a ultimei bucăți ascultate.
-- [ ] Modulele fără lecție începută și fără termen apar în listă și pot fi alese oricând.
+- [x] Testele pe aplicație arată: poziția avansează doar după redarea completă, nu la Sari, nu la o bucată întreruptă.
+- [x] La terminarea fișei, poziția revine la zero și se notează data.
+- [x] Îmbinarea a două dispozitive păstrează poziția cea mai nouă pe fiecare modul; un reset o șterge.
+- [x] Recomandarea respectă ordinea din spec (lecția începută, apoi nevoia cea mai mare dintre modulele nefăcute în 2 zile, fără Bonus și comportamental).
+- [x] Butonul recomandat arată numele modulului și poziția.
+- [x] La reluare, prima replică a lui Jarvis conține o recapitulare a ultimei bucăți ascultate.
+- [x] Modulele fără lecție începută și fără termen apar în listă și pot fi alese oricând.
+
+## Comments
+
+Implementat. `S.l[modul] = { n, d, t }` (în `MAPS`, deci se îmbină și se șterge la reset ca restul), `PrepApp.sheet` / `lessonHeard` / `lessonDone` / `lessonRec`, butonul `#jv-rec` și lista modulelor în tab-ul Jarvis. Poziția = bucata ascultată cel mai departe: o bucată sărită nu se numără, iar una ascultată după ea mută poziția. Testele: `tools/test_lesson.py` (aplicația) și `tools/unit/lesson.test.mjs` (recapitularea la reluare).

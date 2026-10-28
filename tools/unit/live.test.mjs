@@ -341,3 +341,27 @@ test("a message that is not JSON is ignored", async () => {
   await settle();
   assert.deepEqual(t.events, [{ type: "turnComplete" }]);
 });
+
+// ---- Lecție live: sfârșitul fluxului audio și reîncercări mai lungi ----
+
+test("audioEnd tells the server the microphone stream has ended, so it flushes the cached audio", async () => {
+  const t = await opened();
+  const ok = t.session.audioEnd();
+  assert.deepEqual([ok, t.sock.sent[1]], [true, { realtimeInput: { audioStreamEnd: true } }]);
+});
+
+test("audioEnd is refused while the connection is being restored", async () => {
+  const t = await withHandle();
+  t.net.holdOpen = true;
+  t.sock.serverClose(1006, "");
+  await settle();
+  assert.equal(t.session.audioEnd(), false);
+});
+
+test("a longer retry schedule in the config replaces the default one, and the other sessions keep the default", async () => {
+  const t = await withHandle({ retryMs: [100, 200, 300, 400, 500] });
+  t.net.plan.push({ close: [1006] }, { close: [1006] }, { close: [1006] }, { close: [1006] }, { close: [1006] });
+  t.sock.serverClose(1006, "");
+  await settle(14);
+  assert.deepEqual([t.sleeps, t.events.at(-1).type], [[100, 200, 300, 400, 500], "closed"]);
+});

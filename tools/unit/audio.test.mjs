@@ -54,7 +54,7 @@ test("each frame reports its level as RMS between 0 and 1", () => {
 function speaker() {
   const ctx = fakeAudioContext(), states = [];
   const p = Pcm.player(ctx, { onPlaying: v => states.push(v) });
-  return { ctx, states, play: n => p.play(new Int16Array(n)), playPcm: pcm => p.play(pcm), flush: () => p.flush() };
+  return { ctx, states, play: n => p.play(new Int16Array(n)), playPcm: pcm => p.play(pcm), flush: () => p.flush(), pause: () => p.pause(), resume: () => p.resume() };
 }
 
 test("chunks are scheduled back to back", () => {
@@ -97,4 +97,52 @@ test("flush stops everything, reports not playing once, and later chunks start f
   await settle();
   sp.play(2400);
   assert.deepEqual([sp.ctx.sources.slice(0, 2).map(s => s.stopped), sp.states, sp.ctx.sources[2].startedAt], [[true, true], [true, false, true], 0]);
+});
+
+// ---- Lecție live: pauză cu păstrarea cozii și sunetele scurte ----
+
+test("pause suspends the context and keeps what is queued, without stopping a source or reporting silence", async () => {
+  const sp = speaker();
+  sp.play(2400);
+  sp.play(2400);
+  sp.pause();
+  await settle();
+  assert.deepEqual([sp.ctx.suspended, sp.ctx.sources.map(s => s.stopped), sp.states], [true, [false, false], [true]]);
+});
+
+test("a chunk that arrives during a pause is queued after the ones already waiting", () => {
+  const sp = speaker();
+  sp.ctx.currentTime = 2;
+  sp.play(2400);
+  sp.pause();
+  sp.play(2400);
+  assert.deepEqual(sp.ctx.sources.map(s => s.startedAt), [2, 2.1]);
+});
+
+test("resume lets the queue play on from where it stopped", () => {
+  const sp = speaker();
+  sp.play(2400);
+  sp.pause();
+  sp.resume();
+  assert.deepEqual([sp.ctx.suspended, sp.ctx.sources[0].stopped], [false, false]);
+});
+
+test("flush during a pause empties the queue and the context is running again afterwards", async () => {
+  const sp = speaker();
+  sp.play(2400);
+  sp.pause();
+  sp.flush();
+  await settle();
+  assert.deepEqual([sp.ctx.sources[0].stopped, sp.ctx.suspended, sp.states], [true, false, [true, false]]);
+});
+
+test("the window tone is short, quiet and starts and ends at silence", () => {
+  const f = Pcm.tone("window", 24000);
+  const peak = Math.max(...f.map(Math.abs));
+  assert.deepEqual([f.length >= 2400 && f.length <= 4800, peak > 0.05 && peak <= 0.25, f[0], f[f.length - 1]], [true, true, 0, 0]);
+});
+
+test("the warning tone is longer than the window tone and also quiet", () => {
+  const w = Pcm.tone("window", 24000), warn = Pcm.tone("warn", 24000);
+  assert.deepEqual([warn.length > w.length, Math.max(...warn.map(Math.abs)) <= 0.3], [true, true]);
 });

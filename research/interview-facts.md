@@ -317,6 +317,13 @@ Analiza completă și sursele pentru fiecare afirmație sunt în `research/job-8
 - ✅ **Onapsis**: Control e „the only SAP-endorsed automated SAP application security testing software”; Defend are „over 2,600 detection rules”; OVERPASS e CVE-2026-44756. Surse: https://onapsis.com/platform/control/, https://onapsis.com/platform/defend/, https://onapsis.com/blog/sap-overpass-remediation/
 - ⚠️ **CoderPad**: pagina Python 3 spune CPython 3.10, iar docs-ul CoderPad Screen spune 3.11.5. Rulezi `sys.version` la început. Surse: https://coderpad.io/languages/python-3/, https://coderpad.io/resources/docs/screen/more-screen-resources/supported-languages-frameworks-technologies/what-compiler-does-my-test-run-on/
 
+## 8. Gemini Live și Web Audio, pentru lecție (Jarvis)
+
+- ✅ **Sfârșitul fluxului audio**: când microfonul se oprește (sau poarta lui se închide), clientul trimite `realtimeInput: { audioStreamEnd: true }` (în JS `sendRealtimeInput({ audioStreamEnd: true })`, în Python `audio_stream_end`). Serverul golește audio-ul păstrat; după aceea se poate trimite din nou audio. Documentația spune că trebuie trimis când fluxul stă mai mult de o secundă, de exemplu când utilizatorul oprește microfonul. Folosit la „Vorbește” și la sfârșitul ferestrei de ascultare (`audioEnd` în `src/live.js`). Sursă: https://ai.google.dev/gemini-api/docs/live-guide (verificat 2026-10-28)
+- ✅ **Sesiuni lungi**: sesiunile doar audio au 15 minute; reluarea cu `sessionResumption` (token valabil 2 ore) și `contextWindowCompression` le leagă între ele; `GoAway` anunță închiderea. Pentru lecție, reîncercările de reconectare sunt de ~60 s (`retryMs` în configurația sesiunii; celelalte moduri au cele trei din GeminiLive). Sursă: https://ai.google.dev/gemini-api/docs/live-session
+- ✅ **`AudioContext.suspend()` îngheață timpul contextului**: sursele deja programate rămân în coadă și continuă din aceeași secundă la `resume()`, iar `ended` nu se declanșează cât durează pauza (verificat în Chromium, `tools/test_audio.py`). Pauza lecției se sprijină pe asta. Sursă: https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/suspend
+- ⚠️ **Nepublicat**: limita zilnică a nivelului gratuit pentru Live; rămâne de văzut în AI Studio. Butoanele căștilor (Media Session), conexiunea cu ecranul stins și reconectarea într-un tunel adevărat se află doar prin proba din metrou (`docs/probe-lectie-metrou.html`).
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.

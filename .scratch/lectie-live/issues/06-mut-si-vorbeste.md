@@ -8,10 +8,14 @@
 
 **Status:** ready-for-agent
 
-- [ ] Pe Mut, microfonul nu trimite sunet decât cât e ținut apăsat Vorbește (teste pentru apel și pentru Jarvis).
-- [ ] Pe Mut nu se deschide fereastra de ascultare și nu se redă sunetul ei; bucățile se înlănțuie.
-- [ ] Apăsarea pe Vorbește oprește redarea și deschide microfonul; eliberarea trimite sfârșitul turei și lecția revine după răspuns.
-- [ ] Setarea Mut se păstrează între sesiuni, în stocarea setărilor Jarvis, și nu apare în starea de progres, în export sau în brief.
-- [ ] Pauza, Repetă, Sari și Gata merg la fel pe Mut.
-- [ ] Instrucțiunile de sistem pe Mut nu mai menționează că poate fi oprit prin voce.
-- [ ] Butoanele Mut și Vorbește sunt mari și ușor de atins cu o mână, la 360 px, în light și dark.
+- [x] Pe Mut, microfonul nu trimite sunet decât cât e ținut apăsat Vorbește (teste pentru apel și pentru Jarvis).
+- [x] Pe Mut nu se deschide fereastra de ascultare și nu se redă sunetul ei; bucățile se înlănțuie.
+- [x] Apăsarea pe Vorbește oprește redarea și deschide microfonul; eliberarea trimite sfârșitul turei și lecția revine după răspuns.
+- [x] Setarea Mut se păstrează între sesiuni, în stocarea setărilor Jarvis, și nu apare în starea de progres, în export sau în brief.
+- [x] Pauza, Repetă, Sari și Gata merg la fel pe Mut.
+- [x] Instrucțiunile de sistem pe Mut nu mai menționează că poate fi oprit prin voce.
+- [x] Butoanele Mut și Vorbește sunt mari și ușor de atins cu o mână, la 360 px, în light și dark.
+
+## Comments
+
+Implementat. `Call.talk(down)` (oprește redarea, deschide microfonul, la eliberare trimite `audioStreamEnd`; fapt verificat în docs Gemini, vezi `research/interview-facts.md` §8). Mut în `onapsis-jarvis-v1`. Vorbește se ține apăsat prin `pointerdown` / `pointerup` pe document; cât e apăsat, ecranul nu se redesenează.

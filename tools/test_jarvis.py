@@ -108,7 +108,7 @@ async def main():
             # --- settings
             await pg.select_option('[data-jv="voice"]', "Orus"); await pg.select_option('[data-jv="patience"]', "long"); await pg.check('[data-jv="halfDuplex"]')
             saved = await ev(pg, "JSON.parse(localStorage.getItem('onapsis-jarvis-v1'))")
-            check(tag + "settings are saved without the key", saved == {"voice": "Orus", "patience": "long", "halfDuplex": True, "micId": ""}, saved)
+            check(tag + "settings are saved without the key", saved == {"voice": "Orus", "patience": "long", "halfDuplex": True, "micId": "", "muted": False}, saved)
             await pg.click('[data-a="jv-start"][data-mode="mock"]'); await pg.wait_for_timeout(200)
             cfg = await ev(pg, f"({{ voice: {CTL}.live.cfg.voice, ms: {CTL}.live.cfg.silenceMs }})")
             check(tag + "the next session uses them", cfg == {"voice": "Orus", "ms": 2000}, cfg)

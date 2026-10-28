@@ -284,3 +284,240 @@ test("the candidate's earlier talking does not make it think once the model has 
   t.audio.level(0.001);
   assert.deepEqual(t.states(), ["listening", "speaking", "listening"]);
 });
+
+// ---- Lecție live: poarta microfonului, vorbirea terminată, Vorbește, pauza cu coadă, pierderea conexiunii ----
+
+const ofType = (t, type) => t.events.filter(e => e.type === type);
+const speakAll = t => { t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); };
+
+test("spoken is reported when the model's turn is complete and the playback has drained", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "turnComplete" });
+  const early = ofType(t, "spoken").length;
+  t.audio.drain();
+  assert.deepEqual([early, ofType(t, "spoken").length], [0, 1]);
+});
+
+test("spoken is not reported when the speech is cut short by an interruption", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "interrupted" });
+  t.live.emit({ type: "turnComplete" });
+  assert.equal(ofType(t, "spoken").length, 0);
+});
+
+test("a gated call sends nothing from the microphone until the gate is opened", async () => {
+  const t = await started({ gate: false });
+  t.audio.frame(Int16Array.of(1));
+  t.call.mic(true);
+  t.audio.frame(Int16Array.of(2));
+  assert.deepEqual(t.live.sent, [{ audio: [2] }]);
+});
+
+test("closing the gate ends the audio stream once, so the server closes the turn", async () => {
+  const t = await started({ gate: false });
+  t.call.mic(true);
+  t.audio.frame(Int16Array.of(2));
+  t.call.mic(false);
+  t.call.mic(false);
+  t.audio.frame(Int16Array.of(3));
+  assert.deepEqual(t.live.sent, [{ audio: [2] }, { audioEnd: true }]);
+});
+
+test("voice is reported when the level rises above the threshold while the gate is open, once per utterance", async () => {
+  const t = await started({ gate: false });
+  t.audio.level(0.2);
+  t.call.mic(true);
+  t.audio.level(0.2);
+  t.audio.level(0.3);
+  t.clock.advance(600);
+  t.audio.level(0.001);
+  t.audio.level(0.2);
+  assert.equal(ofType(t, "voice").length, 2);
+});
+
+test("talk(true) empties the speaker, opens the microphone and drops the rest of the interrupted turn", async () => {
+  const t = await started({ gate: false });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.talk(true);
+  t.live.emit({ type: "audio", pcm: Int16Array.of(2) });
+  t.audio.frame(Int16Array.of(5));
+  assert.deepEqual([t.audio.flushes, t.audio.played, t.live.sent], [1, [[1]], [{ audio: [5] }]]);
+});
+
+test("after talk(true) the model's next turn plays once the server has reported the interruption", async () => {
+  const t = await started({ gate: false });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.talk(true);
+  t.live.emit({ type: "interrupted" });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(9) });
+  assert.deepEqual(t.audio.played, [[1], [9]]);
+});
+
+test("releasing talk closes the microphone again and ends the audio stream", async () => {
+  const t = await started({ gate: false });
+  t.call.talk(true);
+  t.audio.frame(Int16Array.of(5));
+  t.call.talk(false);
+  t.audio.frame(Int16Array.of(6));
+  assert.deepEqual(t.live.sent, [{ audio: [5] }, { audioEnd: true }]);
+});
+
+test("while talk is held, a gate that is open stays open after the release", async () => {
+  const t = await started({ gate: false });
+  t.call.mic(true);
+  t.call.talk(true);
+  t.call.talk(false);
+  t.audio.frame(Int16Array.of(7));
+  assert.deepEqual(t.live.sent, [{ audio: [7] }]);
+});
+
+test("interrupt(text) empties the speaker and sends that text instead of the default one", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.interrupt("Repetă bucata.");
+  assert.deepEqual([t.audio.flushes, t.live.sent], [1, [{ text: "Repetă bucata." }]]);
+});
+
+test("the rest of a turn cut by interrupt(text) is dropped until the model reports a tool call", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.interrupt("Repetă bucata.");
+  t.live.emit({ type: "audio", pcm: Int16Array.of(2) });
+  t.live.emit({ type: "tool", name: "repeat_chunk", args: {}, result: {} });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(3) });
+  assert.deepEqual(t.audio.played, [[1], [3]]);
+});
+
+test("pause({ keep: true }) keeps the queue, stops the microphone and reports paused", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.pause({ keep: true });
+  t.audio.frame(Int16Array.of(2));
+  assert.deepEqual([t.audio.pauses, t.audio.flushes, t.live.sent, t.states().pop()], [1, 0, [], "paused"]);
+});
+
+test("audio from the model keeps being queued during a kept pause, without leaving the paused state", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.pause({ keep: true });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(2) });
+  t.live.emit({ type: "turnComplete" });
+  assert.deepEqual([t.audio.played, t.states().pop(), ofType(t, "spoken").length], [[[1], [2]], "paused", 0]);
+});
+
+test("resume after a kept pause plays on, shows speaking, and reports spoken when the queue drains", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "turnComplete" });
+  t.call.pause({ keep: true });
+  t.call.resume();
+  const during = t.states().pop();
+  t.audio.drain();
+  assert.deepEqual([t.audio.resumes, during, ofType(t, "spoken").length], [1, "speaking", 1]);
+});
+
+test("resume after a kept pause with nothing queued goes back to listening", async () => {
+  const t = await started();
+  t.call.pause({ keep: true });
+  t.call.resume();
+  assert.equal(t.states().pop(), "listening");
+});
+
+test("resume({ fresh: true }) throws away what was queued before playing on", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.pause({ keep: true });
+  t.call.resume({ fresh: true });
+  assert.deepEqual([t.audio.flushes, t.states().pop()], [1, "listening"]);
+});
+
+test("the plain pause still empties the speaker and drops the model's audio", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.call.pause();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(2) });
+  assert.deepEqual([t.audio.flushes, t.audio.pauses, t.audio.played, ofType(t, "spoken").length], [1, 0, [[1]], 0]);
+});
+
+test("a call that survives a network loss reports lost and pauses instead of ending", async () => {
+  const t = await started({ survive: true });
+  t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
+  t.audio.frame(Int16Array.of(1));
+  assert.deepEqual([ofType(t, "lost").length, ofType(t, "ended").length, t.audio.stopped, t.states().pop(), t.live.sent], [1, 0, false, "paused", []]);
+});
+
+test("a call that survives still ends for a refused key", async () => {
+  const t = await started({ survive: true });
+  t.live.emit({ type: "closed", reason: "auth", code: 1008, detail: "" });
+  assert.deepEqual(ofType(t, "ended"), [{ type: "ended", reason: "auth" }]);
+});
+
+test("resume after a loss opens a new session and reports reopened", async () => {
+  const t = await started({ survive: true });
+  t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
+  const ok = await t.call.resume();
+  t.audio.frame(Int16Array.of(4));
+  assert.deepEqual([ok, t.live.opens, ofType(t, "reopened").length, t.states().pop(), t.live.sent], [true, 2, 1, "listening", [{ audio: [4] }]]);
+});
+
+test("resume after a loss with the network still down reports lost again and stays paused", async () => {
+  const t = await started({ survive: true });
+  t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
+  t.live.failOpenOnce = "network";
+  const ok = await t.call.resume();
+  assert.deepEqual([ok, ofType(t, "lost").length, t.states().pop()], [false, 2, "paused"]);
+});
+
+test("a call that does not survive ends on a network loss, as before", async () => {
+  const t = await started();
+  t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
+  assert.deepEqual(ofType(t, "ended"), [{ type: "ended", reason: "network" }]);
+});
+
+test("spoken is not reported when speech that is already fully received is cut short while still playing", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "turnComplete" });
+  t.call.cut();
+  assert.equal(ofType(t, "spoken").length, 0);
+});
+
+test("talk(true) over fully received speech does not report spoken either", async () => {
+  const t = await started({ gate: false });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "turnComplete" });
+  t.call.talk(true);
+  assert.equal(ofType(t, "spoken").length, 0);
+});
+
+// ---- din code-review: restul unei ture se aruncă doar dacă tura mai e deschisă; eliberarea lui Vorbește contează și pe pauză ----
+
+test("talk(true) after the model's turn is complete does not drop the answer to the question", async () => {
+  const t = await started({ gate: false });
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "turnComplete" });
+  t.call.talk(true);
+  t.live.emit({ type: "audio", pcm: Int16Array.of(2) });
+  assert.deepEqual(t.audio.played, [[1], [2]]);
+});
+
+test("interrupt(text) after the model's turn is complete does not drop the model's next turn", async () => {
+  const t = await started();
+  t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.live.emit({ type: "turnComplete" });
+  t.call.interrupt("Repetă bucata.");
+  t.live.emit({ type: "audio", pcm: Int16Array.of(2) });
+  assert.deepEqual(t.audio.played, [[1], [2]]);
+});
+
+test("releasing talk while paused still closes the microphone gate", async () => {
+  const t = await started({ gate: false });
+  t.call.talk(true);
+  t.call.pause({ keep: true });
+  t.call.talk(false);
+  t.call.resume();
+  t.audio.frame(Int16Array.of(8));
+  assert.deepEqual(t.live.sent.filter(x => x.audio), []);
+});

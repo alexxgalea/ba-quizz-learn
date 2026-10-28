@@ -31,7 +31,8 @@ const Pcm = (() => {
   // Redare: fragmente Int16 la 24 kHz, programate unul după altul pe un context Web Audio.
   // `onPlaying(true)` la primul fragment după tăcere, `onPlaying(false)` când s-a terminat și ultimul sau după `flush`.
   function player(ctx, handlers) {
-    let next = 0;
+    let next = 0, held = false;
+    const quiet = p => { if (p && typeof p.catch === "function") p.catch(() => { /* contextul s-a închis între timp */ }); };
     const active = new Set();
     return {
       play(pcm) {
@@ -47,8 +48,13 @@ const Pcm = (() => {
         active.add(src);
         src.onended = () => { if (active.delete(src) && !active.size) handlers.onPlaying(false); };
       },
+      // Pauză: contextul îngheață, deci ce e în coadă rămâne programat și continuă exact din aceeași secundă la `resume`.
+      // Fragmentele care vin în pauză se așază după cele din coadă (`currentTime` stă pe loc).
+      pause() { if (!held) { held = true; quiet(ctx.suspend()); } },
+      resume() { if (held) { held = false; quiet(ctx.resume()); } },
       // Oprește imediat tot ce e programat. `stop()` declanșează și el `ended`, de aceea handlerele se scot întâi.
       flush() {
+        if (held) { held = false; quiet(ctx.resume()); }
         const was = Array.from(active);
         active.clear(); next = 0;
         for (const src of was) { src.onended = null; try { src.stop(); } catch (e) { /* oprit deja */ } }
@@ -57,7 +63,24 @@ const Pcm = (() => {
     };
   }
 
-  return { micFramer, player };
+  // Sunete scurte, discrete, generate: „window” = un ton de 880 Hz de 120 ms (se deschide fereastra de ascultare), „warn” = două tonuri joase (lecția a intrat pe pauză).
+  // Fiecare ton intră și iese pe o înfășurătoare, ca să nu pocnească.
+  function tone(kind, rate) {
+    const parts = kind === "warn" ? [[440, 0.16], [0, 0.08], [330, 0.2]] : [[880, 0.12]];
+    const amp = kind === "warn" ? 0.22 : 0.15, fade = 0.02;
+    const out = [];
+    for (const [hz, sec] of parts) {
+      const n = Math.round(sec * rate);
+      for (let i = 0; i < n; i++) {
+        const t = i / rate, env = Math.min(1, t / fade, (sec - t) / fade);
+        out.push(hz ? amp * Math.max(0, env) * Math.sin(2 * Math.PI * hz * t) : 0);
+      }
+    }
+    out[0] = 0; out[out.length - 1] = 0;
+    return Float32Array.from(out);
+  }
+
+  return { micFramer, player, tone };
 })();
 
 // Microfonul rulează într-un AudioWorklet (încărcat din Blob) care trimite blocuri de ~1024 de eșantioane.
@@ -115,10 +138,21 @@ const BrowserAudio = {
       if (ctx) { const c = ctx; ctx = null; try { await c.close(); } catch (e) { /* închis deja */ } }
     }
 
+    // Un sunet scurt (Pcm.tone) pe un tampon propriu; nu trece prin `speaker`, deci nu schimbă „se redă”.
+    function beep(kind) {
+      if (!ctx) return;                                    // dacă contextul tocmai se reia, sunetul pornește odată cu el
+      const tone = Pcm.tone(kind, 24000), buf = ctx.createBuffer(1, tone.length, 24000);
+      buf.copyToChannel(tone, 0);
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.connect(ctx.destination); src.start();
+    }
+
     return {
-      start, stop,
+      start, stop, beep,
       play: pcm => { if (speaker) speaker.play(pcm); },
       flush: () => { if (speaker) speaker.flush(); },
+      pause: () => { if (speaker) speaker.pause(); },
+      resume: () => { if (speaker) speaker.resume(); },
       async mics() {
         const all = await nav.mediaDevices.enumerateDevices();
         return all.filter(d => d.kind === "audioinput").map(d => ({ id: d.deviceId, label: d.label }));

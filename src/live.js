@@ -124,7 +124,7 @@ const GeminiLive = (() => {
         reconnecting = true; live = false;
         onEvent({ type: "reconnecting" });
         let last = info;
-        for (const ms of RETRY_MS) {
+        for (const ms of (cfg.retryMs || RETRY_MS)) {
           await sleep(ms);
           if (closed) return;
           const r = await connect();
@@ -143,6 +143,8 @@ const GeminiLive = (() => {
         return {
           audio: pcm => send({ realtimeInput: { audio: { data: toBase64(pcm), mimeType: "audio/pcm;rate=16000" } } }),
           text: text => send({ realtimeInput: { text } }),
+          // Microfonul s-a oprit (sau poarta lui s-a închis): serverul golește audio-ul păstrat și închide tura.
+          audioEnd: () => send({ realtimeInput: { audioStreamEnd: true } }),
           close() { finish({ reason: "user", code: 1000, detail: "" }); sock.close(1000); }
         };
       });
