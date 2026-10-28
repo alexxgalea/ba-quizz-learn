@@ -47,3 +47,17 @@ Aplicația de pregătire a lui Alex pentru interviul tehnic de la Onapsis (Softw
 - Jarvis (dialog vocal, tab-ul „Jarvis”, doar în PWA): `src/live.js` (GeminiLive), `audio.js` (Pcm pur + BrowserAudio), `call.js`, `jarvis.js`, plus `window.PrepApp` în `app.js` (`next`, `record`, `theory`, `summary`, `log`; `record` și `oralSave` împart `recordOral`). Fișierele `src/{live,audio,call,jarvis}.js` se concatenează înaintea lui `app.js` (`LIB_FILES` în `lib.mjs`) și se testează în Node (`tools/unit`, peste `tools/unit/fakes.mjs`). Spec și decizii: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Cheia Gemini: doar `localStorage` (`onapsis-gemini-v1`), nu intră în `S`, în export sau în brief. Testele de ecran folosesc `window.__jarvisFakes` (`tools/jarvis_fakes.js`). Modificările de logică se fac cu TDD (test la interfață, apoi cod); un modul nou are cusătura lui doar dacă există două adaptoare.
 - PWA: `node build.mjs` scrie și `dist/app` (index, manifest, iconițe din `src/pwa`, service worker). `npm run pages` îl copiază în `docs/app`, servit de GitHub Pages din ramura de lucru. Artifactul (`dist/pregatire-onapsis.html`) rămâne fără manifest și service worker.
 - „Întreabă despre asta” (`vAsk`, `askCtx`, `askSend`, `AskModel` în `src/app.js`; `src/ask.js`, `src/gemini_text.js`): întrebări deschise limitate la tema zonei de teorie, sub explicația grilei (`mcq:<id>`), în fișe (`sheet:<modul>`) și la goluri (`gap:<card>:<punct>`). Modelul răspunde JSON `{on_topic, answer}`; în afara temei ecranul arată o frază fixă, nu textul modelului. Sursa: `sample` (artifact), Gemini cu cheia Jarvis (PWA), DeepSeek ca rezervă. Starea e în `ui.ask` (același obiect la fiecare randare) și nu intră în `S`. Limite: 400 de caractere, 6 schimburi pe context.
+
+## Agent skills
+
+### Issue tracker
+
+Spec-urile și tichetele stau local, în `.scratch/<feature>/`, commit-uite și împinse pe ramura de lucru. Vezi `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Cele cinci roluri implicite (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), scrise ca linie `Status:` în fiecare tichet. Vezi `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: un `CONTEXT.md` și `docs/adr/` în rădăcină. Vezi `docs/agents/domain.md`.
