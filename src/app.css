@@ -557,7 +557,8 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 #jv-lesson .jv-stage .jv-warn { flex: 1; }
 .jv-chunk-card .jv-chunk { max-height: 34vh; overflow-y: auto; }
 #jv-lesson.is-mut .jv-chunk { max-height: 22vh; }
-#jv-lesson .jv-ctl { grid-template-columns: 1.3fr 1fr 1fr; }
+#jv-lesson .jv-ctl { grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 6px; }
+#jv-lesson .jv-ctl .btn { padding-inline: 2px; font-size: 15px; }
 #jv-lesson .jv-ctl .btn, #jv-lesson .jv-mutes .btn { min-height: 56px; font-size: 16px; }
 .jv-mutes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .jv-mutes .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }

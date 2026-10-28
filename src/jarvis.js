@@ -31,6 +31,7 @@ const Jarvis = (() => {
     repeat: "Repetă bucata curentă de la început: apelează repeat_chunk.",
     skip: "Alex a cerut să sari peste bucata asta: apelează next_chunk pentru bucata următoare.",
     again: "Alex a cerut să repeți: apelează repeat_chunk și explică bucata de la început.",
+    restart: "Alex a cerut să reiei lecția de la început: apelează next_chunk pentru prima bucată și începe din nou cu ideea principală.",
     back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi "
   };
 
@@ -402,6 +403,14 @@ const Jarvis = (() => {
       pause() { if (sess && sess.call) { if (lz) lessonPause(); else sess.call.pause(); } },
       resume() { if (sess && sess.call) return lz ? lessonResume() : sess.call.resume(); },
       // Lecția: Sari, Repetă, Mut și Vorbește (ținut apăsat). Butoanele fac același lucru ca vocea.
+      // Reset în lecție: poziția salvată revine la zero, iar modelul reia de la ideea principală (nu mai e „ascultat” nimic din ce a fost).
+      restart() {
+        if (!lz || !sess.call || lz.paused || lz.lost) return;
+        quiet();
+        env.app.lessonReset(lz.module);
+        lz.pos0 = 0; lz.idx = 0; lz.cur = null; lz.started = false; lz.redo = false;
+        sess.call.interrupt(MSG.restart); sync();
+      },
       skip: () => interruptWith(MSG.skip),
       repeat: () => interruptWith(MSG.again),
       talk: down => lessonTalk(down),

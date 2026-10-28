@@ -702,3 +702,45 @@ test("Sari and Repetă do the same housekeeping and differ only in what they ask
   t.jarvis.repeat();
   assert.deepEqual([/next_chunk/.test(skip), /repeat_chunk/.test(t.texts().at(-1)), t.audio.flushes], [true, true, 2]);
 });
+
+// ---------- Reset în lecție: de la început ----------
+
+test("Reset in the middle of a lesson sends the position back to zero and asks the model to begin again", async () => {
+  const t = await begin(setup());
+  await deliver(t); t.clock.advance(3100); await deliver(t);
+  t.jarvis.restart();
+  assert.deepEqual([t.app.pos.asyncio, t.app.resets, /next_chunk/.test(t.texts().at(-1)), /început/.test(t.texts().at(-1)), t.audio.flushes], [0, 1, true, true, 1]);
+});
+
+test("after Reset the model gets the main idea and the first chunk again", async () => {
+  const t = await begin(setup());
+  await deliver(t); t.clock.advance(3100); await deliver(t);
+  t.jarvis.restart();
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.n, r.text, r.intro.total, "recap" in r, t.state().lesson.n], [1, SHEET.points[0], 4, false, 1]);
+});
+
+test("Reset cancels the listening window, so the old move-on does not fire", async () => {
+  const t = await begin(setup());
+  await deliver(t);
+  t.jarvis.restart();
+  const n = t.texts().length;
+  t.clock.advance(10000);
+  assert.deepEqual([t.texts().length, t.state().lesson.status], [n, "idle"]);
+});
+
+test("a chunk heard after Reset moves the position from zero again", async () => {
+  const t = await begin(setup());
+  await deliver(t); t.clock.advance(3100); await deliver(t);
+  t.jarvis.restart();
+  await deliver(t);
+  assert.equal(t.app.pos.asyncio, 1);
+});
+
+test("Reset does nothing while the lesson is paused", async () => {
+  const t = await begin(setup());
+  await deliver(t);
+  t.jarvis.pause();
+  t.jarvis.restart();
+  assert.deepEqual([t.app.resets || 0, t.app.pos.asyncio], [0, 1]);
+});

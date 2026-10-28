@@ -150,5 +150,6 @@ export function stubApp(cards = [CARD_A, CARD_B]) {
   app.sheet = id => id === "asyncio" ? { module: "asyncio", name: "asyncio", lead: SHEET.lead, points: SHEET.points.slice(), avoid: SHEET.avoid.slice(), total: SHEET.points.length, pos: app.pos.asyncio || 0 } : id === "gil" ? { module: "gil", name: "GIL & threads", lead: "GIL-ul limitează paralelismul.", points: ["Un singur thread rulează bytecode.", "Procesele ocolesc GIL."], avoid: [], total: 2, pos: app.pos.gil || 0 } : null;
   app.lessonHeard = (id, n) => { app.pos[id] = Math.max(app.pos[id] || 0, n); };
   app.lessonDone = id => { app.pos[id] = 0; app.doneLessons.push(id); };
+  app.lessonReset = id => { app.pos[id] = 0; app.resets = (app.resets || 0) + 1; };
   return app;
 }

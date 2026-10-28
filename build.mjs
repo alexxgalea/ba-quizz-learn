@@ -33,7 +33,9 @@ const data = DATA_FILES.map(f => read("./src/" + f)).join("\n") +
   "\nwindow.PREP.kataCode = " + JSON.stringify(kataCode) + ";\n" +
   "window.PREP.expl = " + JSON.stringify(expl) + ";\n" +
   "window.PREP.gloss = " + JSON.stringify(gloss) + ";\n";
-const app = LIB_FILES.map(f => read("./src/" + f)).join("\n") + "\n" + read("./src/app.js");
+// „Versiunea” afișată în ecranul Jarvis: un hash scurt al codului, ca să se vadă pe telefon dacă rulează varianta nouă (service worker-ul poate ține una veche în cache).
+const appSrc = LIB_FILES.map(f => read("./src/" + f)).join("\n") + "\n" + read("./src/app.js");
+const app = appSrc.replace("__BUILD__", crypto.createHash("sha1").update(appSrc + data + read("./src/app.css")).digest("hex").slice(0, 7));
 
 for (const [name, js] of [["data", data], ["app", app]]) if (/<\/script/i.test(js)) throw new Error("</script inside " + name);
 

@@ -533,7 +533,7 @@
     study: { seg: "sheets", open: null, kata: null, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
-    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false },
+    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {}
   };
 
@@ -1660,7 +1660,7 @@
             (s.avoid ? '<div class="avoid"><b>De evitat la interviu</b>' + s.avoid.map(x => "<span>" + fmt(x) + "</span>").join("") + "</div>" : "") +
             '<div class="row">' + (nq ? '<button class="btn primary sm" data-a="mcq-mod" data-m="' + m.id + '">Grile (' + nq + ")</button>" : "") +
             (no ? '<button class="btn sm" data-a="oral-mod" data-m="' + m.id + '">Oral (' + no + ")</button>" : "") +
-            (IN_ARTIFACT ? "" : '<button class="btn sm" data-a="listen" data-m="' + m.id + '">Ascultă</button>') +
+            (IN_ARTIFACT ? '<a class="btn sm" data-lesson-link href="' + PWA_URL + '" target="_blank" rel="noopener">Ascultă în aplicație</a>' : '<button class="btn sm" data-a="listen" data-m="' + m.id + '">Ascultă</button>') +
             (s.page ? '<button class="btn sm" data-a="seg" data-seg="' + s.page + '">Deschide pagina</button>' : "") + "</div>" + vAsk("sheet:" + m.id) + "</div>";
         }
         h += "</details>";
@@ -1870,7 +1870,7 @@
     const a = b.dataset.a;
     switch (a) {
       case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-mics":
-      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-mute": jvAct(a, b); break;
+      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
@@ -2205,6 +2205,7 @@
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/app/";
+  const BUILD = "__BUILD__";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };
@@ -2240,7 +2241,7 @@
   const jvChip = r => '<span class="chip ' + (r.score >= 0.8 ? "ok" : r.score >= 0.5 ? "warn" : "bad") + '">' + esc(MOD[OBY[r.id].m].short) + " " + pc(r.score) + "%</span>";
 
   function vJarvis() {
-    if (IN_ARTIFACT) return '<div class="eyebrow">Jarvis · interviu vorbit</div><section class="card stack-s"><h2>Jarvis merge în aplicația de pe telefon</h2><p class="small">Aici, în artifact, microfonul și conexiunea către serverul vocal sunt blocate. Deschide aplicația instalabilă și vorbești cu Jarvis acolo, cu același progres.</p><a class="btn primary block" href="' + PWA_URL + '" target="_blank" rel="noopener">Deschide aplicația</a></section>';
+    if (IN_ARTIFACT) return '<div class="eyebrow">Jarvis · interviu vorbit</div><section class="card stack-s"><h2>Jarvis merge în aplicația de pe telefon</h2><p class="small">Aici, în artifact, microfonul și conexiunea către serverul vocal sunt blocate. Deschide aplicația instalabilă și vorbești cu Jarvis acolo, cu același progres.</p><p class="small">Tot acolo e și lecția: Jarvis îți explică o fișă cu voce tare, bucată cu bucată, de exemplu în metrou. Alegi modulul din tab-ul Jarvis sau apeși „Ascultă” pe o fișă.</p><a class="btn primary block" href="' + PWA_URL + '" target="_blank" rel="noopener">Deschide aplicația</a></section>';
     const J = jvInit(), st = J.getState();
     if (st.mode === "lesson" && st.lesson && st.phase !== "idle") return st.phase === "ended" ? vLessonEnded(st) : vLessonActive(st);
     return st.phase === "ended" ? vJarvisEnded(st) : st.phase === "idle" ? vJarvisHome(st, J.settings.get()) : vJarvisActive(st);
@@ -2268,7 +2269,8 @@
       '<label>Microfon<select class="keyin" data-jv="micId"><option value="">Implicit</option>' + ui.jv.mics.map(m => '<option value="' + esc(m.id) + '"' + (m.id === set.micId ? " selected" : "") + ">" + esc(m.label || "Microfon") + "</option>").join("") + "</select></label>" +
       '<button class="btn sm" data-a="jv-mics">Arată microfoanele</button></div></section>';
     const lesson = vLessonHome();
-    return h + (hasKey ? lesson + modes + topic + keyCard + settings : keyCard + lesson + modes + topic + settings);
+    const ver = '<p class="xs muted mono" id="jv-build">Versiune ' + BUILD + "</p>";
+    return h + (hasKey ? lesson + modes + topic + keyCard + settings : keyCard + lesson + modes + topic + settings) + ver;
   }
 
   // ---------- Lecție: Jarvis explică o fișă, bucată cu bucată (spec .scratch/lectie-live) ----------
@@ -2301,7 +2303,8 @@
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +
-      '<button class="btn" data-a="jv-repeat"' + (paused ? " disabled" : "") + '>Repetă</button><button class="btn" data-a="jv-skip"' + (paused ? " disabled" : "") + ">Sari</button></div>";
+      '<button class="btn" data-a="jv-repeat"' + (paused ? " disabled" : "") + '>Repetă</button><button class="btn" data-a="jv-skip"' + (paused ? " disabled" : "") + ">Sari</button>" +
+      '<button class="btn' + (ui.jv.rst ? " danger" : "") + '" data-a="jv-restart" aria-label="Resetează lecția: de la început"' + (paused ? " disabled" : "") + ">" + (ui.jv.rst ? "Sigur?" : "Reset") + "</button></div>";
     h += '<div class="jv-mutes"><button class="btn" data-a="jv-mute" aria-pressed="' + L.muted + '">Mut' + (L.muted ? " · pornit" : "") + '</button><button class="btn danger" data-a="jv-stop">Gata</button></div>';
     if (L.muted) h += '<button class="btn primary block jv-talk' + (ui.jv.holding ? " on" : "") + '" id="jv-talk" aria-pressed="' + !!ui.jv.holding + '">Vorbește<span class="xs">ține apăsat</span></button>';
     h += '<details class="card stack-s" id="jv-trd"><summary class="small">Transcriere</summary><div id="jv-tr" data-h="' + esc(jvTranscript(st)) + '">' + jvTranscript(st) + "</div></details></div>";
@@ -2352,6 +2355,10 @@
       case "jv-start": J.start({ mode: b.dataset.mode, module: b.dataset.mode === "topic" ? ui.jv.module : undefined }).catch(err => toast("Jarvis: " + ((err && err.message) || "eroare"))); break;
       case "jv-lesson": J.start({ mode: "lesson", module: b.dataset.m }).catch(err => toast("Jarvis: " + ((err && err.message) || "eroare"))); break;
       case "jv-lesson-reset": PrepApp.lessonReset(b.dataset.m); toast("Lecția „" + ((MOD[b.dataset.m] || {}).short || b.dataset.m) + "” revine la început"); render(); break;
+      case "jv-restart":
+        if (!ui.jv.rst) { ui.jv.rst = true; render(); setTimeout(() => { if (ui.jv.rst) { ui.jv.rst = false; if (ui.tab === "jarvis") render(); } }, 4000); }
+        else { ui.jv.rst = false; J.restart(); render(); toast("Lecția reîncepe de la început"); }
+        break;
       case "jv-repeat": J.repeat(); break;
       case "jv-skip": J.skip(); break;
       case "jv-mute": J.setMuted(!J.settings.get().muted); break;
