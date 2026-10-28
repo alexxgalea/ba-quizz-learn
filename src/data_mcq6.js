@@ -398,4 +398,98 @@ def get_alert():
       ctx: "Dependențele pot depinde la rândul lor de alte dependențe, deci aceeași dependență apare des de mai multe ori în același arbore.",
       e: "Implicit, o dependență e calculată o singură dată pe cerere și refolosită, deci toate primesc aceeași sesiune. Cu `Depends(get_db, use_cache=False)` ai fi primit sesiuni separate." }
   ]);
+  Q("frontend", [
+    { id: "fe-05", lvl: 1, q: "Pornești de la `n = 0`. Cât e `n` după un click?", code: R`const [n, setN] = useState(0);
+
+function onClick() {
+  setN(n + 1);
+  setN(n + 1);
+  setN(n + 1);
+}`, o: ["1", "3", "0", "Eroare: prea multe actualizări de state"],
+      ctx: "În React, o componentă e o funcție apelată la fiecare render. `useState` întoarce valoarea pentru render-ul curent și o funcție care cere un render nou.",
+      e: "`n` e 0 pe tot parcursul acestui render, deci toate trei apelurile cer `0 + 1`. Cu `setN(x => x + 1)` React aplică funcțiile pe rând și ajungi la 3." },
+    { id: "fe-06", lvl: 2, q: "Un `useEffect(() => { ... })` nu are array de dependențe. Când rulează?", o: [
+      "După fiecare render al componentei",
+      "O singură dată, după primul render",
+      "Doar când se schimbă props-urile",
+      "Înainte de fiecare render, ca să pregătească datele"],
+      ctx: "Al doilea argument al lui `useEffect` e lista de dependențe. Poate lipsi, poate fi `[]` sau poate conține valori din props și state.",
+      e: "Fără array, efectul rulează după fiecare commit. Cu `[]` rulează doar după primul render, iar cu `[a, b]` când se schimbă `a` sau `b`." },
+    { id: "fe-07", lvl: 2, q: "În dev, un `useEffect` cu `[]` se execută de două ori la mount. De ce?", o: [
+      "Strict Mode face un ciclu setup → cleanup → setup în plus, ca să verifice cleanup-ul",
+      "Părintele montează componenta de două ori, deci e un bug în aplicație",
+      "React randează mereu de două ori, și în producție",
+      "Lipsește `key` pe componentă, iar React o recreează"],
+      ctx: "Aplicațiile create cu Vite sau Next.js pornesc cu `<StrictMode>` în jurul aplicației. Strict Mode adaugă verificări doar în development.",
+      e: "Strict Mode simulează un unmount și un mount imediat după primul mount. Un efect cu cleanup corect nu se vede deloc; unul fără cleanup (interval, subscribe) se dublează." },
+    { id: "fe-08", lvl: 2, q: "Userul tastează repede în căutare. Ce poate merge prost?", code: R`useEffect(() => {
+  fetch("/api/alerts?q=" + q)
+    .then(r => r.json())
+    .then(setAlerts);
+}, [q]);`, o: [
+      "Un răspuns vechi sosește ultimul și suprascrie rezultatul corect",
+      "Fetch-ul rulează o singură dată, după primul render",
+      "React anulează singur request-urile vechi, deci nimic",
+      "`[q]` garantează că răspunsurile vin în ordinea cererilor"],
+      ctx: "La fiecare literă `q` se schimbă, deci efectul pornește un request nou. Rețeaua nu garantează ordinea răspunsurilor.",
+      e: "Cererile pentru „ad” și „adm” pot reveni în orice ordine. Fără cleanup, ultimul care sosește câștigă. Rezolvi cu un flag `ignore` în cleanup, cu `AbortController` sau cu TanStack Query." },
+    { id: "fe-09", lvl: 1, q: "Vrei să verifici că mesajul de eroare NU apare. Ce query din Testing Library folosești?", o: [
+      "`queryByText`: întoarce `null` dacă nu găsește",
+      "`getByText`: întoarce `null` dacă nu găsește",
+      "`findByText`: așteaptă, apoi întoarce `null`",
+      "`getAllByText`: întoarce o listă goală"],
+      ctx: "Testing Library are trei familii de query-uri: `getBy`, `queryBy` și `findBy`, fiecare cu varianta `All`. Diferă prin ce fac când elementul lipsește.",
+      e: "`getBy` și `getAllBy` aruncă excepție dacă nu găsesc nimic, iar `findBy` întoarce un Promise care eșuează după timeout. Pentru „nu există” folosești `queryBy`." },
+    { id: "fe-10", lvl: 2, q: "Ce tip dai rezultatului `await res.json()` dintr-un API extern?", o: [
+      "`unknown`: te obligă să verifici forma înainte s-o folosești",
+      "`any`: e mai sigur, pentru că acceptă orice formă",
+      "`unknown`: TypeScript verifică forma la runtime",
+      "Oricare: `any` și `unknown` se comportă identic"],
+      ctx: "`res.json()` întoarce date pe care compilatorul nu le cunoaște. TypeScript are două tipuri „orice”: `any` și `unknown`.",
+      e: "Cu `any` compilatorul te lasă să faci orice, deci greșelile ajung la runtime. Cu `unknown` nu poți folosi valoarea până nu o îngustezi (verificare manuală, type guard sau zod)." },
+    { id: "fe-11", lvl: 3, q: "Ce face `const n: never = x` în ramura `default`?", code: R`type State =
+  | { s: "loading" }
+  | { s: "error"; msg: string }
+  | { s: "ok"; data: Alert[] };
+
+function label(x: State) {
+  switch (x.s) {
+    case "loading": return "…";
+    case "ok": return "OK";
+    default: {
+      const n: never = x;
+      return n;
+    }
+  }
+}`, o: [
+      "Dă eroare la compilare: cazul `error` nu e tratat",
+      "Aruncă excepție la runtime când `s` e `error`",
+      "Nimic: compilatorul ignoră tipul `never`",
+      "Transformă `x` în `null` pentru cazurile netratate"],
+      ctx: "`State` e un union discriminat: câmpul comun `s` spune care variantă e. În fiecare `case`, TypeScript îngustează tipul lui `x`.",
+      e: "După `loading` și `ok`, în `default` a rămas `{ s: \"error\" }`, care nu se poate atribui lui `never`. Compilarea pică, deci afli de cazul uitat înainte de rulare." },
+    { id: "fe-12", lvl: 2, q: "Un SPA React se autentifică la Keycloak. Ce flux e recomandat azi?", o: [
+      "Authorization Code cu PKCE, sau un BFF care ține tokenurile pe server",
+      "Implicit grant: tokenul vine direct în URL, fără server",
+      "Password grant: SPA-ul trimite parola userului la Keycloak",
+      "Client Credentials, cu secretul clientului în bundle-ul JS"],
+      ctx: "Un SPA e un client public: tot codul lui ajunge în browser, deci nu poate păstra un secret. OAuth 2.0 are mai multe fluxuri (grant types).",
+      e: "RFC 9700 cere PKCE pentru clienții publici și descurajează implicit grant. RFC 10017 (2026) pune BFF-ul primul ca securitate: tokenurile nu ajung deloc în browser." },
+    { id: "fe-13", lvl: 2, q: "API-ul răspunde cu `Access-Control-Allow-Origin: *`, iar frontendul face `fetch(url, { credentials: \"include\" })`. Ce se întâmplă?", o: [
+      "Browserul blochează răspunsul: cu credentials, originea trebuie numită explicit",
+      "Merge: `*` acceptă orice origine, inclusiv cu cookies",
+      "Serverul respinge cererea cu 401",
+      "Cookie-urile ajung la server, dar body-ul răspunsului e gol"],
+      ctx: "Frontendul (`app.example.com`) și API-ul (`api.example.com`) au origini diferite. Browserul aplică CORS: citești răspunsul doar dacă serverul permite explicit originea ta.",
+      e: "Pentru cereri cu credentials, `*` nu e acceptat. Serverul trebuie să întoarcă originea exactă și `Access-Control-Allow-Credentials: true`. Blocajul e în browser, nu pe server." },
+    { id: "fe-14", lvl: 3, q: "`fetchB` respinge după 100 ms; `fetchA` și `fetchC` durează 2 s. Ce se întâmplă?", code: R`const r = await Promise.all([
+  fetchA(), fetchB(), fetchC(),
+]);`, o: [
+      "`await` aruncă după ~100 ms; A și C continuă să ruleze",
+      "`await` aruncă după 2 s, când s-au terminat toate",
+      "A și C sunt anulate automat la eșecul lui B",
+      "`r` conține două rezultate și eroarea lui B"],
+      ctx: "`Promise.all` așteaptă mai multe promisiuni în paralel. Există și `Promise.allSettled`, care nu respinge niciodată.",
+      e: "`Promise.all` respinge la primul eșec, dar o promisiune nu se poate anula, deci A și C își termină treaba. Ca să aștepți toate rezultatele, folosești `allSettled`; ca să le oprești, `AbortController`." }
+  ]);
 })(window.PREP);

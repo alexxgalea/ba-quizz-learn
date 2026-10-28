@@ -361,6 +361,30 @@
       "Refactoring sigur, autocomplete, onboarding mai ușor",
       "Migrare incrementală (allowJs), strict activat treptat",
       "Tipurile dispar la runtime → validare la granițe"],
-      model: "În primul rând pentru siguranță la scară: compilatorul prinde clase întregi de bug-uri — proprietăți undefined, argumente de formă greșită — înainte să ajungă în producție. Tipurile documentează și contractul dintre frontend și API, mai ales când sunt generate din schema OpenAPI sau GraphQL, și fac refactoring-ul și onboarding-ul mult mai ușoare. Aș migra incremental, cu `allowJs`, și aș strânge treptat modul strict, ținând minte că tipurile dispar la runtime, deci datele externe tot trebuie validate." }
+      model: "În primul rând pentru siguranță la scară: compilatorul prinde clase întregi de bug-uri — proprietăți undefined, argumente de formă greșită — înainte să ajungă în producție. Tipurile documentează și contractul dintre frontend și API, mai ales când sunt generate din schema OpenAPI sau GraphQL, și fac refactoring-ul și onboarding-ul mult mai ușoare. Aș migra incremental, cu `allowJs`, și aș strânge treptat modul strict, ținând minte că tipurile dispar la runtime, deci datele externe tot trebuie validate." },
+    { id: "o-fe-3", q: "Construiești în React pagina de alerte: listă cu filtre, paginare și alerte noi în timp real. Cum o structurezi?", k: [
+      "Starea de server separată de starea de UI: TanStack Query pentru date, `useState` sau URL pentru filtre",
+      "Filtrele și pagina în query string: link-uri partajabile, back/forward merg",
+      "Paginare cu cursor din API, `queryKey` care include filtrele, debounce la căutare",
+      "Timp real: WebSocket sau SSE care invalidează sau actualizează cache-ul, cu cleanup la unmount",
+      "Stări explicite: loading, error, empty, ok (union discriminat); liste lungi virtualizate",
+      "Tipurile generate din OpenAPI-ul backendului; teste RTL + MSW pe filtre și stări"],
+      model: "Separ starea de server de starea de UI. Datele vin prin TanStack Query, cu un `queryKey` care conține filtrele și cursorul, așa că am cache, retry și refetch fără cod scris de mână. Filtrele și pagina le țin în query string, ca un analist să poată trimite link-ul exact și ca butonul Back să meargă. La căutarea text pun debounce. Pentru alerte noi deschid un WebSocket sau SSE într-un effect cu cleanup, iar la fiecare eveniment actualizez cache-ul sau îl invalidez, în loc să țin o a doua copie a listei. Componenta de listă primește o stare discriminată: loading, error, empty sau ok, ca să nu pot afișa date și eroare simultan. Dacă lista poate avea mii de rânduri, o virtualizez. Tipurile le generez din OpenAPI-ul FastAPI. Testez cu React Testing Library și MSW: schimb un filtru și verific cererea și rândurile afișate, plus stările de eroare și listă goală." },
+    { id: "o-fe-4", q: "Cum ai testa o pagină React care listează alertele din API, cu filtrare și paginare?", k: [
+      "Teste de componentă cu React Testing Library: ce vede și ce face userul (`getByRole`, `user-event`)",
+      "Rețeaua mock-uită cu MSW, nu funcții interne mock-uite",
+      "Cazuri: loading, eroare, listă goală, filtru aplicat, pagina următoare",
+      "`findBy` pentru ce apare după fetch, `queryBy` pentru ce trebuie să lipsească",
+      "Câteva teste E2E Playwright doar pe fluxul critic, cu aserții care reîncearcă",
+      "Contractul cu backendul: tipuri generate din OpenAPI sau contract tests"],
+      model: "Pun majoritatea testelor la nivel de componentă, cu React Testing Library: randez pagina, schimb filtrul cu `user-event` și verific ce vede userul, prin query-uri după rol. Rețeaua o simulez cu MSW, la nivel de request, deci testul nu depinde de cum e scris hook-ul intern. Acopăr stările: loading, eroare de la server, listă goală, filtru aplicat și trecerea la pagina următoare. Pentru ce apare după fetch folosesc `findBy`, iar pentru ce trebuie să lipsească, `queryBy`. Peste ele pun puține teste Playwright, doar pe fluxul critic, cu backend real sau de test și cu aserții care reîncearcă, fără `sleep`. Ca frontendul și backendul să nu se despartă, generez tipurile din OpenAPI-ul FastAPI și îl verific în CI." },
+    { id: "o-fe-5", q: "Cum gestionezi autentificarea cu Keycloak într-un SPA React?", k: [
+      "SPA-ul e client public: fără secret, Authorization Code + PKCE (S256)",
+      "Tokenul ținut în memorie, nu în `localStorage`; refresh înainte de expirare (`updateToken`)",
+      "API-ul validează JWT-ul: semnătura (JWKS), `iss`, `aud`, `exp`; rolurile se verifică pe server",
+      "UI-ul ascunde butoane după roluri doar pentru UX, nu pentru securitate",
+      "Pentru aplicații de business: BFF, cu tokenurile pe server și cookie `HttpOnly` (RFC 10017)",
+      "Logout: închizi și sesiunea Keycloak, nu doar starea din React"],
+      model: "SPA-ul e un client public, deci nu are secret. Folosesc Authorization Code cu PKCE, prin adaptorul JS Keycloak, cu `pkceMethod: \"S256\"`. Tokenul stă în memorie, nu în `localStorage`, unde l-ar putea citi orice XSS, și îl reîmprospătez cu `updateToken` înainte să expire. Pe fiecare request trimit access token-ul, iar API-ul validează semnătura prin JWKS, emitentul, audiența și expirarea, apoi verifică rolurile. În UI ascund butoanele după rol doar pentru experiență, nu ca protecție. Pentru o aplicație de securitate aș merge mai departe, cu un BFF: backendul face fluxul OAuth și ține tokenurile, iar browserul primește doar un cookie `HttpOnly`. Așa recomandă RFC 10017 pentru aplicații de business. Am integrat Keycloak în proiectele mele, deci știu și partea de configurare: clientul, redirect URI-urile exacte și maparea rolurilor." }
   ]);
 })(window.PREP);

@@ -28,9 +28,9 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
     { id: "behav", code: "BEH", name: "Comportamental: pitch, motivație, povești", short: "Comportamental", p: 3, src: "Onapsis" },
     { id: "dbmodels", code: "DBM", name: "Relațional vs nerelațional", short: "SQL vs NoSQL", p: 4, src: "Lacună Lateral" },
     { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 4, src: "Onapsis" },
-    { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 4, src: "Onapsis" },
+    { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 3, src: "Anunț" },
     { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 4, src: "Experiența ta" },
-    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 4, src: "Bonus Lateral" }
+    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 1, src: "Anunț + panel FE" }
   ];
 
 
@@ -365,21 +365,30 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       ]
     },
     frontend: {
-      lead: "Bonus: React/TS nu sunt în stack-ul Onapsis. Le reiei doar dacă rămâne timp.",
+      lead: "În panel e un inginer de frontend, iar anunțul cere „React and modern frontend development standards”. Aici contează modelul de randare, nu sintaxa.",
       points: [
-        "TS: tipare statică, erori la compilare, contracte cu API-ul, refactoring sigur; dispare la runtime → validezi datele externe.",
-        "Props (de la părinte, read-only) vs state (local; setState re-randează componenta și copiii).",
-        "Context: la schimbarea valorii se re-randează toți consumatorii → memoizezi valoarea, împarți contextul.",
-        "`key` stabil în liste (nu indexul când lista se reordonează); `useEffect` cu dependențe complete și cleanup.",
-        "TanStack Query: `staleTime` (cât timp datele sunt proaspete) vs `gcTime` (cât stau în cache nefolosite)."
-      ]
+        "State e un snapshot al render-ului: trei `setN(n + 1)` la rând dau +1, iar `setN(x => x + 1)` de trei ori dă +3. React aplică actualizările după ce se termină handlerul (batching).",
+        "Regulile hooks: le apelezi doar la nivelul de sus al unei componente sau al unui custom hook, nu în bucle, condiții sau după un `return` timpuriu. React le identifică după ordinea apelurilor.",
+        "`useEffect` fără array rulează după fiecare render, cu `[]` doar după primul, cu dependențe când se schimbă una. Cleanup-ul rulează înaintea următorului efect și la unmount.",
+        "În dev, Strict Mode face un ciclu setup → cleanup → setup în plus, ca să verifice cleanup-ul. Un `setInterval` sau un subscribe fără cleanup se vede imediat.",
+        "Un effect e pentru sincronizare cu un sistem extern (rețea, DOM, socket). Ce se poate calcula din props și state calculezi direct în render.",
+        "Fetch în effect: un flag `ignore` setat în cleanup (sau `AbortController`), altfel un răspuns vechi poate suprascrie unul nou. În practică folosești TanStack Query.",
+        "TanStack Query: `staleTime` (implicit 0) = cât datele sunt proaspete; `gcTime` (implicit 5 min) = cât stau în cache nefolosite. Refetch la mount, focus și reconectare, 3 retry-uri.",
+        "`key` stabil și unic între frați, luat din date. Indexul mută starea pe alt rând la reordonare; `Math.random()` recreează elementele la fiecare render.",
+        "Memoizare: React Compiler 1.0 (oct. 2025) memoizează automat; `useMemo`, `useCallback` și `memo` rămân pentru cazuri speciale. Întâi măsori cu React DevTools Profiler.",
+        "TS: `unknown` pentru date externe (te obligă să verifici), union-uri discriminate și `never` pentru un `switch` exhaustiv. Tipurile dispar la runtime: validezi la graniță (zod) sau generezi tipurile din OpenAPI-ul FastAPI.",
+        "Testing Library testează ce vede userul (`getByRole`). `getBy` aruncă dacă lipsește, `queryBy` dă `null`, `findBy` așteaptă. `user-event` pentru interacțiuni, MSW pentru rețea, Playwright pentru fluxurile E2E.",
+        "Securitate: JSX escapează textul, dar `dangerouslySetInnerHTML` cu date nesigure e XSS. Cu `credentials`, CORS nu acceptă `Access-Control-Allow-Origin: *`. OAuth în SPA: Authorization Code + PKCE; RFC 10017 (2026) recomandă BFF pentru aplicații de business.",
+        "JS are un singur thread cu event loop: promisiunile (microtasks) rulează înaintea timerelor (tasks). `Promise.all` respinge la primul eșec, dar nu oprește restul (ca `gather`); `allSettled` le așteaptă pe toate."
+      ],
+      avoid: ["„Calculez datele derivate într-un `useEffect`.”", "„TypeScript validează răspunsul de la API.”", "„Indexul e un `key` bun pentru orice listă.”"]
     }
   };
 
   // ---------- interviu & plan ----------
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
-  P.cfg = { interview: "2026-11-03", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
+  P.cfg = { interview: "2026-11-03", hours: 2.5, company: "Onapsis", role: "SDET III – Python & JavaScript · Onapsis" };
   // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou

@@ -356,4 +356,26 @@ def test_notify(m):
       "API-ul răspunde 202 + id pentru joburi lungi; starea se citește separat"],
       model: "Aleg după cât de grav e să pierd lucrul și cât durează. `BackgroundTasks` rulează după răspuns, în același proces, fără coadă și fără retry, deci îl folosesc doar pentru lucruri mici, pe care le pot pierde, cum ar fi un log secundar. `asyncio.create_task` e pentru concurență în interiorul procesului, cu condiția să păstrez referința la task, să-i tratez erorile și să-l anulez la oprire. Pentru tot ce contează, o alertă sau o scanare lungă, folosesc Celery cu RabbitMQ: coadă durabilă, retry, workeri separați pe care îi scalez independent, cu procesare idempotentă. Pentru joburile lungi, API-ul răspunde 202 cu un id, iar starea se citește separat." }
   ]);
+  O("frontend", [
+    { id: "o-snp-fe1", q: "Ce probleme are componenta și cum ai rescrie-o?", code: R`function AlertCount({ tenant }) {
+  const [n, setN] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetch("/api/count?t=" + tenant)
+        .then(r => r.json())
+        .then(d => setN(d.n));
+    }, 5000);
+  }, []);
+
+  return <b>{n}</b>;
+}`, k: [
+      "Lipsește cleanup-ul: intervalul rămâne după unmount (și se dublează în Strict Mode); `return () => clearInterval(id)`",
+      "Dependența `tenant` lipsește: la schimbarea tenantului se interoghează în continuare cel vechi (closure învechit)",
+      "Nu se verifică `r.ok` și nu se tratează erorile: un 500 dă `d.n` undefined sau o promisiune respinsă",
+      "Răspunsurile pot sosi după unmount sau în altă ordine: `AbortController` sau un flag în cleanup",
+      "Mai simplu: TanStack Query cu `refetchInterval` și `queryKey: [\"count\", tenant]`, sau push prin WebSocket/SSE",
+      "Test: fake timers + MSW; schimbi prop-ul `tenant` și verifici URL-ul cererii; unmount și verifici că nu mai pleacă cereri"],
+      model: "Am trei probleme. Prima: efectul nu are cleanup, deci intervalul continuă după unmount, iar în Strict Mode am două intervale. Adaug `return () => clearInterval(id)`. A doua: efectul folosește `tenant`, dar array-ul de dependențe e gol, deci closure-ul rămâne cu primul tenant; dacă userul schimbă tenantul, afișez în continuare numărul celui vechi. Pun `[tenant]`, iar cleanup-ul oprește intervalul vechi. A treia: nu verific `r.ok` și nu tratez erorile, iar un răspuns poate sosi după unmount sau după ce s-a schimbat tenantul; folosesc un `AbortController` anulat în cleanup. În practică aș înlocui totul cu TanStack Query: `useQuery` cu cheia `[\"count\", tenant]` și `refetchInterval: 5000`, care rezolvă cache-ul, erorile și anularea. Dacă numărul trebuie să fie în timp real, aș trece pe WebSocket sau SSE. Testez cu fake timers și MSW: avansez timpul, schimb prop-ul `tenant` și verific URL-ul cererii, apoi fac unmount și verific că nu mai pleacă nicio cerere." }
+  ]);
 })(window.PREP);

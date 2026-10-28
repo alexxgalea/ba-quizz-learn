@@ -117,7 +117,7 @@ Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` 
 
 ## Proba tehnică: snippet-uri, design, interviu simulat
 
-După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` (threading), `asyncio`, `python` (generatori), `oop`, `pytest`, `asgi` (FastAPI), `design`; NoSQL (`dbmodels`) e Bonus.
+După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` (threading), `asyncio`, `python` (generatori), `oop`, `pytest`, `asgi` (FastAPI), `design`; NoSQL (`dbmodels`) e Bonus. Sesiunea tehnică din 3 noiembrie are un inginer de backend și unul de frontend, cu live coding pe CoderPad, deci și `frontend` (React/TS) e P1, iar `graphql` a urcat la P3 (anunțul cere REST și GraphQL).
 
 - **Snippet-uri orale** (`src/data_oral2.js`, câmpul `code`): vezi codul sub întrebare, spui ce e greșit, ce se întâmplă sub încărcare, cum ai repara și cum ai testa. Codul intră în promptul intervievatorului și al verificării. Rânduri de cel mult 38 de caractere (verificat de `validate.mjs`), cod la 11 px pe card.
 - **Scenarii de design** (modulul `design`): intervievatorul cere clarificări, trade-off-uri, puncte de eșec și scalare și pune până la 3 întrebări de continuare. Verdictul tratează punctele cheie ca criterii de raționament.
