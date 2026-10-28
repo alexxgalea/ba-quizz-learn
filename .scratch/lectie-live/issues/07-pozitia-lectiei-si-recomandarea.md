@@ -19,3 +19,5 @@
 ## Comments
 
 Implementat. `S.l[modul] = { n, d, t }` (în `MAPS`, deci se îmbină și se șterge la reset ca restul), `PrepApp.sheet` / `lessonHeard` / `lessonDone` / `lessonRec`, butonul `#jv-rec` și lista modulelor în tab-ul Jarvis. Poziția = bucata ascultată cel mai departe: o bucată sărită nu se numără, iar una ascultată după ea mută poziția. Testele: `tools/test_lesson.py` (aplicația) și `tools/unit/lesson.test.mjs` (recapitularea la reluare).
+
+Adăugat la cererea lui Alex: resetarea poziției (`PrepApp.lessonReset`; „Resetează lecția” sub butonul recomandat și „Resetează” în lista modulelor, doar pentru lecții începute). Păstrează data ultimei terminări și nu pornește lecția.

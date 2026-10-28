@@ -541,6 +541,10 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-rec-t { font: 700 17px/1.2 var(--font-display); }
 .jv-rec-s { font-size: 14px; font-weight: 500; opacity: .9; }
 .jv-lessons > summary { cursor: pointer; padding: 6px 0; color: var(--accent); }
+.jv-lrow { display: flex; gap: 6px; align-items: stretch; }
+.jv-lrow .modrow { flex: 1; min-width: 0; }
+.jv-lrow .btn { flex: none; }
+#jv-rec-reset { align-self: flex-start; }
 .jv-chunk-card { gap: 10px; }
 .jv-pos { font-size: 15px; font-weight: 700; color: var(--accent); }
 .jv-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }

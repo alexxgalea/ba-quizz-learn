@@ -35,7 +35,7 @@ async def app_logic(b):
     mods = await ev(pg, MODS)
     total = {m["id"]: m["n"] for m in mods}
 
-    check("PrepApp exposes the lesson methods", await ev(pg, "['sheet','lessonHeard','lessonDone','lessonRec'].every(m => typeof window.PrepApp[m] === 'function')"))
+    check("PrepApp exposes the lesson methods", await ev(pg, "['sheet','lessonHeard','lessonDone','lessonRec','lessonReset'].every(m => typeof window.PrepApp[m] === 'function')"))
 
     sh = await ev(pg, "window.PrepApp.sheet('asyncio')")
     pts = await ev(pg, "window.PREP.sheets.asyncio")
@@ -49,6 +49,18 @@ async def app_logic(b):
     l = await ev(pg, "window.__prep.state().l.asyncio")
     check("the position advances to the chunk heard and never goes back", l["n"] == 3 and l["t"] > 0, l)
     check("sheet reports the saved position", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 3)
+    # --- resetarea poziției
+    await ev(pg, "window.PrepApp.lessonDone('asyncio')")
+    done_at = (await ev(pg, "window.__prep.state().l.asyncio")).get("d")
+    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 3)")
+    await ev(pg, "window.PrepApp.lessonReset('asyncio')")
+    r = await ev(pg, "window.__prep.state().l.asyncio")
+    check("resetting a lesson puts the position back to zero and keeps the date of the last finish", r["n"] == 0 and r.get("d") == done_at and r["t"] > 0, r)
+    check("after a reset the lesson is no longer a started one", (await ev(pg, "window.PrepApp.lessonRec()"))["why"] == "need" and (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0)
+    newer = await ev(pg, """() => { const T = window.__prep, a = T.normalize({ l: { gil: { n: 0, t: 900 } } }), b = T.normalize({ l: { gil: { n: 5, t: 300 } } }); return T.mergeState(a, b).state.l.gil.n; }""")
+    check("a reset on one device beats an older position from another", newer == 0, newer)
+    await ev(pg, "window.PrepApp.lessonReset('nu-exista')")
+    check("resetting an unknown module changes nothing", "nu-exista" not in await ev(pg, "window.__prep.state().l"))
     await ev(pg, "window.PrepApp.lessonDone('asyncio')")
     l = await ev(pg, "window.__prep.state().l.asyncio")
     check("finishing the sheet puts the position back to zero and notes the date", l["n"] == 0 and l["d"] > 0, l)
@@ -140,6 +152,21 @@ async def screens(b, scheme):
     rec = await ev(pg, "window.PrepApp.lessonRec()")
     n = (await ev(pg, "window.PrepApp.sheet('asyncio')"))["total"]
     check(tag + "a started lesson turns the button into Continuă, with n/total", "Continuă asyncio, 4/" + str(n) in (await text(pg, "#jv-rec")).replace("\n", " "), await text(pg, "#jv-rec"))
+
+    # --- resetarea din ecran
+    check(tag + "a started lesson offers Resetează lecția under the recommended button and a Resetează in its row", await pg.locator("#jv-rec-reset").count() == 1 and await pg.locator('.jv-lessons [data-a="jv-lesson-reset"][data-m="asyncio"]').count() == 1)
+    check(tag + "only started lessons have a reset", await pg.locator('.jv-lessons [data-a="jv-lesson-reset"]').count() == 1)
+    await pg.screenshot(path=str(SHOTS / f"lesson_home_started_{scheme}.png"))
+    await pg.click("#jv-rec-reset"); await pg.wait_for_timeout(150)
+    check(tag + "the reset sends the lesson back to the start and the buttons go away", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0 and await pg.locator("#jv-rec-reset").count() == 0 and "Continuă asyncio" not in await text(pg, "main") and await pg.locator('[data-a="jv-lesson-reset"]').count() == 0)
+    check(tag + "the reset does not start a lesson", await ev(pg, f"{CTL}.live.cfg") is None)
+    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 4)")
+    await pg.click('.tab[data-tab="progress"]'); await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
+    await pg.click('.jv-lessons summary'); await pg.click('.jv-lessons [data-a="jv-lesson-reset"][data-m="asyncio"]'); await pg.wait_for_timeout(150)
+    check(tag + "the reset in the module list works too", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0)
+    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 4)")
+    await pg.click('.tab[data-tab="progress"]'); await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
+    await pg.wait_for_function("(() => { const t = document.getElementById('toast'); return !t || t.hidden; })()")      # toast-ul „revine la început” stă 2,4 s peste butoane
 
     # --- pornirea din fișă, cu poziția salvată
     await pg.click('.tab[data-tab="study"]'); await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)

@@ -1870,7 +1870,7 @@
     const a = b.dataset.a;
     switch (a) {
       case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-mics":
-      case "jv-lesson": case "jv-repeat": case "jv-skip": case "jv-mute": jvAct(a, b); break;
+      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-mute": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
@@ -2077,6 +2077,13 @@
       if (k > (e.n || 0)) { S.l[id] = Object.assign({}, e, { n: k, t: now() }); commit(); }
     },
     lessonDone(id) { S.l[id] = { n: 0, d: now(), t: now() }; commit(); },
+    // Resetarea: lecția revine la început, dar data ultimei terminări rămâne (recomandarea o folosește). `t` mai nou face ca resetarea să câștige la îmbinare.
+    lessonReset(id) {
+      if (!P.sheets[id]) return;
+      const e = S.l[id] || {};
+      S.l[id] = Object.assign({ n: 0, t: now() }, e.d ? { d: e.d } : {});
+      commit();
+    },
     // Întâi lecția începută (cea mai recentă); altfel modulul cu cea mai mare nevoie dintre cele neterminate în ultimele 2 zile, fără Bonus și fără comportamental.
     // Lecția ascultată nu schimbă nevoia, de aceea excluderea de 2 zile.
     lessonRec() {
@@ -2273,8 +2280,10 @@
     const mods = MODS.filter(m => P.sheets[m.id] && P.sheets[m.id].points && P.sheets[m.id].points.length);
     let h = '<section class="card stack-s"><h3>Lecție</h3><p class="small muted">Jarvis îți explică fișa unui modul cu voce tare, bucată cu bucată. Tu doar asculți. O poți opri sau poți întreba oricând.</p>' +
       '<button class="btn primary block jv-rec" id="jv-rec" data-a="jv-lesson" data-m="' + rec.module + '"><span class="jv-rec-t">Ascultă lecția recomandată</span><span class="jv-rec-s">' + esc(sub) + "</span></button>" +
+      (rec.pos > 0 ? '<button class="btn sm ghost" id="jv-rec-reset" data-a="jv-lesson-reset" data-m="' + rec.module + '">Resetează lecția</button>' : "") +
       '<details class="jv-lessons"><summary class="small">Alege altă temă (' + mods.length + ")</summary><div class=\"stack-s\" style=\"margin-top:8px\">" +
-      mods.map(m => { const l = S.l[m.id] || {}, n = m.id && P.sheets[m.id].points.length; return '<button class="modrow" data-a="jv-lesson" data-m="' + m.id + '"><span class="chip">' + m.code + '</span><span class="nm">' + esc(m.short) + '</span><span class="st">' + (l.n > 0 ? l.n + "/" + n : n + " idei") + "</span></button>"; }).join("") +
+      mods.map(m => { const l = S.l[m.id] || {}, n = m.id && P.sheets[m.id].points.length; return '<div class="jv-lrow"><button class="modrow" data-a="jv-lesson" data-m="' + m.id + '"><span class="chip">' + m.code + '</span><span class="nm">' + esc(m.short) + '</span><span class="st">' + (l.n > 0 ? l.n + "/" + n : n + " idei") + "</span></button>" +
+        (l.n > 0 ? '<button class="btn sm" data-a="jv-lesson-reset" data-m="' + m.id + '" aria-label="Resetează lecția ' + esc(m.short) + '">Resetează</button>' : "") + "</div>"; }).join("") +
       "</div></details></section>";
     return h;
   }
@@ -2342,6 +2351,7 @@
     switch (a) {
       case "jv-start": J.start({ mode: b.dataset.mode, module: b.dataset.mode === "topic" ? ui.jv.module : undefined }).catch(err => toast("Jarvis: " + ((err && err.message) || "eroare"))); break;
       case "jv-lesson": J.start({ mode: "lesson", module: b.dataset.m }).catch(err => toast("Jarvis: " + ((err && err.message) || "eroare"))); break;
+      case "jv-lesson-reset": PrepApp.lessonReset(b.dataset.m); toast("Lecția „" + ((MOD[b.dataset.m] || {}).short || b.dataset.m) + "” revine la început"); render(); break;
       case "jv-repeat": J.repeat(); break;
       case "jv-skip": J.skip(); break;
       case "jv-mute": J.setMuted(!J.settings.get().muted); break;
