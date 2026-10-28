@@ -35,7 +35,8 @@ src/
   data_*.js        module, grile, context, carduri orale, fișe, exerciții, setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
   expl/glosar.md   glosarul
-katas/             exercițiile de live coding și testele lor (pytest)
+katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
+                   katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, verificat cu vitest în afara repo-ului)
 tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
 docs/              spec-ul Jarvis (docs/superpowers/specs), proba de aruncat și PWA-ul publicat pe Pages (docs/app)
 export/            generatorul brief-ului trimis la Perplexity
@@ -47,7 +48,8 @@ export/            generatorul brief-ului trimis la Perplexity
 node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
-python3 -m pytest -q katas   # testele exercițiilor de live coding
+python3 -m pytest -q katas   # testele exercițiilor Python (k13 e sărit dacă lipsește fastapi)
+node --test katas/katas_js.test.mjs   # exercițiile JavaScript
 python3 tools/check.py       # teste de interfață (Playwright + Chromium)
 python3 tools/test_teach.py
 python3 tools/test_expl.py

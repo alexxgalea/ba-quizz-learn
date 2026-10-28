@@ -1669,7 +1669,7 @@
   function kataStatus(id) { const e = S.k[id]; return e && e.s; }
   const KST = { solo: ["ok", "Rezolvat singur"], hint: ["warn", "Cu indicii"], redo: ["bad", "De reluat"] };
   function vKataList() {
-    let h = '<p class="muted small">Exerciții de live coding alese pentru un rol de detecție: ferestre de timp, deduplicare, retry, procesare pe stream. Lucrezi cu cronometru, gândind cu voce tare; soluțiile de referință sunt testate.</p>';
+    let h = '<p class="muted small">Exerciții de live coding pentru CoderPad: Python (clase, asyncio, FastAPI, teste, procesare pe stream) și React/TypeScript. Lucrezi cu cronometru, gândind cu voce tare; soluțiile de referință sunt testate. Pe CoderPad rulezi întâi <code>import sys; print(sys.version)</code>: pe 3.10 nu ai <code>TaskGroup</code> și <code>asyncio.timeout</code>.</p>';
     h += '<div class="stack-s">' + KATAS.map(k => {
       const s = kataStatus(k.id);
       return '<button class="kata" data-a="kata" data-k="' + k.id + '"><span class="n">' + k.n + '</span><span class="stack-s" style="gap:2px;min-width:0"><span class="t">' + esc(k.title) + '</span><span class="xs muted">' + esc(k.level) + "</span></span>" + (s ? '<span class="chip ' + KST[s][0] + '">' + KST[s][1] + "</span>" : '<span class="chip">nou</span>') + "</button>";
@@ -1685,7 +1685,7 @@
     h += '<p class="xs muted">Protocol: clarifici input și cazuri limită → spui soluția simplă și complexitatea → scrii codul → treci prin exemple → discuți follow-up-urile.</p>';
     for (let i = 0; i < Math.min(st.hints, k.hints.length); i++) h += '<div class="hint"><b class="xs mono">INDICIU ' + (i + 1) + "</b><br>" + fmt(k.hints[i]) + "</div>";
     if (st.hints < k.hints.length) h += '<button class="btn" data-a="kata-hint">Arată un indiciu (' + (st.hints + 1) + "/" + k.hints.length + ")</button>";
-    h += '<details class="model"><summary>Soluția de referință (testată cu pytest)</summary><div class="stack-s" style="padding:0 14px 14px">' + codeBlock(code) + '<button class="btn sm" data-a="copy-code" data-k="' + k.id + '">Copiază codul</button></div></details>';
+    h += '<details class="model"><summary>Soluția de referință (' + esc(k.check || "testată cu pytest") + ')</summary><div class="stack-s" style="padding:0 14px 14px">' + codeBlock(code, !!k.lang && k.lang !== "py") + '<button class="btn sm" data-a="copy-code" data-k="' + k.id + '">Copiază codul</button></div></details>';
     h += '<section class="card stack-s"><h3>Complexitate</h3><p class="small">' + fmt(k.complexity) + '</p><h3 style="margin-top:6px">Întrebări de follow-up</h3><ul class="pts">' + k.follow.map(f => "<li>" + fmt(f) + "</li>").join("") + "</ul></section>";
     h += '<section class="card stack-s"><h3>Cum a mers?</h3><div class="row">' + Object.keys(KST).map(key => '<button class="btn sm' + (s === key ? " primary" : "") + '" data-a="kata-status" data-s="' + key + '">' + KST[key][1] + "</button>").join("") + "</div></section>";
     return h;

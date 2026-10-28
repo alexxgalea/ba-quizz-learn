@@ -34,9 +34,11 @@ try:
         info = page.evaluate(START)
         check("start dă numele microfonului", isinstance(info, dict) and bool(info.get("label")), info)
         page.wait_for_timeout(1500)
-        frames = page.evaluate("window.frames")
+        # cadrele și nivelurile se citesc în același evaluate: între două apeluri mai sosesc cadre
+        snap = page.evaluate("({ frames: window.frames.slice(), levels: window.levels.slice() })")
+        frames, levels = snap["frames"], snap["levels"]
         check("cadre de 640 de eșantioane Int16, ~25 pe secundă", len(frames) >= 25 and all(f == [640, True] for f in frames), len(frames))
-        check("nivelul vine odată cu cadrele", page.evaluate("window.levels.length") == len(frames) and page.evaluate("Math.max(...window.levels)") > 0)
+        check("nivelul vine odată cu cadrele", len(levels) == len(frames) and max(levels) > 0, (len(levels), len(frames)))
         mics = page.evaluate("window.A.mics()")
         check("lista de microfoane are id și nume", len(mics) >= 1 and all(m["id"] is not None and "label" in m for m in mics), mics)
         page.evaluate(SINE)

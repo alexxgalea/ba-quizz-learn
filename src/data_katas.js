@@ -149,6 +149,155 @@ list(failed_logon_batches(lines, size=500))
       follow: [
         "Intervalele vin în stream, deja sortate?",
         "Câte intervale se suprapun maxim într-un punct (sweep line)?"]
+    },
+    {
+      id: "k10", n: 10, title: "Parser tolerant de audit log", level: "ușor–mediu",
+      why: "Cod de zi cu zi într-un produs de detecție: date murdare, fără să se oprească la prima linie stricată.",
+      prompt: "Linii de forma `2026-10-28T10:00:00Z user=ana action=login result=fail`. Scrie `parse_log(lines, errors=None)`: un generator de obiecte `Event(ts, user, action, ok)` (dataclass) care sare peste liniile goale și pune în `errors` numărul liniilor stricate, fără să se oprească. Apoi `summarize(events)` → `{user: (eșecuri, ultima acțiune)}`, cu ultima acțiune după timp, nu după ordinea liniilor.",
+      example: R`errors = []
+events = parse_log(lines, errors)
+summarize(events)  # {"ana": (1, "login"), ...}
+errors             # [3, 6]`,
+      hints: [
+        "Pe CoderPad rulează întâi `import sys; print(sys.version)`. Pe 3.10, `fromisoformat` nu acceptă `Z`: îl înlocuiești cu `+00:00`.",
+        "`stamp, *pairs = line.split()`, apoi `dict(p.split(\"=\", 1) for p in pairs)`.",
+        "Prinzi doar `ValueError` și `KeyError`, nu `Exception`: un bug în codul tău nu trebuie ascuns ca „linie stricată”."],
+      complexity: "O(n) timp; parserul e leneș (generator), iar sumarul ține O(useri) în memorie.",
+      follow: [
+        "Fișierul are 20 GB. Ce rămâne neschimbat și ce schimbi?",
+        "Vrei și motivul pentru fiecare linie stricată. Cum îl raportezi fără să complici generatorul?",
+        "Cum testezi că parserul e cu adevărat leneș?",
+        "Timestamp-uri fără fus orar amestecate cu cele cu `Z`: ce faci?"]
+    },
+    {
+      id: "k11", n: 11, title: "Scrie testele (găsește bug-ul)", level: "ușor",
+      why: "Managerul a insistat pe testare, iar rolul are și partea de calitate: arăți cum gândești cazurile limită.",
+      prompt: "Specificație: `parse_duration(text)` primește perechi număr + unitate, în ordinea h, m, s, fiecare cel mult o dată („1h30m”, „90s”, „2m30s”); spațiile de la capete se ignoră; orice altceva ridică `ValueError`. Implementarea primită e mai jos. Scrie întâi teste pytest (`parametrize` pentru cazuri valide și invalide) până prinzi bug-ul, apoi repar-o.",
+      example: R`UNITS = {"h": 3600, "m": 60, "s": 1}
+
+def parse_duration(text):
+    total = 0
+    for num, unit in re.findall(
+            r"(\d+)([hms])", text):
+        total += int(num) * UNITS[unit]
+    return total`,
+      hints: [
+        "Începe cu exemplele din specificație, apoi întreabă-te ce intrări invalide ar trece.",
+        "Ce întoarce funcția pentru `\"\"`, `\"1x\"` sau `\"30m1h\"`?",
+        "Fix: o expresie regulată cu `fullmatch`, nu `findall`, plus o verificare că ai cel puțin o unitate."],
+      complexity: "O(lungimea textului).",
+      follow: [
+        "Ce caz ai adăuga ca test de regresie după un bug raportat de un client?",
+        "Când ai folosi Hypothesis (property-based) aici? Ce proprietate ai verifica?",
+        "Cum ai testa o funcție care depinde de ora curentă?",
+        "De ce `parametrize` și nu o buclă `for` în test?"]
+    },
+    {
+      id: "k12", n: 12, title: "Motor de reguli de detecție", level: "mediu",
+      why: "OOP pe un caz Onapsis: reguli noi fără să atingi motorul (open/closed), ușor de testat.",
+      prompt: "Definește `Rule` (clasă abstractă) cu `rule_id`, `severity` și `match(event) -> bool`. Un decorator `@register` pune regulile într-un registry, iar `Engine.default()` le instanțiază pe toate. `Engine.run(events)` produce `Alert(rule_id, severity, event)`. Scrie două reguli: profil critic acordat (`SAP_ALL`, `SAP_NEW`) și login în afara orelor 8–20. O regulă care aruncă excepție nu trebuie să oprească motorul.",
+      example: R`events = [
+  {"type": "profile_grant",
+   "user": "x", "profile": "SAP_ALL"},
+  {"type": "login", "user": "y",
+   "hour": 3},
+]
+[a.rule_id for a in
+ Engine.default().run(events)]
+# ["PRIV-001", "LOGIN-002"]`,
+      hints: [
+        "`class Rule(ABC)` cu `@abstractmethod match`: o subclasă care uită `match` nu se poate instanția.",
+        "Registry: un dict `rule_id → clasă`, completat de decorator. Motorul nu știe numele regulilor.",
+        "Izolezi fiecare regulă cu `try/except` și `log.exception`, ca o regulă stricată să nu oprească restul.",
+        "`Engine.run` ca generator: alertele ies pe măsură ce vin evenimentele."],
+      complexity: "O(evenimente × reguli). Cu multe reguli, le indexezi după `event[\"type\"]`.",
+      follow: [
+        "Ai 2.000 de reguli. Cum eviți să rulezi toate regulile pe fiecare eveniment?",
+        "O regulă cu stare (5 eșecuri în 2 minute, ca în k1): unde ține starea?",
+        "Cum ai încărca regulile din configurare (YAML) în loc de cod?",
+        "Ce teste scrii pentru o regulă nouă?"]
+    },
+    {
+      id: "k13", n: 13, title: "Endpoint FastAPI idempotent, cu test", level: "mediu",
+      why: "Backendul din rol: un contract HTTP corect, validare cu Pydantic, dependency injection și un test.",
+      prompt: "`POST /alerts` primește `{rule_id, host, severity}` și headerul `Idempotency-Key`. Aceeași cheie cu același body întoarce aceeași alertă, fără duplicat; aceeași cheie cu alt body → 409; body invalid sau cheie lipsă → 422. `GET /alerts?limit=&cursor=` paginează după id. „Baza de date” e un obiect în memorie dat prin `Depends`, înlocuit în teste cu `app.dependency_overrides`. Pe CoderPad: proiect multi-file și `pip3 install fastapi httpx` din Shell.",
+      example: R`c = make_client()
+h = {"Idempotency-Key": "abc"}
+b = {"rule_id": "R1", "host": "h1"}
+c.post("/alerts", json=b, headers=h)
+c.post("/alerts", json=b, headers=h)
+# același răspuns, o singură alertă`,
+      hints: [
+        "`idempotency_key: str = Header()` citește headerul `Idempotency-Key`; dacă lipsește, FastAPI dă 422.",
+        "Ții `cheie → (body, alertă)`: compari body-ul ca să deosebești un retry de o greșeală.",
+        "Cursorul e ultimul id văzut, nu un offset: rămâne stabil când apar alerte noi.",
+        "În test, `app.dependency_overrides[get_store] = lambda: store` îți dă un store curat."],
+      complexity: "O(1) la creare; listarea e O(n) în memorie, O(limit) cu un index pe id într-o bază reală.",
+      follow: [
+        "Două request-uri cu aceeași cheie ajung simultan pe doi workeri. Ce se întâmplă și cum rezolvi (constrângere unică în Postgres)?",
+        "Cât timp păstrezi cheile de idempotență?",
+        "De ce `def` și nu `async def` aici? Ce s-ar schimba cu un driver DB async?",
+        "Cum ai testa endpoint-ul împotriva unui Postgres real (testcontainers)?"]
+    },
+    {
+      id: "k14", n: 14, title: "Worker pool async cu timeout", level: "mediu",
+      why: "asyncio scris corect: concurență limitată, timeout per job, oprire curată, fără task-uri orfane.",
+      prompt: "Scrie `async def run_jobs(jobs, handler, workers=4, timeout=5.0)`: N workeri consumă dintr-o `asyncio.Queue`, fiecare job are timeout, iar rezultatele vin în ordinea joburilor, cu excepția (inclusiv `TimeoutError`) în locul rezultatului. La final nu rămâne niciun worker pornit. Scrie-l compatibil cu Python 3.10 (fără `TaskGroup` și `asyncio.timeout`).",
+      example: R`res = asyncio.run(run_jobs(
+    ["a", "boom", "slow"], handler,
+    workers=2, timeout=0.2))
+# ["A", ValueError("boom"),
+#  TimeoutError()]`,
+      hints: [
+        "Pui în coadă `(index, job)`, ca să scrii rezultatul la locul lui.",
+        "`await asyncio.wait_for(handler(job), timeout)`; prinzi `Exception`, nu `BaseException`, ca anularea să treacă.",
+        "`queue.task_done()` în `finally`, apoi `await queue.join()`.",
+        "La final: `cancel()` pe workeri și `gather(..., return_exceptions=True)`, ca să aștepți să se oprească."],
+      complexity: "Timp ≈ (n / workers) × durata medie; memorie O(n) pentru rezultate.",
+      follow: [
+        "Joburile vin dintr-un stream infinit. Ce schimbi (coadă mărginită, backpressure)?",
+        "Pe 3.11+, cum arată varianta cu `TaskGroup` și `asyncio.timeout`?",
+        "Un handler apelează o bibliotecă sincronă care blochează 2 s. Ce se întâmplă cu ceilalți workeri?",
+        "Cum testezi timeout-ul fără să aștepți secunde reale?"]
+    },
+    {
+      id: "k15", n: 15, title: "Listă de alerte în React + TypeScript", level: "mediu", lang: "ts",
+      check: "verificată cu React 19, Testing Library și tsc --strict",
+      why: "Pentru inginerul de frontend: hooks corecte, stări explicite, TypeScript și un test.",
+      prompt: "Pe pad-ul React (Vite + TypeScript), scrie `AlertList`: ia alertele de la `/api/alerts`, arată „Se încarcă…”, eroarea (cu `role=\"alert\"`) sau lista, și are un `<select>` care filtrează după severitate. Starea e un union discriminat (`loading` / `error` / `ok`), datele de la API sunt `unknown` până le verifici, iar request-ul se anulează la unmount. Bonus: un test cu Testing Library.",
+      example: R`<AlertList url="/api/alerts" />
+// Se încarcă… → listă cu 2 alerte
+// select „high” → 1 alertă`,
+      hints: [
+        "`useState<State>({ s: \"loading\" })` și un `type State` cu trei variante.",
+        "În `useEffect`: `AbortController`, `fetch(url, { signal })`, verifici `r.ok`, iar cleanup-ul face `abort()`.",
+        "Ignori `AbortError` în `catch`, altfel la unmount afișezi o eroare falsă.",
+        "Filtrul se calculează în render, nu într-un effect separat.",
+        "Testul: înlocuiești `fetch`, `findAllByRole(\"listitem\")`, apoi `userEvent.selectOptions`."],
+      complexity: "Filtrarea e O(n) la fiecare render; la mii de rânduri: `useMemo` sau virtualizare.",
+      follow: [
+        "Cum ai face filtrarea pe server și ai păstra filtrul în URL?",
+        "Cum ai înlocui codul de fetch cu TanStack Query? Ce câștigi?",
+        "Alertele noi vin pe WebSocket. Unde le integrezi?",
+        "De ce `queryByText` și nu `getByText` când verifici că o alertă a dispărut?"]
+    },
+    {
+      id: "k16", n: 16, title: "Promise pool în JavaScript", level: "ușor–mediu", lang: "js",
+      check: "testată cu node:test",
+      why: "Analogul JS al lui k8: concurență limitată pe un singur thread, cu event loop.",
+      prompt: "Scrie `runWithLimit(tasks, limit)`: `tasks` sunt funcții care întorc o promisiune. Rulează cel mult `limit` simultan, întoarce rezultatele în ordinea task-urilor și respinge dacă un task eșuează. `limit < 1` → `RangeError`.",
+      example: R`const tasks = urls.map(u => () => fetch(u));
+const res = await runWithLimit(tasks, 4);`,
+      hints: [
+        "Pornești `min(limit, n)` workeri; fiecare ia următorul index liber până se termină lista.",
+        "Pe un singur thread, `const i = next++` între două `await`-uri nu are race condition.",
+        "`await Promise.all(workers)` așteaptă să se termine toți."],
+      complexity: "Timp ≈ (n / limit) × durata medie; memorie O(n) pentru rezultate.",
+      follow: [
+        "Vrei toate rezultatele chiar dacă unele eșuează (ca `allSettled`). Ce schimbi?",
+        "Cum oprești task-urile rămase la primul eșec (`AbortController`)?",
+        "De ce în Python ai nevoie de `Semaphore` sau `Queue`, iar aici ajunge un contor?",
+        "Scrie semnătura în TypeScript cu generice."]
     }
   ];
 })(window.PREP);

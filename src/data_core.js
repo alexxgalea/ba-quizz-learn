@@ -400,7 +400,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       { id: "m-log", min: 5, text: "Logistică: link sau adresă, laptop încărcat, editor deschis, apă, hârtie și pix.", go: { t: "study", tab: "tactics" } }
     ],
     // ordinea în care intră exercițiile de live coding în plan (câte unul pe seară)
-    katas: ["k1", "k3", "k8", "k4", "k5", "k2", "k6", "k9", "k7"]
+    katas: ["k12", "k15", "k13", "k14", "k10", "k16", "k11", "k1", "k3", "k8", "k4", "k5", "k2", "k6", "k9", "k7"]
   };
 
   // ---------- study pages ----------

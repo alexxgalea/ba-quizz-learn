@@ -5,7 +5,17 @@ from pathlib import Path
 import pytest
 
 from katas import (
+    Engine,
     LRUCache,
+    OffHoursLogin,
+    Rule,
+    parse_duration,
+    parse_log,
+    register,
+    run_jobs,
+    summarize,
+    test_duration_invalid_raises,
+    test_duration_valid,
     TokenBucket,
     batched,
     dedupe_alerts,
@@ -219,6 +229,123 @@ def test_merge_intervals():
 def test_each_section_runs_on_its_own():
     src = Path(__file__).with_name("katas.py").read_text()
     sections = re.findall(r"# === (k\d+) ===\n(.*?)# === end ===", src, re.S)
-    assert len(sections) == 9
+    assert [n for n, _ in sections] == [f"k{i}" for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14)]
     for name, code in sections:
         exec(compile(code, name, "exec"), {})
+
+
+# ---------- k10 audit log ----------
+LOG = """2026-10-28T10:00:00Z user=ana action=login result=fail
+2026-10-28T10:00:05Z user=ana action=login result=ok
+garbage line
+
+2026-10-28T10:01:00Z user=bob action=export result=fail
+2026-13-28T10:01:00Z user=bob action=login result=ok
+2026-10-28T10:02:00Z user=bob action=login
+2026-10-28T09:00:00Z user=ana action=logout result=ok
+""".splitlines()
+
+
+def test_parse_log_skips_broken_lines_and_reports_them():
+    errors = []
+    events = list(parse_log(LOG, errors))
+    assert len(events) == 4
+    assert errors == [3, 6, 7]  # garbage, lună 13, fără result
+
+
+def test_parse_log_is_lazy():
+    def boom():
+        yield LOG[0]
+        raise AssertionError("citit prea mult")
+    gen = parse_log(boom())
+    assert next(gen).user == "ana"
+
+
+def test_summarize_counts_failures_and_uses_latest_timestamp():
+    out = summarize(parse_log(LOG))
+    # ultima acțiune după timp, nu după ordinea liniilor
+    assert out == {"ana": (1, "login"), "bob": (1, "export")}
+
+
+def test_timestamp_is_timezone_aware():
+    ev = next(parse_log(LOG))
+    assert ev.ts.utcoffset().total_seconds() == 0
+
+
+# ---------- k12 rule engine ----------
+def test_engine_emits_alerts_from_registered_rules():
+    events = [
+        {"type": "profile_grant", "user": "x", "profile": "SAP_ALL"},
+        {"type": "login", "user": "y", "hour": 3},
+        {"type": "login", "user": "z", "hour": 10},
+    ]
+    alerts = list(Engine.default().run(events))
+    assert [(a.rule_id, a.severity) for a in alerts] == [
+        ("PRIV-001", "high"), ("LOGIN-002", "medium")]
+
+
+def test_new_rule_needs_no_engine_change():
+    @register
+    class Debug(Rule):
+        rule_id = "TEST-999"
+
+        def match(self, event):
+            return event.get("type") == "debug"
+    try:
+        alerts = list(Engine.default().run([{"type": "debug"}]))
+        assert [a.rule_id for a in alerts] == ["TEST-999"]
+    finally:
+        from katas import RULES
+        RULES.pop("TEST-999")
+
+
+def test_broken_rule_does_not_stop_engine(caplog):
+    class Broken(Rule):
+        rule_id = "BAD"
+
+        def match(self, event):
+            raise KeyError("hour")
+    engine = Engine([Broken(), OffHoursLogin()])
+    alerts = list(engine.run([{"type": "login", "hour": 23}]))
+    assert [a.rule_id for a in alerts] == ["LOGIN-002"]
+    assert "BAD" in caplog.text
+
+
+def test_rule_is_abstract():
+    with pytest.raises(TypeError):
+        Rule()
+
+
+# ---------- k14 async worker pool ----------
+def test_run_jobs_keeps_order_limits_concurrency_and_times_out():
+    running = peak = 0
+
+    async def handler(job):
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        try:
+            if job == "boom":
+                raise ValueError(job)
+            await asyncio.sleep(1 if job == "slow" else 0.01)
+            return job.upper()
+        finally:
+            running -= 1
+
+    async def main():
+        jobs = ["a", "boom", "slow", "b", "c", "d"]
+        res = await run_jobs(jobs, handler, workers=2, timeout=0.2)
+        left = [t for t in asyncio.all_tasks()
+                if t is not asyncio.current_task()]
+        return res, left
+
+    res, left = asyncio.run(main())
+    assert res[0] == "A" and res[3:] == ["B", "C", "D"]
+    assert isinstance(res[1], ValueError)
+    assert isinstance(res[2], asyncio.TimeoutError)
+    assert peak == 2
+    assert left == []  # niciun worker rămas agățat
+
+
+def test_run_jobs_with_no_jobs():
+    assert asyncio.run(run_jobs([], None)) == []

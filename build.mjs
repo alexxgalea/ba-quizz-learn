@@ -5,9 +5,22 @@ import { DATA_FILES, LIB_FILES, loadData, buildExplanations } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const read = p => fs.readFileSync(new URL(p, root), "utf8");
-const py = read("./katas/katas.py");
+// Kata solutions: every "# === kN ===" (Python) or "// === kN ===" (JS/TS) section in katas/,
+// sources first, then their tests (a test section is appended to the kata's code).
 const kataCode = {};
-for (const m of py.matchAll(/# === (k\d+) ===\n([\s\S]*?)# === end ===/g)) kataCode[m[1]] = m[2].replace(/\s+$/, "") + "\n";
+const kataFiles = fs.readdirSync(new URL("./katas/", root))
+  .filter(f => /\.(py|mjs|tsx)$/.test(f) && !/^test_/.test(f) && !/\.test\.mjs$/.test(f))
+  .sort((a, b) => /\.test\./.test(a) - /\.test\./.test(b) || a.localeCompare(b));
+for (const f of kataFiles) {
+  const src = read("./katas/" + f);
+  for (const m of src.matchAll(/^(#|\/\/) === (k\d+) ===\n([\s\S]*?)^\1 === end ===/gm)) {
+    const code = m[3].replace(/\s+$/, "") + "\n";
+    kataCode[m[2]] = kataCode[m[2]] ? kataCode[m[2]] + "\n// --- test ---\n" + code : code;
+  }
+}
+for (const k of Object.keys(kataCode).sort((a, b) => a.slice(1) - b.slice(1))) {
+  const code = kataCode[k]; delete kataCode[k]; kataCode[k] = code;  // ordinea k1, k2, …
+}
 
 // explanations (src/expl/*.md) and glossary (src/expl/glosar.md), checked against the questions
 const P = loadData(root);
