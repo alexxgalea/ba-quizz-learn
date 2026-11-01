@@ -38,7 +38,9 @@ src/
   expl/glosar.md   glosarul
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
                    katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, verificat cu vitest în afara repo-ului);
-                   skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest)
+                   skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest); fișierele de config
+                   (skel_docker.Dockerfile, skel_docker_compose.yml, skel_ops_gitlab_ci.yml) sunt verificate structural, nu rulate;
+                   requirements-skel-ops.txt: pachetele de dev (PyYAML, Django, SQLAlchemy, strawberry-graphql); testele se sar fără ele
 tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
 docs/              spec-ul Jarvis (docs/superpowers/specs), probele de aruncat (prototype-jarvis-probe.html, probe-lectie-metrou.html) și PWA-ul publicat pe Pages (docs/app)
 .scratch/          spec-urile și tichetele locale (de exemplu .scratch/lectie-live)
@@ -51,7 +53,8 @@ export/            generatorul brief-ului trimis la Perplexity
 node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
-python3 -m pytest -q katas   # testele exercițiilor Python (k13 e sărit dacă lipsește fastapi)
+pip install -r katas/requirements-skel-ops.txt   # opțional: pachetele testelor de schelete (docker, ops, graphql, django)
+python3 -m pytest -q katas   # testele exercițiilor Python (k13 și scheletele cu pachete lipsă sunt sărite)
 node --test katas/katas_js.test.mjs   # exercițiile JavaScript
 python3 tools/check.py       # teste de interfață (Playwright + Chromium)
 python3 tools/test_teach.py
