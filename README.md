@@ -54,6 +54,7 @@ export/            generatorul brief-ului trimis la Perplexity
 node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
+python3 -m pip install -r katas/requirements-dev.txt   # pytest, celery, PyJWT (doar pentru teste)
 python3 -m pytest -q katas   # testele exercițiilor Python (k13 e sărit dacă lipsește fastapi)
 node --test katas/katas_js.test.mjs katas/skel_js.test.mjs   # exercițiile și scheletele JavaScript
 npm run test:ts              # `npm install` în katas/, apoi tsc --strict --noEmit și vitest (k15 și scheletele TS / TSX)

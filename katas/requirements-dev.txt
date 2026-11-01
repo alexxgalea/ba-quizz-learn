@@ -1,0 +1,7 @@
+# Dependențe de dezvoltare pentru testele din katas/ (doar pentru teste: aplicația rămâne fără dependențe).
+# Instalare: python3 -m pip install -r katas/requirements-dev.txt
+pytest>=8.0
+# skel_celery_*: task-uri Celery, testate fără broker (apel direct și .apply())
+celery>=5.6
+# skel_security (s-security-jwt)
+PyJWT>=2.10
