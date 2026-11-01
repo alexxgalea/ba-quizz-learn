@@ -12,7 +12,7 @@ export const LIB_FILES = ["live.js", "audio.js", "call.js", "jarvis.js", "ask.js
 export function loadCode(root) {
   const kataCode = {}, skelCode = {};
   const files = fs.readdirSync(new URL("./katas/", root))
-    .filter(f => /\.(py|mjs|ts|tsx|sql)$/.test(f) && !/^test_/.test(f) && !/\.test\./.test(f))
+    .filter(f => /\.(py|mjs|ts|tsx|sql|ya?ml|dockerfile)$/i.test(f) && !/^test_/.test(f) && !/\.test\./.test(f))
     .sort((a, b) => a.localeCompare(b));
   const kataTests = fs.readdirSync(new URL("./katas/", root)).filter(f => /\.test\.(mjs|tsx)$/.test(f)).sort();
   for (const f of files.concat(kataTests)) {

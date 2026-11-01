@@ -1,0 +1,9 @@
+# Pachetele de dev pentru testele schelet-urilor din tichetul 16 (docker, ops, graphql, django).
+# Instalare: pip install -r katas/requirements-skel-ops.txt
+# Aplicația rămâne fără dependențe; astea rulează doar testele referințelor.
+# Versiunile sunt cele pe care au fost rulate testele (1 noiembrie 2026).
+pytest>=9
+PyYAML>=6          # parsarea compose și .gitlab-ci.yml (verificare structurală)
+Django==6.1.2      # s-django-orm
+SQLAlchemy>=2.1    # s-django-orm (echivalentul 2.0 al lui select_related / prefetch_related)
+strawberry-graphql==0.339.1   # s-graphql-dataloader

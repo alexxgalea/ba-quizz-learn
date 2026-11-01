@@ -39,7 +39,9 @@ src/
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
                    katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, vitest);
                    skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest);
-                   skel_js.mjs + skel_js.test.mjs (node:test), skel_ts.ts / .tsx + .test.ts / .tsx (tsc + vitest)
+                   skel_js.mjs + skel_js.test.mjs (node:test), skel_ts.ts / .tsx + .test.ts / .tsx (tsc + vitest);
+                   fișierele de config (skel_docker.Dockerfile, skel_docker_compose.yml, skel_ops_gitlab_ci.yml) sunt verificate structural, nu rulate;
+                   requirements-skel-ops.txt: pachetele de dev (PyYAML, Django, SQLAlchemy, strawberry-graphql); testele se sar fără ele
 katas/package.json dependențele de dev pentru TypeScript / TSX (tsc, vitest, jsdom, Testing Library, React);
                    doar aici: aplicația și rădăcina rămân fără dependențe, iar katas/node_modules nu se publică
 tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
@@ -54,8 +56,9 @@ export/            generatorul brief-ului trimis la Perplexity
 node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
+pip install -r katas/requirements-skel-ops.txt   # opțional: pachetele testelor de schelete (docker, ops, graphql, django)
 python3 -m pip install -r katas/requirements-dev.txt   # pytest, celery, PyJWT (doar pentru teste)
-python3 -m pytest -q katas   # testele exercițiilor Python (k13 e sărit dacă lipsește fastapi)
+python3 -m pytest -q katas   # testele exercițiilor Python (k13 și scheletele cu pachete lipsă sunt sărite)
 node --test katas/katas_js.test.mjs katas/skel_js.test.mjs   # exercițiile și scheletele JavaScript
 npm run test:ts              # `npm install` în katas/, apoi tsc --strict --noEmit și vitest (k15 și scheletele TS / TSX)
 python3 tools/check.py       # teste de interfață (Playwright + Chromium)

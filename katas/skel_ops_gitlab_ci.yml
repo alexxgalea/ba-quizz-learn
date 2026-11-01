@@ -1,0 +1,35 @@
+# Referința de schelet pentru modulul ops: .gitlab-ci.yml minim, test + build.
+# Verificat structural (YAML + reguli), nu rulat: katas/test_skel_ops_ci.py.
+
+# === s-ops-gitlab-ci ===
+stages: [test, build]
+
+default:
+  image: python:3.12-slim
+
+test:
+  stage: test
+  variables:
+    PIP_CACHE_DIR: $CI_PROJECT_DIR/.pip
+  cache:
+    key:
+      files: [requirements.txt]
+    paths: [.pip]
+  script:
+    - pip install -r requirements.txt
+    - pytest -q
+
+build:
+  stage: build
+  image: docker:29-cli
+  services: [docker:29-dind]
+  variables:
+    DOCKER_TLS_CERTDIR: /certs
+    TAG: app:$CI_COMMIT_SHORT_SHA
+  script:
+    - docker build -t $TAG .
+  rules:
+    - if: >-
+        $CI_COMMIT_BRANCH ==
+        $CI_DEFAULT_BRANCH
+# === end ===
