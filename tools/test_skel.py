@@ -46,6 +46,27 @@ async def main():
         check("list is grouped by module, P1 first", len(grp) >= 1 and grp[0] == "gil", grp)
         check("no horizontal overflow on the list", await pg.evaluate("document.documentElement.scrollWidth <= 360"))
 
+        # --- frontend groups, no Python colouring for other languages, the language in the AI prompt ---
+        JS_ID, TS_ID = "s-frontend-closure", "s-frontend-union-never"
+        grp = await pg.evaluate("""() => [...document.querySelectorAll('[data-skel-mod="frontend"] [data-skel-grp]')].map(e => [e.dataset.skelGrp, e.querySelector('.eyebrow').textContent.trim()])""")
+        keys = [g[0] for g in grp]
+        check("frontend skeletons are split into groups, in React / JavaScript / TypeScript order", keys == [k for k in ["react", "js", "ts"] if k in keys] and "js" in keys and "ts" in keys, grp)
+        check("group headings use the language names", dict(grp).get("js") == "JavaScript" and dict(grp).get("ts") == "TypeScript", grp)
+        check("each frontend skeleton sits in its own group", await pg.locator('[data-skel-grp="js"] button[data-k="%s"]' % JS_ID).count() == 1 and await pg.locator('[data-skel-grp="ts"] button[data-k="%s"]' % TS_ID).count() == 1 and await pg.locator('[data-skel-grp="js"] button[data-k="%s"]' % TS_ID).count() == 0)
+        check("other modules have no group headings", await pg.locator('[data-skel-mod="gil"] [data-skel-grp]').count() == 0)
+        refs = {}
+        for sid in [SID, JS_ID, TS_ID]:
+            await pg.click('button[data-a="skel"][data-k="%s"]' % sid)
+            await pg.click('button[data-a="skel-done"]')
+            refs[sid] = await pg.evaluate("() => ({ spans: document.querySelectorAll('.skel-ref code span').length, text: document.querySelector('.skel-ref code').textContent, w: document.documentElement.scrollWidth })")
+            await pg.click('button[data-a="skel-back"]')
+        check("the Python reference is highlighted", refs[SID]["spans"] > 0, refs[SID]["spans"])
+        check("the JavaScript reference is shown without Python highlighting", refs[JS_ID]["spans"] == 0 and "function makeCounter" in refs[JS_ID]["text"], refs[JS_ID]["spans"])
+        check("the TypeScript reference is shown without Python highlighting", refs[TS_ID]["spans"] == 0 and "function assertNever" in refs[TS_ID]["text"], refs[TS_ID]["spans"])
+        check("no horizontal overflow on the JS / TS reference screens at 360 px", refs[JS_ID]["w"] <= 360 and refs[TS_ID]["w"] <= 360, (refs[JS_ID]["w"], refs[TS_ID]["w"]))
+        langs = await pg.evaluate("""(ids) => ids.map(id => { const k = window.PREP.skel.find(s => s.id === id); return window.__prep.skelPrompt(k, 'x'.repeat(30)).user.split('\\n').find(l => l.indexOf('Limbaj') === 0); })""", [SID, JS_ID, TS_ID])
+        check("the AI prompt carries the skeleton's language", langs == ["Limbaj: py", "Limbaj: js", "Limbaj: ts"], langs)
+
         # --- the skeleton screen and the draft ---
         await row.click()
         sk = await pg.evaluate("window.PREP.skel.find(s => s.id === '%s')" % SID)

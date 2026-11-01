@@ -324,6 +324,13 @@ Analiza completă și sursele pentru fiecare afirmație sunt în `research/job-8
 - ✅ **`AudioContext.suspend()` îngheață timpul contextului**: sursele deja programate rămân în coadă și continuă din aceeași secundă la `resume()`, iar `ended` nu se declanșează cât durează pauza (verificat în Chromium, `tools/test_audio.py`). Pauza lecției se sprijină pe asta. Sursă: https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/suspend
 - ⚠️ **Nepublicat**: limita zilnică a nivelului gratuit pentru Live; rămâne de văzut în AI Studio. Butoanele căștilor (Media Session), conexiunea cu ecranul stins și reconectarea într-un tunel adevărat se află doar prin proba din metrou (`docs/probe-lectie-metrou.html`).
 
+## 9. Unelte de dev pentru referințele TypeScript / TSX (`katas/package.json`)
+
+- ✅ **Versiuni pe registry (1 nov. 2026), fixate exact în manifest**: `typescript` 7.0.2, `vitest` 5.0.5, `jsdom` 30.1.3, `@testing-library/react` 16.3.3 (cu `@testing-library/dom` 10.4.2 ca peer), `@testing-library/user-event` 14.6.8, `react` / `react-dom` 19.3.1, `@types/react` 19.3.0, `@types/react-dom` 19.3.0. Sursă: `npm view <pachet> version` pe https://registry.npmjs.org/ (verificat 2026-11-01).
+- ✅ **`tsc --strict --noEmit` cu TypeScript 7** (portul nativ): aceleași opțiuni, `-p katas` citește `tsconfig.json`; `// @ts-expect-error` produce eroarea TS2578 („Unused directive”) când eroarea așteptată dispare, deci un test de tip se poate strica. Verificat local: cu `assertNever(x: unknown)` în loc de `x: never`, `tsc` pică pe testul „caz nou în union”.
+- ⚠️ **`jsdom` 30 declară `engines.node` ≥ 22.22.2 (sau ≥ 24.15)**. Mediul de lucru are Node 22.22.0: `npm install` dă doar avertismente `EBADENGINE`, iar testele rulează. Pe o mașină cu Node mai vechi de 22.22.2 trebuie un Node mai nou sau un `jsdom` mai vechi.
+- ✅ **vitest** include implicit și `*.test.mjs`; testele `node:test` din `katas/` n-ar rula acolo, de aceea `vitest.config.ts` limitează `include` la `*.test.ts` / `*.test.tsx`, iar `.mjs` rămân pe `node --test`.
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.

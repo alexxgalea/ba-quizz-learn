@@ -37,8 +37,11 @@ src/
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
   expl/glosar.md   glosarul
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
-                   katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, verificat cu vitest în afara repo-ului);
-                   skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest)
+                   katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, vitest);
+                   skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest);
+                   skel_js.mjs + skel_js.test.mjs (node:test), skel_ts.ts / .tsx + .test.ts / .tsx (tsc + vitest)
+katas/package.json dependențele de dev pentru TypeScript / TSX (tsc, vitest, jsdom, Testing Library, React);
+                   doar aici: aplicația și rădăcina rămân fără dependențe, iar katas/node_modules nu se publică
 tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
 docs/              spec-ul Jarvis (docs/superpowers/specs), probele de aruncat (prototype-jarvis-probe.html, probe-lectie-metrou.html) și PWA-ul publicat pe Pages (docs/app)
 .scratch/          spec-urile și tichetele locale (de exemplu .scratch/lectie-live)
@@ -52,7 +55,8 @@ node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
 python3 -m pytest -q katas   # testele exercițiilor Python (k13 e sărit dacă lipsește fastapi)
-node --test katas/katas_js.test.mjs   # exercițiile JavaScript
+node --test katas/katas_js.test.mjs katas/skel_js.test.mjs   # exercițiile și scheletele JavaScript
+npm run test:ts              # `npm install` în katas/, apoi tsc --strict --noEmit și vitest (k15 și scheletele TS / TSX)
 python3 tools/check.py       # teste de interfață (Playwright + Chromium)
 python3 tools/test_teach.py
 python3 tools/test_expl.py
@@ -126,8 +130,9 @@ Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` 
 Un **schelet** e codul minim, canonic, al unui concept, pe care îl scrii din memorie; un **kata** e o problemă de ~20 de minute (vezi `CONTEXT.md`). Spec-ul și tichetele: `.scratch/schelete/`.
 
 - **Date**: `src/data_skel.js` (`window.PREP.skel`): `id` (`s-<modul>-<nume>`), `m`, `t` (titlul), `p` (cerința), `k` (3–5 puncte esențiale), `lang`, opțional `v` („3.11+”), `st` („verificat structural”) și `g` (grupa, doar la `frontend`: `react` / `js` / `ts`).
-- **Referința** nu stă în date: e secțiunea `=== <id> ===` dintr-un fișier `katas/skel_*`, testată (`katas/test_skel_*`). `loadCode` din `lib.mjs` o extrage (la build în `window.PREP.skelCode`, la validare ca s-o verifice). `validate.mjs` cere cerință, 3–5 puncte, referință existentă și rânduri de cel mult **42** de caractere: referința se afișează fără împachetare, la 11 px, și atât încape la 360 px.
-- **Ecranul** (`vSkelList`, `vSkel`): scrii în câmpul de cod (Tab = 4 spații; ciorna stă în `localStorage`, `onapsis-skel-draft-v1`, și nu intră în `S`, în export sau în brief), apoi „Gata, mă notez” arată punctele ca bife și referința. „Arată referința” înainte de încercare notează încercarea cu 0; marcajul rămâne pe schelet (în `ui`, nu în `S`) până la salvare, deci ieșirea și revenirea nu îl șterg, iar câmpul rămâne editabil.
+- **Referința** nu stă în date: e secțiunea `=== <id> ===` dintr-un fișier `katas/skel_*`, testată (`katas/test_skel_*`). `loadCode` din `lib.mjs` o extrage (la build în `window.PREP.skelCode`, la validare ca s-o verifice). `validate.mjs` cere cerință, 3–5 puncte, referință existentă și rânduri de cel mult **42** de caractere: referința se afișează fără împachetare, la 11 px, și atât încape la 360 px. Fișierele de referință: `skel_<modul>.py` (pytest), `skel_js.mjs` (`node --test`), `skel_ts.ts` / `.tsx` (`tsc --strict --noEmit` + vitest). Marcajele de secțiune folosesc prefixul fișierului (`#` în Python, `//` în JS / TS, `--` în SQL), iar `export`-urile stau după `// === end ===`, ca să nu încarce codul de scris. O eroare de tip așteptată se verifică în teste cu `// @ts-expect-error` (tsc se plânge dacă eroarea dispare).
+- **Lista** (`vSkelList`): grupată pe modul, cu P1 primele; la `frontend` e împărțită pe grupe (React, JavaScript, TypeScript, în ordinea asta; grupele fără schelete nu apar). Referințele non-Python nu primesc colorarea de Python (`codeBlock(…, plain)` cu `lang !== "py"`), iar `lang` intră în prompt ca „Limbaj: …”.
+- **Ecranul** (`vSkel`): scrii în câmpul de cod (Tab = 4 spații; ciorna stă în `localStorage`, `onapsis-skel-draft-v1`, și nu intră în `S`, în export sau în brief), apoi „Gata, mă notez” arată punctele ca bife și referința. „Arată referința” înainte de încercare notează încercarea cu 0; marcajul rămâne pe schelet (în `ui`, nu în `S`) până la salvare, deci ieșirea și revenirea nu îl șterg, iar câmpul rămâne editabil.
 - **Starea**: `S.s[id]` = `{ b, n, s, t }`, cu pragurile de la cardurile orale (`updS` și `updO` folosesc același `leitnerStep`: ≥ 80% urcă o cutie, 50–80% rămâne, < 50% cutia 1) și scadențele obișnuite. Se îmbină, se curăță și se resetează ca restul stării; nu intră în scorul de pregătire.
 - **Verificarea AI** („Verifică cu AI”, doar când există o sursă: Claude prin `sample`, altfel Gemini cu cheia Jarvis, altfel DeepSeek, adică `AskModel`, ca la „Întreabă despre asta”). Cererea (`skelPrompt`) are cerința, punctele numerotate de la 0 și codul ca date între `<<<` și `>>>`, curățat de delimitatori și tăiat la 6000 de caractere; cere română, termeni tehnici în engleză și doar greșeli certe (codul nu se rulează). Răspunsul JSON (`parseSkelVerdict`, și într-un bloc ```) are `covered`, `errors`, `missing`: indexurile invalide se ignoră, listele au cel mult 4 elemente de 300 de caractere, iar un răspuns fără `covered` ca listă e format invalid. Verdictul pre-bifează exact punctele din `covered` și deschide faza de notare; greșelile și ce lipsește apar sub cod, iar o nouă verificare (după ce modifici codul) înlocuiește rezultatul și bifele. Sub 20 de caractere (`SKEL_MIN`) nu se trimite nimic. Erorile folosesc mesajele lui „Întreabă” și permit reîncercarea. Scorul vine tot din bifele confirmate de tine, iar referința văzută înainte de încercare dă tot 0. Rezultatul stă în `ui` (nu în `S`).
 - Teste de interfață: `tools/test_skel.py`, `tools/test_skel_ai.py` (model fals cu coadă de răspunsuri și jurnal de apeluri).
