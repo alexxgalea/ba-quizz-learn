@@ -1738,9 +1738,9 @@
     let h = '<button class="btn ghost" data-a="skel-back" data-k="' + k.id + '" style="align-self:flex-start">← Toate scheletele</button>';
     h += '<section class="card stack"><div class="row"><span class="chip acc">' + esc(m.code) + "</span>" + skelMarks(k) + skelChip(k.id) + (e ? leit(e.b) : "") + "</div><h2>" + esc(k.t) + "</h2><p>" + fmt(k.p) + "</p>" +
       '<textarea class="skel-code" data-skel-code rows="12" maxlength="6000" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Scrie codul aici, din memorie" aria-label="Codul tău"' + (r.phase === "write" || r.peek || r.ai ? "" : " readonly") + (busy ? " readonly" : "") + ">\n" + esc(r.code) + "</textarea>" +
-      (r.phase === "write" || ai ? '<div class="row">' + (r.phase === "write" ? '<button class="btn primary" data-a="skel-done">Gata, mă notez</button>' : "") +
+      (r.phase === "write" || ai ? '<div class="row">' + (r.phase === "write" ? '<button class="btn primary" data-a="skel-done"' + (busy ? " disabled" : "") + '>Gata, mă notez</button>' : "") +
         (ai ? '<button class="btn' + (r.phase === "write" ? "" : " primary") + '" data-a="skel-ai"' + (busy ? " disabled" : "") + ">" + (busy ? "Se verifică…" : r.ai && r.ai.s === "ok" ? "Verifică din nou" : "Verifică cu AI") + "</button>" : "") +
-        (r.phase === "write" ? '<button class="btn" data-a="skel-peek">Arată referința</button>' : "") + "</div>" : "") + "</section>" + vSkelAi(r);
+        (r.phase === "write" ? '<button class="btn" data-a="skel-peek"' + (busy ? " disabled" : "") + '>Arată referința</button>' : "") + "</div>" : "") + "</section>" + vSkelAi(r);
     if (r.peek) h += '<p class="small skel-peek-note hint">Ai deschis referința înainte să scrii: încercarea asta contează 0, oricare ar fi bifele. Bifează totuși ce ai știut, ca să vezi unde ești.</p>';
     if (r.phase === "grade") {
       const n = k.k.length, ticked = r.ticks.filter(Boolean).length;
@@ -2312,7 +2312,7 @@
   // Rezultatul stă pe încercare (r.ai): { s: "busy" } | { s: "err", code, detail } | { s: "msg", text } | { s: "ok", errors, missing }.
   async function skelCheck() {
     const r = ui.study.attempt, k = r && SBY[r.id]; if (!k || !AskModel.ready() || (r.ai && r.ai.s === "busy")) return;
-    if (r.code.trim().length < SKEL_MIN) { r.ai = { s: "msg", text: "Scrie mai mult cod înainte să verifici (cel puțin " + SKEL_MIN + " de caractere)." }; render(); return; }
+    if (skelClean(r.code, SKEL_MAX).length < SKEL_MIN) { r.ai = { s: "msg", text: "Scrie mai mult cod înainte să verifici (cel puțin " + SKEL_MIN + " de caractere)." }; render(); return; }
     const mine = r.ai = { s: "busy" }; render();
     let v = null, code = null, detail = "";
     try { v = parseSkelVerdict(await AskModel.generate(skelPrompt(k, r.code)), k.k.length); if (!v) code = "format"; }

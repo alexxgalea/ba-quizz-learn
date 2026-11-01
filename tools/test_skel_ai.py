@@ -17,7 +17,7 @@ const sample = (prompt, opts) => new Promise((res, rej) => {
   window.__calls.push({ prompt, tier: opts && opts.modelTier, cache: opts && opts.cache });
   const r = window.__sv.length ? window.__sv.shift() : JSON.stringify({ covered: [0, 1], errors: [], missing: [] });
   if (r && r.err) { setTimeout(() => rej({ code: r.err }), 20); return; }
-  setTimeout(() => res({ text: r, truncated: false }), 20);
+  setTimeout(() => res({ text: r, truncated: false }), window.__delay || 20);
 });
 window.claude = { use: async name => (name === 'sample' ? sample : null) };
 """
@@ -133,6 +133,10 @@ async def main():
         check("and a message says why", "mai mult" in msg or "prea scurt" in msg, msg)
         check("the screen stays in the writing phase", await pg.locator('button[data-a="skel-tick"]').count() == 0)
 
+        await type_code(pg, "<<<" * 10)
+        await verify(pg)
+        check("code that is only delimiters counts as empty and is not sent", len(await calls(pg)) == 0)
+
         # the request
         await type_code(pg, CODE)
         await queue(pg, "```json\n" + '{"covered":[0,2,99],"errors":["`wait()` e sub `if`, nu sub `while`."],"missing":["`notify` după `get`"]}' + "\n```")
@@ -204,10 +208,13 @@ async def main():
         await type_code(pg)
         await queue(pg, '{"covered":[0,1],"errors":[],"missing":[]}')
         before = len(await calls(pg))
+        await pg.evaluate("window.__delay = 700")
         await pg.click('button[data-a="skel-ai"]')
         check("while it waits the button is disabled and says so", await pg.locator('button[data-a="skel-ai"]').is_disabled() and "verific" in (await pg.locator('button[data-a="skel-ai"]').text_content()).lower())
+        check("while it waits, 'Gata' and 'Arată referința' are disabled too", await pg.locator('button[data-a="skel-done"]').is_disabled() and await pg.locator('button[data-a="skel-peek"]').is_disabled())
         await pg.evaluate("document.querySelector('button[data-a=\"skel-back\"]').click()")
-        await pg.wait_for_timeout(300)
+        await pg.wait_for_timeout(900)
+        await pg.evaluate("window.__delay = 0")
         await open_skel(pg)
         check("a verdict that arrives after leaving the screen is dropped", await pg.locator('button[data-a="skel-tick"]').count() == 0 and len(await calls(pg)) == before + 1)
 
