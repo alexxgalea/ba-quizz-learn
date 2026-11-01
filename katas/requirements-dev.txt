@@ -1,7 +1,24 @@
 # Dependențe de dezvoltare pentru testele din katas/ (doar pentru teste: aplicația rămâne fără dependențe).
 # Instalare: python3 -m pip install -r katas/requirements-dev.txt
-pytest>=8.0
+# Fără ele, testele care le cer sar cu un mesaj clar (pytest.importorskip).
+# Limitele de jos sunt minimele; testele au rulat cu pytest 9.2.0, celery 5.6.3, PyJWT 2.15.0,
+# redis 8.1.0, pika 1.4.4, boto3 1.43.123, moto 5.2.5, requests 2.34.2 (1 nov. 2026).
+pytest>=9.0
+
 # skel_celery_*: task-uri Celery, testate fără broker (apel direct și .apply())
 celery>=5.6
+
 # skel_security (s-security-jwt)
 PyJWT>=2.10
+
+# Redis: redis-py + binarul `redis-server` din PATH (apt install redis-server);
+# testele pornesc singure un server temporar pe un port liber.
+redis>=7.0
+
+# RabbitMQ: doar semnăturile reale din pika; nu e nevoie de broker.
+pika>=1.3
+
+# AWS: boto3 testat cu moto (S3 simulat în proces) și requests.
+boto3>=1.40
+moto[s3]>=5.1
+requests>=2.32
