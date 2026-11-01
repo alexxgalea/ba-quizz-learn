@@ -341,6 +341,13 @@
   const dueQ = () => MCQ.filter(q => MOD[q.m].p < 4 && isDue(S.q[q.id])).sort(byDue(S.q));
   const dueO = () => ORAL.filter(c => MOD[c.m].p < 4 && isDue(S.o[c.id])).sort(byDue(S.o));
   const dueX = () => OPEN.filter(q => isDue(S.x[q.id])).sort(byDue(S.x));
+  const dueS = () => SKEL.filter(k => isDue(S.s[k.id])).sort(byDue(S.s));    // schelete scadente, cele mai slabe primele
+  // Scheletele neîncepute, din modulele cu nevoia cea mai mare (egalitățile păstrează ordinea priorității, apoi a catalogului).
+  function newS(n) {
+    const mods = MODS.filter(m => m.p < 4 && SKEL.some(k => k.m === m.id)).sort((a, b) => modNeed(b) - modNeed(a));
+    const out = []; for (const m of mods) for (const k of SKEL) if (k.m === m.id && !S.s[k.id]) out.push(k);
+    return out.slice(0, n);
+  }
   function pickDue(n) { return dueQ().slice(0, n); }
   // Mix inteligent: întâi ce e scadent (cel mult 60%), apoi grile pe nivelul tău, mai multe din modulele slabe și din P1.
   function pickSmart(n) {
@@ -444,6 +451,14 @@
       min = 15; go = ms.length ? { t: "oral", ms: ms.map(m => m.id) } : { t: "oral", due: true };
       text = (IV.ready() ? "Oral, cu „Răspunde intervievatorului”: " : "Oral, cu voce tare și cronometru: ") + (ms.length ? ms.map(m => m.short).join(", ") : "cardurile scadente") + ".";
     }
+    else if (key === "sch") {
+      if (!SKEL.length) return null;
+      const dn = c.today ? c.dS : [], nw = c.today ? c.nS : [], fin = isDone(dayId + "-sch");
+      if (c.today && !dn.length && !nw.length && !fin) return null;
+      min = dn.length + nw.length > 4 ? 20 : 15;
+      text = !c.today ? "Schelete: cele scadente + 3 noi." : dn.length || nw.length ? "Schelete: " + dn.length + " scadente + " + nw.length + " noi." : "Schelete: făcute azi.";
+      go = { t: "skel" }; const first = dn[0] || nw[0]; if (first) go.id = first.id;
+    }
     else if (key === "gap") { const n = gapList().length; if (!n) return null; min = 10; text = "Pentru tine: " + n + (n === 1 ? " gol" : " goluri") + " de la oral. Teorie pe ce ai ratat, apoi întrebarea țintită."; go = { t: "study", tab: "gaps" }; }
     else if (key === "open") { min = 15; const ms = (c.mods || []).map(m => m.id); text = ms.length ? "Întrebări deschise din modulele de azi, cu voce tare." : "8 întrebări deschise, cu voce tare: răspunzi, dezvălui, te notezi."; go = ms.length ? { t: "open", ms } : { t: "open" }; }
     else if (key === "smart") { min = 15; text = "Mix inteligent: 15 grile pe nivelul tău."; go = { t: "smart" }; }
@@ -455,7 +470,7 @@
     else return null;
     return { id: dayId + "-" + key, key, min, text, go };
   }
-  const KEY_ORDER = ["diag", "due", "sheet-", "oral", "gap", "open", "smart", "mock", "kata-", "mist", "intv", "log"];
+  const KEY_ORDER = ["diag", "due", "sheet-", "oral", "sch", "gap", "open", "smart", "mock", "kata-", "mist", "intv", "log"];
   const keyRank = k => { const i = KEY_ORDER.findIndex(o => k === o || (o.slice(-1) === "-" && k.indexOf(o) === 0)); return i < 0 ? 99 : i; };
   // Rețeta unei seri: scadențe → fișă + grile pe modulele cu nevoie mare → oral pe aceleași module → kata → greșeli.
   // În ultima seară: fără modul nou în final, formulările P1 cu voce tare și logistică.
@@ -468,7 +483,7 @@
     const hasDiag = S.h.some(e => e.mode === "diag");
     for (let i = 0; i < left; i++) {
       const date = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + i), iso = isoLocal(date), id = "g" + iso, last = i === left - 1, today = i === 0;
-      const c = { today, mods: [], dq: today ? dueQ().length : 0, dO: today ? dueO().length : 0, dX: today ? dueX().length : 0, mist: today ? pickMistakes().length : 0 };
+      const c = { today, mods: [], dq: today ? dueQ().length : 0, dO: today ? dueO().length : 0, dX: today ? dueX().length : 0, mist: today ? pickMistakes().length : 0, dS: today ? dueS() : [], nS: today ? newS(3) : [] };
       const total = Math.round(h * 60), tasks = [], has = new Set();
       const T = key => { if (has.has(key)) return null; const t = mkTask(id, key, c); if (t) { tasks.push(t); has.add(key); } return t; };
       if (today) {
@@ -483,7 +498,8 @@
       let budget = total - (today ? spentMin(iso) : 0);
       if (today && !hasDiag && readiness().cover < 0.2) { const t = T("diag"); if (t) budget -= t.min; }
       { const t = T("due"); if (t) budget -= t.min; }
-      const fixed = (last ? 20 : 0) + 10 + 15 + 20 + (hasGaps ? 10 : 0);           // formulări + greșeli + oral + kata + goluri
+      const schT = has.has("sch") ? null : mkTask(id, "sch", c);                    // schelete: iau din același buget ca mixul inteligent, nu din kata
+      const fixed = (last ? 20 : 0) + 10 + 15 + 20 + (hasGaps ? 10 : 0) + (schT ? schT.min : 0);   // formulări + greșeli + oral + kata + goluri + schelete
       let modBudget = budget - fixed;
       const fresh = [];
       while (queue.length && modBudget >= 10) {
@@ -496,6 +512,7 @@
       c.mods = c.mods.concat(fresh);
       if (c.mods.length) { if (c.mods.some(m => ORAL_BY_M[m.id].length)) T("oral"); else T("open"); }
       else { T("smart"); T("open"); if (modBudget >= 25) T("mock"); }
+      T("sch");
       if (hasGaps) T("gap");
       const k = nextKata(usedK);
       if (k && modBudget > -10) { usedK.add(k); T("kata-" + k); }
@@ -534,7 +551,7 @@
   // ---------- UI state ----------
   let ui = {
     tab: "plan", run: null, result: null,
-    study: { seg: "sheets", open: null, kata: null, skel: null, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
+    study: { seg: "sheets", open: null, kata: null, skel: null, skelDue: false, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
@@ -1655,7 +1672,7 @@
     [1, 2, 3, 4].forEach(p => {
       h += '<div class="eyebrow" style="margin-top:4px">' + PNAME[p] + "</div>";
       MODS.filter(m => m.p === p).forEach(m => {
-        const s = P.sheets[m.id], st = modStats(m.id), nq = MCQ_BY_M[m.id].length, no = ORAL_BY_M[m.id].length;
+        const s = P.sheets[m.id], st = modStats(m.id), nq = MCQ_BY_M[m.id].length, no = ORAL_BY_M[m.id].length, nsk = SKEL.filter(k => k.m === m.id).length;
         const open = ui.study.open === m.id;
         h += '<details class="sheet" id="sheet-' + m.id + '" data-m="' + m.id + '"' + (open ? " open" : "") + '><summary><span class="chip">' + m.code + '</span><span class="nm">' + esc(m.name) + '</span><span class="xs muted mono">' + pc(st.mastery) + "%</span></summary>";
         if (open) {
@@ -1666,6 +1683,7 @@
             '<div class="row">' + (nq ? '<button class="btn primary sm" data-a="mcq-mod" data-m="' + m.id + '">Grile (' + nq + ")</button>" : "") +
             (no ? '<button class="btn sm" data-a="oral-mod" data-m="' + m.id + '">Oral (' + no + ")</button>" : "") +
             (IN_ARTIFACT ? '<a class="btn sm" data-lesson-link href="' + PWA_URL + '" target="_blank" rel="noopener">Ascultă în aplicație</a>' : '<button class="btn sm" data-a="listen" data-m="' + m.id + '">Ascultă</button>') +
+            (nsk ? '<button class="btn sm" data-a="skel-mod" data-m="' + m.id + '">Schelete (' + nsk + ")</button>" : "") +
             (s.page ? '<button class="btn sm" data-a="seg" data-seg="' + s.page + '">Deschide pagina</button>' : "") + "</div>" + vAsk("sheet:" + m.id) + "</div>";
         }
         h += "</details>";
@@ -1708,18 +1726,24 @@
   const skelMarks = k => (k.v ? '<span class="chip">' + esc(k.v) + "</span>" : "") + (k.st ? '<span class="chip">verificat structural</span>' : "");
   // Modulele cu schelete, după prioritate (ordinea din MODS în cadrul aceleiași priorități).
   const skelMods = () => MODS.map((m, i) => ({ m, i })).filter(o => SKEL.some(k => k.m === o.m.id)).sort((a, b) => a.m.p - b.m.p || a.i - b.i).map(o => o.m);
+  const skelRow = (k, mod) => '<button class="kata skel" data-a="skel" data-k="' + k.id + '"><span class="stack-s" style="gap:2px;min-width:0"><span class="t">' + esc(k.t) + '</span>' +
+    (mod || k.v || k.st ? '<span class="row" style="gap:4px">' + (mod ? '<span class="chip">' + esc(MOD[k.m].code) + "</span>" : "") + skelMarks(k) + "</span>" : "") + "</span>" + skelChip(k.id) + "</button>";
   function vSkelList() {
+    const due = dueS();
     let h = '<p class="muted small">Forma minimă a fiecărui concept, scrisă din memorie în 2–5 minute: cum pornești un proces, cum arată o coadă sigură între thread-uri, un fixture cu <code>yield</code>. Scrii, te notezi pe punctele esențiale, iar scheletul revine la scadență.</p>';
+    if (ui.study.skelDue) {
+      h += '<div class="spread"><h3>Scadente (' + due.length + ')</h3><button class="btn sm" data-a="skel-all">Toate scheletele</button></div>';
+      return h + (due.length ? '<div class="stack-s">' + due.map(k => skelRow(k, true)).join("") + "</div>" : '<p class="small muted">Nimic scadent acum. Scheletele revin pe măsură ce le notezi.</p>');
+    }
+    h += '<button class="btn' + (due.length ? " primary" : "") + ' block" data-a="skel-due">Scadente (' + due.length + ")</button>";
     for (const m of skelMods()) {
-      const list = SKEL.filter(k => k.m === m.id);
-      h += '<div class="stack-s" data-skel-mod="' + m.id + '"><div class="eyebrow" style="margin-top:4px">' + esc(m.code) + " · " + esc(m.short) + '</div>' +
-        list.map(k => '<button class="kata skel" data-a="skel" data-k="' + k.id + '"><span class="stack-s" style="gap:2px;min-width:0"><span class="t">' + esc(k.t) + '</span>' +
-          (k.v || k.st ? '<span class="row" style="gap:4px">' + skelMarks(k) + "</span>" : "") + "</span>" + skelChip(k.id) + "</button>").join("") + "</div>";
+      h += '<div class="stack-s" data-skel-mod="' + m.id + '"><div class="eyebrow" style="margin-top:4px">' + esc(m.code) + " · " + esc(m.short) + "</div>" +
+        SKEL.filter(k => k.m === m.id).map(k => skelRow(k, false)).join("") + "</div>";
     }
     return h;
   }
   // Ciorna fiecărui schelet: doar pe dispozitiv (localStorage), nu în S, nu în sincronizare, export sau brief.
-  const SKD_KEY = "onapsis-skel-draft-v1";
+  const SKD_KEY = "onapsis-skel-draft-v1", SKEL_DUR_MAX = 15 * 60;
   const Drafts = {
     all() { try { const o = JSON.parse(localStorage.getItem(SKD_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } },
     get(id) { return this.all()[id] || ""; },
@@ -1729,7 +1753,7 @@
   // marcată pe schelet (ui.study.peeked) până la salvare, ca o ieșire și o revenire să nu șteargă regula „contează 0”.
   function skelRun(id) {
     const st = ui.study, peek = !!st.peeked[id];
-    if (!st.attempt || st.attempt.id !== id) st.attempt = { id, phase: peek ? "grade" : "write", ticks: [], peek, code: Drafts.get(id) };
+    if (!st.attempt || st.attempt.id !== id) st.attempt = { id, phase: peek ? "grade" : "write", ticks: [], peek, code: Drafts.get(id), t0: now() };
     return st.attempt;
   }
   function skelScrollTo(id) { const el = $('[data-a="skel"][data-k="' + id + '"]'); if (el) el.scrollIntoView({ block: "center" }); }
@@ -1799,6 +1823,9 @@
     h += '<section class="card stack-s"><h3>Întrebări deschise pe cutii</h3><div class="boxes" style="grid-template-columns:repeat(6,1fr)">' + ["noi", "c. 1", "c. 2", "c. 3", "c. 4", "c. 5"].map((l, i) => '<div><div class="v">' + xc[i] + '</div><div class="l">' + l + "</div></div>").join("") + "</div></section>";
     const ks = { solo: 0, hint: 0, redo: 0 }; KATAS.forEach(k => { const s = kataStatus(k.id); if (s) ks[s]++; });
     h += '<section class="card stack-s"><h3>Live coding</h3><p class="small">' + ks.solo + " rezolvate singur · " + ks.hint + " cu indicii · " + ks.redo + " de reluat · " + (KATAS.length - ks.solo - ks.hint - ks.redo) + " neîncepute</p></section>";
+    // schelete: știute = cutia ≥ 3, de repetat = scadente, neîncepute = fără încercare
+    const sk = { known: SKEL.filter(k => S.s[k.id] && S.s[k.id].b >= 3).length, due: dueS().length, fresh: SKEL.filter(k => !S.s[k.id]).length };
+    if (SKEL.length) h += '<section class="card stack-s"><h3>Schelete</h3><p class="small">' + sk.known + " știute · " + sk.due + " de repetat · " + sk.fresh + " neîncepute</p></section>";
     // lacunele: grilele P1 (apoi P2) văzute și rămase în cutia 1, cele mai recente primele
     const weak = MCQ.filter(q => MOD[q.m].p < 3 && S.q[q.id] && S.q[q.id].b <= 1).sort((a, b) => MOD[a.m].p - MOD[b.m].p || S.q[b.id].t - S.q[a.id].t).slice(0, 10);
     if (weak.length) h += '<section class="card stack-s"><div class="spread"><h3>Lacunele de acum</h3><span class="xs muted">P1, apoi P2</span></div>' +
@@ -1807,7 +1834,7 @@
     const hist = S.h.slice().reverse();
     const mcqH = S.h.filter(e => e.kind === "mcq" && e.n);
     h += '<section class="card stack-s"><h3>Istoric</h3>' + (mcqH.length > 1 ? spark(mcqH.slice(-20).map(e => e.c / e.n)) : "") +
-      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : e.kind === "jarvis" ? "Jarvis" : "grile") + '</span></span><span class="mono xs">' + (e.lesson ? e.n + " idei" : e.kind === "oral" || e.kind === "open" || e.kind === "jarvis" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
+      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : e.kind === "jarvis" ? "Jarvis" : e.kind === "skel" ? "schelete" : "grile") + '</span></span><span class="mono xs">' + (e.lesson ? e.n + " idei" : e.kind === "oral" || e.kind === "open" || e.kind === "jarvis" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
     h += '<section class="card stack-s"><h3>Salvare</h3><p class="small" id="sync-l">' + esc(Sync.label()) + '</p><div class="row">' +
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
@@ -1862,6 +1889,7 @@
     else if (g.t === "sheet") openSheet(g.m);
     else if (g.t === "oral") startOral(g.due ? { due: true } : { ms: g.ms || [g.m] });
     else if (g.t === "ivmock") { if (IV.ready()) startIvMock(g.n); else startOral({ due: true }); }
+    else if (g.t === "skel") { ui.tab = "study"; ui.study.seg = "skel"; ui.study.skelDue = false; ui.study.skel = g.id && SBY[g.id] ? g.id : null; ui.study.attempt = null; render(); window.scrollTo(0, 0); }
     else if (g.t === "kata") { ui.tab = "study"; ui.study.seg = "katas"; ui.study.kata = g.id; ui.study.hints = 0; render(); window.scrollTo(0, 0); }
     else if (g.t === "study") { ui.tab = "study"; ui.study.seg = g.tab; ui.study.kata = null; render(); window.scrollTo(0, 0); }
   }
@@ -1998,8 +2026,15 @@
         S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
         break;
       }
-      case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
+      case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.skelDue = false; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
       case "open-sheet": openSheet(b.dataset.m); break;
+      case "skel-due": ui.study.skelDue = true; render(); window.scrollTo(0, 0); break;
+      case "skel-mod": {
+        ui.tab = "study"; ui.study.seg = "skel"; ui.study.skelDue = false; ui.study.skel = null; ui.study.attempt = null; render();
+        const el = document.querySelector('[data-skel-mod="' + b.dataset.m + '"]'); if (el) el.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
+        break;
+      }
+      case "skel-all": ui.study.skelDue = false; render(); window.scrollTo(0, 0); break;
       case "skel": ui.study.skel = b.dataset.k; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
       case "skel-done": { const r = ui.study.attempt; if (r) { r.phase = "grade"; render(); } break; }
       case "skel-ai": skelCheck(); break;
@@ -2007,7 +2042,10 @@
       case "skel-tick": { const r = ui.study.attempt; if (r) { const i = +b.dataset.k; r.ticks[i] = !r.ticks[i]; render(); } break; }
       case "skel-save": {
         const r = ui.study.attempt, k = r && SBY[r.id]; if (!k) break;
-        updS(k.id, r.peek ? 0 : r.ticks.filter(Boolean).length / k.k.length);
+        const got = r.peek ? 0 : r.ticks.filter(Boolean).length;
+        updS(k.id, got / k.k.length);
+        // timpul intră în istoric ca la celelalte exerciții (spentMin îl numără); o încercare lăsată deschisă se plafonează
+        S.h.push({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) }); S.h = S.h.slice(-HMAX);
         Drafts.set(k.id, ""); delete ui.study.peeked[k.id]; commit();
         ui.study.skel = null; ui.study.attempt = null; render(); toast("Notat: cutia " + S.s[k.id].b);
         skelScrollTo(k.id);

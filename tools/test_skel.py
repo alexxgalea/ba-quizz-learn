@@ -1,7 +1,7 @@
 # Checks Study › Schelete: the list grouped by module, the skeleton screen, the draft kept on the device,
 # self-grading on the essential points with the oral-card Leitner thresholds, "Arată referința" before an attempt → 0,
 # and the new state key (normalize / merge / prune / reset; readiness unchanged).
-import asyncio, pathlib
+import asyncio, json, pathlib, subprocess, tempfile
 from playwright.async_api import async_playwright
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "dist" / "pregatire-onapsis.html").as_uri()
@@ -136,6 +136,159 @@ async def main():
         await open_skel(pg)
         check("a leading newline in the draft survives rendering", (await pg.locator('textarea[data-skel-code]').input_value()) == "\nx = 1")
         await pg.click('button[data-a="skel-back"]')
+
+        # --- "Scadente": the due skeletons, in box order, with the same due dates as questions and cards ---
+        ids = await pg.evaluate("window.PREP.skel.map(s => s.id)")
+        other = next((i for i in ids if i != SID), None)
+        async def set_skels(m):
+            await pg.evaluate("m => { const T = window.__prep, s = T.state(); s.s = m; T.setState(s); }", m)
+        await set_skels({})
+        await open_seg(pg)
+        entry = pg.locator('button[data-a="skel-due"]')
+        check("Scadente entry is on the list and shows 0 on a fresh state", await entry.count() == 1 and "Scadente" in (await entry.text_content()) and "(0)" in (await entry.text_content()))
+        t_now = await pg.evaluate("Date.now()")
+        due = {SID: {"b": 1, "n": 1, "s": 0, "t": t_now - 30 * 60000}}
+        if other: due[other] = {"b": 3, "n": 1, "s": 100, "t": t_now - 3 * 86400000}
+        notdue = next((i for i in ids if i not in due), None)
+        if notdue: due[notdue] = {"b": 2, "n": 1, "s": 100, "t": t_now - 10 * 60000}      # box 2, 10 min ago: not due
+        await set_skels(due)
+        await open_seg(pg)
+        want = [SID] + ([other] if other else [])
+        check("the entry counts the due skeletons only", ("(%d)" % len(want)) in (await pg.locator('button[data-a="skel-due"]').text_content()), await pg.locator('button[data-a="skel-due"]').text_content())
+        await pg.click('button[data-a="skel-due"]')
+        shown = await pg.eval_on_selector_all('button[data-a="skel"]', "bs => bs.map(b => b.dataset.k)")
+        check("Scadente lists the due skeletons only, weakest box first", shown == want, shown)
+        check("no horizontal overflow on the due list", await pg.evaluate("document.documentElement.scrollWidth <= 360"))
+        await pg.click('button[data-a="skel"][data-k="%s"]' % SID)
+        await pg.click('button[data-a="skel-done"]')
+        for i in range(n): await pg.click('button[data-a="skel-tick"][data-k="%d"]' % i)
+        await pg.click('button[data-a="skel-save"]')
+        await pg.wait_for_timeout(150)
+        shown = await pg.eval_on_selector_all('button[data-a="skel"]', "bs => bs.map(b => b.dataset.k)")
+        check("after saving, the skeleton leaves the due list, which stays open", shown == want[1:], shown)
+        await pg.click('button[data-a="seg"][data-seg="skel"]')
+        check("tapping the segment again shows every skeleton", await pg.locator('button[data-a="skel"]').count() == len(ids))
+
+        # --- the evening plan: task "sch" ---
+        iso_in2 = await pg.evaluate("""() => { const t = new Date(), d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 2);
+          return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }""")
+        async def plan_with(m, extra=""):
+            return await pg.evaluate("""([m, iso]) => { const T = window.__prep, s = T.state(); s.s = m; s.c = { d: iso, h: 2.5, t: Date.now() }; s.p = {}; s.h = []; T.setState(s);
+              const plan = T.genPlan(); const day = plan[0];
+              return { day, nextDay: plan[1], ids: day.tasks.map(t => t.key) }; }""", [m, iso_in2])
+        t_now = await pg.evaluate("Date.now()")
+        have_due = {SID: {"b": 1, "n": 1, "s": 0, "t": t_now - 30 * 60000}}
+        P = await plan_with(have_due)
+        sch = next((t for t in P["day"]["tasks"] if t["key"] == "sch"), None)
+        check("every evening has a 'sch' task with a stable id", sch is not None and sch["id"].endswith("-sch") and sch["id"].startswith("g"), P["ids"])
+        n_new = min(3, len(ids) - 1)
+        check("task text counts the due skeletons and the new ones", sch and sch["text"] == "Schelete: 1 scadente + %d noi." % n_new, sch and sch["text"])
+        check("task takes 15-20 minutes", sch and 15 <= sch["min"] <= 20, sch and sch["min"])
+        keys = P["ids"]
+        check("task sits right after oral and before the kata", "oral" in keys and keys.index("sch") == keys.index("oral") + 1 or ("oral" not in keys and "open" in keys), keys)
+        check("a kata is still planned next to the skeleton task", any(k.startswith("kata-") for k in keys), keys)
+        check("task opens the first due skeleton", sch and sch["go"]["t"] == "skel" and sch["go"]["id"] == SID, sch and sch["go"])
+        nxt = next((t for t in P["nextDay"]["tasks"] if t["key"] == "sch"), None)
+        check("later evenings have the task too, without a count", nxt is not None and nxt["id"] != sch["id"], nxt)
+        # nothing due: the task opens a new skeleton from the module with the greatest need
+        P0 = await plan_with({})
+        sch0 = next((t for t in P0["day"]["tasks"] if t["key"] == "sch"), None)
+        best = await pg.evaluate("""() => { const T = window.__prep, P = window.PREP, mods = [...new Set(P.skel.map(k => k.m))];
+          mods.sort((a, b) => T.modNeed(P.modules.find(m => m.id === b)) - T.modNeed(P.modules.find(m => m.id === a)));
+          return P.skel.find(k => k.m === mods[0]).id; }""")
+        check("with nothing due the text says 0 due + the new ones", sch0 and sch0["text"] == "Schelete: 0 scadente + %d noi." % min(3, len(ids)), sch0 and sch0["text"])
+        check("new skeletons come from the module with the greatest need", sch0 and sch0["go"]["id"] == best, (sch0 and sch0["go"], best))
+        # checking the task keeps it after regeneration, and it is not proposed twice
+        await pg.evaluate("""id => { const T = window.__prep, s = T.state(); s.p[id] = { d: 1, t: Date.now() }; T.setState(s); }""", sch["id"])
+        done_plan = await pg.evaluate("window.__prep.genPlan()[0].tasks.filter(t => t.key === 'sch').map(t => t.id)")
+        check("a checked 'sch' task stays after the plan is regenerated", done_plan == [sch["id"]], done_plan)
+        await set_skels({SID: {"b": 5, "n": 3, "s": 100, "t": t_now}})
+        done_plan = await pg.evaluate("window.__prep.genPlan()[0].tasks.filter(t => t.key === 'sch').map(t => t.id)")
+        check("... even after the skeletons were done and nothing is due", done_plan == [sch["id"]], done_plan)
+        # the task opens the skeleton screen in the app
+        await pg.evaluate("""([m, iso]) => { const T = window.__prep, s = T.state(); s.s = m; s.p = {}; s.c = { d: iso, h: 2.5, t: Date.now() }; T.setState(s); }""", [have_due, iso_in2])
+        await pg.click('nav button[data-tab="progress"]'); await pg.click('nav button[data-tab="plan"]')
+        await pg.click('[data-a="go"][data-id$="-sch"]')
+        await pg.wait_for_timeout(100)
+        check("the task opens Schelete at the first due skeleton", (await pg.locator("#main h2").first.text_content()) == title and await pg.locator('textarea[data-skel-code]').count() == 1)
+        await pg.click('button[data-a="skel-back"]')
+
+        # --- time on a skeleton goes into the history (so today's budget shrinks) ---
+        async def timed_attempt(minutes, ticks, peek=False):
+            await pg.evaluate("() => { window.__realNow = window.__realNow || Date.now.bind(Date); window.__shift = 0; Date.now = () => window.__realNow() + window.__shift; }")
+            await open_skel(pg)
+            await pg.evaluate("m => { window.__shift = m * 60000; }", minutes)
+            if peek: await pg.click('button[data-a="skel-peek"]')
+            else: await pg.click('button[data-a="skel-done"]')
+            for i in ticks: await pg.click('button[data-a="skel-tick"][data-k="%d"]' % i)
+            await pg.click('button[data-a="skel-save"]')
+            await pg.wait_for_timeout(100)
+            await pg.evaluate("() => { window.__shift = 0; }")
+            return await pg.evaluate("window.__prep.state().h.filter(e => e.kind === 'skel')")
+        await pg.evaluate("() => { const T = window.__prep, s = T.state(); s.h = []; s.s = {}; T.setState(s); }")
+        hs = await timed_attempt(4, [0, 1])
+        e = hs[-1] if hs else None
+        check("a saved attempt writes a history entry (kind skel) with the time spent", e and e["mode"] == "skel" and e["title"] == title and e["n"] == n and e["c"] == 2 and 239 <= e["dur"] <= 242 and e["id"] and e["ts"], e)
+        hs = await timed_attempt(120, [0])
+        check("an attempt left open for hours counts at most 15 minutes", hs[-1]["dur"] <= 900 and hs[-1]["dur"] > 0, hs[-1])
+        hs = await timed_attempt(2, [0, 1], peek=True)
+        check("a peeked attempt is logged with the score it got (0)", hs[-1]["c"] == 0, hs[-1])
+        check("three attempts, three history entries", len(hs) == 3, len(hs))
+
+        # --- Progres: the skeleton line and the history row ---
+        t_now = await pg.evaluate("Date.now()")
+        cons = {SID: {"b": 3, "n": 2, "s": 100, "t": t_now - 3 * 86400000}}                # known (box >= 3), and due
+        if other: cons[other] = {"b": 1, "n": 1, "s": 0, "t": t_now - 30 * 60000}           # due, not known
+        third = next((i for i in ids if i not in cons), None)
+        if third: cons[third] = {"b": 2, "n": 1, "s": 60, "t": t_now - 10 * 60000}          # started, not due, not known
+        await set_skels(cons)
+        await pg.click('nav button[data-tab="progress"]')
+        sec = pg.locator("section.card", has=pg.locator("h3", has_text="Schelete"))
+        want_line = "1 știute · %d de repetat · %d neîncepute" % (1 + (1 if other else 0), len(ids) - len(cons))
+        check("Progres shows X știute · Y de repetat · Z neîncepute", await sec.count() == 1 and want_line in (await sec.text_content()), await sec.text_content() if await sec.count() else "no section")
+        row = pg.locator(".hist-r").first
+        check("the history lists the skeleton attempt with its score", title in (await row.text_content()) and "schelete" in (await row.text_content()) and "0/%d" % n in (await row.text_content()), await row.text_content())
+        check("no horizontal overflow on Progres", await pg.evaluate("document.documentElement.scrollWidth <= 360"))
+
+        # --- the module sheet links to its skeletons ---
+        per_mod = await pg.evaluate("() => { const c = {}; window.PREP.skel.forEach(k => { c[k.m] = (c[k.m] || 0) + 1; }); return c; }")
+        no_skel = await pg.evaluate("() => window.PREP.modules.map(m => m.id).filter(id => !window.PREP.skel.some(k => k.m === id))")
+        for mid, cnt in list(per_mod.items())[:2]:
+            await pg.click('nav button[data-tab="progress"]')
+            await pg.click('.tile[data-m="%s"]' % mid)
+            lk = pg.locator('details.sheet[open] button[data-a="skel-mod"]')
+            check("sheet %s has the link 'Schelete (%d)'" % (mid, cnt), await lk.count() == 1 and (await lk.text_content()).strip() == "Schelete (%d)" % cnt, await lk.count())
+            await lk.click()
+            on_skel = await pg.evaluate("document.querySelector('button[data-a=seg][aria-pressed=true]').dataset.seg")
+            vis = await pg.evaluate("m => { const e = document.querySelector('[data-skel-mod=' + m + ']'); if (!e) return false; const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }", mid)
+            check("the link opens Schelete scrolled to module %s" % mid, on_skel == "skel" and vis, (on_skel, vis))
+        if no_skel:
+            await pg.click('nav button[data-tab="progress"]'); await pg.click('.tile[data-m="%s"]' % no_skel[0])
+            check("a sheet without skeletons has no link", await pg.locator('details.sheet[open] button[data-a="skel-mod"]').count() == 0)
+
+        # --- the Perplexity brief: counts per module and the missed skeletons ---
+        def brief(skels):
+            with tempfile.TemporaryDirectory() as d:
+                src, out = pathlib.Path(d) / "progress.json", pathlib.Path(d) / "brief.md"
+                src.write_text(json.dumps({"v": 1, "q": {}, "o": {}, "h": [], "s": skels}))
+                subprocess.run(["node", str(ROOT / "export" / "make_brief.js"), str(src), str(out)], check=True, capture_output=True)
+                return out.read_text()
+        mods = await pg.evaluate("() => window.PREP.modules.map(m => ({ id: m.id, short: m.short }))")
+        short = {m["id"]: m["short"] for m in mods}
+        sk_mod = await pg.evaluate("window.PREP.skel.map(s => [s.id, s.m, s.t])")
+        mod_of = {i: m for i, m, _ in sk_mod}; title_of = {i: t for i, _, t in sk_mod}
+        weak_id = SID; strong_id = other
+        sprog = {weak_id: {"b": 1, "n": 1, "s": 20, "t": 1000}}
+        if strong_id: sprog[strong_id] = {"b": 4, "n": 2, "s": 90, "t": 2000}
+        md = brief(sprog)
+        known_in = lambda mid: sum(1 for i, e in sprog.items() if mod_of[i] == mid and e["b"] >= 3)
+        total_in = lambda mid: sum(1 for m in mod_of.values() if m == mid)
+        check("brief counts skeletons per module (known / total)", ("%s: %d/%d" % (short[mod_of[SID]], known_in(mod_of[SID]), total_in(mod_of[SID]))) in md)
+        check("brief lists a skeleton whose last score is under 50%", ("`%s`" % weak_id) in md and title_of[weak_id] in md and "20%" in md)
+        if strong_id: check("brief does not list a skeleton scored 50% or more", ("`%s`" % strong_id) not in md)
+        md2 = brief({weak_id: {"b": 2, "n": 1, "s": 50, "t": 1000}})
+        check("exactly 50% is not a miss", ("`%s`" % weak_id) not in md2)
+        check("a progress export without skeletons still builds the brief, with zero known", "0 știute din" in brief({}))
 
         # --- the state key: normalize / merge / prune / reset; readiness unchanged ---
         R = await pg.evaluate("""(id) => {
