@@ -235,6 +235,23 @@ async def main():
         check("a peeked attempt is logged with the score it got (0)", hs[-1]["c"] == 0, hs[-1])
         check("three attempts, three history entries", len(hs) == 3, len(hs))
 
+        # --- the budget: skeleton time shrinks tonight's plan, and the task never costs the kata ---
+        async def plan_mins(hours, hist_dur=0, skels=None):
+            return await pg.evaluate("""([hours, dur, skels, iso]) => { const T = window.__prep, s = T.state();
+              s.s = skels || {}; s.p = {}; s.h = dur ? [{ id: 'hs', ts: Date.now(), kind: 'skel', mode: 'skel', title: 'x', n: 4, c: 4, dur }] : [];
+              s.c = { d: iso, h: hours, t: Date.now() }; T.setState(s);
+              const day = T.genPlan()[0]; return { total: day.tasks.reduce((a, t) => a + t.min, 0), keys: day.tasks.map(t => t.key) }; }""", [hours, hist_dur, skels, iso_in2])
+        saved = await pg.evaluate("() => JSON.stringify(window.__prep.state())")
+        base = await plan_mins(2.5)
+        spent = await plan_mins(2.5, 60 * 60)
+        check("an hour spent on skeletons shrinks tonight's plan (the history entry counts)", spent["total"] < base["total"], (base["total"], spent["total"]))
+        all_done = {i: {"b": 5, "n": 3, "s": 100, "t": t_now} for i in ids}          # nothing due, nothing new: no 'sch' task
+        for hrs in (1.5, 2, 2.5, 3, 4, 5, 6):
+            with_sch = await plan_mins(hrs); without = await plan_mins(hrs, 0, all_done)
+            check("%s h: the skeleton task is there, and the kata survives exactly when it would without it" % hrs, "sch" in with_sch["keys"] and "sch" not in without["keys"] and any(k.startswith("kata-") for k in with_sch["keys"]) == any(k.startswith("kata-") for k in without["keys"]), (with_sch["keys"], without["keys"]))
+
+        await pg.evaluate("j => window.__prep.setState(window.__prep.normalize(JSON.parse(j)))", saved)
+
         # --- Progres: the skeleton line and the history row ---
         t_now = await pg.evaluate("Date.now()")
         cons = {SID: {"b": 3, "n": 2, "s": 100, "t": t_now - 3 * 86400000}}                # known (box >= 3), and due

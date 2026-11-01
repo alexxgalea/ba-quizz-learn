@@ -341,7 +341,7 @@
   const dueQ = () => MCQ.filter(q => MOD[q.m].p < 4 && isDue(S.q[q.id])).sort(byDue(S.q));
   const dueO = () => ORAL.filter(c => MOD[c.m].p < 4 && isDue(S.o[c.id])).sort(byDue(S.o));
   const dueX = () => OPEN.filter(q => isDue(S.x[q.id])).sort(byDue(S.x));
-  const dueS = () => SKEL.filter(k => isDue(S.s[k.id])).sort(byDue(S.s));    // schelete scadente, cele mai slabe primele
+  const dueS = () => SKEL.filter(k => MOD[k.m].p < 4 && isDue(S.s[k.id])).sort(byDue(S.s));    // schelete scadente, cele mai slabe primele
   // Scheletele neîncepute, din modulele cu nevoia cea mai mare (egalitățile păstrează ordinea priorității, apoi a catalogului).
   function newS(n) {
     const mods = MODS.filter(m => m.p < 4 && SKEL.some(k => k.m === m.id)).sort((a, b) => modNeed(b) - modNeed(a));
