@@ -393,6 +393,7 @@ figcaption { font-size: 13.5px; color: var(--muted); }
 .kata .n { font: 800 22px/1 var(--font-display); color: var(--accent); text-align: center; }
 .kata .t { font-weight: 650; }
 .kata.skel { grid-template-columns: 1fr auto; }
+.skel-grp { text-transform: none; letter-spacing: .02em; font-size: 12.5px; margin-top: 4px; }
 textarea.skel-code { width: 100%; min-height: 220px; font: 13px/1.45 var(--font-mono); tab-size: 4; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px; background: var(--code-bg); color: var(--ink); resize: vertical; white-space: pre; overflow-x: auto; font-variant-ligatures: none; }
 .hint { border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 10px 10px 0; padding: 10px 12px; font-size: 15px; }
 .star { display: grid; grid-template-columns: 22px 1fr; gap: 6px 10px; font-size: 15px; }

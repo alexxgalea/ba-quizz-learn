@@ -1726,6 +1726,8 @@
   const skelMarks = k => (k.v ? '<span class="chip">' + esc(k.v) + "</span>" : "") + (k.st ? '<span class="chip">verificat structural</span>' : "");
   // Modulele cu schelete, după prioritate (ordinea din MODS în cadrul aceleiași priorități).
   const skelMods = () => MODS.map((m, i) => ({ m, i })).filter(o => SKEL.some(k => k.m === o.m.id)).sort((a, b) => a.m.p - b.m.p || a.i - b.i).map(o => o.m);
+  // La frontend, scheletele sunt împărțite pe limbaj / framework (k.g); grupele goale nu apar.
+  const SKEL_GROUPS = [["react", "React"], ["js", "JavaScript"], ["ts", "TypeScript"]];
   const skelRow = (k, mod) => '<button class="kata skel" data-a="skel" data-k="' + k.id + '"><span class="stack-s" style="gap:2px;min-width:0"><span class="t">' + esc(k.t) + '</span>' +
     (mod || k.v || k.st ? '<span class="row" style="gap:4px">' + (mod ? '<span class="chip">' + esc(MOD[k.m].code) + "</span>" : "") + skelMarks(k) + "</span>" : "") + "</span>" + skelChip(k.id) + "</button>";
   function vSkelList() {
@@ -1737,8 +1739,12 @@
     }
     h += '<button class="btn' + (due.length ? " primary" : "") + ' block" data-a="skel-due">Scadente (' + due.length + ")</button>";
     for (const m of skelMods()) {
-      h += '<div class="stack-s" data-skel-mod="' + m.id + '"><div class="eyebrow" style="margin-top:4px">' + esc(m.code) + " · " + esc(m.short) + "</div>" +
-        SKEL.filter(k => k.m === m.id).map(k => skelRow(k, false)).join("") + "</div>";
+      const list = SKEL.filter(k => k.m === m.id);
+      const row = k => skelRow(k, false);
+      const body = m.id === "frontend"
+        ? SKEL_GROUPS.filter(g => list.some(k => k.g === g[0])).map(g => '<div class="stack-s" data-skel-grp="' + g[0] + '"><div class="eyebrow skel-grp">' + g[1] + "</div>" + list.filter(k => k.g === g[0]).map(row).join("") + "</div>").join("")
+        : list.map(row).join("");
+      h += '<div class="stack-s" data-skel-mod="' + m.id + '"><div class="eyebrow" style="margin-top:4px">' + esc(m.code) + " · " + esc(m.short) + "</div>" + body + "</div>";
     }
     return h;
   }
