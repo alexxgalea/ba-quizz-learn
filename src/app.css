@@ -337,6 +337,8 @@ details.rev .rv { padding: 0 14px 14px; display: flex; flex-direction: column; g
 
 /* ---------- code ---------- */
 pre.code { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.55; tab-size: 4; max-width: 100%; }
+pre.code, code, textarea.skel-code { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+.skel-ref pre.code { font-size: 11px; padding: 10px 6px; margin: 0 -10px; max-width: none; }
 pre.code code { background: none; border: 0; padding: 0; font-size: inherit; overflow-wrap: normal; white-space: pre; }
 pre.code.wrap code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 pre.code.wrap .ln { display: block; padding-left: calc((var(--n, 0) + 2) * 1ch); text-indent: calc((var(--n, 0) + 2) * -1ch); }
@@ -390,6 +392,8 @@ figcaption { font-size: 13.5px; color: var(--muted); }
 .kata { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; text-align: left; cursor: pointer; appearance: none; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; width: 100%; }
 .kata .n { font: 800 22px/1 var(--font-display); color: var(--accent); text-align: center; }
 .kata .t { font-weight: 650; }
+.kata.skel { grid-template-columns: 1fr auto; }
+textarea.skel-code { width: 100%; min-height: 220px; font: 13px/1.45 var(--font-mono); tab-size: 4; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px; background: var(--code-bg); color: var(--ink); resize: vertical; white-space: pre; overflow-x: auto; font-variant-ligatures: none; }
 .hint { border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 10px 10px 0; padding: 10px 12px; font-size: 15px; }
 .star { display: grid; grid-template-columns: 22px 1fr; gap: 6px 10px; font-size: 15px; }
 .star b { font: 800 14px/1.5 var(--font-display); color: var(--accent); }

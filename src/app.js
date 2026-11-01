@@ -5,10 +5,11 @@
   // ---------- indexes ----------
   const MODS = P.modules;
   const MOD = Object.fromEntries(MODS.map(m => [m.id, m]));
-  const MCQ = P.mcq, ORAL = P.oral, KATAS = P.katas;
+  const MCQ = P.mcq, ORAL = P.oral, KATAS = P.katas, SKEL = P.skel || [];
   const QBY = Object.fromEntries(MCQ.map(q => [q.id, q]));
   const OBY = Object.fromEntries(ORAL.map(c => [c.id, c]));
   const KBY = Object.fromEntries(KATAS.map(k => [k.id, k]));
+  const SBY = Object.fromEntries(SKEL.map(k => [k.id, k]));
   const MCQ_BY_M = {}, ORAL_BY_M = {};
   MODS.forEach(m => { MCQ_BY_M[m.id] = []; ORAL_BY_M[m.id] = []; });
   MCQ.forEach(q => MCQ_BY_M[q.m].push(q));
@@ -133,10 +134,10 @@
   }
 
   // ---------- state ----------
-  // q grile, o carduri orale, x întrebări deschise, k exerciții, p sarcini bifate, l poziția lecției pe modul ({ n: bucata la care a ajuns, d: data ultimei terminări, t }),
+  // q grile, o carduri orale, x întrebări deschise, k exerciții, s schelete (aceeași formă ca o: b, n, s, t), p sarcini bifate, l poziția lecției pe modul ({ n: bucata la care a ajuns, d: data ultimei terminări, t }),
   // h istoric, c setări (data interviului, ore pe seară)
-  const MAPS = ["q", "o", "x", "k", "p", "l"];
-  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, p: {}, l: {}, h: [] }; }
+  const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
+  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] }; }
   const validCfg = c => !!(c && typeof c === "object" && /^\d{4}-\d{2}-\d{2}$/.test(c.d || ""));
   function normalize(x) {
     const s = emptyState();
@@ -276,6 +277,16 @@
     else e.b = 1;
     e.t = now();
     S.o[id] = e;
+  }
+  // Schelete: aceleași praguri ca la cardurile orale, pe procentul de puncte esențiale bifate.
+  function updS(id, p) {
+    const e = Object.assign({ b: 0, n: 0 }, S.s[id]);
+    e.n++; e.s = Math.round(p * 100);
+    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
+    else if (p >= 0.5) e.b = Math.max(1, e.b);
+    else e.b = 1;
+    e.t = now();
+    S.s[id] = e;
   }
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
   function updX(id, g) {
@@ -530,7 +541,7 @@
   // ---------- UI state ----------
   let ui = {
     tab: "plan", run: null, result: null,
-    study: { seg: "sheets", open: null, kata: null, hints: 0, kEnd: 0, gapOpen: {} },
+    study: { seg: "sheets", open: null, kata: null, skel: null, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
@@ -1609,7 +1620,7 @@
   }
 
   // ---------- views: study ----------
-  const SEGS = [["sheets", "Fișe"], ["gaps", "Pentru tine"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
+  const SEGS = [["sheets", "Fișe"], ["gaps", "Pentru tine"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["skel", "Schelete"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
   function vStudy() {
     const st = ui.study;
     let h = '<div class="seg" role="group" aria-label="Secțiuni de studiu">' + SEGS.map(s => '<button data-a="seg" data-seg="' + s[0] + '" aria-pressed="' + (st.seg === s[0]) + '">' + s[1] + (s[0] === "gaps" && gapList().length ? " (" + gapList().length + ")" : "") + "</button>").join("") + "</div>";
@@ -1618,6 +1629,7 @@
     else if (st.seg === "intv") h += vIntv();
     else if (st.seg === "gloss") h += vGloss();
     else if (st.seg === "katas") h += st.kata ? vKata(KBY[st.kata]) : vKataList();
+    else if (st.seg === "skel") h += st.skel && SBY[st.skel] ? vSkel(SBY[st.skel]) : vSkelList();
     else if (st.seg === "design") h += vDesign();
     else if (st.seg === "behav") h += vBehav();
     else h += vTactics();
@@ -1690,6 +1702,57 @@
     h += '<details class="model"><summary>Soluția de referință (' + esc(k.check || "testată cu pytest") + ')</summary><div class="stack-s" style="padding:0 14px 14px">' + codeBlock(code, !!k.lang && k.lang !== "py") + '<button class="btn sm" data-a="copy-code" data-k="' + k.id + '">Copiază codul</button></div></details>';
     h += '<section class="card stack-s"><h3>Complexitate</h3><p class="small">' + fmt(k.complexity) + '</p><h3 style="margin-top:6px">Întrebări de follow-up</h3><ul class="pts">' + k.follow.map(f => "<li>" + fmt(f) + "</li>").join("") + "</ul></section>";
     h += '<section class="card stack-s"><h3>Cum a mers?</h3><div class="row">' + Object.keys(KST).map(key => '<button class="btn sm' + (s === key ? " primary" : "") + '" data-a="kata-status" data-s="' + key + '">' + KST[key][1] + "</button>").join("") + "</div></section>";
+    return h;
+  }
+  // ---------- schelete ----------
+  // Starea unui schelet în listă: nou, scadent sau cutia lui.
+  function skelChip(id) {
+    const e = S.s[id];
+    if (!e) return '<span class="chip">nou</span>';
+    if (isDue(e)) return '<span class="chip warn">scadent</span>';
+    return '<span class="chip' + (e.b >= 3 ? " ok" : "") + '">cutia ' + e.b + "</span>";
+  }
+  const skelMarks = k => (k.v ? '<span class="chip">' + esc(k.v) + "</span>" : "") + (k.st ? '<span class="chip">verificat structural</span>' : "");
+  // Modulele cu schelete, după prioritate (ordinea din MODS în cadrul aceleiași priorități).
+  const skelMods = () => MODS.map((m, i) => ({ m, i })).filter(o => SKEL.some(k => k.m === o.m.id)).sort((a, b) => a.m.p - b.m.p || a.i - b.i).map(o => o.m);
+  function vSkelList() {
+    let h = '<p class="muted small">Forma minimă a fiecărui concept, scrisă din memorie în 2–5 minute: cum pornești un proces, cum arată o coadă sigură între thread-uri, un fixture cu <code>yield</code>. Scrii, te notezi pe punctele esențiale, iar scheletul revine la scadență.</p>';
+    for (const m of skelMods()) {
+      const list = SKEL.filter(k => k.m === m.id);
+      h += '<div class="stack-s" data-skel-mod="' + m.id + '"><div class="eyebrow" style="margin-top:4px">' + esc(m.code) + " · " + esc(m.short) + '</div>' +
+        list.map(k => '<button class="kata skel" data-a="skel" data-k="' + k.id + '"><span class="stack-s" style="gap:2px;min-width:0"><span class="t">' + esc(k.t) + '</span>' +
+          (k.v || k.st ? '<span class="row" style="gap:4px">' + skelMarks(k) + "</span>" : "") + "</span>" + skelChip(k.id) + "</button>").join("") + "</div>";
+    }
+    return h;
+  }
+  // Ciorna fiecărui schelet: doar pe dispozitiv (localStorage), nu în S, nu în sincronizare, export sau brief.
+  const SKD_KEY = "onapsis-skel-draft-v1";
+  const Drafts = {
+    all() { try { const o = JSON.parse(localStorage.getItem(SKD_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } },
+    get(id) { return this.all()[id] || ""; },
+    set(id, text) { try { const o = this.all(); if (text) o[id] = text; else delete o[id]; localStorage.setItem(SKD_KEY, JSON.stringify(o)); } catch (e) { /* fără localStorage: ciorna rămâne doar în ecran */ } }
+  };
+  // Încercarea curentă (în ui, nu în S): phase write → grade; peek = referința văzută înainte de încercare.
+  function skelRun(id) {
+    const st = ui.study;
+    if (!st.sk || st.sk.id !== id) st.sk = { id, phase: "write", ticks: [], peek: false, code: Drafts.get(id) };
+    return st.sk;
+  }
+  function vSkel(k) {
+    const r = skelRun(k.id), e = S.s[k.id], m = MOD[k.m];
+    let h = '<button class="btn ghost" data-a="skel-back" data-k="' + k.id + '" style="align-self:flex-start">← Toate scheletele</button>';
+    h += '<section class="card stack"><div class="row"><span class="chip acc">' + esc(m.code) + "</span>" + skelMarks(k) + skelChip(k.id) + (e ? leit(e.b) : "") + "</div><h2>" + esc(k.t) + "</h2><p>" + fmt(k.p) + "</p>" +
+      '<textarea class="skel-code" data-skel-code rows="12" maxlength="6000" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Scrie codul aici, din memorie" aria-label="Codul tău"' + (r.phase === "write" ? "" : " readonly") + ">" + esc(r.code) + "</textarea>" +
+      (r.phase === "write" ? '<div class="row"><button class="btn primary" data-a="skel-done">Gata, mă notez</button><button class="btn" data-a="skel-peek">Arată referința</button></div>' : "") + "</section>";
+    if (r.peek) h += '<p class="small skel-peek-note hint">Ai deschis referința înainte să scrii: încercarea asta contează 0, oricare ar fi bifele. Bifează totuși ce ai știut, ca să vezi unde ești.</p>';
+    if (r.phase === "grade") {
+      const n = k.k.length, ticked = r.ticks.filter(Boolean).length;
+      h += '<section class="card stack"><div class="spread"><h3>Ce ai scris corect?</h3><span class="chip' + (ticked / n >= 0.8 ? " ok" : ticked / n >= 0.5 ? " warn" : "") + '">' + ticked + "/" + n + "</span></div>" +
+        '<div class="kp">' + k.k.map((x, i) => '<button class="kp-i" data-a="skel-tick" data-k="' + i + '" aria-pressed="' + !!r.ticks[i] + '"><span class="check">' + CHECK + "</span><span>" + fmt(x) + "</span></button>").join("") + "</div></section>";
+      h += '<section class="card stack-s skel-ref"><h3>Referința' + (k.st ? " (verificată structural)" : " (testată)") + "</h3>" + codeBlock((P.skelCode || {})[k.id] || "", k.lang !== "py") +
+        '<button class="btn sm" data-a="copy-code" data-k="' + k.id + '">Copiază codul</button></section>';
+      h += '<button class="btn primary block" data-a="skel-save">Salvează (' + ticked + "/" + n + ")</button>";
+    }
     return h;
   }
   function vDesign() {
@@ -1938,14 +2001,27 @@
         S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
         break;
       }
-      case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; render(); window.scrollTo(0, 0); break;
+      case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; render(); window.scrollTo(0, 0); break;
       case "open-sheet": openSheet(b.dataset.m); break;
+      case "skel": ui.study.skel = b.dataset.k; ui.study.sk = null; render(); window.scrollTo(0, 0); break;
+      case "skel-done": { const r = ui.study.sk; if (r) { r.phase = "grade"; render(); } break; }
+      case "skel-peek": { const r = ui.study.sk; if (r) { r.peek = true; r.phase = "grade"; render(); } break; }
+      case "skel-tick": { const r = ui.study.sk; if (r) { const i = +b.dataset.k; r.ticks[i] = !r.ticks[i]; render(); } break; }
+      case "skel-save": {
+        const r = ui.study.sk, k = r && SBY[r.id]; if (!k) break;
+        updS(k.id, r.peek ? 0 : r.ticks.filter(Boolean).length / k.k.length);
+        Drafts.set(k.id, ""); commit();
+        ui.study.skel = null; ui.study.sk = null; render(); toast("Notat: cutia " + S.s[k.id].b);
+        { const el = $('[data-a="skel"][data-k="' + k.id + '"]'); if (el) el.scrollIntoView({ block: "center" }); }
+        break;
+      }
+      case "skel-back": ui.study.skel = null; ui.study.sk = null; render(); { const el = $('[data-a="skel"][data-k="' + b.dataset.k + '"]'); if (el) el.scrollIntoView({ block: "center" }); } break;
       case "kata": ui.study.kata = b.dataset.k; ui.study.hints = 0; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-back": ui.study.kata = null; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-hint": ui.study.hints++; render(); break;
       case "kata-timer": ui.study.kEnd = ui.study.kEnd ? 0 : now() + 20 * 60000; ui.study.kDone = false; render(); break;
       case "kata-status": { const id = ui.study.kata; S.k[id] = { s: b.dataset.s, t: now() }; commit(); render(); toast("Notat"); break; }
-      case "copy-code": { const pre = b.parentElement.querySelector("pre"); copyText((P.kataCode || {})[b.dataset.k] || "", pre); break; }
+      case "copy-code": { const pre = b.parentElement.querySelector("pre"); copyText((P.kataCode || {})[b.dataset.k] || (P.skelCode || {})[b.dataset.k] || "", pre); break; }
       case "exp": ui.prog.exp = !ui.prog.exp; render(); break;
       case "imp": ui.prog.imp = !ui.prog.imp; render(); break;
       case "copy-exp": copyText(JSON.stringify(S), $("#exp-t")); break;
@@ -1993,6 +2069,7 @@
     const t = e.target;
     if (t && t.dataset && t.dataset.ask && ui.ask[t.dataset.ask]) ui.ask[t.dataset.ask].draft = t.value;
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
+    else if (t && t.dataset && "skelCode" in t.dataset && ui.study.sk) { ui.study.sk.code = t.value; Drafts.set(ui.study.sk.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;
@@ -2004,6 +2081,16 @@
         const st = $(".rw-st"); if (st) st.remove();
       }
     }
+  });
+  // Tab în câmpul de cod al unui schelet: indentare (4 spații), nu ieșire din câmp.
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    if (e.key !== "Tab" || e.shiftKey || !t || !t.dataset || !("skelCode" in t.dataset) || t.readOnly) return;
+    e.preventDefault();
+    const a = t.selectionStart, z = t.selectionEnd;
+    t.value = t.value.slice(0, a) + "    " + t.value.slice(z);
+    t.selectionStart = t.selectionEnd = a + 4;
+    t.dispatchEvent(new Event("input", { bubbles: true }));
   });
   document.addEventListener("keydown", e => {
     if (!gsheet.hidden) { if (e.key === "Escape") { closeTerm(); e.preventDefault(); } return; }

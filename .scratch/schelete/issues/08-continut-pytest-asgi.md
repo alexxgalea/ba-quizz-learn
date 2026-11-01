@@ -14,4 +14,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] Scheletele nu repetă kata-urile k11 și k13.
 - [ ] Textele sunt în română, cu termenii tehnici în engleză; punctele numesc greșeala tipică.
 - [ ] Faptele noi sunt verificate pe surse primare și trecute în notele de fapte verificate.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

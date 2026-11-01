@@ -15,4 +15,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] perf (1): `cProfile` / `timeit` + citirea rezultatului.
 - [ ] aws (1): boto3, URL presemnat S3, testat cu moto.
 - [ ] Pachetele necesare sunt în lista de dev a testelor; faptele sunt verificate pe surse primare.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

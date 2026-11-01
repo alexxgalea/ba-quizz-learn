@@ -15,4 +15,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] index (1): `CREATE INDEX CONCURRENTLY` compus / parțial + `EXPLAIN ANALYZE` (testul verifică folosirea indexului în plan).
 - [ ] Referințele SQL au limbajul lor la colorare și în prompt.
 - [ ] Faptele (versiunea SQLAlchemy, comportamente Postgres) sunt verificate pe surse primare și trecute în notele de fapte verificate.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

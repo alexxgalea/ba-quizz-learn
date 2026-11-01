@@ -135,7 +135,7 @@ Planul de seară primește o sarcină cu scheletele scadente și câteva noi. Pr
 
 - Scheletul e un tip de conținut nou, distinct de kata, cu propria listă de date (încărcată ca restul fișierelor de date și listată în `DATA_FILES` și în exportul brief-ului). Câmpuri: identificator stabil, modul, grupă (doar la `frontend`: React / JavaScript / TypeScript), titlul conceptului, cerința, punctele esențiale (3–5), limbajul referinței (pentru colorare și pentru prompt), marcajul de versiune („3.11+”, unde e cazul) și marcajul „verificat structural” la config.
 - Referința nu stă în date. Stă în fișierele de cod testate, cu marcaje de secțiune pe identificatorul scheletului, la fel ca soluțiile kata, iar build-ul o injectează în pagină, lângă codul kata. Extensia mecanismului: identificatorii de schelet au propriul prefix, iar build-ul acceptă și extensii noi (TS, SQL, config).
-- Validarea datelor cere: cerință nevidă, 3–5 puncte, referință găsită pentru fiecare schelet, rânduri de cod de cel mult 38 de caractere, modul existent, grupă validă la `frontend`.
+- Validarea datelor cere: cerință nevidă, 3–5 puncte, referință găsită pentru fiecare schelet, rânduri de cod de cel mult 42 de caractere (referința se afișează fără împachetare, la 11 px; atât încape la 360 px, măsurat), modul existent, grupă validă la `frontend`.
 
 **Starea**
 

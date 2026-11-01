@@ -9,6 +9,7 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 - **Glosar** de 46 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
 - **73 de carduri orale** (dintre care 13 snippet-uri de cod și 6 scenarii de design), **9 exerciții de live coding** cu soluții testate cu pytest și fișe pe module.
 - **Întrebări deschise**: cele 217 întrebări „Verificare” din explicații (fără modulul bonus), fără variante. Răspunzi cu voce tare, dezvălui răspunsul, te notezi (știu / parțial / nu); intră în aceleași cutii Leitner.
+- **Schelete** (Studiu › Schelete): forma minimă a fiecărui concept, scrisă din memorie în 2–5 minute (o coadă sigură între thread-uri, un proces pornit corect, un fixture cu `yield`). Scrii codul, te notezi pe 3–5 puncte esențiale, iar scheletul intră în cutiile Leitner. Vezi „Schelete”.
 - **Formulări pentru interviu** (Studiu › Formulări): liniile „La interviu” din toate explicațiile, pe o pagină, filtrate P1 / greșite / toate.
 - **Diagnostic adaptiv** și **repetiție spațiată** cu scadențe reale: cutia 1 revine după 20 de minute, cutia 2 după 4 ore, cutia 3 a doua zi, cutia 4 peste două zile, cutia 5 niciodată. „De repetat acum” adună grilele, cardurile și întrebările deschise scadente; „Mix inteligent” ia întâi scadentele.
 - **Plan pe zile generat din progres**: data interviului și orele pe seară se setează în Progres › Interviul. Fiecare seară are aceeași rețetă (scadențe → fișă + grile pe modulele cu cea mai mare nevoie → oral → kata → greșeli), ultima seară se încheie cu formulările, iar dimineața interviului are doar încălzire. Sarcinile bifate azi rămân în listă; restul se recalculează din timpul rămas.
@@ -32,11 +33,12 @@ src/
   ask.js           „Întreabă despre asta”: prompt, limite și verdict „în temă”
   gemini_text.js   un apel de text către Gemini (REST), pentru PWA
   pwa/             iconița, service worker-ul
-  data_*.js        module, grile, context, carduri orale, fișe, exerciții, setări (data interviului, ore pe seară)
+  data_*.js        module, grile, context, carduri orale, fișe, exerciții, schelete (data_skel.js), setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
   expl/glosar.md   glosarul
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
-                   katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, verificat cu vitest în afara repo-ului)
+                   katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, verificat cu vitest în afara repo-ului);
+                   skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest)
 tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
 docs/              spec-ul Jarvis (docs/superpowers/specs), probele de aruncat (prototype-jarvis-probe.html, probe-lectie-metrou.html) și PWA-ul publicat pe Pages (docs/app)
 .scratch/          spec-urile și tichetele locale (de exemplu .scratch/lectie-live)
@@ -118,6 +120,16 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
 
 Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
+
+## Schelete
+
+Un **schelet** e codul minim, canonic, al unui concept, pe care îl scrii din memorie; un **kata** e o problemă de ~20 de minute (vezi `CONTEXT.md`). Spec-ul și tichetele: `.scratch/schelete/`.
+
+- **Date**: `src/data_skel.js` (`window.PREP.skel`): `id` (`s-<modul>-<nume>`), `m`, `t` (titlul), `p` (cerința), `k` (3–5 puncte esențiale), `lang`, opțional `v` („3.11+”), `st` („verificat structural”) și `g` (grupa, doar la `frontend`: `react` / `js` / `ts`).
+- **Referința** nu stă în date: e secțiunea `=== <id> ===` dintr-un fișier `katas/skel_*`, testată (`katas/test_skel_*`). `loadCode` din `lib.mjs` o extrage (la build în `window.PREP.skelCode`, la validare ca s-o verifice). `validate.mjs` cere cerință, 3–5 puncte, referință existentă și rânduri de cel mult **42** de caractere: referința se afișează fără împachetare, la 11 px, și atât încape la 360 px.
+- **Ecranul** (`vSkelList`, `vSkel`): scrii în câmpul de cod (Tab = 4 spații; ciorna stă în `localStorage`, `onapsis-skel-draft-v1`, și nu intră în `S`, în export sau în brief), apoi „Gata, mă notez” arată punctele ca bife și referința. „Arată referința” înainte de încercare notează încercarea cu 0.
+- **Starea**: `S.s[id]` = `{ b, n, s, t }`, cu pragurile de la cardurile orale (`updS`: ≥ 80% urcă o cutie, 50–80% rămâne, < 50% cutia 1) și scadențele obișnuite. Se îmbină, se curăță și se resetează ca restul stării; nu intră în scorul de pregătire.
+- Testul de interfață: `tools/test_skel.py`.
 
 ## Proba tehnică: snippet-uri, design, interviu simulat
 

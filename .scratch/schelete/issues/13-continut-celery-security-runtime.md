@@ -13,4 +13,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] runtime (1): `__slots__` / `sys.getsizeof` vs generator (memorie).
 - [ ] Pachetele necesare sunt în lista de dev a testelor.
 - [ ] Faptele sunt verificate pe surse primare și trecute în notele de fapte verificate.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

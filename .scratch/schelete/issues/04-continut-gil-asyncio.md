@@ -15,4 +15,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] Scheletele sunt minimale (2–5 minute) și nu repetă kata-urile k8 și k14.
 - [ ] Textele sunt în română, cu termenii tehnici în engleză; punctele numesc greșeala tipică.
 - [ ] Faptele noi (versiuni, comportamente) sunt verificate pe surse primare și trecute în notele de fapte verificate ale proiectului.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

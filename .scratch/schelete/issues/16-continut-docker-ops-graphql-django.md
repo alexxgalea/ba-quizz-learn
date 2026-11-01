@@ -15,4 +15,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] Marcajul „verificat structural” apare în listă și pe ecranul scheletului.
 - [ ] Referințele de config au limbajul lor la colorare și în prompt.
 - [ ] Pachetele necesare sunt în lista de dev a testelor; faptele sunt verificate pe surse primare.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

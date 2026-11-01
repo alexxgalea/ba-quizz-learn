@@ -14,7 +14,7 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] Scheletul are: identificator stabil, modul, titlu, cerință, 3–5 puncte esențiale, limbaj și (opțional) marcaj de versiune „3.11+” și „verificat structural”.
 - [ ] Referința coada blocantă rulează într-un test pytest care o pune sub mai mulți produceri și consumatori și verifică: nimic pierdut, nimic dublat, capacitatea nedepășită, `put` / `get` blocante corect.
 - [ ] Build-ul injectează referințele de schelet lângă codul kata; codul kata existent rămâne neschimbat în pagină.
-- [ ] Validarea datelor respinge: cerință goală, mai puțin de 3 sau mai mult de 5 puncte, referință lipsă, rând de cod peste 38 de caractere, modul inexistent.
+- [ ] Validarea datelor respinge: cerință goală, mai puțin de 3 sau mai mult de 5 puncte, referință lipsă, rând de cod peste 42 de caractere (limita măsurată la 360 px, fără împachetare), modul inexistent.
 - [ ] Segmentul „Schelete” apare în Studiu între „Live coding” și „System design”; lista e grupată pe modul, după prioritate; fiecare rând arată titlul, marcajele și starea (nou / cutia / scadent).
 - [ ] Ecranul scheletului are conceptul, cerința, câmpul de cod (monospace, fără autocorrect, autocapitalize și spellcheck; Tab inserează indentare), „Arată referința”, bifele punctelor și „Salvează”; înapoi la listă păstrează locul.
 - [ ] Ciorna rămâne pe dispozitiv, pe schelet, după reload și după ieșirea din ecran; nu intră în `S`, în sincronizare, în export sau în brief; se șterge la salvare.

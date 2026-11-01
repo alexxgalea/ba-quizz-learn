@@ -1,5 +1,5 @@
 // Loads the data files the way the page does and checks the schema.
-import { loadData, buildExplanations } from "./lib.mjs";
+import { loadData, loadCode, buildExplanations } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);
@@ -68,7 +68,27 @@ for (const m of P.modules) per[m.id] = { mcq: 0, oral: 0 };
 for (const q of P.mcq) per[q.m].mcq++;
 for (const c of P.oral) per[c.m].oral++;
 console.table(per);
-console.log("MCQ:", P.mcq.length, "oral:", P.oral.length, "katas:", P.katas.length, "interview:", P.cfg.interview, "| morning tasks:", taskIds.size);
+// Schelete: cerință, 3–5 puncte esențiale, referință testată în katas/ (rânduri ≤ SKEL_COLS), grupă doar la frontend.
+const SKEL_COLS = 42, SKEL_LANGS = ["py", "js", "ts", "tsx", "sql", "yaml", "docker"], SKEL_GROUPS = ["react", "js", "ts"];
+const { skelCode } = loadCode(root);
+const skelIds = new Set();
+for (const s of P.skel || []) {
+  if (!/^s-[a-z0-9]+-[a-z0-9-]+$/.test(s.id || "")) errors.push("skel: bad id " + s.id);
+  dup(s.id); skelIds.add(s.id);
+  if (!mods.has(s.m)) errors.push(s.id + ": unknown module " + s.m);
+  else if (!s.id.startsWith("s-" + s.m + "-")) errors.push(s.id + ": id must start with s-" + s.m + "-");
+  if (!s.t || !String(s.t).trim()) errors.push(s.id + ": missing title");
+  if (!s.p || !String(s.p).trim()) errors.push(s.id + ": missing prompt (p)");
+  if (!Array.isArray(s.k) || s.k.length < 3 || s.k.length > 5 || s.k.some(x => !x || !String(x).trim())) errors.push(s.id + ": needs 3–5 essential points (k)");
+  if (!SKEL_LANGS.includes(s.lang)) errors.push(s.id + ": bad lang " + s.lang);
+  if (s.m === "frontend" ? !SKEL_GROUPS.includes(s.g) : s.g !== undefined) errors.push(s.id + ": group (g) only on frontend, one of " + SKEL_GROUPS.join("/"));
+  for (const x of [s.t, s.p, ...(s.k || [])]) if ((String(x).match(/`/g) || []).length % 2) errors.push(s.id + ": unbalanced backticks in: " + String(x).slice(0, 50));
+  const code = skelCode[s.id];
+  if (!code) errors.push(s.id + ": no reference section in katas/");
+  else code.split("\n").forEach((l, i) => { if ([...l].length > SKEL_COLS) errors.push(s.id + ": reference line " + (i + 1) + " longer than " + SKEL_COLS + " chars"); });
+}
+for (const id of Object.keys(skelCode)) if (!skelIds.has(id)) errors.push("reference " + id + " in katas/ has no skeleton in data");
+console.log("MCQ:", P.mcq.length, "oral:", P.oral.length, "katas:", P.katas.length, "schelete:", (P.skel || []).length, "interview:", P.cfg.interview, "| morning tasks:", taskIds.size);
 // position of correct answers in source (all 0 is expected: the app shuffles)
 // new-format explanations + glossary
 const ex = buildExplanations(root, P);

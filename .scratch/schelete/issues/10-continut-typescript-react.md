@@ -13,4 +13,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] Toate referințele compilează în mod strict; cele TypeScript au și cazuri `// @ts-expect-error` pentru ce trebuie să nu compileze; cele React au teste vitest + Testing Library (inclusiv abortul la demontare).
 - [ ] Scheletele nu repetă kata-urile k15 și k16.
 - [ ] Textele sunt în română, cu termenii tehnici în engleză.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.

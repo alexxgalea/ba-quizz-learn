@@ -2,10 +2,31 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js"];
+export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js", "data_skel.js"];
 
 // Modulele Jarvis (Live, Audio, Call, Jarvis) și cele pentru „Întreabă despre asta” (Ask, GeminiText): declarații globale, încărcate înaintea lui app.js. Aceleași fișiere rulează și în Node, în tools/unit.
 export const LIB_FILES = ["live.js", "audio.js", "call.js", "jarvis.js", "ask.js", "gemini_text.js"];
+
+// Codul de referință din katas/: secțiunile „# === kN ===” (Python) sau „// === kN ===” (JS/TS) sunt soluțiile kata
+// (sursele întâi, apoi testele lor, lipite la cod), iar „=== s-… ===” sunt referințele de schelet (fără teste).
+export function loadCode(root) {
+  const kataCode = {}, skelCode = {};
+  const files = fs.readdirSync(new URL("./katas/", root))
+    .filter(f => /\.(py|mjs|ts|tsx|sql)$/.test(f) && !/^test_/.test(f) && !/\.test\./.test(f))
+    .sort((a, b) => a.localeCompare(b));
+  const kataTests = fs.readdirSync(new URL("./katas/", root)).filter(f => /\.test\.(mjs|tsx)$/.test(f)).sort();
+  for (const f of files.concat(kataTests)) {
+    const src = fs.readFileSync(new URL("./katas/" + f, root), "utf8");
+    for (const m of src.matchAll(/^(#|\/\/|--) === (k\d+|s-[a-z0-9-]+) ===\n([\s\S]*?)^\1 === end ===/gm)) {
+      const code = m[3].replace(/\s+$/, "") + "\n", id = m[2];
+      if (id[0] === "s") { if (skelCode[id]) throw new Error("schelet duplicat: " + id); skelCode[id] = code; }
+      else kataCode[id] = kataCode[id] ? kataCode[id] + "\n// --- test ---\n" + code : code;
+    }
+  }
+  const ordered = {};
+  for (const k of Object.keys(kataCode).sort((a, b) => a.slice(1) - b.slice(1))) ordered[k] = kataCode[k];  // k1, k2, …
+  return { kataCode: ordered, skelCode };
+}
 
 export function loadData(root) {
   const ctx = { window: {} };

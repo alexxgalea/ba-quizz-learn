@@ -12,4 +12,4 @@ Spec: `.scratch/schelete/spec.md`. Vocabular: `CONTEXT.md` (Schelet, Punct esen�
 - [ ] Fiecare referință are un test Node care verifică proprietatea punctelor (ordinea exactă pe event loop, debounce cu ceas fals, originalul neschimbat după update, câmpul privat inaccesibil).
 - [ ] API-urile folosite există în versiunea de Node din notele de fapte verificate (de pildă `Object.groupBy`, `AbortSignal.timeout`); unde nu, punctul o spune.
 - [ ] Textele sunt în română, cu termenii tehnici în engleză.
-- [ ] Validarea datelor trece; codul încape în 38 de coloane.
+- [ ] Validarea datelor trece; codul încape în 42 de coloane.
