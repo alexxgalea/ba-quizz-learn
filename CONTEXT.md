@@ -20,6 +20,10 @@ _Avoid_: exercițiu (prea vag), problemă
 Codul minim, canonic, al unui concept (un `Process` pornit corect, un consumer pe coadă cu sentinel, un fixture cu `yield`), pe care Alex îl scrie din memorie în câteva minute. Nu rezolvă o problemă: arată că știe forma.
 _Avoid_: rețetă, șablon, snippet (snippet-ul e codul de analizat dintr-un card oral)
 
+**Punct esențial**:
+Unul din cele 3–5 lucruri fără de care un schelet e greșit sau incomplet (de pildă `while`, nu `if`, în jurul lui `wait()`). Încercarea lui Alex se notează pe ele.
+_Avoid_: criteriu, checklist
+
 ## Jarvis
 
 **Antrenament pe o temă**:
