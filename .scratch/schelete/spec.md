@@ -1,5 +1,7 @@
 Status: ready-for-agent
 
+Tichete: `.scratch/schelete/issues/` (01–17; frontiera de start: 01).
+
 # Schelete: conceptele din teorie, scrise ca cod
 
 Vocabularul vine din `CONTEXT.md`: **Schelet**, **Punct esențial**, **Kata**, **Modul**, **Fișă**. Deciziile au ieșit dintr-o sesiune de grilling (1 noiembrie 2026); jurnalul întrebărilor e în Further Notes. Nu există ADR-uri în zona atinsă (singurul ADR, 0001, privește Lecția).
@@ -16,7 +18,7 @@ Un tip nou de exercițiu, **Schelet**: codul minim și canonic al unui concept, 
 
 În Studiu apare un segment nou, „Schelete”, cu toate scheletele grupate pe modul. Alex alege unul, scrie codul într-un câmp de text, apasă „Verifică cu AI” și primește punctele esențiale pre-bifate, greșelile reale și ce lipsește. El confirmă bifele, iar scheletul intră într-o cutie Leitner și revine la scadență. Referința se poate deschide oricând; dacă o deschide înainte să scrie, încercarea contează 0.
 
-Planul de seară primește o sarcină cu scheletele scadente și câteva noi. Progresul arată câte schelete știe. Catalogul acoperă tot ce se poate scrie ca cod din module (~88), inclusiv JavaScript și TypeScript ca limbaje, nu doar React, și se livrează în patru valuri, fiecare publicat.
+Planul de seară primește o sarcină cu scheletele scadente și câteva noi. Progresul arată câte schelete știe. Catalogul acoperă tot ce se poate scrie ca cod din module (~87), inclusiv JavaScript și TypeScript ca limbaje, nu doar React, și se livrează în patru valuri, fiecare publicat.
 
 ## User Stories
 
@@ -177,7 +179,7 @@ Planul de seară primește o sarcină cu scheletele scadente și câteva noi. Pr
 **Conținut**
 
 - Forma principală a scheletelor Python e compatibilă cu 3.10; formele 3.11+ sunt schelete separate, marcate.
-- Catalogul (~88) e în Further Notes, pe valuri. Faptele noi se verifică pe surse primare și se adaugă în notele de fapte verificate ale proiectului.
+- Catalogul (~87) e în Further Notes, pe valuri. Faptele noi se verifică pe surse primare și se adaugă în notele de fapte verificate ale proiectului.
 - Livrarea e în patru valuri; valul 1 conține toată partea de aplicație.
 
 ## Testing Decisions
@@ -217,7 +219,7 @@ Planul de seară primește o sarcină cu scheletele scadente și câteva noi. Pr
 
 ## Further Notes
 
-**Catalogul, pe valuri (~88)**
+**Catalogul, pe valuri (~87)**
 
 Valul 1 (aplicația + 24):
 - **gil (6)**: `Thread` + `Lock` pe counter · producer/consumer pe `queue.Queue` (sentinel, `task_done` / `join`; `deque` menționat pentru BFS / fereastră) · coadă blocantă mărginită cu `threading.Condition` · `multiprocessing.Process` + garda `__main__` + rezultat prin `Queue` · `ThreadPoolExecutor` / `ProcessPoolExecutor` cu `as_completed` și excepții · oprire cu `threading.Event`
@@ -234,7 +236,7 @@ Valul 2 (37):
 
 Valul 3, P2 (13): sqlalchemy (3: model 2.0 + `select`; `selectinload`; tranzacție + Alembic) · postgres (3: `ON CONFLICT`; window function; `FOR UPDATE SKIP LOCKED`) · index (1: `CREATE INDEX CONCURRENTLY` + `EXPLAIN ANALYZE`) · celery (2: `autoretry_for` + backoff + idempotență; `chain` / `group` + test eager) · security (3: query parametrizat; hash de parolă + `compare_digest`; verificare JWT) · runtime (1: `__slots__` / memorie)
 
-Valul 4, P3 (14): redis (3: cache-aside; lock `SET NX PX`; rate limit) · rabbitmq (1: consumer cu `basic_qos` + ack + DLQ) · docker (2: Dockerfile multi-stage non-root; compose cu healthcheck) · ops (2: logging JSON; CI minim) · linux (1: `SIGTERM`) · perf (1: `cProfile` / `timeit`) · aws (1: URL presemnat S3) · graphql (1: Strawberry + DataLoader) · django (1: `select_related` / `prefetch_related` vs SQLAlchemy)
+Valul 4, P3 (13): redis (3: cache-aside; lock `SET NX PX`; rate limit) · rabbitmq (1: consumer cu `basic_qos` + ack + DLQ) · docker (2: Dockerfile multi-stage non-root; compose cu healthcheck) · ops (2: logging JSON; CI minim) · linux (1: `SIGTERM`) · perf (1: `cProfile` / `timeit`) · aws (1: URL presemnat S3) · graphql (1: Strawberry + DataLoader) · django (1: `select_related` / `prefetch_related` vs SQLAlchemy)
 
 Dacă trebuie tăiat: runtime, perf, graphql, django.
 
