@@ -12,6 +12,14 @@ _Avoid_: temă (în cod), capitol
 Rezumatul de învățat al unui modul: o idee principală, punctele de reținut și formulările de evitat.
 _Avoid_: cheat sheet, foaie
 
+**Kata**:
+O problemă de live coding (brute force, LRU cache, token bucket) pe care Alex o rezolvă în ~20 de minute, cu voce tare. Exersează gândirea, nu forma.
+_Avoid_: exercițiu (prea vag), problemă
+
+**Schelet**:
+Codul minim, canonic, al unui concept (un `Process` pornit corect, un consumer pe coadă cu sentinel, un fixture cu `yield`), pe care Alex îl scrie din memorie în câteva minute. Nu rezolvă o problemă: arată că știe forma.
+_Avoid_: rețetă, șablon, snippet (snippet-ul e codul de analizat dintr-un card oral)
+
 ## Jarvis
 
 **Antrenament pe o temă**:
