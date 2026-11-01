@@ -146,4 +146,4 @@ Dacă trebuie tăiat, primele candidate sunt runtime, perf, graphql și django. 
 | Q18 | Catalog JS / TS | 12 JS + 8 TS + 6 React |
 | Q19 | Testare JS / TS | `node --test`; `tsc --strict` + vitest în `katas/package.json` |
 | Q20 | Ordinea valurilor | gil/asyncio/python/oop → pytest/asgi/frontend → P2 → P3 |
-| – | Presupuse și confirmate odată cu rezumatul | Jarvis fără schelete; linie în Progres; brief cu numărătoare; `src/data_skel.js` + `katas/skel_*` |
+| – | Presupuse în rezumat, neconfirmate explicit (Alex a cerut doar salvarea) | Jarvis fără schelete; linie în Progres; brief cu numărătoare; `src/data_skel.js` + `katas/skel_*` |
