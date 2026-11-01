@@ -31,7 +31,7 @@ def test_bq_put_blocheaza_cand_e_plina():
         q.put(2)  # trebuie să aștepte până se face loc
         done.set()
 
-    t = threading.Thread(target=producer)
+    t = threading.Thread(target=producer, daemon=True)
     t.start()
     assert not done.wait(0.15), "put pe o coadă plină nu a blocat"
     assert q.get() == 1
@@ -47,7 +47,7 @@ def test_bq_get_blocheaza_cand_e_goala():
     def consumer():
         got.append(q.get())
 
-    t = threading.Thread(target=consumer)
+    t = threading.Thread(target=consumer, daemon=True)
     t.start()
     time.sleep(0.15)
     assert got == [], "get pe o coadă goală nu a blocat"
@@ -58,19 +58,22 @@ def test_bq_get_blocheaza_cand_e_goala():
 
 def test_bq_multi_produceri_consumatori():
     # Nimic pierdut, nimic dublat, capacitatea nedepășită niciodată.
+    # Thread-uri daemon + verificarea join-ului: un bug de lock
+    # (deadlock) pică testul curat, nu îl blochează.
     cap, producers, per = 3, 4, 500
     q = BoundedQueue(cap)
     out, lock, peak = [], threading.Lock(), [0]
-    real_put = q.put
+    done = threading.Event()
 
-    def put(item):
-        real_put(item)
-        with lock:
+    def sample():
+        # len() ia lock-ul cozii: un instantaneu consistent
+        while not done.is_set():
             peak[0] = max(peak[0], len(q))
+            time.sleep(0.0001)
 
     def produce(p):
         for i in range(per):
-            put((p, i))
+            q.put((p, i))
 
     def consume():
         while True:
@@ -80,17 +83,24 @@ def test_bq_multi_produceri_consumatori():
             with lock:
                 out.append(item)
 
-    cs = [threading.Thread(target=consume) for _ in range(3)]
-    ps = [threading.Thread(target=produce, args=(p,))
-          for p in range(producers)]
-    for t in cs + ps:
+    def spawn(target, *args):
+        t = threading.Thread(target=target, args=args, daemon=True)
         t.start()
+        return t
+
+    sampler = spawn(sample)
+    cs = [spawn(consume) for _ in range(3)]
+    ps = [spawn(produce, p) for p in range(producers)]
     for t in ps:
         t.join(10)
+    assert not any(t.is_alive() for t in ps), "produceri blocați"
     for _ in cs:
         q.put(None)
     for t in cs:
         t.join(10)
+    assert not any(t.is_alive() for t in cs), "consumatori blocați"
+    done.set()
+    sampler.join(1)
     assert sorted(out) == sorted(
         (p, i) for p in range(producers) for i in range(per))
     assert peak[0] <= cap

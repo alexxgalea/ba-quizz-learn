@@ -269,25 +269,18 @@
     e.l = ok ? 1 : 0; e.t = now();
     S.q[id] = e;
   }
-  function updO(id, p) {
-    const e = Object.assign({ b: 0, n: 0 }, S.o[id]);
+  // Un pas Leitner pe procentul de puncte acoperite (cardurile orale și scheletele): ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
+  function leitnerStep(map, id, p) {
+    const e = Object.assign({ b: 0, n: 0 }, map[id]);
     e.n++; e.s = Math.round(p * 100);
     if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
     else if (p >= 0.5) e.b = Math.max(1, e.b);
     else e.b = 1;
     e.t = now();
-    S.o[id] = e;
+    map[id] = e;
   }
-  // Schelete: aceleași praguri ca la cardurile orale, pe procentul de puncte esențiale bifate.
-  function updS(id, p) {
-    const e = Object.assign({ b: 0, n: 0 }, S.s[id]);
-    e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
-    else if (p >= 0.5) e.b = Math.max(1, e.b);
-    else e.b = 1;
-    e.t = now();
-    S.s[id] = e;
-  }
+  const updO = (id, p) => leitnerStep(S.o, id, p);
+  const updS = (id, p) => leitnerStep(S.s, id, p);    // schelete: pe procentul de puncte esențiale bifate
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
   function updX(id, g) {
     const e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[id]);
@@ -541,7 +534,7 @@
   // ---------- UI state ----------
   let ui = {
     tab: "plan", run: null, result: null,
-    study: { seg: "sheets", open: null, kata: null, skel: null, hints: 0, kEnd: 0, gapOpen: {} },
+    study: { seg: "sheets", open: null, kata: null, skel: null, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
@@ -1732,17 +1725,19 @@
     get(id) { return this.all()[id] || ""; },
     set(id, text) { try { const o = this.all(); if (text) o[id] = text; else delete o[id]; localStorage.setItem(SKD_KEY, JSON.stringify(o)); } catch (e) { /* fără localStorage: ciorna rămâne doar în ecran */ } }
   };
-  // Încercarea curentă (în ui, nu în S): phase write → grade; peek = referința văzută înainte de încercare.
+  // Încercarea curentă (ui.study.attempt, nu în S): phase write → grade. Referința văzută înainte de încercare rămâne
+  // marcată pe schelet (ui.study.peeked) până la salvare, ca o ieșire și o revenire să nu șteargă regula „contează 0”.
   function skelRun(id) {
-    const st = ui.study;
-    if (!st.sk || st.sk.id !== id) st.sk = { id, phase: "write", ticks: [], peek: false, code: Drafts.get(id) };
-    return st.sk;
+    const st = ui.study, peek = !!st.peeked[id];
+    if (!st.attempt || st.attempt.id !== id) st.attempt = { id, phase: peek ? "grade" : "write", ticks: [], peek, code: Drafts.get(id) };
+    return st.attempt;
   }
+  function skelScrollTo(id) { const el = $('[data-a="skel"][data-k="' + id + '"]'); if (el) el.scrollIntoView({ block: "center" }); }
   function vSkel(k) {
     const r = skelRun(k.id), e = S.s[k.id], m = MOD[k.m];
     let h = '<button class="btn ghost" data-a="skel-back" data-k="' + k.id + '" style="align-self:flex-start">← Toate scheletele</button>';
     h += '<section class="card stack"><div class="row"><span class="chip acc">' + esc(m.code) + "</span>" + skelMarks(k) + skelChip(k.id) + (e ? leit(e.b) : "") + "</div><h2>" + esc(k.t) + "</h2><p>" + fmt(k.p) + "</p>" +
-      '<textarea class="skel-code" data-skel-code rows="12" maxlength="6000" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Scrie codul aici, din memorie" aria-label="Codul tău"' + (r.phase === "write" ? "" : " readonly") + ">" + esc(r.code) + "</textarea>" +
+      '<textarea class="skel-code" data-skel-code rows="12" maxlength="6000" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Scrie codul aici, din memorie" aria-label="Codul tău"' + (r.phase === "write" || r.peek ? "" : " readonly") + ">\n" + esc(r.code) + "</textarea>" +
       (r.phase === "write" ? '<div class="row"><button class="btn primary" data-a="skel-done">Gata, mă notez</button><button class="btn" data-a="skel-peek">Arată referința</button></div>' : "") + "</section>";
     if (r.peek) h += '<p class="small skel-peek-note hint">Ai deschis referința înainte să scrii: încercarea asta contează 0, oricare ar fi bifele. Bifează totuși ce ai știut, ca să vezi unde ești.</p>';
     if (r.phase === "grade") {
@@ -2001,21 +1996,21 @@
         S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
         break;
       }
-      case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; render(); window.scrollTo(0, 0); break;
+      case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
       case "open-sheet": openSheet(b.dataset.m); break;
-      case "skel": ui.study.skel = b.dataset.k; ui.study.sk = null; render(); window.scrollTo(0, 0); break;
-      case "skel-done": { const r = ui.study.sk; if (r) { r.phase = "grade"; render(); } break; }
-      case "skel-peek": { const r = ui.study.sk; if (r) { r.peek = true; r.phase = "grade"; render(); } break; }
-      case "skel-tick": { const r = ui.study.sk; if (r) { const i = +b.dataset.k; r.ticks[i] = !r.ticks[i]; render(); } break; }
+      case "skel": ui.study.skel = b.dataset.k; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
+      case "skel-done": { const r = ui.study.attempt; if (r) { r.phase = "grade"; render(); } break; }
+      case "skel-peek": { const r = ui.study.attempt; if (r) { r.peek = true; ui.study.peeked[r.id] = true; r.phase = "grade"; render(); } break; }
+      case "skel-tick": { const r = ui.study.attempt; if (r) { const i = +b.dataset.k; r.ticks[i] = !r.ticks[i]; render(); } break; }
       case "skel-save": {
-        const r = ui.study.sk, k = r && SBY[r.id]; if (!k) break;
+        const r = ui.study.attempt, k = r && SBY[r.id]; if (!k) break;
         updS(k.id, r.peek ? 0 : r.ticks.filter(Boolean).length / k.k.length);
-        Drafts.set(k.id, ""); commit();
-        ui.study.skel = null; ui.study.sk = null; render(); toast("Notat: cutia " + S.s[k.id].b);
-        { const el = $('[data-a="skel"][data-k="' + k.id + '"]'); if (el) el.scrollIntoView({ block: "center" }); }
+        Drafts.set(k.id, ""); delete ui.study.peeked[k.id]; commit();
+        ui.study.skel = null; ui.study.attempt = null; render(); toast("Notat: cutia " + S.s[k.id].b);
+        skelScrollTo(k.id);
         break;
       }
-      case "skel-back": ui.study.skel = null; ui.study.sk = null; render(); { const el = $('[data-a="skel"][data-k="' + b.dataset.k + '"]'); if (el) el.scrollIntoView({ block: "center" }); } break;
+      case "skel-back": ui.study.skel = null; ui.study.attempt = null; render(); skelScrollTo(b.dataset.k); break;
       case "kata": ui.study.kata = b.dataset.k; ui.study.hints = 0; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-back": ui.study.kata = null; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-hint": ui.study.hints++; render(); break;
@@ -2069,7 +2064,7 @@
     const t = e.target;
     if (t && t.dataset && t.dataset.ask && ui.ask[t.dataset.ask]) ui.ask[t.dataset.ask].draft = t.value;
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
-    else if (t && t.dataset && "skelCode" in t.dataset && ui.study.sk) { ui.study.sk.code = t.value; Drafts.set(ui.study.sk.id, t.value); }
+    else if (t && t.dataset && "skelCode" in t.dataset && ui.study.attempt) { ui.study.attempt.code = t.value; Drafts.set(ui.study.attempt.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;

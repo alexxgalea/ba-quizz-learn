@@ -127,8 +127,8 @@ Un **schelet** e codul minim, canonic, al unui concept, pe care îl scrii din me
 
 - **Date**: `src/data_skel.js` (`window.PREP.skel`): `id` (`s-<modul>-<nume>`), `m`, `t` (titlul), `p` (cerința), `k` (3–5 puncte esențiale), `lang`, opțional `v` („3.11+”), `st` („verificat structural”) și `g` (grupa, doar la `frontend`: `react` / `js` / `ts`).
 - **Referința** nu stă în date: e secțiunea `=== <id> ===` dintr-un fișier `katas/skel_*`, testată (`katas/test_skel_*`). `loadCode` din `lib.mjs` o extrage (la build în `window.PREP.skelCode`, la validare ca s-o verifice). `validate.mjs` cere cerință, 3–5 puncte, referință existentă și rânduri de cel mult **42** de caractere: referința se afișează fără împachetare, la 11 px, și atât încape la 360 px.
-- **Ecranul** (`vSkelList`, `vSkel`): scrii în câmpul de cod (Tab = 4 spații; ciorna stă în `localStorage`, `onapsis-skel-draft-v1`, și nu intră în `S`, în export sau în brief), apoi „Gata, mă notez” arată punctele ca bife și referința. „Arată referința” înainte de încercare notează încercarea cu 0.
-- **Starea**: `S.s[id]` = `{ b, n, s, t }`, cu pragurile de la cardurile orale (`updS`: ≥ 80% urcă o cutie, 50–80% rămâne, < 50% cutia 1) și scadențele obișnuite. Se îmbină, se curăță și se resetează ca restul stării; nu intră în scorul de pregătire.
+- **Ecranul** (`vSkelList`, `vSkel`): scrii în câmpul de cod (Tab = 4 spații; ciorna stă în `localStorage`, `onapsis-skel-draft-v1`, și nu intră în `S`, în export sau în brief), apoi „Gata, mă notez” arată punctele ca bife și referința. „Arată referința” înainte de încercare notează încercarea cu 0; marcajul rămâne pe schelet (în `ui`, nu în `S`) până la salvare, deci ieșirea și revenirea nu îl șterg, iar câmpul rămâne editabil.
+- **Starea**: `S.s[id]` = `{ b, n, s, t }`, cu pragurile de la cardurile orale (`updS` și `updO` folosesc același `leitnerStep`: ≥ 80% urcă o cutie, 50–80% rămâne, < 50% cutia 1) și scadențele obișnuite. Se îmbină, se curăță și se resetează ca restul stării; nu intră în scorul de pregătire.
 - Testul de interfață: `tools/test_skel.py`.
 
 ## Proba tehnică: snippet-uri, design, interviu simulat

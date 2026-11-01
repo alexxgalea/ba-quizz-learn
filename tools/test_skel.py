@@ -115,6 +115,28 @@ async def main():
         e = await skel_state(pg)
         check("peek before attempt → score 0, box 1, whatever the ticks", e and e["s"] == 0 and e["b"] == 1, e)
 
+        # the peek sticks to the skeleton until the next save: leaving and coming back does not erase it
+        await pg.evaluate("id => { const s = window.__prep.state(); delete s.s[id]; window.__prep.setState(s); }", SID)
+        await open_skel(pg)
+        await pg.click('button[data-a="skel-peek"]')
+        check("after a peek the code field stays editable", not await pg.locator('textarea[data-skel-code]').evaluate("t => t.readOnly"))
+        await pg.click('button[data-a="skel-back"]')
+        await open_skel(pg)
+        check("coming back after a peek still shows the 0 warning", await pg.locator(".skel-peek-note").count() == 1)
+        if await pg.locator('button[data-a="skel-done"]').count(): await pg.click('button[data-a="skel-done"]')
+        for i in range(n): await pg.click('button[data-a="skel-tick"][data-k="%d"]' % i)
+        await pg.click('button[data-a="skel-save"]')
+        await pg.wait_for_timeout(150)
+        check("peek → back → reopen → save still scores 0", (await skel_state(pg))["s"] == 0, await skel_state(pg))
+        await open_skel(pg)
+        check("after saving, the next attempt starts without the peek", await pg.locator(".skel-peek-note").count() == 0)
+        await pg.click('button[data-a="skel-back"]')
+        # a draft that starts with a newline keeps it after a re-render
+        await pg.evaluate("localStorage.setItem('onapsis-skel-draft-v1', JSON.stringify({ '%s': '\\nx = 1' }))" % SID)
+        await open_skel(pg)
+        check("a leading newline in the draft survives rendering", (await pg.locator('textarea[data-skel-code]').input_value()) == "\nx = 1")
+        await pg.click('button[data-a="skel-back"]')
+
         # --- the state key: normalize / merge / prune / reset; readiness unchanged ---
         R = await pg.evaluate("""(id) => {
           const T = window.__prep;
