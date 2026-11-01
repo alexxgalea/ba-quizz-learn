@@ -432,7 +432,7 @@ textarea.io { width: 100%; min-height: 110px; font: 13px/1.4 var(--font-mono); b
 .spark .ar { fill: var(--accent-soft); stroke: none; }
 .spark .ln { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .spark .pt { fill: var(--accent); }
-details.sheet, details.day { scroll-margin-top: 84px; }
+details.sheet, details.day, [data-skel-mod] { scroll-margin-top: 84px; }
 
 /* ---------- diagrams (inline SVG, themed via classes) ---------- */
 .dg { display: block; width: 100%; max-width: 480px; height: auto; margin-inline: auto; color: var(--ink); }
