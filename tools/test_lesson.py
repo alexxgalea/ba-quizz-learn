@@ -47,7 +47,8 @@ async def app_logic(b):
     so = await ev(pg, "window.PrepApp.sheet('oop')")
     check("a module with unfoldings has a sheet with the map and one unfolding per point", d is not None and so["map"] == d["map"] and so["desf"] == d["items"] and len(so["desf"]) == so["total"], so and list(so))
     check("the unfoldings are copies: changing what the sheet gave does not change the content", await ev(pg, "(() => { const s = window.PrepApp.sheet('oop'); s.desf[0].p = 'x'; s.map.p = 'x'; const t = window.PrepApp.sheet('oop'); return t.desf[0].p !== 'x' && t.map.p !== 'x'; })()"))
-    check("a module without unfoldings has no map and no unfoldings, and the sheet is as before", "map" not in sh and "desf" not in sh and sorted(sh) == ["avoid", "lead", "module", "name", "points", "pos", "total"], sorted(sh))
+    sc = await ev(pg, "window.PrepApp.sheet('aws')")   # modul de control, fără desfășurări (Bonus; când primește, controlul se mută pe altul)
+    check("a module without unfoldings has no map and no unfoldings, and the sheet is as before", not (await ev(pg, "!!window.PREP.desf.aws")) and "map" not in sc and "desf" not in sc and sorted(sc) == ["avoid", "lead", "module", "name", "points", "pos", "total"], sorted(sc))
 
     # --- poziția
     before = await ev(pg, "JSON.stringify([window.__prep.state().q, window.__prep.state().o, window.__prep.state().x, window.__prep.readiness().ready])")
@@ -273,7 +274,7 @@ async def screens(b, scheme):
 
 
 async def unfoldings(b):
-    """Tichet 10: lecția pe un modul cu desfășurări (oop) dă modelului harta și desfășurarea punctului; pe unul fără (asyncio) merge ca înainte."""
+    """Tichet 10: lecția pe un modul cu desfășurări (oop) dă modelului harta și desfășurarea punctului; pe unul fără (aws) merge ca înainte."""
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
     await ctx.add_init_script(path=FAKES)
     pg = await ctx.new_page(); errs = []
@@ -298,10 +299,10 @@ async def unfoldings(b):
     await pg.click('[data-a="jv-stop"]'); await pg.wait_for_timeout(200)
 
     await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
-    await pg.click('#sheet-asyncio summary'); await pg.wait_for_timeout(150)
-    await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)
+    await pg.click('#sheet-aws summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-aws [data-a="listen"]'); await pg.wait_for_timeout(250)
     a1 = await tool(pg, "next_chunk")
-    lead = await ev(pg, "window.PREP.sheets.asyncio.lead")
+    lead = await ev(pg, "window.PREP.sheets.aws.lead")
     check("the lesson on a module without unfoldings is as before: main idea in the intro, no map, no unfolding", a1["intro"]["lead"] == lead and "harta" not in a1["intro"] and "desf" not in a1 and a1["instruction"].startswith("Explică bucata cu vorbele tale"), a1)
     check("no page errors (unfoldings)", not errs, errs)
     await ctx.close()

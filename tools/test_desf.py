@@ -150,6 +150,23 @@ async def main():
             check(tag + "gil: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{G}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{G}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_gil_{scheme}.png"), full_page=True)
             check(tag + "gil: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
+            # ---- asyncio (tichetul 05): harta și 11 desfășurări; C++ la 1, 2, 5, 6 și 9 (event loop, std::async, wait_for, catch, std::queue) ----
+            await pg.evaluate(f"document.querySelector('{G}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa gil, ca să se deschidă asyncio
+            da = await pg.evaluate("window.PREP.desf.asyncio")
+            n_aio = await pg.evaluate("window.PREP.sheets.asyncio.points.length")
+            await open_sheet(pg, "asyncio")
+            A = "#sheet-asyncio "
+            check(tag + "asyncio: the map and one explanation per point, numbered like the points", da and len(da["items"]) == n_aio == 11 and await pg.locator(A + "ul.pts > li .pn").count() == n_aio and await pg.locator(A + '[data-a="dz-map"]').count() == 1)
+            await pg.click(A + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "asyncio: 'Deschide tot' opens the map and every explanation", await pg.locator(A + "[data-dz]").count() == n_aio and await pg.locator(A + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{A}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "asyncio: the C++ block shows only at 1, 2, 5, 6 and 9, and always with 'Unde nu ține'", cpp == [True, True, False, False, True, True, False, False, True, False, False] and cpp == [bool(x.get("cpp")) for x in da["items"]] and await pg.locator(A + ".dz-cpp").count() == await pg.locator(A + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "asyncio: Python examples are colored", await pg.evaluate(f"document.querySelectorAll('{A}pre.code .tk-k').length") > 0)
+            check(tag + "asyncio: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "asyncio: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{A}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{A}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_asyncio_{scheme}.png"), full_page=True)
+            check(tag + "asyncio: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
