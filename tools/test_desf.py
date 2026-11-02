@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md; un modul fără desfășurări (aws, Bonus: ultimul în ordine) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md și src/desf/python.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend.
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -114,20 +114,21 @@ async def main():
             await pg.evaluate(f"document.querySelector('{S}summary').click()"); await pg.wait_for_timeout(150)
             await open_sheet(pg, "aws")
             P = "#sheet-aws "
-            npy = await pg.evaluate("window.PREP.sheets.aws.points.length")
+            n_ctl = await pg.evaluate("window.PREP.sheets.aws.points.length")
             check(tag + "aws has no explanations in the data", await pg.evaluate("!window.PREP.desf.aws"))
-            check(tag + "a module without explanations: no numbers, no buttons, plain list", await pg.locator(P + ".pn").count() == 0 and await pg.locator(P + "[data-a^='dz']").count() == 0 and await pg.locator(P + "ul.pts > li").count() == npy)
+            check(tag + "a module without explanations: no numbers, no buttons, plain list", await pg.locator(P + ".pn").count() == 0 and await pg.locator(P + "[data-a^='dz']").count() == 0 and await pg.locator(P + "ul.pts > li").count() == n_ctl)
 
             # ---- python (tichetul 03): harta și 10 desfășurări, cu C++ doar unde există un echivalent ----
             await pg.evaluate(f"document.querySelector('{P}summary').click()"); await pg.wait_for_timeout(150)
             dp = await pg.evaluate("window.PREP.desf.python")
+            n_py = await pg.evaluate("window.PREP.sheets.python.points.length")
             await open_sheet(pg, "python")
             Y = "#sheet-python "
-            check(tag + "python: the map and one explanation per point (10), numbered like the points", dp and len(dp["items"]) == 10 and await pg.locator(Y + "ul.pts > li .pn").count() == 10 and await pg.locator(Y + '[data-a="dz-map"]').count() == 1)
+            check(tag + "python: the map and one explanation per point, numbered like the points", dp and len(dp["items"]) == n_py == 10 and await pg.locator(Y + "ul.pts > li .pn").count() == n_py and await pg.locator(Y + '[data-a="dz-map"]').count() == 1)
             await pg.click(Y + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
-            check(tag + "python: 'Deschide tot' opens the map and all 10", await pg.locator(Y + "[data-dz]").count() == 10 and await pg.locator(Y + "[data-dz-map]").count() == 1)
+            check(tag + "python: 'Deschide tot' opens the map and every explanation", await pg.locator(Y + "[data-dz]").count() == n_py and await pg.locator(Y + "[data-dz-map]").count() == 1)
             cpp = await pg.evaluate(f"[...document.querySelectorAll('{Y}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
-            check(tag + "python: C++ with 'Unde nu ține' on 1-7 and 9 (no real equivalent at 8 and 10)", cpp == [True] * 7 + [False, True, False] and await pg.locator(Y + ".dz-cpp").count() == await pg.locator(Y + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "python: the C++ block shows exactly where the data has one, and always with 'Unde nu ține' (none at 8 and 10)", cpp == [bool(x.get("cpp")) for x in dp["items"]] and not cpp[7] and not cpp[9] and any(cpp) and await pg.locator(Y + ".dz-cpp").count() == await pg.locator(Y + ".dz-cpp .dz-nu").count(), cpp)
             check(tag + "python: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
             check(tag + "python: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Y}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Y}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_python_{scheme}.png"), full_page=True)

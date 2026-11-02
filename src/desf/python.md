@@ -1,7 +1,7 @@
 <!-- Desfășurările fișei `python` (10 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 3, 4, 10 și 20. -->
 
 ### harta
-Problema: Un script Python merge în demo, apoi în producție dă rezultate care depind de apelurile anterioare, își umple memoria pe un fișier mare și lasă resurse deschise. Cauza e aproape mereu un detaliu al limbajului: când se evaluează o expresie, cine ține o referință la ce și de câte ori poți parcurge o valoare. Modulul răspunde la trei întrebări: ce se întâmplă „în spate”, cum procesezi mult fără să încarci tot și cum garantezi curățenia.
+Problema: Un script Python merge în demo, dar în producție dă rezultate care depind de apelurile anterioare, își umple memoria pe un fișier mare și lasă resurse deschise. Cauza e aproape mereu un detaliu al limbajului: când se evaluează o expresie, cine ține o referință la ce și de câte ori poți parcurge o valoare. Modulul răspunde la trei întrebări: ce se întâmplă „în spate”, cum procesezi mult fără să încarci tot și cum garantezi curățenia.
 Grupuri:
 - 1–3: când se evaluează o expresie și ce înseamnă „același obiect” (valori implicite, closures, `is`)
 - 4–6: cod care ține stare sau învelește alt cod (generatori, decoratori, context managers)
@@ -11,7 +11,7 @@ Grupuri:
 
 ### 1
 Problema: `add_event("a")` și apoi `add_event("b")` întorc aceeași listă, cu `"a"` în ea la al doilea apel. Funcția are `events=[]`.
-Ideea: Python evaluează valoarea implicită o singură dată, când rulează `def`. Toate apelurile împart același obiect. Soluția: implicit `None` și `if x is None: x = []`.
+Ideea: Python evaluează valoarea implicită o singură dată, când rulează `def`. Toate apelurile împart același obiect. Ca soluție, pui `None` implicit și `if x is None: x = []` în corp.
 Exemplu:
 ```python
 def add(x, acc=[]):
@@ -28,7 +28,7 @@ Legătură: PY-01. În Django, `JSONField(default=[])` dă eroarea `fields.E010`
 ### 2
 Greu: da
 Problema: Creezi trei callback-uri într-o buclă, fiecare cu alt `i`. Apelate mai târziu, toate întorc `2`.
-Ideea: Un closure ține variabila, nu valoarea ei. Python citește `i` în momentul apelului, când bucla s-a terminat. Fixul `lambda i=i: i` fixează valoarea la definire, fiindcă valoarea implicită se evaluează atunci (punctul 1).
+Ideea: Un closure ține variabila, nu valoarea ei. Python citește `i` în momentul apelului, când bucla s-a terminat. Cu `lambda i=i: i` valoarea rămâne cea de la definire, fiindcă valoarea implicită se evaluează atunci (punctul 1).
 Exemplu:
 ```python
 r = range(3)
@@ -93,7 +93,7 @@ def one(): return 1
 print(one.__name__)  # → one
 ```
 În C++: O funcție care primește un `std::function<int(int)>` și întoarce un lambda ce o apelează face același lucru: `[f](int x) { return f(f(x)); }`.
-Unde nu ține: În C++ înveleli explicit, la locul folosirii: `auto g = twice(f);`. În Python, `@dec` leagă numele `f` de wrapper chiar la definire, deci toți apelanții folosesc versiunea învelită.
+Unde nu ține: În C++ învelești explicit, la locul folosirii: `auto g = twice(f);`. În Python, `@dec` leagă numele `f` de wrapper chiar la definire, deci toți apelanții folosesc versiunea învelită.
 Legătură: PY-04. `@login_required` din Django, `@api_view(["GET"])` din DRF și `@app.task(bind=True)` din Celery sunt decoratori, ultimii doi cu parametri.
 
 ### 6
@@ -166,6 +166,7 @@ Unde nu ține: Python înlănțuie și arată lanțul în traceback; în C++ des
 Legătură: PY-11. `asyncio.TaskGroup` ridică un `ExceptionGroup` când mai multe task-uri eșuează (fișa asyncio).
 
 ### 10
+Greu: da
 Problema: Ai o listă de evenimente nesortată și vrei un grup pe utilizator. `groupby(events, key=…)` îți dă utilizatorul `a` de două ori, în două grupuri separate.
 Ideea: `groupby` începe un grup nou de fiecare dată când se schimbă cheia, deci grupează doar elemente consecutive, ca `uniq` din Unix. Un `GROUP BY` din SQL strânge toate rândurile cu aceeași cheie, oricum vin. Sortezi întâi după aceeași cheie sau folosești `defaultdict(list)`. Grupul e un iterator legat de sursă și dispare când avansezi, deci îl salvezi cu `list(g)`.
 Exemplu:
