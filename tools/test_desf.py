@@ -168,7 +168,7 @@ async def main():
             await pg.screenshot(path=str(SHOTS / f"desf_asyncio_{scheme}.png"), full_page=True)
             check(tag + "asyncio: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
-            # ---- asgi (tichetul 06): harta și 10 desfășurări; C++ doar la 3 și 6 (fork / thread pool); la 5 și 7 exemple ```text ----
+            # ---- asgi (tichetul 06): harta și 10 desfășurări; C++ doar la 3 (fork / waitpid); la 5 și 7 exemple ```text ----
             await pg.evaluate(f"document.querySelector('{A}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa asyncio, ca să se deschidă asgi
             dsg = await pg.evaluate("window.PREP.desf.asgi")
             n_asgi = await pg.evaluate("window.PREP.sheets.asgi.points.length")
@@ -178,7 +178,7 @@ async def main():
             await pg.click(S_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
             check(tag + "asgi: 'Deschide tot' opens the map and every explanation", await pg.locator(S_ + "[data-dz]").count() == n_asgi and await pg.locator(S_ + "[data-dz-map]").count() == 1)
             cpp = await pg.evaluate(f"[...document.querySelectorAll('{S_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
-            check(tag + "asgi: the C++ block shows only at 3 and 6, and always with 'Unde nu ține'", cpp == [False, False, True, False, False, True, False, False, False, False] and cpp == [bool(x.get("cpp")) for x in dsg["items"]] and await pg.locator(S_ + ".dz-cpp").count() == await pg.locator(S_ + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "asgi: the C++ block shows only at 3, and always with 'Unde nu ține'", cpp == [False, False, True, False, False, False, False, False, False, False] and cpp == [bool(x.get("cpp")) for x in dsg["items"]] and await pg.locator(S_ + ".dz-cpp").count() == await pg.locator(S_ + ".dz-cpp .dz-nu").count(), cpp)
             check(tag + "asgi: Python examples are colored, ```text examples are not", await pg.evaluate(f"document.querySelectorAll('{S_}pre.code .tk-k').length") > 0 and await pg.evaluate(f"[...document.querySelectorAll('{S_}[data-dz=\"4\"] pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
             check(tag + "asgi: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
             check(tag + "asgi: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{S_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{S_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))

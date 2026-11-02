@@ -80,24 +80,21 @@ gunicorn app:app -w 4 \
   -k uvicorn_worker.UvicornWorker
 uvicorn app:app --workers 4
 ```
-Legătură: ASGI-01 și ASGI-10. Cu Docker Swarm sau Kubernetes, `replicas` înlocuiește `-w`: orchestratorul repornește containerele, cum repornea Gunicorn procesele.
+Legătură: ASGI-01 și ASGI-10. Cu Docker Swarm sau Kubernetes, `replicas` înlocuiește `-w`: orchestratorul ține numărul cerut de containere, cum ținea Gunicorn procesele.
 
 ### 6
-Greu: da
-Problema: Pornești un singur worker sync pe o mașină cu 4 core-uri. Cât așteaptă el după baza de date, cererile din spate stau la coadă, deși CPU-ul e liber. Pornești 100 de workeri și mașina își pierde timpul comutând între procese și umplându-se de memorie.
-Ideea: Un worker sync servește un singur request odată și așteaptă o parte din timp după I/O. Cu ceva mai mulți workeri decât core-uri, cât timp unii așteaptă, alții calculează. De aici formula (2 × core) + 1 din documentația Gunicorn: 9 workeri pe 4 core-uri. E doar punct de plecare: apoi măsori latența, CPU-ul și memoria sub încărcare.
+Problema: Pornești un singur worker sync pe 4 core-uri. Cât așteaptă el după baza de date, cererile stau la coadă, deși CPU-ul e liber. Cu 100 de workeri, mașina comută între procese și se umple de memorie.
+Ideea: Un worker sync servește un request odată și așteaptă des după I/O. Cu ceva mai mulți workeri decât core-uri, cât timp unii așteaptă, alții calculează. De aici formula (2 × core) + 1 din documentația Gunicorn. E doar punct de plecare: apoi măsori sub încărcare.
 Exemplu:
 ```python
 def workers(cores):
     return 2 * cores + 1
 print(workers(4))  # → 9
 ```
-În C++: La un thread pool pornești tot de la numărul de core-uri, cu `std::thread::hardware_concurrency()`, și urci doar dacă thread-urile așteaptă I/O.
-Unde nu ține: `hardware_concurrency()` e doar un indiciu și poate întoarce 0. `os.cpu_count()` poate întoarce `None`. Iar un worker e un proces cu memoria lui, nu un thread: 9 workeri înseamnă 9 copii ale aplicației.
-Legătură: ASGI-09. În Docker Swarm, totalul e workeri per container × replici.
+Legătură: ASGI-09. În Swarm, totalul e workeri × replici.
 
 ### 7
-Problema: Expui direct un Gunicorn cu 4 workeri sync. Patru utilizatori de pe rețea mobilă încarcă încet fișiere mari, iar workerii stau ocupați să citească octeți. Toți ceilalți așteaptă.
+Problema: Expui direct un Gunicorn cu 4 workeri sync. Patru utilizatori de pe rețea mobilă încarcă încet fișiere mari, iar workerii stau ocupați să citească octeți.
 Ideea: Un reverse proxy (Nginx, HAProxy, un load balancer) stă între clienți și aplicație. Citește tot request-ul, oricât de încet vine, și îl trimite aplicației abia când e complet. Termină TLS și servește fișierele statice de pe disc. Gunicorn cere un astfel de proxy pentru workerii sync.
 Exemplu:
 ```text
@@ -108,7 +105,7 @@ location / {
   proxy_pass http://app:8000;
 }
 ```
-Legătură: ASGI-06. Rolul ăsta îl are un Ingress în Kubernetes sau Traefik în Docker Swarm.
+Legătură: ASGI-06. Rolul ăsta îl are un Ingress în Kubernetes (load balancing, terminare SSL) sau Nginx în Docker Swarm.
 
 ### 8
 Greu: da
@@ -143,8 +140,8 @@ Legătură: ASGI-07, ASGI-08 și ASGI-15. Un serializer DRF cu `is_valid(raise_e
 
 ### 10
 Greu: da
-Problema: Clientul trimite `POST /payments` și primește un timeout. Nu știe dacă plata s-a făcut. Dacă reîncearcă și s-a făcut, plătește de două ori. Dacă nu reîncearcă și nu s-a făcut, pierde comanda.
-Ideea: O metodă safe (GET, HEAD, OPTIONS) nu cere nicio schimbare de stare. Una idempotentă (PUT, DELETE și cele safe) are la a doua cerere același efect ca la prima, deci o poți reîncerca. POST și PATCH nu sunt idempotente. La un POST reîncercabil, clientul trimite `Idempotency-Key` (încă draft IETF), iar serverul întoarce la a doua cerere rezultatul primei. Coduri: 401 credențiale lipsă sau invalide, 403 te știu, dar n-ai voie, 409 conflict cu starea resursei, 422 validare eșuată, 429 rate limit.
+Problema: Clientul trimite `POST /payments` și primește un timeout. Nu știe dacă plata s-a făcut. Dacă reîncearcă și s-a făcut, plătește de două ori. Dacă nu reîncearcă și nu s-a făcut, pierde comanda. Iar răspunsul, dacă vine, poate fi 401, 403, 409, 422 sau 429, fiecare cu altă reacție.
+Ideea: O metodă safe (GET, HEAD, OPTIONS) nu cere nicio schimbare de stare. Una idempotentă (PUT, DELETE și cele safe) are la a doua cerere același efect ca la prima, deci o poți reîncerca. POST și PATCH nu sunt idempotente. La un POST reîncercabil, clientul trimite `Idempotency-Key` (încă draft IETF), iar serverul întoarce la a doua cerere rezultatul primei. Codul spune ce faci mai departe: la 401 trimiți credențiale, la 403 nu reîncerci, la 409 rezolvi conflictul, la 422 corectezi datele, la 429 aștepți.
 Exemplu:
 ```python
 done = {}
