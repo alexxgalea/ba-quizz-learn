@@ -56,7 +56,7 @@ def raise_alert(alert):
       "Să facă mock-ul asincron, pentru funcții `async`"], a: 0,
       e: "`mock.side_effect = [ConnectionError(), {\"ok\": True}]`: primul apel eșuează, al doilea reușește. Exact ce îți trebuie ca să testezi un retry." },
     { id: "pt-08", q: "De ce `task_always_eager=True` nu ajunge pentru testarea integrării cu Celery?", o: [
-      "Ocolește brokerul, serializarea și ack-urile",
+      "Ocolește brokerul, workerul și ack-urile",
       "E mai lent decât un worker real, deci testele durează",
       "Cere oricum un RabbitMQ pornit, deci nu e izolat",
       "Nu execută deloc task-ul, doar înregistrează apelul"], a: 0,

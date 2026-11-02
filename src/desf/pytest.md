@@ -1,4 +1,4 @@
-<!-- Desfășurările fișei `pytest` (13 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 6, 11 și 24. -->
+<!-- Desfășurările fișei `pytest` (13 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 6, 11, 16 și 24. -->
 
 ### harta
 Problema: Un test bun e rapid, determinist și izolat. Dar codul real atinge baza de date, ceasul, rețeaua, Celery și browserul, iar fiecare dintre ele face testul lent, instabil sau dependent de ordine. Fără reguli, suita crește până când nimeni nu mai are încredere în ea. Modulul răspunde la patru întrebări: cum scrii și organizezi testele, cum izolezi dependențele, cum rulezi suita repede și cum construiești un framework de teste, inclusiv pentru UI.
@@ -20,12 +20,12 @@ def test_f():
 E       assert 4 == 5
 E        +  where 4 = f(2)
 ```
-Legătură: PT-11. Un `TestCase` din Django folosește `self.assertEqual`; în pytest scrii doar `assert`.
+Legătură: Un `TestCase` din Django folosește `self.assertEqual`; în pytest scrii doar `assert`.
 
 ### 2
 Greu: da
 Problema: Zece teste au nevoie de aceeași conexiune la baza de test. Pe fiecare o deschizi și o închizi de mână. Când un test pică la mijloc, conexiunea rămâne deschisă.
-Ideea: Fixture-ul e o funcție cu `@pytest.fixture`. Testul îl cere prin numele unui parametru, iar pytest îl rulează înainte și îi dă valoarea. Codul de după `yield` e teardown și rulează și când testul pică. Pytest face `next` pe generator pentru setup și încă un `next` pentru teardown. Scope-ul decide cât trăiește valoarea: `function` (implicit), `class`, `module`, `package`, `session`.
+Ideea: Fixture-ul e o funcție cu `@pytest.fixture`. Testul îl cere prin numele unui parametru, iar pytest îl rulează înainte și îi dă valoarea. Codul de după `yield` e teardown și rulează și când testul pică. Pytest face `next` pe generator pentru setup și încă un `next` pentru teardown. Exemplul imită asta cu un generator. Scope-ul decide cât trăiește valoarea: `function` (implicit), `class`, `module`, `package`, `session`.
 Exemplu:
 ```python
 def db():
@@ -37,9 +37,9 @@ v = next(g)  # → setup
 print(v)  # → conn
 for _ in g: pass  # → teardown
 ```
-În C++: GoogleTest folosește o clasă derivată din `testing::Test`, cu `SetUp()` și `TearDown()`, și `TEST_F`. Pentru fiecare test creează un obiect nou, chemă `SetUp()`, rulează testul, chemă `TearDown()` și șterge obiectul.
+În C++: GoogleTest folosește o clasă derivată din `testing::Test`, cu `SetUp()` și `TearDown()`, și `TEST_F`. Pentru fiecare test creează un obiect nou, cheamă `SetUp()`, rulează testul, cheamă `TearDown()` și șterge obiectul.
 Unde nu ține: În C++ merg și constructorul și destructorul (RAII), iar `TearDown()` e opțional. În pytest nu moștenești nimic: testul cere fixture-ul după nume, iar un fixture poate cere altul. Scope-ul mai larg ca un test apare în GoogleTest ca `SetUpTestSuite()`, static, o dată per suită.
-Legătură: PT-01 și PT-02. Pentru un container Postgres de 5 s folosești scope `session`, nu `function`.
+Legătură: PT-01 și PT-02. Un container Postgres de 5 s cere scope `session`.
 
 ### 3
 Problema: Trei fișiere de test au nevoie de fixture-ul `client`. Îl copiezi în fiecare sau îl imporți, iar importul pare neutilizat, fiindcă fixture-ul apare doar ca nume de parametru.
@@ -53,7 +53,7 @@ tests/
     conftest.py [client: sub]
     test_d.py   -> sub
 ```
-Legătură: PT-05. Fixture-ul `engine` din PT-02, cu scope `session`, stă tot într-un `conftest.py`. Aici `test_api.py` primește „root”, iar `test_d.py` primește „sub”.
+Legătură: PT-05. Un fixture partajat de multe fișiere (PT-02) stă de obicei aici.
 
 ### 4
 Greu: da
@@ -105,12 +105,13 @@ print(m(5))  # → 1
 m(1, 2)  # ! TypeError
 ```
 În C++: Fără patch la rulare, o dependență se înlocuiește prin design: o interfață cu metode `virtual`, pe care testul o implementează cu un mock (gMock: `MOCK_METHOD`, `EXPECT_CALL`).
-Unde nu ține: În Python `patch` schimbă un nume la rulare, fără să atingi codul testat. În C++ nu poți înlocui o funcție liberă sau o metodă non-virtuală: ai proiectat-o ca interfață sau nu merge. Iar `EXPECT_CALL` verifică apelurile dinainte, pe când mock-ul din Python doar le notează, iar tu verifici după.
-Legătură: PT-03, PT-07 și PT-10.
+Unde nu ține: În Python `patch` schimbă un nume la rulare, fără să atingi codul testat. În C++ o dependență se înlocuiește de obicei prin design: interfață sau șablon. Iar `EXPECT_CALL` se setează înainte de apel, pe când mock-ul din Python notează apelurile, iar tu le verifici după.
+Legătură: PT-03, PT-07 și PT-10. PT-03 e exact cazul din Problemă: patch-ul se pune la numele din modulul care folosește funcția.
 
 ### 7
+Greu: da
 Problema: Testele trec pe SQLite și pică pe Postgres în producție, fiindcă tipurile, funcțiile SQL și blocările diferă. Iar fiecare test lasă rânduri, deci următorul vede date străine.
-Ideea: Rulezi testele pe același motor ca în producție: Postgres real, ca service în CI sau în Docker, cu `testcontainers`. Izolezi testele cu tranzacție și rollback: fixture-ul deschide tranzacția, testul lucrează, teardown-ul face rollback. `factory_boy` construiește datele cu valori implicite, pe care le schimbi doar unde contează.
+Ideea: Rulezi testele pe același motor ca în producție: Postgres real, ca service în CI sau în Docker, cu `testcontainers`. Izolezi testele cu tranzacție și rollback: fixture-ul deschide tranzacția, testul lucrează, teardown-ul face rollback. Dacă codul testat face `commit()`, sesiunea se leagă de tranzacția externă cu un SAVEPOINT (`create_savepoint`). `factory_boy` construiește datele cu valori implicite, pe care le schimbi doar unde contează.
 Exemplu:
 ```python
 import sqlite3  # doar pt. rollback
@@ -122,7 +123,7 @@ c.rollback()
 n = c.execute("select * from t")
 print(n.fetchall())  # → []
 ```
-Legătură: PT-01 și PT-02. În Django, `TestCase` face același lucru: învelește fiecare test într-un `atomic()` anulat la final.
+Legătură: PT-01 și PT-02. Exemplul folosește sqlite3 doar ca să arate rollback-ul, nu ca alternativă la Postgres. În Django, `TestCase` face același lucru: învelește fiecare test într-un `atomic()` anulat la final.
 
 ### 8
 Problema: Testezi un task Celery care trimite un email. Cu `.delay()` testul cere broker și worker. Cu `task_always_eager` nu mai testezi nimic din ce se întâmplă prin broker.
@@ -150,11 +151,12 @@ def expired(t0, now, ttl=900):
 print(expired(0, 899))  # → False
 print(expired(0, 900))  # → True
 ```
-În C++: O funcție care chemă direct `std::chrono::steady_clock::now()` nu se testează fără să aștepți. Cu ceasul ca parametru de șablon (`template <class Clock>`), testul pasează un ceas fals, cu un `now()` pe care îl controlezi.
+În C++: O funcție care cheamă direct `std::chrono::steady_clock::now()` nu se testează fără să aștepți. Cu ceasul ca parametru de șablon (`template <class Clock>`), testul pasează un ceas fals, cu un `now()` pe care îl controlezi.
 Unde nu ține: În C++ ceasul trebuie injectat prin design. În Python, freezegun și time-machine înlocuiesc ceasul global la rulare, fără să schimbi funcția. Un ceas injectat merge totuși la fel de bine în Python.
 Legătură: PT-09 și punctul 13: același principiu, `sleep` nu e sincronizare.
 
 ### 10
+Greu: da
 Problema: Suita rulează 8 minute. Un test pică, iar tu rulezi din nou tot. Alte teste sunt lente și vrei să le sari cât lucrezi.
 Ideea: `-x` oprește la primul eșec. `-k expr` alege testele după nume. `--lf` rulează doar testele picate data trecută. `-m "not slow"` sare testele marcate `slow`. `-n auto` (pytest-xdist) le rulează în paralel, pe procese. `pytest-cov` măsoară acoperirea, cu `--cov`.
 Exemplu:
@@ -163,11 +165,11 @@ pytest -x -k login --lf
 pytest -m "not slow" -n auto
 pytest --cov=app
 ```
-Legătură: PT-16. Markerul `slow` îl înregistrezi în config; fără asta primești `PytestUnknownMarkWarning`.
+Legătură: PT-16 pentru `-n`. Markerul `slow` îl înregistrezi în config; fără asta primești `PytestUnknownMarkWarning`.
 
 ### 11
 Problema: Rulezi cu `-n 4`. Fixture-ul `session` care creează baza de test rulează de patru ori, iar patru procese scriu în aceeași bază și își strică datele.
-Ideea: xdist pornește workeri ca procese separate, `gw0`, `gw1` și așa mai departe. Fiecare face propria colectare. Deci un fixture `scope="session"` rulează o dată pe worker, nu o dată în total. Fixture-ul `worker_id` îți dă numele workerului (`master`, fără paralelizare). Izolezi datele după el: o bază sau o schemă pe worker.
+Ideea: xdist pornește workeri ca procese separate, `gw0`, `gw1` și așa mai departe. Fiecare face propria colectare. Deci un fixture `scope="session"` rulează o dată pe worker, nu o dată în total. Fixture-ul `worker_id` îți dă numele workerului (`master`, fără paralelizare). Izolezi datele după el: o bază sau o scheamă pe worker.
 Exemplu:
 ```python
 def db_name(worker_id):
@@ -175,7 +177,7 @@ def db_name(worker_id):
 print(db_name("gw0"))  # → test_gw0
 print(db_name("gw1"))  # → test_gw1
 ```
-Legătură: PT-16 și PT-15. Procese separate, ca la `ProcessPoolExecutor` (GIL-13): nu împart memoria.
+Legătură: PT-16 și GIL-13. Procese separate, ca la `ProcessPoolExecutor`: nu împart memoria.
 
 ### 12
 Greu: da
@@ -192,7 +194,7 @@ def base_url(request):
         "--env")
     return URLS[env]
 ```
-Legătură: PT-05. Rolul din anunț (RO-1186) cere un framework de teste, nu doar teste: straturile și configurarea sunt chiar subiectul.
+Legătură: PT-05 pentru `conftest.py`. Rolul din anunț (RO-1186) cere un framework de teste, nu doar teste.
 
 ### 13
 Greu: da
