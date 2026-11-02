@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md și src/desf/gil.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md și src/desf/asyncio.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend.
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
