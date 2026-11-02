@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PROBĂ: lecția în metrou</title>
+<style>
+  :root { --bg: #f4f6fa; --card: #fff; --ink: #141a27; --muted: #5b667c; --line: #d2d9e5; --acc: #2c4fd3; --on-acc: #fff; --ok: #1a7a4b; --bad: #c2382d; --warn: #9a5800; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e121a; --card: #161c27; --ink: #e6eaf2; --muted: #9aa5ba; --line: #2a3445; --acc: #8ea2ff; --on-acc: #0e121a; --ok: #55cf92; --bad: #ff8a7e; --warn: #f3b54e; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .banner { background: var(--warn); color: var(--bg); font-weight: 700; padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+  h1 { font-size: 21px; margin: 0; } h2 { font-size: 16px; margin: 0; }
+  p { margin: 0; } .muted { color: var(--muted); } .small { font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { font: inherit; font-weight: 600; min-height: 48px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; touch-action: manipulation; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+  button.talk { min-height: 72px; flex: 1; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  button.talk.on { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+  button:disabled { opacity: .45; }
+  label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 14px; }
+  dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
+  ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+  textarea { width: 100%; min-height: 220px; font: 12px/1.4 ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">PROBĂ DE ARUNCAT · nu e aplicația · tichetul 01 din .scratch/lectie-live</div>
+  <div>
+    <h1>Lecția în metrou: patru întrebări</h1>
+    <p class="muted small">Rulezi proba pe telefon, în metrou, cu căștile pe urechi. Cheia Gemini e cea deja salvată în aplicație (aceeași origine). La final apeși „Copiază jurnalul” și îl lipești în chat sau în <code>## Comments</code> din tichetul 01, cu câte un rând pentru fiecare întrebare.</p>
+  </div>
+
+  <section class="card">
+    <h2>Pornire</h2>
+    <dl><dt>Cheie</dt><dd id="keyInfo">…</dd><dt>Stare</dt><dd id="st">oprit</dd><dt>Bucata</dt><dd id="chunk">0</dd><dt>Semnal</dt><dd id="net">…</dd><dt>Ecran</dt><dd id="vis">…</dd><dt>Audio</dt><dd id="ctxst">…</dd></dl>
+    <div class="row">
+      <button class="primary" id="go">Pornește lecția de probă</button>
+      <button id="end">Oprește</button>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="viaEl" checked> redare prin &lt;audio&gt; (pentru butoanele căștilor)</label>
+      <label><input type="checkbox" id="wake" checked> Wake Lock</label>
+      <label><input type="checkbox" id="mute"> Mut</label>
+    </div>
+    <p class="small muted">Pornirea cere o replică lungă (~1 minut) despre asyncio. După ce o termină, aud un sunet scurt și microfonul stă deschis 3 secunde; dacă tac, cere singură bucata următoare. Pe Mut, bucățile curg una după alta, iar microfonul se deschide doar cât ții apăsat Vorbește.</p>
+  </section>
+
+  <section class="card">
+    <h2>Vorbește (microfon doar cât ții apăsat)</h2>
+    <div class="row"><button class="talk" id="talk">Vorbește</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Ce faci în metrou</h2>
+    <ol>
+      <li><b>1 · Ecran stins.</b> Pornește lecția, apoi stinge ecranul 2 minute (cu telefonul în buzunar). Aprinde-l: în jurnal vezi dacă audio-ul a mers, dacă au venit date și dacă a existat vreo închidere.</li>
+      <li><b>2 · Căști.</b> Apasă pe căști play/pauză, următorul, anterior. În jurnal apar rândurile <code>media:</code> cu butonul primit. Încearcă și cu ecranul stins.</li>
+      <li><b>3 · Tunel.</b> Lasă lecția pornită și treci printr-o porțiune fără semnal. Jurnalul arată <code>offline</code>, <code>reconnecting</code>, <code>live</code> și cât a durat. Reîncercările sunt de până la ~60 de secunde.</li>
+      <li><b>4 · Zgomot.</b> Cu Mut pornit, ține apăsat Vorbește și pune o întrebare scurtă. Cu Mut oprit, urmărește fereastra de 3 secunde: apar rânduri <code>voce</code> / <code>transcriere</code> / <code>interrupted</code> doar când vorbești tu sau doar din zgomotul vagonului?</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Jurnal</h2>
+    <textarea id="log" readonly></textarea>
+    <div class="row"><button class="primary" id="copy">Copiază jurnalul</button><button id="clear">Șterge</button></div>
+  </section>
+</main>
+
+<script>
+// GeminiLive: protocolul WebSocket al serverului vocal, ascuns în spatele lui `open` (spec §4.1).
+// Fără importuri: socketul și ceasul se primesc prin `create`. În pagină e o declarație globală, în Node un modul.
+const GeminiLive = (() => {
+  const WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+  const RETRY_MS = [500, 1000, 2000];                // pauzele dinaintea celor trei încercări de reluare
+
+  function setupMessage(cfg, handle) {
+    const setup = {
+      model: "models/" + cfg.model,
+      generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: cfg.voice } } } },
+      systemInstruction: { parts: [{ text: cfg.system }] },
+      realtimeInputConfig: { automaticActivityDetection: { silenceDurationMs: cfg.silenceMs } },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      sessionResumption: handle ? { handle } : {},
+      contextWindowCompression: { slidingWindow: {} }
+    };
+    if (cfg.tools && cfg.tools.length) setup.tools = [{ functionDeclarations: cfg.tools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })) }];
+    return { setup };
+  }
+
+  // PCM 16 biți little-endian → Base64, cum cere protocolul.
+  function toBase64(pcm) {
+    const u8 = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+    let bin = "";
+    for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function fromBase64(b64) {
+    const bin = atob(b64), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return new Int16Array(u8.buffer, 0, u8.length >> 1);
+  }
+
+  // De ce s-a închis conexiunea, după codul și textul serverului: auth (cheie), quota (limită), rejected (cerere greșită), network (restul).
+  function closeInfo(code, detail) {
+    detail = detail || "";
+    const reason = /api key|permission|unauthenticated|credential|forbidden/i.test(detail) ? "auth"
+      : /quota|exhaust|rate.?limit|too many|429/i.test(detail) ? "quota"
+      : code === 1007 || code === 1008 ? "rejected" : "network";
+    return { reason, code, detail };
+  }
+  const failure = info => Object.assign(new Error(info.detail || info.reason), info);
+
+  function create(env) {
+    const Socket = (env && env.WebSocket) || (typeof WebSocket !== "undefined" ? WebSocket : null);
+    const sleep = (env && env.sleep) || (ms => new Promise(r => setTimeout(r, ms)));
+
+    function open(cfg, onEvent) {
+      if (!cfg.key) return Promise.reject(failure({ reason: "auth", code: 0, detail: "lipsește cheia" }));
+      const tools = new Map((cfg.tools || []).map(t => [t.name, t]));
+      let sock = null, gen = 0, live = false, closed = false, reconnecting = false, handle = null;
+
+      const send = obj => { if (closed || !live || sock.readyState !== 1) return false; sock.send(JSON.stringify(obj)); return true; };
+      // O singură închidere definitivă, anunțată cu `closed`.
+      const finish = info => {
+        if (closed) return;
+        closed = true; live = false;
+        onEvent(Object.assign({ type: "closed" }, info));
+      };
+
+      // Apelurile de funcții se rulează pe rând, în ordinea sosirii, chiar dacă vin în mesaje diferite.
+      // Răspunsul pleacă după ce `run` s-a terminat; un apel anulat de server nu primește răspuns.
+      let queue = Promise.resolve();
+      const cancelled = new Set();
+      const runCalls = calls => { queue = queue.then(async () => {
+        for (const c of calls) {
+          if (cancelled.has(c.id) || closed) continue;
+          const args = c.args || {}, tool = tools.get(c.name), out = {};
+          try {
+            if (!tool) throw new Error("funcție necunoscută: " + c.name);
+            out.result = await tool.run(args);
+          } catch (err) { out.error = String((err && err.message) || err); }
+          if (cancelled.has(c.id) || closed) continue;
+          send({ toolResponse: { functionResponses: [{ id: c.id, name: c.name, response: out }] } });
+          onEvent(Object.assign({ type: "tool", name: c.name, args }, out));
+        }
+      }); };
+
+      // Un mesaj de la server → evenimente.
+      const route = msg => {
+        const sc = msg.serverContent || {};
+        if (sc.interrupted) onEvent({ type: "interrupted" });
+        if (sc.inputTranscription && sc.inputTranscription.text) onEvent({ type: "transcript", who: "me", text: sc.inputTranscription.text });
+        if (sc.outputTranscription && sc.outputTranscription.text) onEvent({ type: "transcript", who: "model", text: sc.outputTranscription.text });
+        const parts = (sc.modelTurn && sc.modelTurn.parts) || [];
+        for (const p of parts) if (p.inlineData && p.inlineData.data) onEvent({ type: "audio", pcm: fromBase64(p.inlineData.data) });
+        if (sc.turnComplete) onEvent({ type: "turnComplete" });
+        if (msg.toolCall) runCalls(msg.toolCall.functionCalls || []);
+        if (msg.toolCallCancellation) (msg.toolCallCancellation.ids || []).forEach(id => cancelled.add(id));
+        const u = msg.sessionResumptionUpdate;
+        if (u && u.resumable && u.newHandle) handle = u.newHandle;
+        // Serverul anunță că închide curând: se trece pe o conexiune nouă acum, nu după ce cade.
+        if (msg.goAway) { const old = sock; gen++; old.close(1000); lost({ reason: "network", code: 0, detail: "goAway" }); }
+      };
+
+      // Deschide un socket. Se rezolvă cu null când serverul confirmă setup-ul sau cu motivul închiderii dacă pică înainte.
+      // Un socket înlocuit (`gen` mai nou) nu mai are voie să schimbe nimic.
+      const connect = () => new Promise(done => {
+        const id = ++gen, s = sock = new Socket(WS_URL + "?key=" + encodeURIComponent(cfg.key));
+        let settled = false;
+        const settle = v => { if (!settled) { settled = true; done(v); } };
+        s.onopen = () => s.send(JSON.stringify(setupMessage(cfg, handle)));
+        s.onmessage = async m => {
+          let msg;
+          try { msg = JSON.parse(typeof m.data === "string" ? m.data : await m.data.text()); } catch (e) { return; }      // serverul trimite cadre binare: Blob
+          if (id !== gen || closed) return;
+          if (msg.setupComplete) settle(null);
+          route(msg);
+        };
+        s.onclose = e => {
+          if (id !== gen) return;
+          const info = closeInfo(e.code, e.reason);
+          if (!settled) settle(info); else lost(info);
+        };
+      });
+
+      // Conexiunea s-a pierdut după ce era în picioare: se reia doar cu un handle și doar dacă motivul e rețeaua.
+      const lost = info => {
+        if (closed || reconnecting) return;
+        if (!handle || info.reason !== "network") finish(info); else reconnect(info);
+      };
+      const reconnect = async info => {
+        reconnecting = true; live = false;
+        onEvent({ type: "reconnecting" });
+        let last = info;
+        for (const ms of (cfg.retryMs || RETRY_MS)) {
+          await sleep(ms);
+          if (closed) return;
+          const r = await connect();
+          if (closed) return;
+          if (!r) { reconnecting = false; live = true; onEvent({ type: "live" }); return; }
+          last = r;
+          if (r.reason !== "network") break;
+        }
+        reconnecting = false;
+        finish(last);
+      };
+
+      return connect().then(first => {
+        if (first) { closed = true; throw failure(first); }      // a căzut înainte de confirmare
+        live = true;
+        return {
+          audio: pcm => send({ realtimeInput: { audio: { data: toBase64(pcm), mimeType: "audio/pcm;rate=16000" } } }),
+          text: text => send({ realtimeInput: { text } }),
+          // Microfonul s-a oprit (sau poarta lui s-a închis): serverul golește audio-ul păstrat și închide tura.
+          audioEnd: () => send({ realtimeInput: { audioStreamEnd: true } }),
+          close() { finish({ reason: "user", code: 1000, detail: "" }); sock.close(1000); }
+        };
+      });
+    }
+    return { open };
+  }
+
+  return { create, open: (cfg, onEvent) => create().open(cfg, onEvent) };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = GeminiLive;
+
+</script>
+<script>
+// Audio: microfon și difuzor în browser (spec §4.2). Partea pură (`Pcm`) se testează în Node; `BrowserAudio` e lipiciul cu API-urile browserului.
+// Fără importuri. În pagină sunt declarații globale, în Node un modul.
+const Pcm = (() => {
+  const OUT_RATE = 16000, FRAME = 640;               // 40 ms la 16 kHz
+
+  const toInt16 = v => { v = Math.max(-1, Math.min(1, v)); return v < 0 ? v * 0x8000 : v * 0x7fff; };
+
+  // Microfon: blocuri Float32 la rata dispozitivului → cadre Int16 de 40 ms la 16 kHz.
+  // Fiecare eșantion de ieșire e media eșantioanelor de intrare din fereastra lui; ferestrele merg în continuare de la un bloc la altul.
+  function micFramer(inRate, handlers) {
+    const frame = new Int16Array(FRAME);
+    let fill = 0, produced = 0, consumed = 0, acc = 0, n = 0;
+    return { push(f32) {
+      for (let i = 0; i < f32.length; i++) {
+        acc += f32[i]; n++; consumed++;
+        if (consumed >= Math.floor(((produced + 1) * inRate) / OUT_RATE)) {
+          frame[fill++] = toInt16(acc / n);
+          acc = 0; n = 0; produced++;
+          if (fill === FRAME) {
+            let sq = 0;
+            for (let j = 0; j < FRAME; j++) sq += frame[j] * frame[j];
+            handlers.onFrame(frame.slice());
+            if (handlers.onLevel) handlers.onLevel(Math.sqrt(sq / FRAME) / 32768);
+            fill = 0;
+          }
+        }
+      }
+    } };
+  }
+
+  // Redare: fragmente Int16 la 24 kHz, programate unul după altul pe un context Web Audio.
+  // `onPlaying(true)` la primul fragment după tăcere, `onPlaying(false)` când s-a terminat și ultimul sau după `flush`.
+  function player(ctx, handlers) {
+    let next = 0, held = false;
+    const active = new Set();
+    return {
+      play(pcm) {
+        const f32 = new Float32Array(pcm.length);
+        for (let i = 0; i < pcm.length; i++) f32[i] = pcm[i] / 32768;
+        const buf = ctx.createBuffer(1, f32.length, 24000);
+        buf.copyToChannel(f32, 0);
+        const src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination);
+        next = Math.max(next, ctx.currentTime);
+        src.start(next); next += buf.duration;
+        if (!active.size) handlers.onPlaying(true);
+        active.add(src);
+        src.onended = () => { if (active.delete(src) && !active.size) handlers.onPlaying(false); };
+      },
+      // Pauză: contextul îngheață, deci ce e în coadă rămâne programat și continuă exact din aceeași secundă la `resume`.
+      // Fragmentele care vin în pauză se așază după cele din coadă (`currentTime` stă pe loc).
+      pause() { if (!held) { held = true; ctx.suspend(); } },
+      resume() { if (held) { held = false; ctx.resume(); } },
+      // Oprește imediat tot ce e programat. `stop()` declanșează și el `ended`, de aceea handlerele se scot întâi.
+      flush() {
+        if (held) { held = false; ctx.resume(); }
+        const was = Array.from(active);
+        active.clear(); next = 0;
+        for (const src of was) { src.onended = null; try { src.stop(); } catch (e) { /* oprit deja */ } }
+        if (was.length) handlers.onPlaying(false);
+      }
+    };
+  }
+
+  // Sunete scurte, discrete, generate: „window” = un ton de 880 Hz de 120 ms (se deschide fereastra de ascultare), „warn” = două tonuri joase (lecția a intrat pe pauză).
+  // Fiecare ton intră și iese pe o înfășurătoare, ca să nu pocnească.
+  function tone(kind, rate) {
+    const parts = kind === "warn" ? [[440, 0.16], [0, 0.08], [330, 0.2]] : [[880, 0.12]];
+    const amp = kind === "warn" ? 0.22 : 0.15, fade = 0.02;
+    const out = [];
+    for (const [hz, sec] of parts) {
+      const n = Math.round(sec * rate);
+      for (let i = 0; i < n; i++) {
+        const t = i / rate, env = Math.min(1, t / fade, (sec - t) / fade);
+        out.push(hz ? amp * Math.max(0, env) * Math.sin(2 * Math.PI * hz * t) : 0);
+      }
+    }
+    out[0] = 0; out[out.length - 1] = 0;
+    return Float32Array.from(out);
+  }
+
+  return { micFramer, player, tone };
+})();
+
+// Microfonul rulează într-un AudioWorklet (încărcat din Blob) care trimite blocuri de ~1024 de eșantioane.
+const MIC_WORKLET = "class P extends AudioWorkletProcessor {" +
+  " constructor() { super(); this.buf = new Float32Array(1024); this.n = 0; }" +
+  " process(inputs) { const c = inputs[0] && inputs[0][0]; if (!c) return true;" +
+  "  for (let i = 0; i < c.length; i++) { this.buf[this.n++] = c[i]; if (this.n === 1024) { this.port.postMessage(this.buf.slice(0)); this.n = 0; } }" +
+  "  return true; } }" +
+  " registerProcessor('jarvis-mic', P);";
+
+// BrowserAudio.create(env?) → dispozitivul audio (spec §4.2). `env` poate înlocui navigator și AudioContext.
+const BrowserAudio = {
+  create(env) {
+    env = env || {};
+    const nav = env.navigator || (typeof navigator !== "undefined" ? navigator : null);
+    const AC = env.AudioContext || (typeof AudioContext !== "undefined" ? AudioContext : null);
+    const doc = typeof document !== "undefined" ? document : null;
+    const fail = reason => Object.assign(new Error(reason), { reason });
+    let ctx = null, stream = null, node = null, source = null, speaker = null, wake = null, onVisible = null;
+
+    async function keepAwake() { try { wake = await nav.wakeLock.request("screen"); } catch (e) { wake = null; } }
+
+    async function start(opts) {
+      if (!AC || !nav || !nav.mediaDevices) throw fail("failed");
+      ctx = new AC();
+      try {
+        await ctx.resume();
+        stream = await nav.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, deviceId: opts.micId ? { exact: opts.micId } : undefined } });
+      } catch (e) {
+        await stop();
+        throw fail(e && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "denied" : e && (e.name === "NotFoundError" || e.name === "OverconstrainedError") ? "no-mic" : "failed");
+      }
+      try {
+        await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([MIC_WORKLET], { type: "text/javascript" })));
+        const framer = Pcm.micFramer(ctx.sampleRate, { onFrame: opts.onFrame, onLevel: opts.onLevel });
+        node = new AudioWorkletNode(ctx, "jarvis-mic", { numberOfOutputs: 0 });
+        node.port.onmessage = ev => framer.push(ev.data);
+        source = ctx.createMediaStreamSource(stream);
+        source.connect(node);
+        speaker = Pcm.player(ctx, { onPlaying: opts.onPlaying });
+      } catch (e) { await stop(); throw fail("failed"); }
+      await keepAwake();
+      if (doc) { onVisible = () => { if (doc.visibilityState === "visible" && !wake) keepAwake(); }; doc.addEventListener("visibilitychange", onVisible); }
+      const track = stream.getAudioTracks()[0];
+      return { label: track ? track.label : "" };
+    }
+
+    async function stop() {
+      if (onVisible && doc) { doc.removeEventListener("visibilitychange", onVisible); onVisible = null; }
+      if (wake) { try { await wake.release(); } catch (e) { /* eliberat deja */ } wake = null; }
+      if (node) { node.port.onmessage = null; node.disconnect(); node = null; }
+      if (source) { source.disconnect(); source = null; }
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      speaker = null;
+      if (ctx) { const c = ctx; ctx = null; try { await c.close(); } catch (e) { /* închis deja */ } }
+    }
+
+    // Un sunet scurt (Pcm.tone) pe un tampon propriu; nu trece prin `speaker`, deci nu schimbă „se redă”.
+    function beep(kind) {
+      if (!ctx || ctx.state === "suspended") return;
+      const tone = Pcm.tone(kind, 24000), buf = ctx.createBuffer(1, tone.length, 24000);
+      buf.copyToChannel(tone, 0);
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.connect(ctx.destination); src.start();
+    }
+
+    return {
+      start, stop, beep,
+      play: pcm => { if (speaker) speaker.play(pcm); },
+      flush: () => { if (speaker) speaker.flush(); },
+      pause: () => { if (speaker) speaker.pause(); },
+      resume: () => { if (speaker) speaker.resume(); },
+      async mics() {
+        const all = await nav.mediaDevices.enumerateDevices();
+        return all.filter(d => d.kind === "audioinput").map(d => ({ id: d.deviceId, label: d.label }));
+      }
+    };
+  }
+};
+if (typeof module !== "undefined" && module.exports) module.exports = { Pcm, BrowserAudio };
+
+</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const t0 = Date.now(), lines = [];
+  const stamp = () => { const s = (Date.now() - t0) / 1000; return String(Math.floor(s / 60)).padStart(2, "0") + ":" + (s % 60).toFixed(1).padStart(4, "0"); };
+  const log = msg => { lines.push("[" + stamp() + "] " + msg); $("log").value = lines.join("\n"); $("log").scrollTop = 1e9; };
+  const key = localStorage.getItem("onapsis-gemini-v1") || "";
+  $("keyInfo").textContent = key ? "salvată (…" + key.slice(-4) + ")" : "LIPSEȘTE: o adaugi întâi în aplicație, tab-ul Jarvis";
+  log("pagina pornită · " + navigator.userAgent);
+
+  const SYSTEM = "Ești Jarvis, asistentul vocal al lui Alex. Vorbești doar în română; termenii tehnici rămân în engleză. Ești politicos și sec, cu umor discret. Fără liste și fără markdown. " +
+    "Ții o lecție de probă despre asyncio, pe bucăți. La fiecare mesaj «Bucata următoare» explici o idee nouă despre asyncio în aproximativ un minut, cu un exemplu. La mesajul «Prima bucată» începi cu «Asyncio, în zece idei. Prima:». Nu pui întrebări și nu anunți ce urmează. La o întrebare liberă răspunzi scurt și revii la lecție.";
+  const IDEAS = ["Prima bucată", "Bucata următoare"];
+
+  // --- stare
+  let live = null, actx = null, dest = null, el = null, player = null, mic = null, wake = null, hb = 0, winTimer = 0;
+  let playing = false, turnDone = true, chunks = 0, audioIn = 0, lastAudioAt = 0, ending = false, window_ = false, talking = false, framesSent = 0, maxRms = 0;
+  const gateOpen = () => (window_ || talking) && !playing;
+  const setSt = s => { $("st").textContent = s; };
+
+  // --- ecran, semnal, Wake Lock
+  const vis = () => { $("vis").textContent = document.visibilityState; };
+  document.addEventListener("visibilitychange", () => { vis(); log("ecran: " + document.visibilityState + " · audio=" + (actx ? actx.state : "-") + " · chunks primite=" + audioIn); });
+  vis();
+  const net = () => { $("net").textContent = navigator.onLine ? "online" : "OFFLINE"; };
+  window.addEventListener("online", () => { net(); log("online"); }); window.addEventListener("offline", () => { net(); log("offline"); }); net();
+  async function lock() {
+    if (!$("wake").checked || !navigator.wakeLock) return;
+    try { wake = await navigator.wakeLock.request("screen"); log("wakeLock: luat"); wake.addEventListener("release", () => log("wakeLock: eliberat")); } catch (e) { log("wakeLock: refuzat (" + e.name + ")"); }
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && live && $("wake").checked && (!wake || wake.released)) lock(); });
+
+  // --- căști: Media Session
+  function mediaSession() {
+    if (!("mediaSession" in navigator)) { log("media: Media Session lipsește"); return; }
+    navigator.mediaSession.metadata = new MediaMetadata({ title: "Lecție de probă", artist: "Jarvis", album: "asyncio" });
+    for (const a of ["play", "pause", "nexttrack", "previoustrack", "stop", "seekforward", "seekbackward"]) {
+      try { navigator.mediaSession.setActionHandler(a, () => { log("media: " + a); if (a === "pause" && actx) { actx.suspend(); } if (a === "play" && actx) actx.resume(); }); } catch (e) { log("media: " + a + " nesuportat"); }
+    }
+    navigator.mediaSession.playbackState = "playing";
+  }
+
+  // --- sunete
+  function beep(hz, ms) {
+    if (!actx) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = hz; g.gain.value = 0.12; o.connect(g); g.connect(dest || actx.destination); o.start(); o.stop(actx.currentTime + ms / 1000);
+  }
+
+  // --- redare (prin MediaStream -> <audio>, ca Chrome să o trateze ca media)
+  function startAudio() {
+    actx = new AudioContext();
+    const out = { get currentTime() { return actx.currentTime; }, destination: null, createBuffer: (...a) => actx.createBuffer(...a), createBufferSource: () => actx.createBufferSource(), suspend: () => actx.suspend(), resume: () => actx.resume() };
+    if ($("viaEl").checked) {
+      dest = actx.createMediaStreamDestination(); out.destination = dest;
+      el = new Audio(); el.srcObject = dest.stream; el.play().then(() => log("redare prin <audio>: ok"), e => log("redare prin <audio>: " + e.name));
+    } else out.destination = actx.destination;
+    player = Pcm.player(out, { onPlaying: v => { playing = v; if (!v) afterSpeech(); } });
+    const c = actx;
+    c.onstatechange = () => { $("ctxst").textContent = c.state; log("audio context: " + c.state); };
+    $("ctxst").textContent = c.state;
+  }
+
+  // --- microfon (poartă: doar în fereastră sau cât ții apăsat Vorbește)
+  async function startMic() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    await actx.audioWorklet.addModule(URL.createObjectURL(new Blob([MIC_WORKLET], { type: "text/javascript" })));
+    const framer = Pcm.micFramer(actx.sampleRate, { onFrame: f => { if (live && gateOpen()) { live.audio(f); framesSent++; } }, onLevel: v => {
+      if (gateOpen()) { if (v > maxRms) maxRms = v; if (v > 0.03 && !voiceOn) { voiceOn = true; log("voce: nivel " + v.toFixed(3) + (window_ ? " (în fereastră)" : " (Vorbește)")); if (window_) { clearTimeout(winTimer); winTimer = setTimeout(closeWindow, 12000); } } else if (v < 0.01) voiceOn = false; }
+    } });
+    const node = new AudioWorkletNode(actx, "jarvis-mic", { numberOfOutputs: 0 });
+    node.port.onmessage = e => framer.push(e.data);
+    actx.createMediaStreamSource(stream).connect(node);
+    mic = stream;
+  }
+  let voiceOn = false;
+
+  // --- ritmul lecției (mic) : după vorbire, sunet + fereastră de 3 s, apoi bucata următoare
+  function afterSpeech() {
+    if (!turnDone || playing || !live || ending) return;
+    if (talking) return;
+    chunks++; $("chunk").textContent = chunks;
+    log("bucata " + chunks + " redată toată · chunks audio primite=" + audioIn);
+    if ($("mute").checked) { next(); return; }
+    beep(880, 120); window_ = true; maxRms = 0; voiceOn = false; log("fereastră: deschisă (3 s)");
+    winTimer = setTimeout(closeWindow, 3000);
+  }
+  function closeWindow() { window_ = false; winTimer = 0; live && live.audioEnd(); log("fereastră: închisă · frame-uri trimise=" + framesSent + " · nivel maxim=" + maxRms.toFixed(3) + " → bucata următoare"); next(); }
+  function next() { if (live) live.text(chunks === 0 ? IDEAS[0] : IDEAS[1]); }
+
+  function onEvent(e) {
+    if (e.type === "audio") { audioIn++; lastAudioAt = Date.now(); turnDone = false; player && player.play(e.pcm); }
+    else if (e.type === "turnComplete") { turnDone = true; log("turnComplete"); if (!playing) afterSpeech(); }
+    else if (e.type === "interrupted") { log("interrupted"); player && player.flush(); }
+    else if (e.type === "transcript") log("transcriere " + e.who + ": " + e.text.slice(0, 60));
+    else if (e.type === "reconnecting") { log("reconnecting…"); setSt("reconectare"); }
+    else if (e.type === "live") { log("live (reconectat)"); setSt("pornit"); }
+    else if (e.type === "closed") { log("closed: " + e.reason + " " + e.code + " " + e.detail); setSt("închis (" + e.reason + ")"); cleanup(); }
+    else if (e.type === "tool") log("tool " + e.name);
+  }
+
+  async function start() {
+    if (!key) { log("fără cheie"); return; }
+    if (live) return;
+    ending = false; chunks = 0; audioIn = 0; framesSent = 0; turnDone = true; $("chunk").textContent = "0";
+    setSt("se conectează");
+    try {
+      startAudio(); mediaSession(); await lock();
+      await startMic();
+      live = await GeminiLive.create({}).open({ key, model: "gemini-3.8-live", voice: "Charon", silenceMs: 1200, system: SYSTEM, tools: [], retryMs: [500, 1000, 2000, 3000, 4000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] }, onEvent);
+      setSt("pornit"); log("sesiune deschisă");
+      live.text(IDEAS[0]);
+      hb = setInterval(() => log("puls · ctx=" + (actx && actx.state) + " · ecran=" + document.visibilityState + " · online=" + navigator.onLine + " · audio primit=" + audioIn + " (ultimul acum " + (lastAudioAt ? Math.round((Date.now() - lastAudioAt) / 1000) + " s" : "-") + ")"), 10000);
+    } catch (e) { log("eroare la pornire: " + (e && (e.reason || e.name || e.message))); setSt("eroare"); cleanup(); }
+  }
+  function cleanup() {
+    ending = true; clearInterval(hb); clearTimeout(winTimer); window_ = false; talking = false;
+    if (live) { try { live.close(); } catch (e) {} live = null; }
+    if (mic) { mic.getTracks().forEach(t => t.stop()); mic = null; }
+    if (wake) { try { wake.release(); } catch (e) {} wake = null; }
+    if (el) { el.pause(); el.srcObject = null; el = null; }
+    if (actx) { actx.close().catch(() => {}); actx = null; }
+  }
+
+  $("go").onclick = start;
+  $("end").onclick = () => { log("oprit de utilizator · bucăți=" + chunks); cleanup(); setSt("oprit"); };
+  $("clear").onclick = () => { lines.length = 0; $("log").value = ""; };
+  $("copy").onclick = async () => {
+    const text = "PROBĂ lecție metrou · " + new Date().toISOString() + "\n" + lines.join("\n");
+    try { await navigator.clipboard.writeText(text); log("jurnal copiat"); } catch (e) { $("log").select(); log("copiere manuală: selectat"); }
+  };
+
+  // --- Vorbește: ținut apăsat
+  const talk = $("talk");
+  talk.addEventListener("pointerdown", e => {
+    if (!live || talking) return;
+    talking = true; talk.classList.add("on"); voiceOn = false; maxRms = 0;
+    try { talk.setPointerCapture(e.pointerId); } catch (x) {}
+    if (playing && player) player.flush();
+    log("Vorbește: apăsat");
+  });
+  const release = () => { if (!talking) return; talking = false; talk.classList.remove("on"); live && live.audioEnd(); log("Vorbește: eliberat · frame-uri trimise=" + framesSent + " · nivel maxim=" + maxRms.toFixed(3)); };
+  talk.addEventListener("pointerup", release); talk.addEventListener("pointercancel", release);
+  talk.addEventListener("contextmenu", e => e.preventDefault());
+})();
+</script>
+</body>
+</html>

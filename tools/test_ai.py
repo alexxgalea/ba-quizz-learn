@@ -143,7 +143,7 @@ async def main():
         check("manual override of a tick works", ticked == expect_ticked, (ticked, expect_ticked))
         await pg.click('[data-a="oral-save"]'); await pg.wait_for_timeout(100)
         saved = await pg.evaluate("Object.values(window.__prep.state().o)")
-        check("score saved from ticks, no AI data in state", len(saved) == 1 and saved[0]["s"] == round(expect_ticked / n * 100) and set(saved[0]) <= {"b", "n", "s", "t"}, saved)
+        check("score saved from ticks; only gap fields (m, mc, w) added, no raw AI data", len(saved) == 1 and saved[0]["s"] == round(expect_ticked / n * 100) and set(saved[0]) <= {"b", "n", "s", "t", "m", "mc", "w"}, saved)
         if await pg.locator('#ans-t').count():
             check("next card starts with an empty answer", await pg.input_value('#ans-t') == "")
 

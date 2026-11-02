@@ -107,7 +107,7 @@ main > * { min-width: 0; }
   padding-left: max(8px, env(safe-area-inset-left, 0px));
   padding-right: max(8px, env(safe-area-inset-right, 0px));
 }
-.tabs-in { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+.tabs-in { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); }
 .tab {
   appearance: none; border: 0; background: none; cursor: pointer;
   height: var(--tabbar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -337,6 +337,8 @@ details.rev .rv { padding: 0 14px 14px; display: flex; flex-direction: column; g
 
 /* ---------- code ---------- */
 pre.code { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.55; tab-size: 4; max-width: 100%; }
+pre.code, code, textarea.skel-code { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+.skel-ref pre.code { font-size: 11px; padding: 10px 6px; margin: 0 -10px; max-width: none; }
 pre.code code { background: none; border: 0; padding: 0; font-size: inherit; overflow-wrap: normal; white-space: pre; }
 pre.code.wrap code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 pre.code.wrap .ln { display: block; padding-left: calc((var(--n, 0) + 2) * 1ch); text-indent: calc((var(--n, 0) + 2) * -1ch); }
@@ -390,6 +392,9 @@ figcaption { font-size: 13.5px; color: var(--muted); }
 .kata { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; text-align: left; cursor: pointer; appearance: none; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; width: 100%; }
 .kata .n { font: 800 22px/1 var(--font-display); color: var(--accent); text-align: center; }
 .kata .t { font-weight: 650; }
+.kata.skel { grid-template-columns: 1fr auto; }
+.skel-grp { text-transform: none; letter-spacing: .02em; font-size: 12.5px; margin-top: 4px; }
+textarea.skel-code { width: 100%; min-height: 220px; font: 13px/1.45 var(--font-mono); tab-size: 4; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px; background: var(--code-bg); color: var(--ink); resize: vertical; white-space: pre; overflow-x: auto; font-variant-ligatures: none; }
 .hint { border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 10px 10px 0; padding: 10px 12px; font-size: 15px; }
 .star { display: grid; grid-template-columns: 22px 1fr; gap: 6px 10px; font-size: 15px; }
 .star b { font: 800 14px/1.5 var(--font-display); color: var(--accent); }
@@ -427,7 +432,7 @@ textarea.io { width: 100%; min-height: 110px; font: 13px/1.4 var(--font-mono); b
 .spark .ar { fill: var(--accent-soft); stroke: none; }
 .spark .ln { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .spark .pt { fill: var(--accent); }
-details.sheet, details.day { scroll-margin-top: 84px; }
+details.sheet, details.day, [data-skel-mod] { scroll-margin-top: 84px; }
 
 /* ---------- diagrams (inline SVG, themed via classes) ---------- */
 .dg { display: block; width: 100%; max-width: 480px; height: auto; margin-inline: auto; color: var(--ink); }
@@ -492,3 +497,112 @@ details.model .iv-m p { padding: 0; font-size: 15px; }
 label.small { display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 0; }
 select.keyin { appearance: auto; min-height: 44px; font-family: var(--font-mono); font-size: 16px; }
 input.keyin[type="date"] { min-width: 0; }
+
+/* goluri: teoria pe ce ai ratat */
+.gap-i { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 0; border-top: 1px dashed var(--line-strong); }
+.gap-i:first-of-type { border-top: 0; padding-top: 0; }
+.gap-i > * { max-width: 100%; }
+.gap-p { font-weight: 650; font-size: 15.5px; line-height: 1.4; }
+.gap-i .xp-sec { align-self: stretch; }
+details.gap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+details.gap[open] { box-shadow: var(--shadow); }
+details.gap > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+details.gap > summary::-webkit-details-marker { display: none; }
+details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 1.4; }
+.gap-ai { align-self: stretch; padding-top: 4px; }
+.gap-ai .btn { align-self: flex-start; }
+.gap-les { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 4px 12px 12px 4px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.gap-les .xp-h { color: var(--accent); }
+.gap-ok { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.card.gap-ok { border-left: 4px solid var(--ok); }
+
+/* snippet pe cardul oral: 38 de caractere încap pe un telefon de 360 px */
+.icard pre.code { font-size: 11px; padding: 10px; }
+
+/* Jarvis: ecranul vocal. Orbul arată starea (culoare) și nivelul vocii (--lv, 0..1); fără mișcare la prefers-reduced-motion (regula globală de mai sus). */
+.jv-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 26px 14px 18px; }
+.jv-orb { --lv: 0; --c: var(--accent); width: 124px; height: 124px; border-radius: 50%; background: var(--c);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 62%, color-mix(in srgb, var(--c) 72%, #000));
+  box-shadow: 0 0 0 calc(5px + var(--lv) * 30px) color-mix(in srgb, var(--c) 16%, transparent), 0 0 calc(14px + var(--lv) * 44px) color-mix(in srgb, var(--c) 38%, transparent);
+  transition: box-shadow .12s linear, background .3s; }
+.jv-orb.speaking { --c: var(--ok); animation: jv-pulse 1.4s ease-in-out infinite; }
+.jv-orb.thinking { --c: var(--warn); animation: jv-pulse 0.9s ease-in-out infinite; }
+.jv-orb.paused, .jv-orb.connecting { --c: var(--line-strong); }
+@keyframes jv-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.jv-state { font: 700 17px/1.2 var(--font-display); }
+.jv-warn, .jv-err { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 14px; line-height: 1.4; }
+.jv-err { background: var(--bad-soft); color: var(--bad); }
+.jv-warn { align-self: stretch; }
+.jv-ctl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.jv-ctl .btn { padding-inline: 4px; }
+.jv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.jv-set { display: grid; gap: 10px; }
+.jv-set label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.jv-set .chk { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+.jv-set .chk input { width: 20px; height: 20px; }
+
+/* Lecție: butonul recomandat, bucata curentă și comenzile mari, pentru o singură mână. */
+.jv-rec { flex-direction: column; gap: 2px; min-height: 64px; }
+.jv-rec-t { font: 700 17px/1.2 var(--font-display); }
+.jv-rec-s { font-size: 14px; font-weight: 500; opacity: .9; }
+.jv-lessons > summary { cursor: pointer; padding: 6px 0; color: var(--accent); }
+.jv-lrow { display: flex; gap: 6px; align-items: stretch; }
+.jv-lrow .modrow { flex: 1; min-width: 0; }
+.jv-lrow .btn { flex: none; }
+#jv-rec-reset { align-self: flex-start; }
+.jv-chunk-card { gap: 10px; }
+.jv-pos { font-size: 15px; font-weight: 700; color: var(--accent); }
+.jv-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.jv-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.jv-chunk { font-size: 16px; line-height: 1.5; }
+.jv-chunk p { margin: 8px 0 0; }
+#jv-lesson { display: flex; flex-direction: column; gap: 10px; }
+#jv-lesson .jv-stage { flex-direction: row; justify-content: center; gap: 14px; padding: 10px 14px; }
+#jv-lesson .jv-orb { width: 44px; height: 44px; flex: none; }
+#jv-lesson .jv-stage .jv-warn { flex: 1; }
+.jv-chunk-card .jv-chunk { max-height: 34vh; overflow-y: auto; }
+#jv-lesson.is-mut .jv-chunk { max-height: 22vh; }
+#jv-lesson .jv-ctl { grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 6px; }
+#jv-lesson .jv-ctl .btn { padding-inline: 2px; font-size: 15px; }
+#jv-lesson .jv-ctl .btn, #jv-lesson .jv-mutes .btn { min-height: 56px; font-size: 16px; }
+.jv-mutes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jv-mutes .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.jv-talk { flex-direction: column; gap: 2px; min-height: 76px; font-size: 19px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.jv-talk .xs { font-weight: 500; opacity: .85; }
+.jv-talk.on { background: var(--ok); border-color: var(--ok); color: var(--on-accent); }
+#jv-trd > summary { cursor: pointer; padding: 4px 0; }
+
+/* Întreabă despre asta: conversație scurtă, în subiectul zonei de teorie. */
+.ask { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+.ask-h { font: 650 15px/1.3 var(--font-display); margin: 0; }
+.ask .iv-m p { white-space: pre-wrap; }
+.ask .iv-m.off { background: var(--warn-soft); }
+.ask .iv-m.off .iv-w { color: var(--warn); }
+.ask-sug { display: flex; flex-wrap: wrap; gap: 4px; }
+.ask-hint { margin: 8px 0 0; }
+.ask-open { margin-top: 8px; }
+.ask textarea.ans { min-height: 64px; }
+.ask-sug .btn.ghost { border: 1px solid var(--line-strong); background: var(--surface); padding-inline: 10px; }
+
+/* Desfășurări: harta modulului și „Pe larg ›” sub fiecare punct (Studiu › Fișe) */
+.dz-top { display: flex; justify-content: flex-end; }
+.more { appearance: none; border: 0; background: none; margin: 0; padding: 4px 0; min-height: 32px; display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; text-align: left; cursor: pointer; font: 600 13.5px/1.2 var(--font-body); color: var(--accent); }
+.more .chev { display: inline-block; transition: transform .15s; }
+.more[aria-expanded="true"] .chev { transform: rotate(90deg); }
+ul.pts.num { list-style: none; padding-left: 0; }
+ul.pts.num > li { display: flex; gap: 10px; align-items: flex-start; }
+.pn { flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 600 12px/22px var(--font-mono); text-align: center; }
+.pb { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.dz { align-self: stretch; box-sizing: border-box; width: 100%; margin: 4px 0 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; font-size: 14.5px; }
+.dz-map { margin: 0; }
+.dz-l { display: block; margin-bottom: 3px; font: 600 11px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.dz .rt { font-size: 14.5px; line-height: 1.5; }
+.dz .rt + .rt, .dz .rt + pre.code, .dz pre.code + .rt { margin-top: 6px; }
+.dz pre.code { font-size: 12px; padding: 10px 8px; background: var(--code-bg); }
+.dz-cpp { padding: 8px 10px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; }
+.dz-nu { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line-strong); }
+.dz-nu .dz-l { color: var(--warn); }
+.dz-groups { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.dz-groups b { margin-right: 6px; color: var(--accent); font-size: 13px; }
+/* panoul se întinde pe toată lățimea fișei (sub numărul punctului), ca rândurile de cod de 36 de caractere să încapă pe 360 px; 32px = lățimea .pn (22) + golul din li (10) */
+ul.pts.num .pb > .dz { width: calc(100% + 32px); margin-left: -32px; }

@@ -344,7 +344,15 @@
       "A: ai urmărit mecanismul (dict-uri serializate, nu stringuri) → fără JSON injection prin match",
       "A: ai găsit riscurile reale: validarea UUID-ului camerei pe server, erori propagate către client",
       "R: remediere prioritizată după risc; lecția: judeci după mecanism"],
-      model: "Aveam o căutare de supraveghere a vehiculelor care construia un query Elasticsearch din input de la utilizator, iar întrebarea era dacă poate fi injectat. În loc să presupun, am urmărit cum se construia query-ul: era alcătuit din dicționare Python serializate, niciodată prin concatenare de stringuri, deci o valoare nu putea ieși din clauza match. Analiza a scos însă la iveală două probleme reale: UUID-ul camerei nu era validat pe server, iar mesajele de eroare brute din Elasticsearch ajungeau la client. Pe acelea le-am prioritizat. Lecția pe care o păstrez: judeci după mecanism, ca efortul să meargă spre riscul real." }
+      model: "Aveam o căutare de supraveghere a vehiculelor care construia un query Elasticsearch din input de la utilizator, iar întrebarea era dacă poate fi injectat. În loc să presupun, am urmărit cum se construia query-ul: era alcătuit din dicționare Python serializate, niciodată prin concatenare de stringuri, deci o valoare nu putea ieși din clauza match. Analiza a scos însă la iveală două probleme reale: UUID-ul camerei nu era validat pe server, iar mesajele de eroare brute din Elasticsearch ajungeau la client. Pe acelea le-am prioritizat. Lecția pe care o păstrez: judeci după mecanism, ca efortul să meargă spre riscul real." },
+    { id: "o-beh-5", q: "„Dă-mi un exemplu concret în care AI-ul te-a ajutat să livrezi mai repede. Ce ai verificat tu?”", k: [
+      "Situația: aplicația de pregătire, construită cu Claude Code, cu termen scurt",
+      "Cum ai lucrat: specificație întâi, TDD (test, apoi cod), task-uri mici, review pe fiecare diff",
+      "Plasa de siguranță: validare pe date, teste Playwright, teste de unitate, soluții testate cu pytest",
+      "Ce ai verificat manual: faptele (versiuni, valori implicite) pe surse primare, nu din model",
+      "AI în produs: LLM API-uri cu JSON parsat strict, rezervă între furnizori, chei ținute local",
+      "Lecția: AI-ul accelerează scrisul; calitatea vine din teste, review și surse"],
+      model: "Cel mai concret exemplu e aplicația cu care m-am pregătit pentru interviul ăsta. Aveam puțin timp și un stack larg, așa că am construit-o cu Claude Code. Am lucrat cu specificații scrise întâi și cu TDD: întâi testul la interfață, apoi codul, în pași mici pe care îi citeam ca într-un code review. Plasa de siguranță a fost esențială: un validator pe date, treisprezece suite Playwright, teste de unitate și soluții de live coding testate cu pytest. Ce n-am lăsat pe seama modelului au fost faptele: versiuni, valori implicite, RFC-uri le-am verificat pe sursele primare și le-am notat separat. În aplicație am integrat și LLM API-uri, pentru verificarea răspunsurilor orale: modelul întoarce JSON, pe care îl parsez strict, cu rezervă între furnizori și cheile ținute doar local. Lecția mea: AI-ul îmi scurtează mult scrisul, dar calitatea vine din teste, review și verificarea surselor. Asta aș aduce și în echipă." }
   ]);
 
   O("frontend", [
@@ -361,6 +369,30 @@
       "Refactoring sigur, autocomplete, onboarding mai ușor",
       "Migrare incrementală (allowJs), strict activat treptat",
       "Tipurile dispar la runtime → validare la granițe"],
-      model: "În primul rând pentru siguranță la scară: compilatorul prinde clase întregi de bug-uri — proprietăți undefined, argumente de formă greșită — înainte să ajungă în producție. Tipurile documentează și contractul dintre frontend și API, mai ales când sunt generate din schema OpenAPI sau GraphQL, și fac refactoring-ul și onboarding-ul mult mai ușoare. Aș migra incremental, cu `allowJs`, și aș strânge treptat modul strict, ținând minte că tipurile dispar la runtime, deci datele externe tot trebuie validate." }
+      model: "În primul rând pentru siguranță la scară: compilatorul prinde clase întregi de bug-uri — proprietăți undefined, argumente de formă greșită — înainte să ajungă în producție. Tipurile documentează și contractul dintre frontend și API, mai ales când sunt generate din schema OpenAPI sau GraphQL, și fac refactoring-ul și onboarding-ul mult mai ușoare. Aș migra incremental, cu `allowJs`, și aș strânge treptat modul strict, ținând minte că tipurile dispar la runtime, deci datele externe tot trebuie validate." },
+    { id: "o-fe-3", q: "Construiești în React pagina de alerte: listă cu filtre, paginare și alerte noi în timp real. Cum o structurezi?", k: [
+      "Starea de server separată de starea de UI: TanStack Query pentru date, `useState` sau URL pentru filtre",
+      "Filtrele și pagina în query string: link-uri partajabile, back/forward merg",
+      "Paginare cu cursor din API, `queryKey` care include filtrele, debounce la căutare",
+      "Timp real: WebSocket sau SSE care invalidează sau actualizează cache-ul, cu cleanup la unmount",
+      "Stări explicite: loading, error, empty, ok (union discriminat); liste lungi virtualizate",
+      "Tipurile generate din OpenAPI-ul backendului; teste RTL + MSW pe filtre și stări"],
+      model: "Separ starea de server de starea de UI. Datele vin prin TanStack Query, cu un `queryKey` care conține filtrele și cursorul, așa că am cache, retry și refetch fără cod scris de mână. Filtrele și pagina le țin în query string, ca un analist să poată trimite link-ul exact și ca butonul Back să meargă. La căutarea text pun debounce. Pentru alerte noi deschid un WebSocket sau SSE într-un effect cu cleanup, iar la fiecare eveniment actualizez cache-ul sau îl invalidez, în loc să țin o a doua copie a listei. Componenta de listă primește o stare discriminată: loading, error, empty sau ok, ca să nu pot afișa date și eroare simultan. Dacă lista poate avea mii de rânduri, o virtualizez. Tipurile le generez din OpenAPI-ul FastAPI. Testez cu React Testing Library și MSW: schimb un filtru și verific cererea și rândurile afișate, plus stările de eroare și listă goală." },
+    { id: "o-fe-4", q: "Cum ai testa o pagină React care listează alertele din API, cu filtrare și paginare?", k: [
+      "Teste de componentă cu React Testing Library: ce vede și ce face userul (`getByRole`, `user-event`)",
+      "Rețeaua mock-uită cu MSW, nu funcții interne mock-uite",
+      "Cazuri: loading, eroare, listă goală, filtru aplicat, pagina următoare",
+      "`findBy` pentru ce apare după fetch, `queryBy` pentru ce trebuie să lipsească",
+      "Câteva teste E2E Playwright doar pe fluxul critic, cu aserții care reîncearcă",
+      "Contractul cu backendul: tipuri generate din OpenAPI sau contract tests"],
+      model: "Pun majoritatea testelor la nivel de componentă, cu React Testing Library: randez pagina, schimb filtrul cu `user-event` și verific ce vede userul, prin query-uri după rol. Rețeaua o simulez cu MSW, la nivel de request, deci testul nu depinde de cum e scris hook-ul intern. Acopăr stările: loading, eroare de la server, listă goală, filtru aplicat și trecerea la pagina următoare. Pentru ce apare după fetch folosesc `findBy`, iar pentru ce trebuie să lipsească, `queryBy`. Peste ele pun puține teste Playwright, doar pe fluxul critic, cu backend real sau de test și cu aserții care reîncearcă, fără `sleep`. Ca frontendul și backendul să nu se despartă, generez tipurile din OpenAPI-ul FastAPI și îl verific în CI." },
+    { id: "o-fe-5", q: "Cum gestionezi autentificarea cu Keycloak într-un SPA React?", k: [
+      "SPA-ul e client public: fără secret, Authorization Code + PKCE (S256)",
+      "Tokenul ținut în memorie, nu în `localStorage`; refresh înainte de expirare (`updateToken`)",
+      "API-ul validează JWT-ul: semnătura (JWKS), `iss`, `aud`, `exp`; rolurile se verifică pe server",
+      "UI-ul ascunde butoane după roluri doar pentru UX, nu pentru securitate",
+      "Pentru aplicații de business: BFF, cu tokenurile pe server și cookie `HttpOnly` (RFC 10017)",
+      "Logout: închizi și sesiunea Keycloak, nu doar starea din React"],
+      model: "SPA-ul e un client public, deci nu are secret. Folosesc Authorization Code cu PKCE, prin adaptorul JS Keycloak, cu `pkceMethod: \"S256\"`. Tokenul stă în memorie, nu în `localStorage`, unde l-ar putea citi orice XSS, și îl reîmprospătez cu `updateToken` înainte să expire. Pe fiecare request trimit access token-ul, iar API-ul validează semnătura prin JWKS, emitentul, audiența și expirarea, apoi verifică rolurile. În UI ascund butoanele după rol doar pentru experiență, nu ca protecție. Pentru o aplicație de securitate aș merge mai departe, cu un BFF: backendul face fluxul OAuth și ține tokenurile, iar browserul primește doar un cookie `HttpOnly`. Așa recomandă RFC 10017 pentru aplicații de business. Am integrat Keycloak în proiectele mele, deci știu și partea de configurare: clientul, redirect URI-urile exacte și maparea rolurilor." }
   ]);
 })(window.PREP);

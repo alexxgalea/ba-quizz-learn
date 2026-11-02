@@ -1,5 +1,5 @@
 // Loads the data files the way the page does and checks the schema.
-import { loadData, buildExplanations } from "./lib.mjs";
+import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);
@@ -42,6 +42,11 @@ for (const c of P.oral) {
   if (!mods.has(c.m)) errors.push(c.id + ": unknown module " + c.m);
   if (!Array.isArray(c.k) || c.k.length < 3) errors.push(c.id + ": key points");
   if (!c.model || c.model.length < 80) errors.push(c.id + ": model answer missing");
+  // snippet: codul se citește pe telefon (38 de caractere încap la 360 px), deci fără rânduri lungi
+  if (c.code !== undefined) {
+    if (typeof c.code !== "string" || !c.code.trim()) errors.push(c.id + ": empty code");
+    else c.code.split("\n").forEach((l, i) => { if (l.length > 38) errors.push(c.id + ": code line " + (i + 1) + " longer than 38 (" + l.length + ")"); });
+  }
 }
 for (const m of P.modules) if (!P.sheets[m.id]) errors.push("no sheet for " + m.id);
 for (const [k, s] of Object.entries(P.sheets)) if (s.diagram && !P.diagrams[s.diagram]) errors.push("missing diagram " + s.diagram);
@@ -63,7 +68,27 @@ for (const m of P.modules) per[m.id] = { mcq: 0, oral: 0 };
 for (const q of P.mcq) per[q.m].mcq++;
 for (const c of P.oral) per[c.m].oral++;
 console.table(per);
-console.log("MCQ:", P.mcq.length, "oral:", P.oral.length, "katas:", P.katas.length, "interview:", P.cfg.interview, "| morning tasks:", taskIds.size);
+// Schelete: cerință, 3–5 puncte esențiale, referință testată în katas/ (rânduri ≤ SKEL_COLS), grupă doar la frontend.
+const SKEL_COLS = 42, SKEL_LANGS = ["py", "js", "ts", "tsx", "sql", "yaml", "docker"], SKEL_GROUPS = ["react", "js", "ts"];
+const { skelCode } = loadCode(root);
+const skelIds = new Set();
+for (const s of P.skel || []) {
+  if (!/^s-[a-z0-9]+-[a-z0-9-]+$/.test(s.id || "")) errors.push("skel: bad id " + s.id);
+  dup(s.id); skelIds.add(s.id);
+  if (!mods.has(s.m)) errors.push(s.id + ": unknown module " + s.m);
+  else if (!s.id.startsWith("s-" + s.m + "-")) errors.push(s.id + ": id must start with s-" + s.m + "-");
+  if (!s.t || !String(s.t).trim()) errors.push(s.id + ": missing title");
+  if (!s.p || !String(s.p).trim()) errors.push(s.id + ": missing prompt (p)");
+  if (!Array.isArray(s.k) || s.k.length < 3 || s.k.length > 5 || s.k.some(x => !x || !String(x).trim())) errors.push(s.id + ": needs 3–5 essential points (k)");
+  if (!SKEL_LANGS.includes(s.lang)) errors.push(s.id + ": bad lang " + s.lang);
+  if (s.m === "frontend" ? !SKEL_GROUPS.includes(s.g) : s.g !== undefined) errors.push(s.id + ": group (g) only on frontend, one of " + SKEL_GROUPS.join("/"));
+  for (const x of [s.t, s.p, ...(s.k || [])]) if ((String(x).match(/`/g) || []).length % 2) errors.push(s.id + ": unbalanced backticks in: " + String(x).slice(0, 50));
+  const code = skelCode[s.id];
+  if (!code) errors.push(s.id + ": no reference section in katas/");
+  else code.split("\n").forEach((l, i) => { if ([...l].length > SKEL_COLS) errors.push(s.id + ": reference line " + (i + 1) + " longer than " + SKEL_COLS + " chars"); });
+}
+for (const id of Object.keys(skelCode)) if (!skelIds.has(id)) errors.push("reference " + id + " in katas/ has no skeleton in data");
+console.log("MCQ:", P.mcq.length, "oral:", P.oral.length, "katas:", P.katas.length, "schelete:", (P.skel || []).length, "interview:", P.cfg.interview, "| morning tasks:", taskIds.size);
 // position of correct answers in source (all 0 is expected: the app shuffles)
 // new-format explanations + glossary
 const ex = buildExplanations(root, P);
@@ -71,6 +96,11 @@ ex.errors.forEach(e => errors.push(e));
 const covered = {};
 for (const q of P.mcq) { covered[q.m] = covered[q.m] || [0, 0]; covered[q.m][1]++; if (ex.expl[q.id]) covered[q.m][0]++; }
 console.log("explanations:", Object.keys(ex.expl).length + "/" + P.mcq.length, "| terms:", ex.gloss.length, "|", Object.entries(covered).map(([m, [a, b]]) => m + " " + a + "/" + b).join(", "));
+// Desfășurările punctelor (src/desf/<modul>.md): modul complet sau absent; regulile sunt în lib.mjs (checkDesf).
+const dz = buildDesf(P, readDesfFiles(root));
+dz.errors.forEach(e => errors.push(e));
+console.log("desfășurări:", Object.entries(dz.desf).map(([m, d]) => m + " " + d.items.length).join(", ") || "niciuna");
+if (dz.warnings.length) console.log("desfășurări, în afara benzii (warning):\n  " + dz.warnings.join("\n  "));
 const long = [];
 const LIM = { scurt: 220, scop: 360, mec: 420, pas: 520, apl: 560, leg: 320, lim: 380, intv: 420, ver: 280, verR: 360 };
 for (const [id, x] of Object.entries(ex.expl)) for (const [k, n] of Object.entries(LIM)) if (x[k] && x[k].replace(/```[\s\S]*?```/g, "").length > n) long.push(id + "." + k + " (" + x[k].length + ")");

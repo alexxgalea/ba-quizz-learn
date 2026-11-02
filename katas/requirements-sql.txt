@@ -1,0 +1,8 @@
+# Dependențele de dev pentru testele scheletelor SQL (sqlalchemy, postgres, index).
+# pip install -r katas/requirements-sql.txt
+# Mai e nevoie de binarele Postgres (initdb, pg_ctl, postgres), de preferat versiunea 16;
+# fără ele, testele sunt sărite cu un mesaj. Aplicația însăși rămâne fără dependențe.
+pytest>=9
+sqlalchemy>=2.0,<2.2
+alembic>=1.13
+psycopg[binary]>=3.2

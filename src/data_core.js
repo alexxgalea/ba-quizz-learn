@@ -5,31 +5,34 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
 
   // p: 1 = critic, 2 = important, 3 = util, 4 = bonus (în afara scorului)
   P.modules = [
-    { id: "gil", code: "GIL", name: "Concurență: GIL, threads, procese, asyncio", short: "GIL & concurență", p: 1, src: "Lacună Lateral" },
-    { id: "runtime", code: "RT", name: "Cum rulează Python", short: "Runtime Python", p: 1, src: "Lacună Lateral" },
-    { id: "asgi", code: "ASGI", name: "WSGI/ASGI, Gunicorn, Uvicorn, FastAPI", short: "WSGI/ASGI", p: 1, src: "Lacună Lateral" },
-    { id: "index", code: "IDX", name: "Indexuri în baze de date", short: "Indexuri", p: 1, src: "Lacună Lateral" },
-    { id: "python", code: "PY", name: "Python de senior", short: "Python core", p: 1, src: "Onapsis" },
-    { id: "sqlalchemy", code: "SQA", name: "SQLAlchemy 2.0 & Alembic", short: "SQLAlchemy", p: 1, src: "Onapsis" },
-    { id: "postgres", code: "PG", name: "PostgreSQL în producție", short: "PostgreSQL", p: 1, src: "Onapsis" },
-    { id: "celery", code: "CEL", name: "Celery", short: "Celery", p: 1, src: "Lateral + Onapsis" },
-    { id: "rabbitmq", code: "RMQ", name: "RabbitMQ & mesagerie", short: "RabbitMQ", p: 2, src: "Onapsis" },
-    { id: "redis", code: "RD", name: "Redis", short: "Redis", p: 2, src: "Onapsis" },
-    { id: "pytest", code: "PT", name: "Pytest & testare", short: "Pytest", p: 2, src: "Onapsis" },
+    { id: "gil", code: "GIL", name: "Concurență: GIL, threads, procese", short: "GIL & threads", p: 1, src: "Interviu manager" },
+    { id: "asyncio", code: "AIO", name: "asyncio: event loop, task-uri, anulare", short: "asyncio", p: 1, src: "Interviu manager" },
+    { id: "python", code: "PY", name: "Python de senior: generatori, idiomuri", short: "Python core", p: 1, src: "Interviu manager" },
+    { id: "oop", code: "OOP", name: "OOP în Python: design de clase", short: "OOP", p: 1, src: "Interviu manager" },
+    { id: "pytest", code: "PT", name: "Pytest & testare", short: "Pytest", p: 1, src: "Interviu manager" },
+    { id: "asgi", code: "ASGI", name: "FastAPI, WSGI/ASGI, Gunicorn, Uvicorn", short: "FastAPI/ASGI", p: 1, src: "Interviu manager" },
+    { id: "design", code: "DES", name: "System design & microservicii", short: "System design", p: 1, src: "Interviu manager" },
+    { id: "sqlalchemy", code: "SQA", name: "SQLAlchemy 2.0 & Alembic", short: "SQLAlchemy", p: 2, src: "Onapsis" },
+    { id: "postgres", code: "PG", name: "PostgreSQL în producție", short: "PostgreSQL", p: 2, src: "Onapsis" },
+    { id: "celery", code: "CEL", name: "Celery", short: "Celery", p: 2, src: "Lateral + Onapsis" },
+    { id: "index", code: "IDX", name: "Indexuri în baze de date", short: "Indexuri", p: 2, src: "Lacună Lateral" },
+    { id: "runtime", code: "RT", name: "Cum rulează Python", short: "Runtime Python", p: 2, src: "Lacună Lateral" },
     { id: "security", code: "SEC", name: "Securitate în backend (AppSec)", short: "Securitate", p: 2, src: "Onapsis" },
-    { id: "design", code: "DES", name: "System design & microservicii", short: "System design", p: 2, src: "Onapsis" },
-    { id: "dbmodels", code: "DBM", name: "Relațional vs nerelațional", short: "SQL vs NoSQL", p: 2, src: "Lacună Lateral" },
-    { id: "docker", code: "DK", name: "Docker & orchestrare", short: "Docker", p: 2, src: "Onapsis" },
-    { id: "domain", code: "DOM", name: "Onapsis, SAP & detecție", short: "Domeniu Onapsis", p: 2, src: "Onapsis" },
-    { id: "behav", code: "BEH", name: "Comportamental: pitch, motivație, povești", short: "Comportamental", p: 2, src: "Onapsis" },
+    { id: "rabbitmq", code: "RMQ", name: "RabbitMQ & mesagerie", short: "RabbitMQ", p: 3, src: "Onapsis" },
+    { id: "redis", code: "RD", name: "Redis", short: "Redis", p: 3, src: "Onapsis" },
+    { id: "docker", code: "DK", name: "Docker & orchestrare", short: "Docker", p: 3, src: "Onapsis" },
+    { id: "domain", code: "DOM", name: "Onapsis, SAP & detecție", short: "Domeniu Onapsis", p: 3, src: "Onapsis" },
     { id: "perf", code: "PF", name: "Performanță & pipeline-uri de date", short: "Performanță", p: 3, src: "Onapsis" },
-    { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 3, src: "Onapsis" },
-    { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 3, src: "Onapsis" },
     { id: "ops", code: "OBS", name: "Observabilitate & GitLab CI", short: "Observabilitate", p: 3, src: "Onapsis" },
     { id: "linux", code: "LX", name: "Linux pentru backend", short: "Linux", p: 3, src: "Onapsis" },
-    { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 3, src: "Experiența ta" },
-    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 4, src: "Bonus Lateral" }
+    { id: "behav", code: "BEH", name: "Comportamental: pitch, motivație, povești", short: "Comportamental", p: 3, src: "Onapsis" },
+    { id: "dbmodels", code: "DBM", name: "Relațional vs nerelațional", short: "SQL vs NoSQL", p: 4, src: "Lacună Lateral" },
+    { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 4, src: "Onapsis" },
+    { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 3, src: "Anunț" },
+    { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 4, src: "Experiența ta" },
+    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 1, src: "Anunț + panel FE" }
   ];
+
 
   P.sheets = {
     gil: {
@@ -73,7 +76,8 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         "Punct de plecare pentru workeri sync: 2 × core + 1. Apoi măsori sub încărcare.",
         "Nginx sau un load balancer în față: TLS, fișiere statice, buffering pentru clienții lenți.",
         "FastAPI: endpoint `def` → threadpool AnyIO (implicit, cel mult 40 de apeluri sincrone în paralel); `async def` → direct pe event loop. Cod blocant în `async def` blochează tot workerul.",
-        "FastAPI = Starlette + Pydantic: validare din type hints (422 automat), `Depends` pentru injecție (cu `yield` pentru teardown), OpenAPI generat automat."
+        "FastAPI = Starlette + Pydantic: validare din type hints (422 automat), `Depends` pentru injecție (cu `yield` pentru teardown), OpenAPI generat automat.",
+        "HTTP: GET, HEAD, OPTIONS sunt safe; PUT și DELETE sunt și idempotente; POST și PATCH nu, deci un retry sigur cere `Idempotency-Key`. 401 = credențiale lipsă sau invalide, 403 = știu cine ești, dar n-ai voie, 409 = conflict cu starea resursei, 422 = validare eșuată (FastAPI), 429 = rate limit."
       ]
     },
     index: {
@@ -202,7 +206,10 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         "DB: Postgres real în Docker (service în CI sau testcontainers), tranzacție + rollback per test, factory_boy pentru date.",
         "Celery: testezi funcția direct; `task_always_eager` doar pentru unit; worker real pentru integrare.",
         "Timp: freezegun/time-machine sau un clock injectat. Niciodată `sleep` ca sincronizare.",
-        "Utile: `-x`, `-k`, `--lf`, markers (`-m \"not slow\"`), `pytest-xdist -n auto`, `pytest-cov`."
+        "Utile: `-x`, `-k`, `--lf`, markers (`-m \"not slow\"`), `pytest-xdist -n auto`, `pytest-cov`.",
+        "xdist (`-n auto`): fiecare worker e un proces separat, deci un fixture `session` rulează o dată per worker; izolezi datele după `worker_id`.",
+        "Framework de teste: straturi (teste → pași de domeniu → clienți API / page objects → drivere), configurare pe mediu cu `pytest_addoption`, date din factories curățate cu `yield`, raport JUnit în CI.",
+        "Playwright: locatori după rol (`get_by_role`), acțiunile așteaptă singure, iar `expect(locator)` reîncearcă (5 s implicit). `is_visible()` nu așteaptă, deci fără `sleep` și fără `assert` pe el."
       ]
     },
     security: {
@@ -271,7 +278,9 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         "Defend = monitorizare continuă și detecție pentru SAP: un sistem de avertizare timpurie pentru schimbări neautorizate, abuz sau atacuri.",
         "Defend: peste 2.600 de reguli de detecție (după pagina produsului), inclusiv zero-day, pe ABAP, Java, HANA, SAProuter, plus cloud (RISE, BTP); scoruri de anomalie și analiză de comportament.",
         "Alertele SAP ajung în SIEM-ul clientului (SOC). „Pre-patch protection” = monitorizezi exploatarea unei vulnerabilități înainte să aplici patch-ul.",
-        "Onapsis e singura platformă de securitate din programul SAP Endorsed Apps. Vulnerabilități celebre raportate de Onapsis: RECON (2020) și ICMAD (2022).",
+        "Platforma e „SAP-endorsed”; după onapsis.com, Control e „the only SAP-endorsed automated SAP application security testing software”. Vulnerabilități celebre raportate de Onapsis: RECON (2020) și ICMAD (2022).",
+        "Actual (sept. 2026): OVERPASS, CVE-2026-44756, vulnerabilitate CVSS 10 în kernelul SAP, exploatabilă de la distanță fără autentificare, descoperită de Onapsis Research Labs; Defend detecta încercările de exploatare înainte de patch. Exemplul tău pentru „pre-patch protection”.",
+        "Platforma de azi: Assess (vulnerabilități), Defend (detecție), Control (cod și transporturi), Security Advisor (ghidare cu AI), iar peste ele „Agentic AI Fabric”. Anunțul cere explicit AI în livrare: Cursor, Copilot, Claude Code, LLM APIs.",
         "SAP = ERP: finanțe, supply chain, HR. ABAP e limbajul SAP; S/4HANA e generația curentă.",
         "Vocabular SOC: SIEM, IoC, MITRE ATT&CK, false positive, alert fatigue, MTTD/MTTR.",
         "Inginerie: ingestie de loguri → normalizare → reguli → alerte → integrare SIEM; ordine per sistem, idempotență, multi-tenant, reguli testate pe loguri reale anonimizate."
@@ -362,21 +371,30 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       ]
     },
     frontend: {
-      lead: "Bonus: React/TS nu sunt în stack-ul Onapsis. Le reiei doar dacă rămâne timp.",
+      lead: "În panel e un inginer de frontend, iar anunțul cere „React and modern frontend development standards”. Aici contează modelul de randare, nu sintaxa.",
       points: [
-        "TS: tipare statică, erori la compilare, contracte cu API-ul, refactoring sigur; dispare la runtime → validezi datele externe.",
-        "Props (de la părinte, read-only) vs state (local; setState re-randează componenta și copiii).",
-        "Context: la schimbarea valorii se re-randează toți consumatorii → memoizezi valoarea, împarți contextul.",
-        "`key` stabil în liste (nu indexul când lista se reordonează); `useEffect` cu dependențe complete și cleanup.",
-        "TanStack Query: `staleTime` (cât timp datele sunt proaspete) vs `gcTime` (cât stau în cache nefolosite)."
-      ]
+        "State e un snapshot al render-ului: trei `setN(n + 1)` la rând dau +1, iar `setN(x => x + 1)` de trei ori dă +3. React aplică actualizările după ce se termină handlerul (batching).",
+        "Regulile hooks: le apelezi doar la nivelul de sus al unei componente sau al unui custom hook, nu în bucle, condiții sau după un `return` timpuriu. React le identifică după ordinea apelurilor.",
+        "`useEffect` fără array rulează după fiecare render, cu `[]` doar după primul, cu dependențe când se schimbă una. Cleanup-ul rulează înaintea următorului efect și la unmount.",
+        "În dev, Strict Mode face un ciclu setup → cleanup → setup în plus, ca să verifice cleanup-ul. Un `setInterval` sau un subscribe fără cleanup se vede imediat.",
+        "Un effect e pentru sincronizare cu un sistem extern (rețea, DOM, socket). Ce se poate calcula din props și state calculezi direct în render.",
+        "Fetch în effect: un flag `ignore` setat în cleanup (sau `AbortController`), altfel un răspuns vechi poate suprascrie unul nou. În practică folosești TanStack Query.",
+        "TanStack Query: `staleTime` (implicit 0) = cât datele sunt proaspete; `gcTime` (implicit 5 min) = cât stau în cache nefolosite. Refetch la mount, focus și reconectare, 3 retry-uri.",
+        "`key` stabil și unic între frați, luat din date. Indexul mută starea pe alt rând la reordonare; `Math.random()` recreează elementele la fiecare render.",
+        "Memoizare: React Compiler 1.0 (oct. 2025) memoizează automat; `useMemo`, `useCallback` și `memo` rămân pentru cazuri speciale. Întâi măsori cu React DevTools Profiler.",
+        "TS: `unknown` pentru date externe (te obligă să verifici), union-uri discriminate și `never` pentru un `switch` exhaustiv. Tipurile dispar la runtime: validezi la graniță (zod) sau generezi tipurile din OpenAPI-ul FastAPI.",
+        "Testing Library testează ce vede userul (`getByRole`). `getBy` aruncă dacă lipsește, `queryBy` dă `null`, `findBy` așteaptă. `user-event` pentru interacțiuni, MSW pentru rețea, Playwright pentru fluxurile E2E.",
+        "Securitate: JSX escapează textul, dar `dangerouslySetInnerHTML` cu date nesigure e XSS. Cu `credentials`, CORS nu acceptă `Access-Control-Allow-Origin: *`. OAuth în SPA: Authorization Code + PKCE; RFC 10017 (2026) recomandă BFF pentru aplicații de business.",
+        "JS are un singur thread cu event loop: promisiunile (microtasks) rulează înaintea timerelor (tasks). `Promise.all` respinge la primul eșec, dar nu oprește restul (ca `gather`); `allSettled` le așteaptă pe toate."
+      ],
+      avoid: ["„Calculez datele derivate într-un `useEffect`.”", "„TypeScript validează răspunsul de la API.”", "„Indexul e un `key` bun pentru orice listă.”"]
     }
   };
 
   // ---------- interviu & plan ----------
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
-  P.cfg = { interview: "2026-10-21", hours: 2.5, company: "Onapsis", role: "Software Engineer – Python · Onapsis Defend" };
+  P.cfg = { interview: "2026-11-03", hours: 2.5, company: "Onapsis", role: "SDET III – Python & JavaScript · Onapsis" };
   // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou
@@ -388,7 +406,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       { id: "m-log", min: 5, text: "Logistică: link sau adresă, laptop încărcat, editor deschis, apă, hârtie și pix.", go: { t: "study", tab: "tactics" } }
     ],
     // ordinea în care intră exercițiile de live coding în plan (câte unul pe seară)
-    katas: ["k1", "k3", "k8", "k4", "k5", "k2", "k6", "k9", "k7"]
+    katas: ["k12", "k15", "k13", "k14", "k10", "k16", "k11", "k1", "k3", "k8", "k4", "k5", "k2", "k6", "k9", "k7"]
   };
 
   // ---------- study pages ----------
@@ -507,6 +525,13 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
         t: "Audit tehnic complet înainte de publicare.",
         a: "Ai găsit două bug-uri blocante: o cheie de status nepotrivită în `get_or_create` și retry-uri Celery care nu făceau nimic. Ai planificat remedierea în pași mici.",
         r: "Lecția pe care o spui: retry-urile și idempotența se testează explicit, nu se presupun."
+      },
+      {
+        h: "AI în livrare: aplicația de pregătire, construită cu Claude Code",
+        s: "Aveai puțin timp pentru un interviu pe un stack larg și voiai o aplicație de exersat pe telefon, nu notițe.",
+        t: "Să construiești repede o aplicație corectă: sute de grile verificate, exerciții testate, sincronizare și un intervievator AI.",
+        a: "Ai lucrat cu Claude Code pe specificații scrise întâi (docs/superpowers/specs), cu TDD: test la interfață, apoi cod. Plasa de siguranță: `validate.mjs` pe date, 13 suite Playwright, teste de unitate în Node și pytest pe soluții. Faptele le-ai verificat pe surse primare (`research/`), nu le-ai luat de la model. În produs ai integrat LLM API-uri: verdict JSON parsat strict, rezervă între furnizori, cheile doar în `localStorage`, răspunsurile „în afara temei” înlocuite cu un text fix.",
+        r: "Aplicație folosită zilnic: peste 270 de grile cu explicații, peste 70 de carduri orale, 16 exerciții de live coding cu soluții testate. Lecția: AI-ul accelerează scrisul, dar calitatea vine din teste, review și verificarea faptelor. Completează: cât timp ți-a luat și un bug concret prins de teste."
       }
     ],
     extra: [
@@ -530,7 +555,11 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       "Cum e împărțită munca între București și celelalte centre de inginerie?",
       "Cum folosiți Grafana și New Relic în fiecare zi? Există o rotație de on-call?",
       "Cât de aproape lucrează inginerii cu Onapsis Research Labs?",
-      "Cum ar arăta succesul în rolul ăsta după trei–șase luni?"
+      "Cum ar arăta succesul în rolul ăsta după trei–șase luni?",
+      "Cât lucrez pe funcționalități noi (backend, frontend) și cât pe automatizarea testelor? Cine scrie testele E2E?",
+      "Ce stack de frontend folosiți: React cu TypeScript, ce bibliotecă pentru date, ce teste?",
+      "Cum folosește echipa azi uneltele AI și ce așteptați de la cineva care „drives AI adoption”?",
+      "Ce rulează în CI la fiecare merge request și care e cel mai mare punct de durere: viteza, testele instabile sau mediile?"
     ]
   };
 

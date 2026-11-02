@@ -2,7 +2,31 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-export const DATA_FILES = ["data_core.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_ctx.js", "data_oral.js", "data_katas.js"];
+export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js", "data_skel.js"];
+
+// Modulele Jarvis (Live, Audio, Call, Jarvis) și cele pentru „Întreabă despre asta” (Ask, GeminiText): declarații globale, încărcate înaintea lui app.js. Aceleași fișiere rulează și în Node, în tools/unit.
+export const LIB_FILES = ["live.js", "audio.js", "call.js", "jarvis.js", "ask.js", "gemini_text.js"];
+
+// Codul de referință din katas/: secțiunile „# === kN ===” (Python) sau „// === kN ===” (JS/TS) sunt soluțiile kata
+// (sursele întâi, apoi testele lor, lipite la cod), iar „=== s-… ===” sunt referințele de schelet (fără teste).
+export function loadCode(root) {
+  const kataCode = {}, skelCode = {};
+  const files = fs.readdirSync(new URL("./katas/", root))
+    .filter(f => /\.(py|mjs|ts|tsx|sql|ya?ml|dockerfile)$/i.test(f) && !/^test_/.test(f) && !/\.test\./.test(f))
+    .sort((a, b) => a.localeCompare(b));
+  const kataTests = fs.readdirSync(new URL("./katas/", root)).filter(f => /\.test\.(mjs|tsx)$/.test(f)).sort();
+  for (const f of files.concat(kataTests)) {
+    const src = fs.readFileSync(new URL("./katas/" + f, root), "utf8");
+    for (const m of src.matchAll(/^(#|\/\/|--) === (k\d+|s-[a-z0-9-]+) ===\n([\s\S]*?)^\1 === end ===/gm)) {
+      const code = m[3].replace(/\s+$/, "") + "\n", id = m[2];
+      if (id[0] === "s") { if (skelCode[id]) throw new Error("schelet duplicat: " + id); skelCode[id] = code; }
+      else kataCode[id] = kataCode[id] ? kataCode[id] + "\n// --- test ---\n" + code : code;
+    }
+  }
+  const ordered = {};
+  for (const k of Object.keys(kataCode).sort((a, b) => a.slice(1) - b.slice(1))) ordered[k] = kataCode[k];  // k1, k2, …
+  return { kataCode: ordered, skelCode };
+}
 
 export function loadData(root) {
   const ctx = { window: {} };
@@ -26,17 +50,20 @@ export const FIELDS = {
   "Verificare": "ver", "Răspuns verificare": "verR", "Varianta greșită": "gr"
 };
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const FIELD_RE = new RegExp("^(" + Object.keys(FIELDS).sort((a, b) => b.length - a.length).map(reEsc).join("|") + ")(?:\\s+([A-D]))?:\\s*(.*)$");
 const CITE_RE = /\s*\[(?:file|web):\d+\](?:\[(?:file|web):\d+\])*/g;
 const clean = s => s.replace(CITE_RE, "").replace(/\s+$/g, "").replace(/^\s+/, "");
 
-export function parseExpl(md, file) {
+// Parser generic de câmpuri: titluri `head` (grupa 1 = id), câmpuri „Nume: text” care continuă pe rândurile următoare (blocurile de cod incluse) până la următorul câmp.
+//   fields: { "Nume": "cheie" }   head: RegExp pe rând   letters: câmpul poate avea o literă A–D („Varianta greșită B:”)
+//   multi: cheile câmpurilor care se pot repeta (se adună în cur[cheie], ca { letter, raw })   init(id): obiectul unui item   norm(id): forma id-ului din titlu, cheia itemilor
+export function parseFields(md, file, { fields, head, letters = false, multi = [], init, norm = id => id }) {
+  const fieldRe = new RegExp("^(" + Object.keys(fields).sort((a, b) => b.length - a.length).map(reEsc).join("|") + ")" + (letters ? "(?:\\s+([A-D]))?" : "") + ":\\s*(.*)$");
   const items = {};
   let cur = null, field = null, buf = [], fence = false;
   const flush = () => {
     if (cur && field) {
       const text = clean(buf.join("\n"));
-      if (field.key === "gr") cur.gr.push({ letter: field.letter, raw: text });
+      if (multi.includes(field.key)) cur[field.key].push({ letter: field.letter, raw: text });
       else if (cur[field.key] !== undefined) throw new Error(file + ": " + cur.id + " has field twice: " + field.key);
       else cur[field.key] = text;
     }
@@ -44,17 +71,21 @@ export function parseExpl(md, file) {
   };
   for (const line of md.split(/\r?\n/)) {
     if (!fence) {
-      const h = line.match(/^###\s+`?([a-z]+-\d+)`?\s*$/);
-      if (h) { flush(); if (items[h[1]]) throw new Error(file + ": duplicate " + h[1]); cur = items[h[1]] = { id: h[1], gr: [], file }; continue; }
+      const h = line.match(head);
+      if (h) { const id = norm(h[1]); flush(); if (items[id]) throw new Error(file + ": duplicate " + id); cur = items[id] = init(id, file); continue; }
       if (/^#{1,3}\s/.test(line)) { flush(); cur = null; continue; }
-      const f = cur && line.match(FIELD_RE);
-      if (f) { flush(); field = { key: FIELDS[f[1]], letter: f[2] || null }; buf = [f[3]]; continue; }
+      const f = cur && line.match(fieldRe);
+      if (f) { flush(); field = { key: fields[f[1]], letter: letters ? f[2] || null : null }; buf = [letters ? f[3] : f[2]]; continue; }
     }
     if (/^\s*```/.test(line)) fence = !fence;
     if (field) buf.push(line);
   }
   flush();
   return items;
+}
+
+export function parseExpl(md, file) {
+  return parseFields(md, file, { fields: FIELDS, head: /^###\s+`?([a-z]+-\d+)`?\s*$/, letters: true, multi: ["gr"], init: (id, f) => ({ id, gr: [], file: f }) });
 }
 
 const norm = s => s.replace(/[`„”"'’«»]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -150,4 +181,122 @@ export function buildExplanations(root, P) {
   if (ids.size !== gloss.length) errors.push("glosar: duplicate term ids");
   for (const v of Object.values(expl)) delete v.file;
   return { expl, gloss, errors };
+}
+
+// ---- desfășurări ----
+// Explicația pe larg a fiecărui punct al unei fișe + harta modulului. Un fișier pe modul: src/desf/<modul>.md.
+//   ### harta                       ### 1   (numărul punctului, în ordine)
+//   Problema: …                     Problema: …   Ideea: …   Exemplu: …   Analogie: …
+//   Grupuri:                        În C++: …   Unde nu ține: …   Legătură: …   Greu: da
+//   - 1–2: ce au în comun
+// Modul complet sau absent: câte o desfășurare pentru fiecare punct, plus harta.
+export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "Analogie": "an", "În C++": "cpp", "Unde nu ține": "nu", "Legătură": "leg", "Grupuri": "g", "Greu": "hard" };
+// Cuvinte (fără blocurile de cod): erori în afara [min, max] (≤ hard la punctele marcate grele), avertisment în afara benzii 60–90.
+export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, cols: 36 };
+// „Întreabă” taie materialul la ASK_DZ_MAX (src/app.js); sub acest prag (cu loc pentru etichete) nu se pierde nimic din coadă.
+export const DESF_ASK_BUDGET = 15000;
+export const DESF_LANGS = ["python", "py", "cpp", "ts", "tsx", "text"];
+const DESF_TEXT = ["p", "i", "ex", "an", "cpp", "nu", "leg"];
+export const DESF_LABEL = { p: "Problema", i: "Ideea", ex: "Exemplu", an: "Analogie", cpp: "În C++", nu: "Unde nu ține", leg: "Legătură" };
+const FENCE_RE = /```(\w*)[^\n]*\n([\s\S]*?)```/g;
+const GROUP_RE = /^[-*]\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*:\s*(\S.*)$/;
+
+export function parseDesf(md, file) {
+  let seq = 0;
+  const raw = parseFields(md, file, { fields: DESF_FIELDS, head: /^###\s+(harta|\d+)\s*$/i, init: id => ({ id, seq: seq++ }), norm: id => id.toLowerCase() });
+  let map = null;
+  if (raw.harta) {
+    const m = raw.harta, g = [], bad = [];
+    for (const l of String(m.g || "").split("\n").map(x => x.trim()).filter(Boolean)) {
+      const r = l.match(GROUP_RE);
+      if (r) g.push({ a: +r[1], b: r[2] ? +r[2] : +r[1], t: r[3].trim() }); else bad.push(l);
+    }
+    map = { p: m.p, g, bad, hasG: m.g !== undefined };
+  }
+  const items = Object.values(raw).filter(x => x.id !== "harta").sort((a, b) => a.seq - b.seq).map(x => {
+    const out = { n: +x.id };
+    for (const k of Object.keys(x)) if (k !== "id" && k !== "seq" && k !== "hard") out[k] = x[k];
+    if (x.hard !== undefined) out.hard = /^da$/i.test(x.hard) ? true : x.hard;
+    return out;
+  });
+  return { map, items };
+}
+
+export const codeBlocks = text => [...String(text || "").matchAll(FENCE_RE)].map(m => ({ lang: m[1], code: m[2].replace(/\s+$/, "") }));
+const wordCount = text => String(text || "").replace(FENCE_RE, " ").split(/\s+/).filter(Boolean).length;
+
+// Regulile de conținut. Întoarce { errors, warnings }, fiecare mesaj cu numele fișierului.
+export function checkDesf(parsed, sheet, file) {
+  const errors = [], warnings = [], L = DESF_LIMITS;
+  const E = m => errors.push(file + ": " + m), W = m => warnings.push(file + ": " + m);
+  const N = sheet.points.length, items = parsed.items;
+  if (items.length !== N) E(items.length + " desfășurări pentru " + N + " puncte (câte una pentru fiecare punct)");
+  items.forEach((it, idx) => { if (it.n !== idx + 1) E("desfășurarea " + it.n + " apare pe locul " + (idx + 1) + ": ordinea trebuie să fie 1, 2, 3… ca a punctelor"); });
+  items.forEach(it => {
+    const at = "punctul " + it.n + ": ";
+    if (!it.p) E(at + "lipsește Problema");
+    if (!it.i) E(at + "lipsește Ideea");
+    if (!it.ex && !it.an) E(at + "cere cel puțin unul dintre Exemplu și Analogie");
+    if (it.cpp && !it.nu) E(at + "În C++ cere Unde nu ține");
+    if (it.nu && !it.cpp) E(at + "Unde nu ține fără În C++");
+    if (it.hard !== undefined && it.hard !== true) E(at + "Greu se scrie „Greu: da”");
+    let words = 0;
+    for (const k of DESF_TEXT) {
+      const t = it[k]; if (!t) continue;
+      words += wordCount(t);
+      if ((t.match(/```/g) || []).length % 2) E(at + "bloc de cod neînchis în " + DESF_LABEL[k]);
+      let lines = 0;
+      for (const b of codeBlocks(t)) {
+        if (!DESF_LANGS.includes(b.lang)) E(at + "limbaj necunoscut în bloc de cod: „" + (b.lang || "(fără)") + "” (python, cpp, ts, tsx sau text)");
+        b.code.split("\n").forEach((l, j) => { lines++; if ([...l].length > L.cols) E(at + "în " + DESF_LABEL[k] + ", rândul " + (j + 1) + " de cod are " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
+      }
+      if (k === "ex" && lines > L.exLines) E(at + "Exemplu are " + lines + " rânduri de cod (maxim " + L.exLines + " rânduri)");
+    }
+    const max = it.hard === true ? L.hard : L.max;
+    if (words < L.min) E(at + "prea scurt (" + words + " cuvinte, minim " + L.min + ")");
+    else if (words > max) E(at + "prea lung (" + words + " cuvinte, maxim " + max + (it.hard === true ? " la un punct greu" : "") + ")");
+    else if (it.hard !== true && (words < L.bandMin || words > L.bandMax)) W(at + words + " cuvinte (de regulă " + L.bandMin + "–" + L.bandMax + ")");
+  });
+  const m = parsed.map;
+  if (!m) E("lipsește harta modulului (### harta, cu Problema și Grupuri)");
+  else {
+    const H = "harta: ";
+    if (!m.p) E(H + "lipsește Problema");
+    if (!m.hasG) E(H + "lipsește Grupuri");
+    m.bad.forEach(l => E(H + "rând de grup necitibil (aștept „- 1–2: ce au în comun”): " + l.slice(0, 50)));
+    const seen = new Map();
+    for (const g of m.g) {
+      if (g.a > g.b) { E(H + "grupul " + g.a + "–" + g.b + " are capetele inversate"); continue; }
+      if (g.a < 1 || g.b > N) { E(H + "grupul " + g.a + "–" + g.b + " iese din fișă (fișa are " + N + " puncte)"); continue; }
+      for (let k = g.a; k <= g.b; k++) { if (seen.has(k)) E(H + "punctul " + k + " e în două grupuri"); else seen.set(k, 1); }
+    }
+    for (let k = 1; k <= N; k++) if (!seen.has(k)) E(H + "punctul " + k + " nu e în niciun grup");
+  }
+  return { errors, warnings };
+}
+
+export function readDesfFiles(root) {
+  const dir = new URL("./src/desf/", root), out = {};
+  if (!fs.existsSync(dir)) return out;
+  for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".md")).sort()) out[f] = fs.readFileSync(new URL(f, dir), "utf8");
+  return out;
+}
+
+// files: { "<modul>.md": text }. Întoarce { desf, errors, warnings }; desf[modul] = { map: { p, g: [{ a, b, t }] }, items: [{ p, i, ex?, an?, cpp?, nu?, leg?, hard? }] } indexat ca punctele fișei.
+export function buildDesf(P, files) {
+  const desf = {}, errors = [], warnings = [];
+  for (const [f, md] of Object.entries(files)) {
+    const id = f.replace(/\.md$/, "");
+    if (!P.modules.some(m => m.id === id)) { errors.push(f + ": modul necunoscut " + id); continue; }
+    if (!P.sheets[id] || !P.sheets[id].points) { errors.push(f + ": modulul nu are fișă"); continue; }
+    let parsed;
+    try { parsed = parseDesf(md, f); } catch (e) { errors.push(e.message); continue; }
+    const r = checkDesf(parsed, P.sheets[id], f);
+    errors.push(...r.errors); warnings.push(...r.warnings);
+    const sh = P.sheets[id], size = [sh.lead, ...sh.points, ...(sh.avoid || []), parsed.map.p, ...parsed.map.g.map(g => g.t), ...parsed.items.flatMap(it => DESF_TEXT.map(k => it[k] || ""))].join(" ").length;
+    if (size > DESF_ASK_BUDGET) warnings.push(f + ": materialul pentru „Întreabă” are ~" + size + " de caractere (> " + DESF_ASK_BUDGET + "): urcă ASK_DZ_MAX în src/app.js sau scurtează");
+    if (r.errors.length) continue;
+    desf[id] = { map: { p: parsed.map.p, g: parsed.map.g }, items: parsed.items.map(({ n, ...rest }) => rest) };
+  }
+  return { desf, errors, warnings };
 }

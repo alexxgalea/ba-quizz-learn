@@ -4,11 +4,12 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 
 ## Ce conține
 
-- **221 de grile** în 23 de module, pe trei niveluri (bază, practic, avansat). Fiecare are context înainte de întrebare, butonul „Nu știu încă” și „Am ghicit”, care trimite grila înapoi la repetat.
+- **264 de grile** în 25 de module, pe trei niveluri (bază, practic, avansat). Fiecare are context înainte de întrebare, butonul „Nu știu încă” și „Am ghicit”, care trimite grila înapoi la repetat.
 - **Explicații pe două niveluri.** Imediat după răspuns: pe scurt, de ce contează, cum funcționează și de ce e greșită varianta aleasă. La cerere („Arată-mi concret”): pas cu pas, aplicare, legătura cu ce știi deja, limite, formularea pentru interviu, o întrebare de verificare și celelalte variante.
 - **Glosar** de 46 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
-- **42 de carduri orale**, **9 exerciții de live coding** cu soluții testate cu pytest și fișe pe module.
+- **73 de carduri orale** (dintre care 13 snippet-uri de cod și 6 scenarii de design), **9 exerciții de live coding** cu soluții testate cu pytest și fișe pe module.
 - **Întrebări deschise**: cele 217 întrebări „Verificare” din explicații (fără modulul bonus), fără variante. Răspunzi cu voce tare, dezvălui răspunsul, te notezi (știu / parțial / nu); intră în aceleași cutii Leitner.
+- **Schelete** (Studiu › Schelete): forma minimă a fiecărui concept, scrisă din memorie în 2–5 minute (o coadă sigură între thread-uri, un proces pornit corect, un fixture cu `yield`). Scrii codul, te notezi pe 3–5 puncte esențiale, iar scheletul intră în cutiile Leitner. Vezi „Schelete”.
 - **Formulări pentru interviu** (Studiu › Formulări): liniile „La interviu” din toate explicațiile, pe o pagină, filtrate P1 / greșite / toate.
 - **Diagnostic adaptiv** și **repetiție spațiată** cu scadențe reale: cutia 1 revine după 20 de minute, cutia 2 după 4 ore, cutia 3 a doua zi, cutia 4 peste două zile, cutia 5 niciodată. „De repetat acum” adună grilele, cardurile și întrebările deschise scadente; „Mix inteligent” ia întâi scadentele.
 - **Plan pe zile generat din progres**: data interviului și orele pe seară se setează în Progres › Interviul. Fiecare seară are aceeași rețetă (scadențe → fișă + grile pe modulele cu cea mai mare nevoie → oral → kata → greșeli), ultima seară se încheie cu formulările, iar dimineața interviului are doar încălzire. Sarcinile bifate azi rămân în listă; restul se recalculează din timpul rămas.
@@ -18,18 +19,35 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 ## Structura
 
 ```text
-build.mjs          construiește dist/pregatire-onapsis.html
+build.mjs          construiește dist/pregatire-onapsis.html (artifact) și dist/app (PWA)
 lib.mjs            încarcă datele și parsează explicațiile (Markdown)
 validate.mjs       verifică datele, explicațiile și glosarul
 package.json       scripturi (validate, build, teste)
 src/
   shell.html       scheletul paginii
   app.js, app.css  aplicația, fără dependențe externe
-  data_*.js        module, grile, context, carduri orale, fișe, exerciții, setări (data interviului, ore pe seară)
+  live.js          Jarvis: serverul vocal (Gemini Live), protocolul și reluarea
+  audio.js         Jarvis: microfon și difuzor în browser
+  call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, poarta microfonului, „Nu te aud”)
+  jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări, modul Lecție)
+  ask.js           „Întreabă despre asta”: prompt, limite și verdict „în temă”
+  gemini_text.js   un apel de text către Gemini (REST), pentru PWA
+  pwa/             iconița, service worker-ul
+  data_*.js        module, grile, context, carduri orale, fișe, exerciții, schelete (data_skel.js), setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
   expl/glosar.md   glosarul
-katas/             exercițiile de live coding și testele lor (pytest)
-tools/             teste de interfață (Playwright) și utilitare pentru explicații
+  desf/<modul>.md  harta modulului și desfășurarea fiecărui punct al fișei (un fișier pe modul; vezi „Desfășurări”)
+katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
+                   katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, vitest);
+                   skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest);
+                   skel_js.mjs + skel_js.test.mjs (node:test), skel_ts.ts + skel_react_*.tsx (React) + skel_tsx_*.tsx (TypeScript în React), fiecare cu .test.ts / .test.tsx (tsc + vitest); referința ESM e într-un comentariu bloc din skel_js.mjs, iar cea a testului RTL stă în skel_react_rtl.test.tsx;
+                   fișierele de config (skel_docker.Dockerfile, skel_docker_compose.yml, skel_ops_gitlab_ci.yml) sunt verificate structural, nu rulate;
+                   requirements-skel-ops.txt: pachetele de dev (PyYAML, Django, SQLAlchemy, strawberry-graphql); testele se sar fără ele
+katas/package.json dependențele de dev pentru TypeScript / TSX (tsc, vitest, jsdom, Testing Library, React);
+                   doar aici: aplicația și rădăcina rămân fără dependențe, iar katas/node_modules nu se publică
+tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare (desf_examples.mjs + desf_run.py: check-ul exemplelor din desfășurări)
+docs/              spec-ul Jarvis (docs/superpowers/specs), probele de aruncat (prototype-jarvis-probe.html, probe-lectie-metrou.html) și PWA-ul publicat pe Pages (docs/app)
+.scratch/          spec-urile și tichetele locale (de exemplu .scratch/lectie-live)
 export/            generatorul brief-ului trimis la Perplexity
 ```
 
@@ -39,17 +57,31 @@ export/            generatorul brief-ului trimis la Perplexity
 node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
-python3 -m pytest -q katas   # testele exercițiilor de live coding
+pip install -r katas/requirements-skel-ops.txt   # opțional: pachetele testelor de schelete (docker, ops, graphql, django)
+python3 -m pip install -r katas/requirements-dev.txt   # pytest, celery, PyJWT (doar pentru teste)
+python3 -m pytest -q katas   # testele exercițiilor Python (k13 și scheletele cu pachete lipsă sunt sărite)
+node --test katas/katas_js.test.mjs katas/skel_js.test.mjs   # exercițiile și scheletele JavaScript
+npm run test:ts              # `npm install` în katas/, apoi tsc --strict --noEmit și vitest (k15 și scheletele TS / TSX)
 python3 tools/check.py       # teste de interfață (Playwright + Chromium)
 python3 tools/test_teach.py
 python3 tools/test_expl.py
 python3 tools/test_terms.py
 python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample și DeepSeek simulate)
+python3 tools/test_gaps.py       # goluri (mc, w), teoria pe ce ai ratat, Studiu › Pentru tine
 python3 tools/test_interview.py  # intervievatorul: dialog, scor 1/0,5, memorie, rescriere, erori (sample simulat)
 python3 tools/test_plan.py   # planul generat, scadențele, întrebările deschise, formulările, setările
+node --test "tools/unit/*.test.mjs"   # Jarvis: Live, Audio (partea pură), Call, Jarvis, peste adaptoare false
+python3 tools/test_audio.py      # BrowserAudio în Chromium cu microfon fals
+python3 tools/test_prepapp.py    # PrepApp: record dă aceleași urme ca oralSave, next, theory, summary, log
+python3 tools/test_jarvis.py     # ecranul Jarvis la 360 px, light și dark, cu Live și Audio false
+python3 tools/test_lesson.py     # Lecție: poziția și recomandarea în aplicație, butoanele, vederea lecției (360 px, light și dark)
+python3 tools/test_pwa.py        # manifest, iconițe, service worker, offline
+python3 tools/test_ask.py        # „Întreabă despre asta”: grilă, fișă, gol; sample, Gemini, DeepSeek
+python3 tools/test_desf.py       # Fișe: harta, „Pe larg ›”, „Deschide tot”, numerele, „Întreabă” cu desfășurări (360 px, light și dark)
+node tools/desf_examples.mjs     # rulează blocurile Python din desfășurări și compară cu `# → …` (npm run test:desf)
 ```
 
-Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:ui`.
+Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:unit`, `npm run test:ui`, iar `npm run pages` copiază PWA-ul în `docs/app`.
 
 Data implicită a interviului și orele pe seară stau în `P.cfg` (`src/data_core.js`); `P.planTpl` are sarcinile din dimineața interviului și ordinea exercițiilor în plan. Utilizatorul le poate schimba din aplicație (se salvează în progres, cheia `c`).
 
@@ -100,6 +132,53 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 
 Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
 
+## Desfășurări
+
+Fiecare punct al unei fișe are o **desfășurare**: explicația pe larg, în stilul refactoring.guru, deschisă din Studiu › Fișe cu „Pe larg ›” sub punct. Fișa primește și **harta modulului**, sub ideea principală. Punctele rămân recapitularea, neschimbate (în afară de erorile de fapt). Vocabularul e în `CONTEXT.md`; spec-ul și tichetele, în `.scratch/desfasurari/`.
+
+- **Sursa**: `src/desf/<modul>.md`, un fișier pe modul, separat de `src/expl/` (acolo id-urile sunt ale grilelor). `### harta` are `Problema:` și `Grupuri:` (rânduri `- 1–2: ce au în comun`); `### 1`, `### 2`… au câmpurile `Problema`, `Ideea`, `Exemplu`, `Analogie`, `În C++`, `Unde nu ține`, `Legătură` și, la punctele cu adevărat grele, `Greu: da`. Un modul are toate desfășurările plus harta sau nimic.
+- **Parsarea** (`lib.mjs`): `parseFields` e parserul generic de câmpuri (titlul și câmpurile se dau ca parametri); `parseExpl` îl folosește pentru grile, neschimbat, iar `parseDesf` pentru desfășurări. `buildDesf` le verifică și le pune la build în `window.PREP.desf[modul] = { map: { p, g: [{ a, b, t }] }, items: [{ p, i, ex, an, cpp, nu, leg, hard }] }`, indexat ca punctele.
+- **Regulile** (`checkDesf`, rulate de `validate.mjs` și `build.mjs`, limitele în `DESF_LIMITS`): câte o desfășurare pentru fiecare punct, în ordine; Problema și Ideea obligatorii; cel puțin unul dintre Exemplu și Analogie; `În C++` și `Unde nu ține` doar împreună; 50–100 de cuvinte fără cod (avertisment în afara benzii 60–90; până la 180 la punctele grele); Exemplu de cel mult 8 rânduri de cod; rânduri de cod de cel mult 36 de caractere; limbaje `python`, `cpp`, `ts`, `tsx`, `text`; harta cu Problema și grupuri care acoperă fiecare punct o singură dată.
+- **Exemplele Python** rulează înainte de publicare (`node tools/desf_examples.mjs`): fiecare bloc într-un proces `python3 -I`, într-un director gol, cu timeout. Ce afișează se compară în ordine cu comentariile `# → …` (o expresie simplă se verifică prin `repr`, ca în REPL). O excepție așteptată se marchează `# ! Tip`: blocul trebuie să se oprească exact cu acel tip, pe acea instrucțiune. Un bloc Python care nu rulează nu e permis; pseudo-codul se scrie ` ```text `. Exemplele TS / TSX și C++ nu se rulează.
+- **Ecranul** (`vSheets`, `vPoints`, `vDz`, `vDzMap`, `dzAct`): „Deschide tot” / „Închide tot” sus, „Harta modulului ›” sub ideea principală, numere și „Pe larg ›” la puncte, doar la modulele cu desfășurări (celelalte arată ca înainte). Totul e închis implicit; starea stă în `ui.dz`, nu în `S` (nu se salvează, nu se sincronizează, nu intră în export sau în brief). Textul trece prin `rich`: cod colorat doar pentru Python, termeni din glosar legați după aceleași reguli ca în punct.
+- **„Întreabă despre asta”** pe o fișă cu desfășurări primește, după punctele de azi, harta și desfășurările (`askCtx`; plafonul materialului urcă de la 3500 la `ASK_DZ_MAX` caractere doar pentru aceste fișe; `validate.mjs` avertizează când materialul trece de `DESF_ASK_BUDGET`). Contextul grilelor, al golurilor și al fișelor fără desfășurări e neschimbat. Teoria de la goluri și brief-ul rămân pe puncte.
+- **Fapte**: cele C++ (C++11/17) sunt în `research/interview-facts.md`, secțiunea 19, verificate în draftul standardului și prin compilare cu `g++` și `clang++` (cppreference răspunde 403 din mediul de lucru).
+- Teste: `tools/unit/desf.test.mjs` (parsare și reguli, câte un caz care pică pe regulă), `tools/unit/desf_examples.test.mjs` (verificatorul, dovedit pe rezultat greșit și pe excepție greșită), `tools/test_desf.py` (ecranul).
+
+## Schelete
+
+Un **schelet** e codul minim, canonic, al unui concept, pe care îl scrii din memorie; un **kata** e o problemă de ~20 de minute (vezi `CONTEXT.md`). Spec-ul și tichetele: `.scratch/schelete/`.
+
+- **Date**: `src/data_skel.js` (`window.PREP.skel`): `id` (`s-<modul>-<nume>`), `m`, `t` (titlul), `p` (cerința), `k` (3–5 puncte esențiale), `lang`, opțional `v` („3.11+”), `st` („verificat structural”) și `g` (grupa, doar la `frontend`: `react` / `js` / `ts`).
+- **Referința** nu stă în date: e secțiunea `=== <id> ===` dintr-un fișier `katas/skel_*`, testată (`katas/test_skel_*`). `loadCode` din `lib.mjs` o extrage (la build în `window.PREP.skelCode`, la validare ca s-o verifice). `validate.mjs` cere cerință, 3–5 puncte, referință existentă și rânduri de cel mult **42** de caractere: referința se afișează fără împachetare, la 11 px, și atât încape la 360 px. Fișierele de referință: `skel_<modul>.py` (pytest), `skel_js.mjs` (`node --test`), `skel_ts.ts` / `.tsx` (`tsc --strict --noEmit` + vitest). Marcajele de secțiune folosesc prefixul fișierului (`#` în Python, `//` în JS / TS, `--` în SQL), iar `export`-urile stau după `// === end ===`, ca să nu încarce codul de scris. O eroare de tip așteptată se verifică în teste cu `// @ts-expect-error` (tsc se plânge dacă eroarea dispare).
+- **Lista** (`vSkelList`): grupată pe modul, cu P1 primele; la `frontend` e împărțită pe grupe (React, JavaScript, TypeScript, în ordinea asta; grupele fără schelete nu apar). Referințele non-Python nu primesc colorarea de Python (`codeBlock(…, plain)` cu `lang !== "py"`), iar `lang` intră în prompt ca „Limbaj: …”.
+- **Ecranul** (`vSkel`): scrii în câmpul de cod (Tab = 4 spații; ciorna stă în `localStorage`, `onapsis-skel-draft-v1`, și nu intră în `S`, în export sau în brief), apoi „Gata, mă notez” arată punctele ca bife și referința. „Arată referința” înainte de încercare notează încercarea cu 0; marcajul rămâne pe schelet (în `ui`, nu în `S`) până la salvare, deci ieșirea și revenirea nu îl șterg, iar câmpul rămâne editabil.
+- **Starea**: `S.s[id]` = `{ b, n, s, t }`, cu pragurile de la cardurile orale (`updS` și `updO` folosesc același `leitnerStep`: ≥ 80% urcă o cutie, 50–80% rămâne, < 50% cutia 1) și scadențele obișnuite. Se îmbină, se curăță și se resetează ca restul stării; nu intră în scorul de pregătire.
+- **Verificarea AI** („Verifică cu AI”, doar când există o sursă: Claude prin `sample`, altfel Gemini cu cheia Jarvis, altfel DeepSeek, adică `AskModel`, ca la „Întreabă despre asta”). Cererea (`skelPrompt`) are cerința, punctele numerotate de la 0 și codul ca date între `<<<` și `>>>`, curățat de delimitatori și tăiat la 6000 de caractere; cere română, termeni tehnici în engleză și doar greșeli certe (codul nu se rulează). Răspunsul JSON (`parseSkelVerdict`, și într-un bloc ```) are `covered`, `errors`, `missing`: indexurile invalide se ignoră, listele au cel mult 4 elemente de 300 de caractere, iar un răspuns fără `covered` ca listă e format invalid. Verdictul pre-bifează exact punctele din `covered` și deschide faza de notare; greșelile și ce lipsește apar sub cod, iar o nouă verificare (după ce modifici codul) înlocuiește rezultatul și bifele. Sub 20 de caractere (`SKEL_MIN`) nu se trimite nimic. Erorile folosesc mesajele lui „Întreabă” și permit reîncercarea. Scorul vine tot din bifele confirmate de tine, iar referința văzută înainte de încercare dă tot 0. Rezultatul stă în `ui` (nu în `S`).
+- **Repetarea în ritmul serii**: în listă, „Scadente (N)” (`dueS`, ordinea cutiei, ca `dueQ` / `dueO`) arată doar scheletele scadente; după „Salvează” lista rămâne deschisă pe scadente, iar „Toate scheletele” (sau atingerea segmentului) o închide. Planul are sarcina `sch` (după `oral`): „Schelete: N scadente + K noi” (K ≤ 3, din modulele cu `modNeed` cel mai mare, `newS`), 15–20 de minute luate din același buget flexibil ca mixul inteligent, nu din kata; deschide primul schelet scadent sau nou, iar bifa rămâne după regenerare. Salvarea scrie în istoric o intrare `kind: "skel"` (`n` = puncte, `c` = puncte notate, `dur` plafonat la 15 minute), pe care `spentMin` o numără. Progres are cardul „Schelete: X știute (cutia ≥ 3) · Y de repetat · Z neîncepute”, fișa unui modul cu schelete are „Schelete (N)”, iar brief-ul (`export/make_brief.js`) primește numărătoarea pe modul și scheletele cu ultimul scor sub 50%.
+- Teste de interfață: `tools/test_skel.py`, `tools/test_skel_ai.py` (model fals cu coadă de răspunsuri și jurnal de apeluri).
+
+## Proba tehnică: snippet-uri, design, interviu simulat
+
+După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` (threading), `asyncio`, `python` (generatori), `oop`, `pytest`, `asgi` (FastAPI), `design`; NoSQL (`dbmodels`) e Bonus. Sesiunea tehnică din 3 noiembrie are un inginer de backend și unul de frontend, cu live coding pe CoderPad, deci și `frontend` (React/TS) e P1, iar `graphql` a urcat la P3 (anunțul cere REST și GraphQL).
+
+- **Snippet-uri orale** (`src/data_oral2.js`, câmpul `code`): vezi codul sub întrebare, spui ce e greșit, ce se întâmplă sub încărcare, cum ai repara și cum ai testa. Codul intră în promptul intervievatorului și al verificării. Rânduri de cel mult 38 de caractere (verificat de `validate.mjs`), cod la 11 px pe card.
+- **Scenarii de design** (modulul `design`): intervievatorul cere clarificări, trade-off-uri, puncte de eșec și scalare și pune până la 3 întrebări de continuare. Verdictul tratează punctele cheie ca criterii de raționament.
+- `ivRules(card)` e singurul loc unde se decid regulile pe tip de card.
+- **Interviu tehnic simulat** (Oral): 7 carduri, câte unul pe slot, în ordinea probei: threading/asyncio, OOP, testing/generatori, FastAPI, frontend (React/TS), un snippet, un scenariu de design (`pickTechMock`, cu ponderile `wO`). Persoana anunță snippet-ul și designul.
+- Faptele verificate pe surse primare: `research/interview-facts.md`.
+
+## Goluri și teorie
+
+Ce ratezi la oral se înregistrează pe fiecare card, în `S.o[id]`: `mc` (index punct → de câte ori l-ai ratat; +1 la un punct neacoperit întreg, −1 la unul acoperit întreg, maximum 9), `m` (punctele ratate ultima dată), `w` (cel mult 3 afirmații marcate greșite de verdict). Se actualizează la fiecare „Salvează”, cu sau fără intervievator; la cardurile vechi, `m` valorează 1 per punct. `mergeState` le îmbină ca pe restul itemului.
+
+- **Pe ecranul de verdict**: „Teorie pe ce ai ratat (N)” arată, pentru punctele neacoperite întreg (din bifele de acum), ce ai spus greșit și, pentru fiecare punct, propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu el (`relRank`, fără cuvinte de legătură și fără diacritice), plus grilele greșite din modul. Nu repetă aceeași propoziție la puncte diferite. În interviul simulat nu apare.
+- **Studiu › Pentru tine**: golurile de pe toate cardurile, cele mai grele primele (ratări × prioritatea modulului, `gapList`), cu „Exersează cardul”.
+- **Doar cu `sample`** (în artifact), la fiecare gol: „Explică-mi pe înțelesul meu” (`default`, fără cache; pornește din ce ai scris sau, în Studiu, din afirmațiile greșite păstrate; trei părți: Ideea, Unde s-a rupt gândirea ta, Spune-l la interviu) și „Verifică-te pe acest punct” (o întrebare nouă, într-un scenariu, `quick`; răspunsul e judecat cu `default`, `{"covered", "feedback"}`). Dacă acoperi punctul, golul e reparat: `mc` revine la 0 și punctul iese din `m`, fără să schimbe cutia cardului. În review reparația se aplică la „Salvează” (`run.fixed`); în Studiu, imediat, cu `gt` (timestamp de îmbinare pentru goluri: `itemT = max(t, gt)` în `mergeState` și `prune`), ca scadența Leitner să rămână pe `t`. Stările explicațiilor și ale întrebărilor stau în `ui.les` / `ui.chk` (nu se salvează în progres).
+- **Alegerea cardurilor**: `wO` înmulțește cu `gapF` (până la ×2; fiecare ratare numără, cel mult 3 per punct), deci „Recomandate”, interviul simulat și planul favorizează cardurile cu goluri.
+- **Plan**: sarcina `gap` pe seară („Pentru tine: N goluri…”, 10 min) și `m-gap` în dimineața interviului, doar când există goluri.
+- Test: `python3 tools/test_gaps.py`.
+
 ## Verificare AI
 
 La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dictează” (Web Speech, `ro-RO`, dacă browserul îl are). „Verifică cu Claude” (sau „cu DeepSeek”) trimite întrebarea, punctele cheie, răspunsul model și răspunsul tău, iar sursa verdictului se alege automat:
@@ -116,4 +195,38 @@ La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dicteaz
 
 Aplicația e publicată ca artifact Claude privat: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT
 
-Progresul stă în baza de date a artefactului, într-un document per utilizator (`data/users/<uid>/progress`), plus o copie locală în browser. Republicarea la același link păstrează progresul. Cheile stării: `q` grile, `o` carduri orale, `x` întrebări deschise, `k` exerciții, `p` sarcini bifate, `h` istoric, `c` setări. Dintr-o sesiune Claude: rulezi build-ul, apoi publici `dist/pregatire-onapsis.html` cu `url` setat la link-ul de mai sus.
+Progresul stă în baza de date a artefactului, într-un document per utilizator (`data/users/<uid>/progress`), plus o copie locală în browser. Republicarea la același link păstrează progresul. Cheile stării: `q` grile, `o` carduri orale, `x` întrebări deschise, `k` exerciții, `p` sarcini bifate, `l` poziția lecției pe modul, `h` istoric, `c` setări. Dintr-o sesiune Claude: rulezi build-ul, apoi publici `dist/pregatire-onapsis.html` cu `url` setat la link-ul de mai sus.
+
+## Jarvis (interviu vorbit)
+
+Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/app/): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini stă în `localStorage` (`onapsis-gemini-v1`), niciodată în starea aplicației, în export sau în brief.
+
+Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Pe scurt:
+
+- **Trei cusături**: `Live` (GeminiLive | FakeLive), `Audio` (BrowserAudio | FakeAudio), `PrepApp` (app.js | stub). `Call` și `Jarvis` stau peste ele. Fiecare fișier merge în pagină (declarații globale) și în Node (`module.exports`), fără importuri între ele.
+- **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`, iar pentru Lecție `sheet`, `lessonHeard`, `lessonDone`, `lessonRec`. Rândurile din istoric au `kind: "jarvis"`; cele de lecție au și `lesson: true`.
+- **Teste**: `tools/unit` (Node, câte un fișier pe modul), `tools/test_audio.py`, `tools/test_prepapp.py`, `tools/test_jarvis.py` (înlocuitorii din `tools/jarvis_fakes.js` se injectează prin `window.__jarvisFakes`).
+- **Publicare PWA**: `npm run build && npm run pages`, apoi commit și push. GitHub Pages servește `docs/app` din ramură (Settings › Pages › Deploy from a branch › `/docs`).
+
+## Lecție (Jarvis explică o fișă)
+
+În tab-ul Jarvis, „Ascultă lecția recomandată” (și lista tuturor modulelor) pornește o lecție: Jarvis explică fișa modulului cu voce tare, **bucată** cu bucată, iar Alex doar ascultă. Pe fiecare fișă din Studiu apare butonul „Ascultă”. Ambele există doar în PWA. Vocabularul (Lecție, Bucată, Poziția lecției, Fereastra de ascultare, Pauză, Mut, Vorbește) e în `CONTEXT.md`, decizia „live, nu audio pregenerat” în `docs/adr/0001-lectie-live-nu-audio-pregenerat.md`, iar spec-ul și tichetele în `.scratch/lectie-live/`.
+
+- **Bucăți**: sursa e fișa (`PrepApp.sheet`). O bucată e un punct. Ideea principală deschide lecția („Asyncio, în 10 idei. Prima: …”), formulările de evitat o încheie ca „capcane la interviu”, apoi recapitulare și rămas-bun. Modelul primește bucățile prin `next_chunk` și `repeat_chunk`; punctele nu intră în instrucțiunile de sistem, deci ordinea și poziția rămân ale aplicației. Funcțiile lecției: `next_chunk`, `repeat_chunk`, `pause_session`, `end_session` („mai simplu” și „exemplu” sunt reexplicări, fără funcție).
+- **Fereastra de ascultare**: după ce o bucată s-a redat toată (`spoken` din `Call`), aplicația redă un sunet scurt (`audio.beep("window")`) și deschide microfonul 3 s (`clock.after`). Tăcere → `Bucata următoare`; voce → trecerea automată se anulează până răspunde Jarvis, apoi se deschide o fereastră nouă. Ceasul îl ține aplicația, nu modelul. Cât vorbește Jarvis, microfonul nu ajunge la server (`halfDuplex` forțat în lecție).
+- **Mut și Vorbește**: pe Mut nu există fereastră, bucățile curg una după alta, iar microfonul ajunge la server doar cât e ținut apăsat „Vorbește” (apăsarea oprește redarea; eliberarea trimite `audioStreamEnd`). Mut-ul se ține minte în `onapsis-jarvis-v1` (setările Jarvis), nu în starea de progres. Poarta microfonului stă în `Call` (`mic`, `talk`).
+- **Pauză**: `audio.pause()` îngheață contextul, deci coada rămâne; sub ~10 minute redarea continuă din aceeași secundă, altfel (sau după o conexiune pierdută) bucata se reia de la început. Pauza vine din buton sau prin voce.
+- **Semnal pierdut**: în lecție reîncercările durează ~60 s (`retryMs`); după reconectare Jarvis spune „Reiau de unde am rămas” și reia bucata. Dacă nu revine, `Call` (cu `survive`) rămâne pe pauză, `audio.beep("warn")` avertizează, iar „Reia” redeschide sesiunea.
+- **Poziția lecției**: `S.l[modul] = { n, d, t }` (bucata ascultată cel mai departe, data ultimei terminări, timestamp), îmbinată pe modul după `t`; un reset o șterge. Avansează doar când o bucată s-a redat toată (nu la Sari, nu la o bucată întreruptă). Recomandarea (`PrepApp.lessonRec`): lecția începută, altfel modulul cu cea mai mare nevoie dintre cele neterminate în ultimele 2 zile, fără Bonus și fără „Comportamental”. **Resetarea** (`PrepApp.lessonReset`, butonul „Resetează lecția” sub butonul recomandat și „Resetează” în lista modulelor, doar pentru lecțiile începute) pune poziția pe zero fără să șteargă data ultimei terminări și fără să pornească lecția; `t` nou, deci câștigă la îmbinare. În lecția în curs, butonul „Reset” (în rândul Pauză, Repetă, Sari; a doua atingere confirmă, „Sigur?”) face `Jarvis.restart()`: poziția pe zero și modelul reia de la ideea principală. Ecranul Jarvis arată jos „Versiune <hash>” (generat la build), ca să se vadă dacă telefonul rulează varianta nouă.
+- **Ce nu face**: nu scrie în scor, cutiile Leitner, goluri sau întrebările deschise; rândul din istoric (`lesson: true`) nu scade din bugetul serii; întrebările libere nu se salvează nicăieri.
+- **Neterminat, în așteptarea probei din metrou** (`docs/probe-lectie-metrou.html`, tichetul 01): ecranul stins (tichetul 10) și butoanele căștilor prin Media Session (tichetul 11). Până atunci ecranul stins rămâne pauză, iar controlul se face din butoanele de pe ecran și din voce.
+- **Teste**: `tools/unit/lesson.test.mjs` (Jarvis peste `Call` real), `call.test.mjs`, `audio.test.mjs`, `live.test.mjs`, `tools/test_lesson.py` (aplicația și ecranele), `tools/test_audio.py` (pauza și sunetele într-un Chromium real).
+
+## Întreabă despre asta
+
+Sub explicația unei grile, într-o fișă din Studiu și la fiecare gol din „Pentru tine” (inclusiv în review-ul unui card oral) apare butonul „Întreabă despre asta”: o conversație scurtă cu modelul, limitată la tema zonei de teorie.
+
+- **Limitare**: `src/ask.js` pune materialul zonei în instrucțiuni și cere răspuns JSON `{on_topic, answer}`. Dacă `on_topic` e fals, ecranul arată o frază fixă („Aici răspund doar despre …”), niciodată textul modelului. Întrebarea intră ca date între `<<<` și `>>>`, fără acești markeri, cu cel mult 400 de caractere; cel mult 6 schimburi pe context, iar „Întrebare nouă” resetează.
+- **Context** (`askCtx` în `app.js`): `mcq:<id>` (grila, variantele, explicația, ce ai ales), `sheet:<modul>` (fișa) și `gap:<card>:<punct>` (cardul, punctul ratat, răspunsul model, afirmațiile marcate greșite).
+- **Sursă**: `sample` în artifact (Claude), altfel Gemini cu cheia de la Jarvis (`gemini-3.8-flash`, REST), altfel DeepSeek. Fără nicio cheie, blocul spune ce să adaugi.
+- **Nu se salvează**: conversația stă în `ui.ask`, nu în progres, export sau sincronizare.

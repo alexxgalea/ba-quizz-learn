@@ -1,0 +1,71 @@
+# Pregătirea pentru Onapsis
+
+Aplicația cu care Alex se pregătește pentru interviul tehnic Onapsis: grile, carduri orale, fișe de teorie și Jarvis, intervievatorul vocal.
+
+## Conținut
+
+**Modul**:
+O temă a interviului (asyncio, OOP, pytest, frontend...), cu prioritatea ei, fișa, grilele și cardurile orale.
+_Avoid_: temă (în cod), capitol
+
+**Fișă**:
+Rezumatul de învățat al unui modul: o idee principală, punctele de reținut și formulările de evitat.
+_Avoid_: cheat sheet, foaie
+
+**Punct**:
+Una dintre ideile de reținut ale unei fișe, într-o frază sau două. E unitatea pe care o recitești, din care Jarvis face o bucată și de care se leagă golurile.
+_Avoid_: card (cardul e oral), bullet, idee
+
+**Desfășurare**:
+Explicația pe larg a unui punct, în stilul refactoring.guru: problema concretă pe care o rezolvă, ideea, un exemplu sau o analogie și, unde există un echivalent real, comparația cu C++ și locul unde ea nu mai ține. Punctul rămâne recapitularea; desfășurarea e prima întâlnire cu ideea.
+_Avoid_: explicație (e a grilelor), lecție, detaliu
+
+**Harta modulului**:
+Desfășurarea ideii principale a unei fișe: problema mare pe care o rezolvă modulul și cum se grupează punctele lui. Se citește prima, ca punctele să se lege între ele.
+_Avoid_: rezumat, introducere, cuprins
+
+**Kata**:
+O problemă de live coding (brute force, LRU cache, token bucket) pe care Alex o rezolvă în ~20 de minute, cu voce tare. Exersează gândirea, nu forma.
+_Avoid_: exercițiu (prea vag), problemă
+
+**Schelet**:
+Codul minim, canonic, al unui concept (un `Process` pornit corect, un consumer pe coadă cu sentinel, un fixture cu `yield`), pe care Alex îl scrie din memorie în câteva minute. Nu rezolvă o problemă: arată că știe forma.
+_Avoid_: rețetă, șablon, snippet (snippet-ul e codul de analizat dintr-un card oral)
+
+**Punct esențial**:
+Unul din cele 3–5 lucruri fără de care un schelet e greșit sau incomplet (de pildă `while`, nu `if`, în jurul lui `wait()`). Încercarea lui Alex se notează pe ele.
+_Avoid_: criteriu, checklist
+
+## Jarvis
+
+**Antrenament pe o temă**:
+Sesiune Jarvis în care Alex răspunde la cardurile orale ale unui singur modul și primește verdict pe fiecare.
+_Avoid_: lecție, mod „topic” (în vorbire)
+
+**Lecție**:
+Sesiune Jarvis în care Jarvis explică fișa unui modul, bucată cu bucată, iar Alex doar ascultă și îl poate opri cu comenzi vocale. Nu e o verificare: nu schimbă scorul, Leitner-ul sau golurile.
+_Avoid_: podcast, curs, explicație
+
+**Bucată**:
+Unitatea unei lecții: un punct din fișă, dezvoltat de Jarvis cu un exemplu, fără fapte noi. Ideea principală deschide lecția, iar formulările de evitat o încheie, drept capcane.
+_Avoid_: segment, chunk, pas
+
+**Poziția lecției**:
+Prima bucată a unui modul pe care Alex n-a ascultat-o până la capăt; de acolo continuă lecția următoare, după o propoziție de recapitulare. Revine la început când fișa e ascultată toată.
+_Avoid_: progresul lecției, bookmark
+
+**Fereastra de ascultare**:
+Cele câteva secunde de după o bucată, anunțate de un sunet scurt, în care Jarvis ascultă o comandă sau o întrebare; dacă Alex tace, lecția merge mai departe.
+_Avoid_: pauza dintre bucăți (se confundă cu Pauza)
+
+**Pauză**:
+Oprirea lecției la cererea lui Alex, din buton, din căști sau prin voce, până când o reia.
+_Avoid_: stop, oprire
+
+**Mut**:
+Lecție în care microfonul ajunge la Jarvis doar cât Alex ține apăsat „Vorbește”: fără fereastra de ascultare, bucățile curg una după alta, iar restul se controlează din butoane și din căști.
+_Avoid_: silențios, doar ascultare
+
+**Vorbește**:
+Butonul ținut apăsat (push-to-talk) prin care Alex dă o comandă sau pune o întrebare pe Mut; cât e apăsat, Jarvis tace și ascultă.
+_Avoid_: push-to-talk (în interfață), microfon

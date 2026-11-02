@@ -211,3 +211,199 @@ def merge_intervals(intervals):
             merged.append([start, end])
     return [tuple(pair) for pair in merged]
 # === end ===
+
+
+# === k10 ===
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass(frozen=True)
+class Event:
+    ts: datetime
+    user: str
+    action: str
+    ok: bool
+
+
+def parse_line(line):
+    """'2026-10-28T10:00:00Z user=ana action=login result=fail'"""
+    stamp, *pairs = line.split()
+    kv = dict(p.split("=", 1) for p in pairs)
+    # Python 3.10 nu acceptă sufixul Z în fromisoformat
+    ts = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    return Event(ts, kv["user"], kv["action"], kv["result"] == "ok")
+
+
+def parse_log(lines, errors=None):
+    """Generator: sare peste liniile goale, notează în `errors`
+    numerele liniilor stricate și merge mai departe."""
+    for n, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            yield parse_line(line)
+        except (ValueError, KeyError):
+            if errors is not None:
+                errors.append(n)
+
+
+def summarize(events):
+    """{user: (eșecuri, ultima acțiune)}"""
+    fails, last = {}, {}
+    for e in events:
+        fails[e.user] = fails.get(e.user, 0) + (not e.ok)
+        if e.user not in last or e.ts >= last[e.user].ts:
+            last[e.user] = e
+    return {u: (fails[u], last[u].action) for u in fails}
+# === end ===
+
+
+# === k11 ===
+import re
+
+import pytest
+
+_DURATION = re.compile(r"(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?")
+
+
+def parse_duration(text):
+    """'1h30m' -> 5400. Ordinea h, m, s, fiecare cel mult o dată."""
+    m = _DURATION.fullmatch(text.strip())
+    if not m or not any(m.groups()):
+        raise ValueError(f"durată invalidă: {text!r}")
+    h, mi, s = (int(g or 0) for g in m.groups())
+    return h * 3600 + mi * 60 + s
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("90s", 90),
+    ("1h", 3600),
+    ("2m30s", 150),
+    ("1h0m5s", 3605),
+    (" 5m ", 300),
+])
+def test_duration_valid(text, expected):
+    assert parse_duration(text) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "", "abc", "1x", "1h30x", "30m1h", "h", "1h1h",
+])
+def test_duration_invalid_raises(text):
+    with pytest.raises(ValueError):
+        parse_duration(text)
+# === end ===
+
+
+# === k12 ===
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Alert:
+    rule_id: str
+    severity: str
+    event: dict
+
+
+class Rule(ABC):
+    rule_id: str
+    severity = "medium"
+
+    @abstractmethod
+    def match(self, event): ...
+
+
+RULES = {}
+
+
+def register(cls):
+    """Decorator: o regulă nouă se înregistrează singură,
+    fără să modifici motorul."""
+    RULES[cls.rule_id] = cls
+    return cls
+
+
+@register
+class CriticalProfileGranted(Rule):
+    rule_id = "PRIV-001"
+    severity = "high"
+    CRITICAL = {"SAP_ALL", "SAP_NEW"}
+
+    def match(self, event):
+        return (event.get("type") == "profile_grant"
+                and event.get("profile") in self.CRITICAL)
+
+
+@register
+class OffHoursLogin(Rule):
+    rule_id = "LOGIN-002"
+
+    def __init__(self, start=8, end=20):
+        self.start, self.end = start, end
+
+    def match(self, event):
+        return (event.get("type") == "login"
+                and not self.start <= event["hour"] < self.end)
+
+
+class Engine:
+    def __init__(self, rules):
+        self.rules = list(rules)
+
+    @classmethod
+    def default(cls):
+        return cls(rule() for rule in RULES.values())
+
+    def run(self, events):
+        for event in events:
+            for rule in self.rules:
+                try:
+                    hit = rule.match(event)
+                except Exception:
+                    # o regulă stricată nu oprește motorul
+                    log.exception("regula %s a eșuat", rule.rule_id)
+                    continue
+                if hit:
+                    yield Alert(rule.rule_id, rule.severity, event)
+# === end ===
+
+
+# === k14 ===
+import asyncio
+
+
+async def run_jobs(jobs, handler, workers=4, timeout=5.0):
+    """Rulează `await handler(job)` cu cel mult `workers` în paralel
+    și un timeout per job. Întoarce rezultatele în ordinea jobs;
+    o excepție (inclusiv TimeoutError) apare în locul rezultatului.
+    Merge și pe Python 3.10 (fără TaskGroup și asyncio.timeout)."""
+    queue = asyncio.Queue()
+    for i, job in enumerate(jobs):
+        queue.put_nowait((i, job))
+    results = [None] * len(jobs)
+
+    async def worker():
+        while True:
+            i, job = await queue.get()
+            try:
+                results[i] = await asyncio.wait_for(handler(job), timeout)
+            except Exception as exc:
+                results[i] = exc
+            finally:
+                queue.task_done()
+
+    tasks = [asyncio.create_task(worker()) for _ in range(workers)]
+    try:
+        await queue.join()
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    return results
+# === end ===

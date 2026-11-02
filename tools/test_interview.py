@@ -142,7 +142,7 @@ async def main():
         await pg.click('[data-a="oral-save"]'); await pg.wait_for_timeout(100)
         e = (await pg.evaluate("window.__prep.state().o"))[card["id"]]
         check("score = (1 + 0.5) / n", e["s"] == round(1.5 / n * 100), e)
-        check("memory: missed points saved as indexes, no rewrite saved", e.get("m") == list(range(1, n)) and "a" not in e and set(e) <= {"b", "n", "s", "t", "m"}, e)
+        check("memory: missed points saved as indexes, one miss each, no rewrite saved", e.get("m") == list(range(1, n)) and e.get("mc") == {str(i): 1 for i in range(1, n)} and "a" not in e and set(e) <= {"b", "n", "s", "t", "m", "mc", "w"}, e)
         check("next card starts clean (ask phase, empty answer, interviewer offered)", await pg.input_value('#ans-t') == "" and await pg.locator('[data-a="iv-start"]').count() == 1 and await pg.locator('.iv').count() == 0)
         await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
         if await pg.locator('[data-a="close-result"]').count(): await pg.click('[data-a="close-result"]')
@@ -259,32 +259,70 @@ async def main():
         await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(200)
         check("quit mid-request: back to the oral home, no leftover dialog", await pg.locator('.modrow').count() > 0 and await pg.locator('.iv').count() == 0)
 
-        # 5b) mock interview: 4 cards from ≥3 modules, fixed persona, no model between cards, result screen with the closing line
+        # 5b) technical mock: 7 fixed slots (threading/asyncio, OOP, testing/generators, FastAPI, frontend, snippet, design), persona adapts, no model between cards
         await fresh(pg)
         spread = await pg.evaluate("Array.from({ length: 40 }, () => { const p = window.__prep.pickIvMock(4); return [p.length, new Set(p.map(c => c.id)).size, new Set(p.map(c => c.m)).size]; })")
-        check("pickIvMock: 4 distinct cards from at least 3 modules, every time", all(a == 4 and b == 4 and c >= 3 for a, b, c in spread), spread[:3])
+        check("pickIvMock (morning warm-up): 4 distinct cards from at least 3 modules, every time", all(a == 4 and b == 4 and c >= 3 for a, b, c in spread), spread[:3])
+        slots = await pg.evaluate("Array.from({ length: 40 }, () => window.__prep.pickTechMock().map(c => [c.m, !!c.code, c.id]))")
+        okslots = all(len(p) == 7 and len(set(x[2] for x in p)) == 7 and p[0][0] in ("gil", "asyncio") and p[1][0] == "oop" and p[2][0] in ("pytest", "python") and p[3][0] == "asgi" and p[4][0] == "frontend" and p[5][1] and p[6][0] == "design" for p in slots)
+        check("pickTechMock: 7 distinct cards, one per slot, in the order of the technical round (BE + FE)", okslots, slots[0])
         await pg.click('.tab[data-tab="oral"]'); await pg.wait_for_timeout(100)
-        check("oral home offers the simulated interview", await pg.locator('[data-a="iv-mock"]').count() == 1)
+        check("oral home offers the technical simulated interview", await pg.locator('[data-a="iv-mock"]').count() == 1 and "Interviu tehnic simulat" in await pg.inner_text('[data-a="iv-mock"]'))
         await pg.screenshot(path=str(SHOTS / "iv8-home.png"), full_page=True)
         await pg.click('[data-a="iv-mock"]'); await pg.wait_for_selector('#ans-t', timeout=3000)
-        check("starts at 1/4 with the greeting", "1/4" in await pg.text_content('.eyebrow') and "Bună!" in await pg.inner_text('.iv-m.int') and "Interviu simulat" in await pg.text_content('.eyebrow'))
+        check("starts at 1/7 with the greeting", "1/7" in await pg.text_content('.eyebrow') and "Bună!" in await pg.inner_text('.iv-m.int') and "Interviu tehnic simulat" in await pg.text_content('.eyebrow'))
         check("mock ask phase: only the interviewer button (no timer, no direct check, no reveal)", await pg.locator('[data-a="iv-start"]').count() == 1 and await pg.locator('[data-a="oral-ai"], [data-a="oral-reveal"], [data-a="oral-timer"]').count() == 0)
         await pg.screenshot(path=str(SHOTS / "iv9-mock-ask.png"))
-        order = []
-        for i in range(4):
+        for i in range(7):
             if i == 1: check("transition between cards", "trecem mai departe" in await pg.inner_text('.iv-m.int'))
-            if i == 3: check("last card is announced", "Ultima întrebare" in await pg.inner_text('.iv-m.int'))
+            if i == 4: check("frontend slot: a React/TS card, announced", "frontend" in await pg.inner_text('.iv-m.int') or "codul" in await pg.inner_text('.iv-m.int'), await pg.inner_text('.iv-m.int'))
+            if i == 5: check("snippet slot: the code is on the card and the interviewer points at it", await pg.locator('.icard pre.code').count() == 1 and "codul" in await pg.inner_text('.iv-m.int'))
+            if i == 5: await pg.screenshot(path=str(SHOTS / "iv11-mock-snippet.png"), full_page=True)
+            if i == 6: check("last part is the design scenario, announced", "Ultima parte" in await pg.inner_text('.iv-m.int') and "design" in await pg.inner_text('.iv-m.int'))
             await queue(pg, "turn", [tj(act="done")])
             await answer_and_start(pg); await pg.wait_for_selector('.ai-v', timeout=3000)
             if i == 0: check("mock review: no model answer and no rewrite step", await pg.locator('details.model summary:has-text("Model de răspuns")').count() == 0 and await pg.locator('[data-a="rw-open"]').count() == 0 and await pg.locator('[data-a="oral-save"]').count() == 1)
             await pg.click('[data-a="oral-save"]'); await pg.wait_for_timeout(120)
-        check("result screen: closing line, 4 cards, scores", "Asta a fost tot" in await pg.inner_text('main') and await pg.locator('main .score').count() == 1 and "4 carduri" in await pg.inner_text('.score'))
+        check("result screen: closing line, 7 cards, scores", "Asta a fost tot" in await pg.inner_text('main') and await pg.locator('main .score').count() == 1 and "7 carduri" in await pg.inner_text('.score'))
         st = await pg.evaluate("({ o: Object.keys(window.__prep.state().o).length, h: window.__prep.state().h.map(e => e.title) })")
-        check("every card went through updO; history records the mock", st["o"] == 4 and st["h"][-1] == "Interviu simulat", st)
+        check("every card went through updO; history records the mock", st["o"] == 7 and st["h"][-1] == "Interviu tehnic simulat", st)
         await pg.screenshot(path=str(SHOTS / "iv10-mock-result.png"), full_page=True)
         calls_n = len(await calls(pg))
-        check("persona added no extra calls (one turn + one verdict per card)", calls_n == 8, calls_n)
+        check("persona added no extra calls (one turn + one verdict per card)", calls_n == 14, calls_n)
         await pg.click('[data-a="close-result"]'); await pg.wait_for_timeout(100)
+
+        # 5d) per-card rules: design gets 3 follow-ups and design rules; a snippet card sends its code
+        R = await pg.evaluate("""() => {
+          const T = window.__prep, des = window.PREP.oral.find(c => c.m === 'design'), snp = window.PREP.oral.find(c => c.code), plain = window.PREP.oral.find(c => !c.code && c.m === 'gil');
+          const iv = { turns: [{ who: 'cand', text: 'x' }], fu: 0 };
+          return { des: T.ivRules(des).max, snp: T.ivRules(snp).max, plain: T.ivRules(plain).max,
+            desTurn: T.ivTurnPrompt(des, iv, null), snpTurn: T.ivTurnPrompt(snp, iv, null), plainTurn: T.ivTurnPrompt(plain, iv, null),
+            snpVerdict: T.ivVerdictPrompt(snp, iv), desVerdict: T.ivVerdictPrompt(des, iv), code1: snp.code.split('\\n')[0] };
+        }""")
+        check("ivRules: design 3 follow-ups, snippet and plain cards 2", R["des"] == 3 and R["snp"] == 2 and R["plain"] == 2, R)
+        check("design prompt: 3 left and design rules; snippet prompt: the code and snippet rules; plain card: neither", "rămase: 3" in R["desTurn"] and "system design" in R["desTurn"] and R["code1"] in R["snpTurn"] and "snippet de cod" in R["snpTurn"] and "snippet" not in R["plainTurn"] and "system design" not in R["plainTurn"])
+        check("verdict prompts carry the code and the design/snippet scoring note", R["code1"] in R["snpVerdict"] and "criterii de raționament" in R["desVerdict"])
+        await fresh(pg)
+        await pg.click('.tab[data-tab="oral"]'); await pg.click('[data-a="oral-mod"][data-m="design"]'); await pg.wait_for_selector('#ans-t')
+        await queue(pg, "turn", [tj(act="followup", say="Ce volum ai?"), tj(act="followup", say="Ce se întâmplă dacă pică brokerul?"), tj(act="followup", say="Cum scalezi?")])
+        await answer_and_start(pg, "Aș începe cu cerințele: volum, latență, câți clienți, apoi aș pune o coadă între API și workeri.")
+        for k in range(3):
+            await pg.wait_for_function("n => document.querySelectorAll('.iv-m.int').length === n", arg=k + 1, timeout=3000)
+            check("design dialog counter shows " + str(k + 1) + "/3", (str(k + 1) + "/3") in await pg.inner_text('.iv h3 + .chip'))
+            await pg.fill('#iv-t', "Răspuns la întrebarea " + str(k + 1) + ", cu un trade-off."); await pg.click('[data-a="iv-send"]')
+        await pg.wait_for_selector('.ai-v', timeout=3000)
+        check("design: three follow-ups, then the verdict without a fourth question", [c["kind"] for c in await calls(pg)] == ["turn", "turn", "turn", "verdict"], [c["kind"] for c in await calls(pg)])
+        await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
+        if await pg.locator('[data-a="close-result"]').count(): await pg.click('[data-a="close-result"]')
+        # open a known snippet card through the app's own action (the module order is random)
+        await pg.evaluate("""() => { const b = document.createElement('button'); b.dataset.a = 'oral-card'; b.dataset.id = 'o-snp-oop3'; document.body.appendChild(b); b.click(); b.remove(); }""")
+        await pg.wait_for_selector('#ans-t')
+        check("an oral snippet card shows its code under the question", await pg.locator('.icard pre.code').count() == 1)
+        await pg.screenshot(path=str(SHOTS / "iv12-snippet-card.png"), full_page=True)
+        await pg.emulate_media(color_scheme="dark"); await pg.screenshot(path=str(SHOTS / "iv13-snippet-dark.png"), full_page=True); await pg.emulate_media(color_scheme="light")
+        await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
+        if await pg.locator('[data-a="quit"]').count(): await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
+
 
         # 5c) plan: oral task points at the interviewer; the morning warm-up starts a 2-card mock
         P = await pg.evaluate("""() => {

@@ -6,7 +6,7 @@ const [progressPath, outPath] = process.argv.slice(2);
 
 const ctx = { window: {} };
 vm.createContext(ctx);
-for (const f of ["data_core.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_ctx.js", "data_oral.js", "data_katas.js"])
+for (const f of ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js", "data_skel.js"])
   vm.runInContext(fs.readFileSync(path.join(root, "src", f), "utf8"), ctx, { filename: f });
 const P = ctx.window.PREP;
 P.mcq.forEach(q => { const c = (P.qctx || {})[q.id]; if (c) { q.lvl = q.lvl || c[0]; q.ctx = q.ctx || c[1]; } q.lvl = q.lvl || 2; });
@@ -56,7 +56,19 @@ function renderStats() {
     .map(h => h.title + ": " + h.c + "/" + h.n + " în " + Math.max(1, Math.round(h.dur / 60)) + " min");
   return "Progresul de azi dimineață: " + entries.length + " de grile răspunse, din care " + ok + " corecte la ultima încercare (bază " +
     byL[1][0] + "/" + byL[1][1] + ", practic " + byL[2][0] + "/" + byL[2][1] + ", avansat " + byL[3][0] + "/" + byL[3][1] + ").\n" +
-    "Sesiunile pe module, în ordine: " + sessions.join("; ") + ".";
+    "Sesiunile pe module, în ordine: " + sessions.join("; ") + "." + renderSkeletons();
+}
+
+// Scheletele de cod (S.s): știute = cutia ≥ 3; ratate = ultimul scor sub 50%. Ciornele nu intră niciodată în progres.
+function renderSkeletons() {
+  const SK = P.skel || [], St = S.s || {};
+  if (!SK.length) return "";
+  const known = k => St[k.id] && St[k.id].b >= 3;
+  const perMod = MODS.filter(m => SK.some(k => k.m === m.id)).map(m => { const l = SK.filter(k => k.m === m.id); return m.short + ": " + l.filter(known).length + "/" + l.length; });
+  const missed = SK.filter(k => St[k.id] && typeof St[k.id].s === "number" && St[k.id].s < 50).sort((a, b) => St[a.id].s - St[b.id].s);
+  return "\n\nScheletele de cod (scris din memorie; cutia 3 sau mai sus = știut): " + SK.filter(known).length + " știute din " + SK.length + " (" + SK.filter(k => !St[k.id]).length + " neîncepute).\n" +
+    "Pe module (știute / total): " + perMod.join("; ") + ".\n" +
+    "Scheletele ratate la ultima încercare (sub 50%): " + (missed.length ? "\n" + missed.map(k => "- `" + k.id + "` · " + MOD[k.m].short + " · " + k.t + " · " + St[k.id].s + "%").join("\n") : "niciunul.");
 }
 
 function renderWeak() {
