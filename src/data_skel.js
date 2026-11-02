@@ -25,6 +25,128 @@ window.PREP.skel = [
       "Metodele nu folosesc `this`, deci merg și extrase (`const { inc } = c; inc()`), unde o metodă de clasă și-ar pierde contextul."
     ]
   },
+  // ---- frontend / JavaScript (tichetul 09) ----
+  {
+    id: "s-frontend-this", m: "frontend", g: "js", lang: "js",
+    t: "this: metodă extrasă, bind și arrow",
+    p: "Scrie clasa `Button(label)` cu `click()`, care întoarce `\"click:\" + label`. Adaugă o versiune legată în constructor (`bound`), un câmp arrow (`arrow`) și `tags(items)`, care folosește un callback arrow. Scrie și `call(handler)`, care apelează `handler()` fără obiect în față, ca să arăți că `click` extrasă aruncă.",
+    k: [
+      "`this` îl decide felul apelului, nu locul unde e scrisă funcția: `btn.click()` are `this === btn`, dar `const f = btn.click; f()` îl pierde. Codul din clase e strict, deci `this` e `undefined` și `this.label` aruncă `TypeError` (nu citește din `globalThis`).",
+      "`bind(this)` în constructor sau un câmp arrow fixează `this` pe instanță, deci poți da metoda ca handler (`onClick={btn.bound}`). Pe o funcție legată, `call` / `apply` și un al doilea `bind` nu mai schimbă `this`; pe metoda obișnuită, `call` îl schimbă.",
+      "Arrow function nu are `this` propriu: îl ia lexical, din scope-ul în care e scrisă. De aceea `items.map((i) => this.label + i)` merge în interiorul metodei.",
+      "Un `function () {}` clasic în același callback își are propriul `this` (`undefined` în cod strict): capcana tipică, reparată cu arrow sau cu `bind`."
+    ]
+  },
+  {
+    id: "s-frontend-event-loop", m: "frontend", g: "js", lang: "js",
+    t: "Ordinea pe event loop: sync, microtask, timeout",
+    p: "Scrie în comentariu ce ordine prezici, apoi funcția `order()`. Ea pune un `setTimeout(…, 0)`, un `.then` (care pornește un `queueMicrotask` numit `nested`), un `queueMicrotask`, o funcție `async` cu `await null` și un pas sincron. Fiecare pas adaugă un șir în `log`, iar promisiunea întoarsă se rezolvă cu `log` din timeout.",
+    k: [
+      "Mai întâi tot codul sincron (inclusiv corpul unei funcții `async` până la primul `await`), apoi microtask-urile, apoi următorul task (`setTimeout`).",
+      "Microtask-urile sunt `.then`, `queueMicrotask` și continuarea de după `await`; rulează în ordinea în care au fost puse în coadă.",
+      "Coada de microtask-uri se golește complet înainte să ruleze orice timer: și un microtask pus de alt microtask (`nested`) iese înaintea lui `setTimeout(…, 0)`.",
+      "`setTimeout(fn, 0)` nu rulează „imediat”: e un task nou, care așteaptă golirea stack-ului și a microtask-urilor."
+    ]
+  },
+  {
+    id: "s-frontend-promisify", m: "frontend", g: "js", lang: "js",
+    t: "promisify și async / await cu try / catch / finally",
+    p: "Scrie `promisify(fn)` pentru funcții cu callback în stil Node (`(err, value) => …`, ultimul argument). Apoi `async load(read, path, log)`: citește cu `await read(path)`, face `JSON.parse`, la eroare aruncă o eroare nouă „citire eșuată: …” care păstrează cauza, și scrie în `log` șirul `gata <path>` indiferent de rezultat.",
+    k: [
+      "`promisify` întoarce o funcție care înfășoară apelul într-un `new Promise`; callback-ul stă ultimul în `fn(...args, cb)`, iar `err` merge la `reject`, valoarea la `resolve`.",
+      "Fiecare cale ajunge la `resolve` sau la `reject`: altfel promisiunea rămâne pending pentru totdeauna. O excepție aruncată sincron în executor devine singură rejecție.",
+      "`await` în `try` face din rejecție o excepție prinsă de `catch`, în același bloc cu `JSON.parse`, care aruncă sincron.",
+      "`finally` rulează și la succes, și la eroare, și nu schimbă rezultatul. Eroarea nouă primește `{ cause: e }`, ca să nu pierzi originalul."
+    ]
+  },
+  {
+    id: "s-frontend-retry", m: "frontend", g: "js", lang: "js",
+    t: "Retry cu backoff exponențial și timeout",
+    p: "Scrie `retry(fn, { tries = 3, base = 100, timeout = 1000 })`. Fiecare încercare apelează `fn(signal)` cu un `AbortSignal.timeout(timeout)` nou. Dacă eșuează, așteaptă `base * 2 ** i` ms și reîncearcă; după ultima încercare aruncă ultima eroare.",
+    k: [
+      "Fiecare încercare primește propriul `AbortSignal.timeout(ms)` (la expirare semnalul se anulează cu `TimeoutError`); `fn` trebuie să-l dea mai departe (de pildă `fetch(url, { signal })`), altfel nu se oprește nimic. `Promise.race` cu un timer te eliberează din așteptare, dar lucrul continuă în fundal.",
+      "Backoff exponențial: `base * 2 ** i` (100, 200, 400 ms). În producție adaugi și jitter, ca mai mulți clienți să nu reîncerce în același moment.",
+      "Nu dormi după ultima încercare: `if (i < tries - 1)`, apoi `throw last`, adică ultima eroare originală, nu una nouă.",
+      "`return await fn(...)` în `try`: fără `await`, promisiunea respinsă iese din funcție înainte să o prindă `catch`, deci retry-ul nu mai rulează."
+    ]
+  },
+  {
+    id: "s-frontend-debounce-throttle", m: "frontend", g: "js", lang: "js",
+    t: "debounce și throttle",
+    p: "Scrie `debounce(fn, ms)` (rulează `fn` o singură dată, la `ms` după ultimul apel, cu argumentele lui) și `throttle(fn, ms)` (rulează imediat, apoi cel mult o dată la `ms`; apelurile dintre ele se pierd).",
+    k: [
+      "`debounce`: fiecare apel face `clearTimeout` pe timerul precedent și pornește unul nou, deci `fn` rulează doar după `ms` de liniște, cu argumentele ULTIMULUI apel.",
+      "Timerul (`let id`) stă în closure-ul fabricii: fiecare funcție întoarsă îl are pe al ei, deci două debounce-uri nu se încurcă.",
+      "`throttle`: ține minte momentul ultimei rulări (`last`) și rulează doar dacă au trecut `ms`; `last` se schimbă doar când rulează, deci apelurile ignorate nu mută fereastra.",
+      "Alegerea: `debounce` pentru „după ce s-a oprit” (căutare în timp ce tastezi, salvare automată), `throttle` pentru „cel mult o dată la” (scroll, resize)."
+    ]
+  },
+  {
+    id: "s-frontend-immutable-update", m: "frontend", g: "js", lang: "js",
+    t: "Update imutabil imbricat: spread și structuredClone",
+    p: "Pentru `state = { user, lists: [{ id, tasks: [{ id, done }] }] }` scrie `setDone(state, lid, id, done)`, care întoarce o stare nouă fără să schimbe originalul, și `snapshot(state)`, o copie profundă a stării.",
+    k: [
+      "Copiezi fiecare nivel de pe drumul spre valoare (`{ ...state, lists: … }`, `{ ...l, tasks: … }`, `{ ...t, done }`) și nu atingi originalul: fără `push`, `splice` sau `t.done = …`.",
+      "Ce nu se schimbă se refolosește prin referință (`l.id !== lid ? l : …`), deci listele neatinse rămân `===` cu cele vechi, iar React poate sări peste ele.",
+      "Spread-ul e copie superficială: `{ ...state }` e un obiect nou, dar `state.lists` e același array. De aceea copiezi nivel cu nivel.",
+      "`structuredClone` face copie profundă (și `Date`, `Map`, `Set`, referințe circulare), dar aruncă `DataCloneError` pe funcții și pierde prototipul claselor. Pentru un update obișnuit e prea scump."
+    ]
+  },
+  {
+    id: "s-frontend-array-group", m: "frontend", g: "js", lang: "js",
+    t: "filter, map, reduce și grupare",
+    p: "Dintr-o listă de comenzi `{ user, total, paid }` scrie `paidByUser(orders)`: totalul comenzilor plătite pe utilizator, ca listă `{ user, total }` sortată descrescător. Apoi `byUser(orders)`, care grupează comenzile pe utilizator.",
+    k: [
+      "Pipeline fără mutarea intrării: `filter` (doar plătitele), `reduce` (însumare), apoi `entries`, `map` și `sort`. `sort` mută array-ul pe care e apelat, deci îl aplici pe unul nou (aici cel din `Object.entries`), nu pe `orders`.",
+      "`reduce` primește mereu valoarea inițială (`{}`): fără ea, pe un array gol aruncă `TypeError`, iar primul element ar deveni acumulator.",
+      "Comparatorul de `sort` e numeric, `b.total - a.total`; implicit `sort` compară ca șiruri (`[10, 9, 1].sort()` dă `[1, 10, 9]`).",
+      "`Object.groupBy(items, fn)` întoarce un obiect cu prototip `null` și câte un array pe cheie. Există de la Node 21; pe un mediu mai vechi faci același lucru cu `reduce`."
+    ]
+  },
+  {
+    id: "s-frontend-map-set", m: "frontend", g: "js", lang: "js",
+    t: "Map și Set: contor, deduplicare, intersecție",
+    p: "Scrie `countWords(text)` (un `Map` cuvânt → număr, fără majuscule), `uniqueBy(items, key)` (prima apariție, în ordine, în O(n)) și `intersect(a, b)` (elementele comune, fără dubluri, în ordinea lui `a`).",
+    k: [
+      "`Map` pentru contor: `counts.set(w, (counts.get(w) ?? 0) + 1)` (citești cu `?? 0`, scrii înapoi). Spre deosebire de un obiect simplu, nu are chei moștenite (`constructor`, `toString`) și primește chei de orice tip; mărimea e `size`, nu `length`.",
+      "`Set` pentru „l-am mai văzut?”: `has` și `add` sunt O(1) în medie. Cu un array și `includes` ar fi O(n) pe fiecare element, deci O(n²) în total.",
+      "Cheile se compară prin identitate (SameValueZero): două obiecte cu același conținut sunt chei diferite, iar `NaN` e egal cu el însuși.",
+      "`new Set(a)` deduplică păstrând ordinea inserării, iar `[...set]` îl aduce înapoi la array. Pentru intersecție faci un `Set` din `b` și filtrezi `a` cu `has`; Node 22 are și `a.intersection(b)`."
+    ]
+  },
+  {
+    id: "s-frontend-async-gen", m: "frontend", g: "js", lang: "js",
+    t: "Generator async și for await peste un API paginat",
+    p: "Scrie `pages(fetchPage)`, un generator async care cere pagină după pagină (`fetchPage(cursor)` întoarce `{ items, next }`, iar `next === null` la ultima) și cedează elementele pe rând. Apoi `collect(source, limit)`, care strânge elemente cu `for await` și se oprește la `limit`.",
+    k: [
+      "`async function*` cu `yield` / `yield*` produce valori pe rând; `yield* page.items` deleagă la elementele paginii curente. Generatorul e leneș: nu cere nimic până nu e consumat.",
+      "`for await (const x of source)` consumă un async iterable și merge doar unde merge `await` (într-o funcție `async` sau într-un modul).",
+      "`break` din `for await` apelează `return()` pe generator: execuția lui se oprește (și rulează blocurile `finally`), deci pagina următoare nu se mai cere.",
+      "Paginarea cu `cursor` și `do…while`: prima cerere se face oricum, iar bucla se oprește când `next === null`. Cererile sunt secvențiale, fiindcă fiecare pagină depinde de cursorul precedentei."
+    ]
+  },
+  {
+    id: "s-frontend-es-class", m: "frontend", g: "js", lang: "js",
+    t: "Clasă ES: #private, static și getter",
+    p: "Scrie clasa `Account(owner)` cu soldul privat (`#balance`), un getter `balance` fără setter, `deposit(amount)` care respinge sumele ≤ 0 cu `RangeError` și întoarce `this`, și un contor static privat al conturilor create, expus prin `static get opened`.",
+    k: [
+      "`#balance` e privat de-adevăratelea: `acc.#balance` în afara clasei e `SyntaxError` la parsare, iar `Object.keys` și `JSON.stringify` nu-l văd. Convenția `_balance` n-ar proteja nimic.",
+      "`get balance()` fără `set` face proprietatea read-only: în cod strict (module, clase) atribuirea `acc.balance = 1` aruncă `TypeError`; în cod sloppy e ignorată în tăcere.",
+      "`static` aparține clasei, nu instanțelor: `Account.opened`, nu `acc.opened`. Câmpul `static #count` se accesează prin numele clasei (`Account.#count`), nu prin `this`, ca să nu se strice la subclase.",
+      "Metoda validează înainte să schimbe starea (`!(amount > 0)` prinde și `NaN`), iar `return this` permite înlănțuirea: `acc.deposit(5).deposit(7)`."
+    ]
+  },
+  {
+    id: "s-frontend-esm", m: "frontend", g: "js", lang: "js",
+    t: "Module ESM: named, default și import dinamic",
+    p: "Scrie două fișiere. `util.mjs`: un contor exportat (`export let count`) cu `inc()`, o funcție numită `add` și un export default `mul`. `app.mjs`: importă default-ul și numele, apelează `inc()` și arată că `count` importat vede valoarea nouă, apoi `lazy()`, care încarcă `util.mjs` cu `import()`.",
+    k: [
+      "Exportul numit (`export const add`) se importă cu acolade și cu același nume (se redenumește cu `as`); default-ul e unul singur per modul și se importă cu orice nume. Pot sta în același import: `import mul, { add } from …`.",
+      "Importurile sunt legături vii (live bindings), nu copii: după `inc()`, `count` din `app.mjs` e 1. Importatorul nu le poate reasigna (`count = 5` aruncă `TypeError`).",
+      "`import()` dinamic întoarce o promisiune cu obiectul namespace al modulului, iar default-ul e `m.default`. Îl folosești pentru încărcare la cerere (lazy loading) și acolo unde `import` static nu e permis (în funcții, condiționat).",
+      "Modulul se execută o singură dată și e ținut în cache: importurile statice și dinamice ale aceluiași fișier văd aceeași stare. În Node, calea relativă are extensia (`./util.mjs`), iar fișierul e `.mjs` sau pachetul are `\"type\": \"module\"`."
+    ]
+  },
   {
     id: "s-frontend-union-never", m: "frontend", g: "ts", lang: "ts",
     t: "Union discriminat și switch exhaustiv cu never",
