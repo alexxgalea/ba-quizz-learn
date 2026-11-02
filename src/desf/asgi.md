@@ -23,7 +23,7 @@ def start(status, headers):
 r = app({}, start)
 print(r)  # → [b'salut']
 ```
-Legătură: ASGI-04 și ASGI-01. Django are `wsgi.py`, pe care `gunicorn proiect.wsgi` îl încarcă. Flask folosește același contract.
+Legătură: ASGI-04. Django are `wsgi.py`, pe care `gunicorn proiect.wsgi` îl încarcă. Flask folosește același contract.
 
 ### 2
 Problema: Vrei notificări live în Django, prin WebSocket. Un apel WSGI primește o cerere, întoarce un răspuns și se termină, deci nu poate ține conexiunea deschisă.
@@ -80,7 +80,7 @@ gunicorn app:app -w 4 \
   -k uvicorn_worker.UvicornWorker
 uvicorn app:app --workers 4
 ```
-Legătură: ASGI-01 și ASGI-10. Cu Docker Swarm sau Kubernetes, `replicas` înlocuiește `-w`: orchestratorul repornește containerele pe care Gunicorn le repornea procesele.
+Legătură: ASGI-01 și ASGI-10. Cu Docker Swarm sau Kubernetes, `replicas` înlocuiește `-w`: orchestratorul repornește containerele, cum repornea Gunicorn procesele.
 
 ### 6
 Greu: da
@@ -98,7 +98,7 @@ Legătură: ASGI-09. În Docker Swarm, totalul e workeri per container × replic
 
 ### 7
 Problema: Expui direct un Gunicorn cu 4 workeri sync. Patru utilizatori de pe rețea mobilă încarcă încet fișiere mari, iar workerii stau ocupați să citească octeți. Toți ceilalți așteaptă.
-Ideea: Un reverse proxy (Nginx, HAProxy, un load balancer) stă între clienți și aplicație. Citește tot request-ul, oricât de încet vine, și îl trimite aplicației abia când e complet. Termină TLS și servește fișierele statice de pe disc. Distribuie traficul între instanțe. Gunicorn cere un astfel de proxy pentru workerii sync.
+Ideea: Un reverse proxy (Nginx, HAProxy, un load balancer) stă între clienți și aplicație. Citește tot request-ul, oricât de încet vine, și îl trimite aplicației abia când e complet. Termină TLS și servește fișierele statice de pe disc. Gunicorn cere un astfel de proxy pentru workerii sync.
 Exemplu:
 ```text
 location /static/ {
@@ -113,7 +113,7 @@ Legătură: ASGI-06. Rolul ăsta îl are un Ingress în Kubernetes sau Traefik �
 ### 8
 Greu: da
 Problema: Un endpoint `async def` apelează `requests.get(...)` pe un API care răspunde în 2 secunde. Local merge bine. La 50 de utilizatori, și `/health` începe să răspundă greu, deși nu face nimic.
-Ideea: FastAPI rulează un endpoint `async def` direct pe event loop. Un endpoint `def` îl rulează într-un threadpool AnyIO, ca să nu blocheze bucla. La fel și dependențele `def`. Threadpool-ul are implicit 40 de thread-uri, deci cel mult 40 de apeluri `def` în paralel. Un apel blocant într-un `async def` îngheață toate cererile workerului. Cu o bibliotecă blocantă folosești `def`; cu una async, `async def` și `await`.
+Ideea: FastAPI rulează un endpoint `async def` direct pe event loop. Un endpoint `def` îl rulează într-un threadpool AnyIO, prin `run_in_threadpool`, ca să nu blocheze bucla. La fel și dependențele `def`. Threadpool-ul are implicit 40 de thread-uri, deci cel mult 40 de apeluri `def` în paralel. Un apel blocant într-un `async def` îngheață toate cererile workerului. Cu o bibliotecă blocantă folosești `def`; cu una async, `async def` și `await`.
 Exemplu:
 ```python
 import anyio, threading as th
@@ -125,7 +125,7 @@ async def main():
     print(t == me)  # → False
 anyio.run(main)
 ```
-Legătură: ASGI-02 și ASGI-03. GIL-04 e același bug fără FastAPI. Exemplul: `run_in_threadpool` e funcția cu care FastAPI mută un `def` pe alt thread. Punctele 2 și 11 din fișa asyncio arată `to_thread` și alegerea dintre `def` și `async def`.
+Legătură: ASGI-02 și ASGI-03. GIL-04 e același bug fără FastAPI. Punctele 2 și 11 din fișa asyncio arată `to_thread` și alegerea dintre `def` și `async def`.
 
 ### 9
 Greu: da
