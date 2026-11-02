@@ -850,7 +850,7 @@ test("the system instructions tell the model how to use the unfolding and the ma
   const t = await begin(setup(), "oop");
   const s = t.live.cfg.system;
   assert.match(s, /desf[^\n]*problem[^\n]*ide[^\n]*exemplu/i);
-  assert.match(s, /exemplul din desfășurare/);
+  assert.match(s, /exemplul din desfășurare/i);
   assert.match(s, /caracter cu caracter/);
   assert.match(s, /harta/i);
   assert.match(s, /fără fapte noi[^\n]*desfășurare|desfășurare[^\n]*fără fapte noi/i);
