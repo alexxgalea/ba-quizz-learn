@@ -2229,12 +2229,14 @@
     log(e) { S.h.push(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); S.h = S.h.slice(-HMAX); commit(); },
 
     // ----- Lecție: fișa unui modul, poziția lecției, recomandarea -----
-    // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat. Diagramele nu intră.
+    // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat; la modulele cu desfășurări și harta, plus desfășurările. Diagramele nu intră.
     sheet(id) {
       const m = MOD[id], sh = P.sheets[id];
       if (!m || !sh || !sh.points || !sh.points.length) return null;
-      const l = S.l[id];
-      return { module: id, name: m.short, lead: sh.lead, points: sh.points.slice(), avoid: (sh.avoid || []).slice(), total: sh.points.length, pos: l ? Math.min(l.n || 0, sh.points.length) : 0 };
+      const l = S.l[id], d = desfOf(id), r = { module: id, name: m.short, lead: sh.lead, points: sh.points.slice(), avoid: (sh.avoid || []).slice(), total: sh.points.length, pos: l ? Math.min(l.n || 0, sh.points.length) : 0 };
+      // Un modul cu desfășurări le dă pe toate plus harta (desfășurarea i e a punctului i); fără ele, fișa arată ca înainte. Copii, ca lecția să nu poată schimba conținutul.
+      if (d) { r.map = { p: d.map.p, g: d.map.g.map(g => Object.assign({}, g)) }; r.desf = d.items.map(x => Object.assign({}, x)); }
+      return r;
     },
     // Poziția avansează doar când o bucată s-a redat toată și nu coboară niciodată în aceeași lecție.
     lessonHeard(id, n) {

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { fakeLive, fakeAudio, fakeClock, memoryStorage, stubApp, SHEET } from "./fakes.mjs";
+import { fakeLive, fakeAudio, fakeClock, memoryStorage, stubApp, SHEET, SHEET_DZ } from "./fakes.mjs";
 
 const require = createRequire(import.meta.url);
 const Call = require("../../src/call.js");
@@ -796,4 +796,93 @@ test("Reset does nothing while the lesson is paused", async () => {
   t.jarvis.pause();
   t.jarvis.restart();
   assert.deepEqual([t.app.resets || 0, t.app.pos.asyncio], [0, 1]);
+});
+
+// ---------- desfășurările (spec .scratch/desfasurari, tichet 10) ----------
+
+test("a chunk of a module with unfoldings brings the unfolding of its point as material for the model", async () => {
+  const t = await begin(setup(), "oop");
+  const r1 = await t.tool("next_chunk"), r2 = await t.tool("next_chunk");
+  assert.deepEqual(r1.desf, {
+    problema: SHEET_DZ.desf[0].p, ideea: SHEET_DZ.desf[0].i, exemplu: SHEET_DZ.desf[0].ex,
+    in_cpp: SHEET_DZ.desf[0].cpp, unde_nu_tine: SHEET_DZ.desf[0].nu, legatura: SHEET_DZ.desf[0].leg });
+  assert.deepEqual(r2.desf, { problema: SHEET_DZ.desf[1].p, ideea: SHEET_DZ.desf[1].i, analogie: SHEET_DZ.desf[1].an });
+});
+
+test("with an unfolding the chunk instruction asks for its example, not an invented one, and for the code to be told, not read out", async () => {
+  const t = await begin(setup(), "oop");
+  const r = await t.tool("next_chunk");
+  assert.match(r.instruction, /desf/i);
+  assert.match(r.instruction, /exemplul din desf/i);
+  assert.match(r.instruction, /caracter cu caracter/);
+  assert.match(r.instruction, /fără fapte noi/i);
+});
+
+test("without an unfolding the chunk has no material field and the same instruction as before", async () => {
+  const t = await begin(setup());
+  const r = await t.tool("next_chunk");
+  assert.deepEqual(["desf" in r, r.instruction], [false, "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi."]);
+});
+
+test("the first chunk opens with the module map when there is one, in place of the main idea", async () => {
+  const t = await begin(setup(), "oop");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual(r.intro, {
+    module: "OOP", total: 3, say: "OOP, în 3 idei. Prima: …",
+    harta: { problema: SHEET_DZ.map.p, grupuri: [{ puncte: "1–2", text: "cum se naște un obiect" }, { puncte: "3", text: "unde stă starea" }] } });
+});
+
+test("without a map the first chunk opens with the main idea, as before", async () => {
+  const t = await begin(setup());
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.intro.lead, "harta" in r.intro], [SHEET.lead, false]);
+});
+
+test("a lesson continued from a saved position recaps the last chunk and does not repeat the map", async () => {
+  const t = setup();
+  t.app.pos.oop = 1;
+  await begin(t, "oop");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.n, r.recap.n, "intro" in r, r.desf.problema], [2, 1, false, SHEET_DZ.desf[1].p]);
+});
+
+test("the system instructions tell the model how to use the unfolding and the map, keep 'no new facts' and tell it to narrate code", async () => {
+  const t = await begin(setup(), "oop");
+  const s = t.live.cfg.system;
+  assert.match(s, /desf[^\n]*problem[^\n]*ide[^\n]*exemplu/i);
+  assert.match(s, /exemplul din desfășurare/);
+  assert.match(s, /caracter cu caracter/);
+  assert.match(s, /harta/i);
+  assert.match(s, /fără fapte noi[^\n]*desfășurare|desfășurare[^\n]*fără fapte noi/i);
+});
+
+test("the unfoldings and the map are not in the system instructions: the app gives them chunk by chunk", async () => {
+  const t = await begin(setup(), "oop");
+  const all = [SHEET_DZ.map.p].concat(SHEET_DZ.desf.map(x => x.p), SHEET_DZ.desf.map(x => x.i));
+  assert.equal(all.some(x => t.live.cfg.system.includes(x)), false);
+});
+
+test("the number of chunks and the lesson position do not change when a module has unfoldings", async () => {
+  const t = await begin(setup(), "oop");
+  const r1 = await deliver(t);
+  await deliver(t);
+  const posAfterTwo = t.app.pos.oop;
+  await deliver(t);
+  const closing = await deliver(t);
+  assert.deepEqual([r1.total, posAfterTwo, closing.kind, "desf" in closing, t.app.doneLessons], [3, 2, "closing", false, ["oop"]]);
+});
+
+test("repeat_chunk gives the same unfolding again, marked as a repeat", async () => {
+  const t = await begin(setup(), "oop");
+  await t.tool("next_chunk"); const r2 = await t.tool("next_chunk");
+  const again = await t.tool("repeat_chunk");
+  assert.deepEqual([again.n, again.repeat, again.desf], [2, true, r2.desf]);
+});
+
+test("after Reset on a module with a map the model is told to begin again with the introduction it gets, and that introduction has the map", async () => {
+  const t = await begin(setup(), "oop");
+  await deliver(t); t.clock.advance(3100); await deliver(t);
+  t.jarvis.restart();
+  const msg = t.texts().at(-1), r = await t.tool("next_chunk");
+  assert.deepEqual([/ideea principală/.test(msg), /intro/.test(msg), r.n, "harta" in r.intro, "recap" in r], [false, true, 1, true, false]);
 });
