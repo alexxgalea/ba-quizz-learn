@@ -1,6 +1,6 @@
 Status: ready-for-agent
 
-Tichete: `.scratch/desfasurari/issues/` (de scris cu `/to-tickets`; primul: formatul + `oop`, de la cap la coadă).
+Tichete: `.scratch/desfasurari/issues/` (01–22; frontiera de start: 01).
 
 # Desfășurări: punctele fișelor, explicate ca pe refactoring.guru
 
