@@ -6,7 +6,7 @@
 
 **Blocked by:** 03.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Funcțiile noi ale modelului sunt oferite în lecție, cu descriere și parametri, și nu apar în celelalte moduri.
 - [x] „Sari” trece la bucata următoare fără să marcheze bucata sărită ca ascultată.
@@ -19,3 +19,5 @@
 ## Comments
 
 Implementat. Funcțiile `next_chunk`, `repeat_chunk`, `pause_session`, `end_session` apar doar în lecție. Butoanele Repetă și Sari folosesc `Call.interrupt(text)`, iar restul unei ture tăiate se aruncă până răspunde modelul cu un apel de funcție.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

@@ -6,7 +6,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Pornirea unei lecții fără cheie trimite la câmpul cheii, ca la celelalte moduri.
 - [x] Testele (Jarvis cu serviciul vocal, audio și ceas false, aplicația stub extinsă) arată că modelul primește bucățile în ordine, cu numărul bucății și totalul, și că cere bucata următoare după ce audio-ul s-a redat.
@@ -21,3 +21,5 @@
 ## Comments
 
 Implementat. Modul `lesson` în `src/jarvis.js` (`makeLessonTools`, `buildLessonSystem`, controlerul `lz`), `PrepApp.sheet` în `src/app.js`, ecranul `vLessonActive` / `vLessonEnded`. Teste: `tools/unit/lesson.test.mjs`, `tools/test_lesson.py` (360 px, light și dark). `next_chunk` dă la prima apelare ideea principală și totalul (`intro`); sfârșitul (`closing`) dă capcanele și textul pentru recapitulare.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

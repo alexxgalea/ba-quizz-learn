@@ -6,7 +6,7 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Testele pe aplicație arată: poziția avansează doar după redarea completă, nu la Sari, nu la o bucată întreruptă.
 - [x] La terminarea fișei, poziția revine la zero și se notează data.
@@ -22,3 +22,5 @@ Implementat. `S.l[modul] = { n, d, t }` (în `MAPS`, deci se îmbină și se șt
 
 Adăugat la cererea lui Alex: resetarea poziției (`PrepApp.lessonReset`; „Resetează lecția” sub butonul recomandat și „Resetează” în lista modulelor, doar pentru lecții începute). Păstrează data ultimei terminări și nu pornește lecția.
 În lecția în curs: butonul „Reset” în rândul Pauză, Repetă, Sari (confirmare la a doua atingere), `Jarvis.restart()`.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

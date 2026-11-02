@@ -6,7 +6,7 @@
 
 **Blocked by:** 03.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Pe Mut, microfonul nu trimite sunet decât cât e ținut apăsat Vorbește (teste pentru apel și pentru Jarvis).
 - [x] Pe Mut nu se deschide fereastra de ascultare și nu se redă sunetul ei; bucățile se înlănțuie.
@@ -19,3 +19,5 @@
 ## Comments
 
 Implementat. `Call.talk(down)` (oprește redarea, deschide microfonul, la eliberare trimite `audioStreamEnd`; fapt verificat în docs Gemini, vezi `research/interview-facts.md` §8). Mut în `onapsis-jarvis-v1`. Vorbește se ține apăsat prin `pointerdown` / `pointerup` pe document; cât e apăsat, ecranul nu se redesenează.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

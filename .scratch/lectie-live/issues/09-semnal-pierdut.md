@@ -6,7 +6,7 @@
 
 **Blocked by:** 03, 05.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Testele cu serviciul vocal fals și ceas fals arată reîncercări în intervalul de ~60 s în lecție, fără să schimbe politica celorlalte moduri.
 - [x] După reconectare, bucata întreruptă se reia de la început, cu „Reiau de unde am rămas”.
@@ -17,3 +17,5 @@
 ## Comments
 
 Implementat. `cfg.retryMs` (~60 s) în `GeminiLive`, doar pentru lecție. `Call` cu `survive` rămâne pe pauză după o pierdere definitivă (`lost`) și redeschide sesiunea la `resume`; Jarvis redă `audio.beep("warn")` și, la revenire, cere bucata cu „Reiau de unde am rămas”. Reluarea după `GoAway` e acoperită de testele `goAway` din `live.test.mjs` și de cel din `lesson.test.mjs`.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

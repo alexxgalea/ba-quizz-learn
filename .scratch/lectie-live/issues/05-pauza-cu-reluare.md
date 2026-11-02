@@ -6,7 +6,7 @@
 
 **Blocked by:** 03.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Testele cu ceas fals arată reluarea exactă sub ~10 minute, cu conexiune deschisă.
 - [x] După ~10 minute, sau după o conexiune pierdută, bucata se reia de la început.
@@ -18,3 +18,5 @@
 ## Comments
 
 Implementat. `audio.pause()` / `audio.resume()` (`Pcm.player` îngheață contextul; verificat și în Chromium real, `tools/test_audio.py`). `Call.pause({ keep: true })` păstrează coada și primește în continuare audio; `resume({ fresh })` o aruncă după ~10 minute sau după o pierdere. O pauză luată în fereastră revine cu fereastră nouă (sub 10 minute) sau trece la bucata următoare (peste 10 minute), fiindcă bucata se auzise deja.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

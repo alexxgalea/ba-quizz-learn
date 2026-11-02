@@ -6,7 +6,7 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Butonul „Ascultă” apare pe fiecare fișă din Studiu în PWA și nu apare în artifact.
 - [x] Apăsarea pornește lecția pe modulul fișei curente, cu poziția lui salvată (dacă există).
@@ -16,3 +16,5 @@
 ## Comments
 
 Implementat. Butonul `data-a="listen"` din `vSheets`, doar când `!IN_ARTIFACT`; fără cheie, trimite la tab-ul Jarvis cu mesajul „adaugă mai întâi cheia Gemini”.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.

@@ -6,7 +6,7 @@
 
 **Blocked by:** 02, 03, 04, 05, 06, 07, 08, 09, 10, 11.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [x] `CLAUDE.md` și `README.md` descriu modul Lecție, în română, în stilul existent.
 - [x] Testele de ecran din `tools/` (inclusiv cele pentru Jarvis, cu `window.__jarvisFakes`) acoperă lecția, butonul „Ascultă” din Studiu și butonul recomandat.
@@ -18,3 +18,5 @@
 ## Comments
 
 Documentația (`CLAUDE.md`, `README.md`, `research/interview-facts.md` §8), `tools/test_lesson.py` (în `npm run test:ui`) și verificarea vizuală la 360 px, light și dark, sunt făcute. `/code-review` (high) a găsit 10 probleme, toate reparate cu teste. Au rămas pentru Alex: proba din metrou (tichetul 01, apoi 10 și 11) și ascultarea unei lecții complete pe telefon, cu notarea rezultatului aici. Artifactul nu s-a republicat: lecția nu apare în el.
+
+**2 nov. 2026 — status actualizat.** Partea de cod, documentație și teste e făcută; rămâne doar ultima bifă (Alex ascultă o lecție completă pe telefon și notează aici rezultatul), deci tichetul e `ready-for-human`.

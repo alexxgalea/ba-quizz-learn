@@ -6,7 +6,7 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Testele cu ceas fals arată: fereastra se deschide doar după redarea completă a bucății, are ~3 secunde, iar la tăcere se cere bucata următoare.
 - [x] Sunetul scurt se redă la deschiderea ferestrei (adaptorul audio fals îl înregistrează).
@@ -17,3 +17,5 @@
 ## Comments
 
 Implementat. `Call` emite `spoken` (redarea s-a golit și tura s-a încheiat, fără tăieri) și `voice`; Jarvis deschide fereastra cu `audio.beep("window")` și `clock.after(3000)`. Poarta microfonului: `Call.mic(open)`. Ceasul fals din `tools/unit/fakes.mjs` primește `after`.
+
+**2 nov. 2026 — status actualizat.** Implementat în commit-urile `ba6d7af`, `daf52fb` și `96bd2ee` (toate criteriile bifate); statusul din fișier rămăsese `ready-for-agent`.
