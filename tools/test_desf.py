@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md și src/desf/asyncio.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md și src/desf/asgi.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend.
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -167,6 +167,23 @@ async def main():
             check(tag + "asyncio: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{A}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{A}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_asyncio_{scheme}.png"), full_page=True)
             check(tag + "asyncio: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
+            # ---- asgi (tichetul 06): harta și 10 desfășurări; C++ doar la 3 și 6 (fork / thread pool); la 5 și 7 exemple ```text ----
+            await pg.evaluate(f"document.querySelector('{A}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa asyncio, ca să se deschidă asgi
+            dsg = await pg.evaluate("window.PREP.desf.asgi")
+            n_asgi = await pg.evaluate("window.PREP.sheets.asgi.points.length")
+            await open_sheet(pg, "asgi")
+            S_ = "#sheet-asgi "
+            check(tag + "asgi: the map and one explanation per point, numbered like the points", dsg and len(dsg["items"]) == n_asgi == 10 and await pg.locator(S_ + "ul.pts > li .pn").count() == n_asgi and await pg.locator(S_ + '[data-a="dz-map"]').count() == 1)
+            await pg.click(S_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "asgi: 'Deschide tot' opens the map and every explanation", await pg.locator(S_ + "[data-dz]").count() == n_asgi and await pg.locator(S_ + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{S_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "asgi: the C++ block shows only at 3 and 6, and always with 'Unde nu ține'", cpp == [False, False, True, False, False, True, False, False, False, False] and cpp == [bool(x.get("cpp")) for x in dsg["items"]] and await pg.locator(S_ + ".dz-cpp").count() == await pg.locator(S_ + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "asgi: Python examples are colored, ```text examples are not", await pg.evaluate(f"document.querySelectorAll('{S_}pre.code .tk-k').length") > 0 and await pg.evaluate(f"[...document.querySelectorAll('{S_}[data-dz=\"4\"] pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            check(tag + "asgi: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "asgi: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{S_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{S_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_asgi_{scheme}.png"), full_page=True)
+            check(tag + "asgi: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
