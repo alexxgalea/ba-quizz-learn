@@ -1,7 +1,7 @@
 // Inlines CSS, data, explanations, glossary, tested kata solutions and app code into one self-contained page.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { DATA_FILES, LIB_FILES, loadData, loadCode, buildExplanations } from "./lib.mjs";
+import { DATA_FILES, LIB_FILES, loadData, loadCode, buildExplanations, buildDesf, readDesfFiles } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const read = p => fs.readFileSync(new URL(p, root), "utf8");
@@ -11,6 +11,8 @@ const { kataCode, skelCode } = loadCode(root);
 const P = loadData(root);
 const { expl, gloss, errors } = buildExplanations(root, P);
 if (errors.length) throw new Error("explanations:\n" + errors.join("\n"));
+const dz = buildDesf(P, readDesfFiles(root));
+if (dz.errors.length) throw new Error("desfășurări:\n" + dz.errors.join("\n"));
 const cap = s => s.replace(/^\p{Ll}/u, c => c.toUpperCase());
 for (const x of Object.values(expl)) for (const k of Object.keys(x.gr)) x.gr[k] = cap(x.gr[k]);
 
@@ -18,7 +20,8 @@ const data = DATA_FILES.map(f => read("./src/" + f)).join("\n") +
   "\nwindow.PREP.kataCode = " + JSON.stringify(kataCode) + ";\n" +
   "window.PREP.skelCode = " + JSON.stringify(skelCode) + ";\n" +
   "window.PREP.expl = " + JSON.stringify(expl) + ";\n" +
-  "window.PREP.gloss = " + JSON.stringify(gloss) + ";\n";
+  "window.PREP.gloss = " + JSON.stringify(gloss) + ";\n" +
+  "window.PREP.desf = " + JSON.stringify(dz.desf) + ";\n";
 // „Versiunea” afișată în ecranul Jarvis: un hash scurt al codului, ca să se vadă pe telefon dacă rulează varianta nouă (service worker-ul poate ține una veche în cache).
 const appSrc = LIB_FILES.map(f => read("./src/" + f)).join("\n") + "\n" + read("./src/app.js");
 const app = appSrc.replace("__BUILD__", crypto.createHash("sha1").update(appSrc + data + read("./src/app.css")).digest("hex").slice(0, 7));
@@ -47,5 +50,5 @@ for (const n of [192, 512]) fs.copyFileSync(new URL("./src/pwa/icon-" + n + ".pn
 fs.mkdirSync(new URL("./dist/", root), { recursive: true });
 fs.writeFileSync(new URL("./dist/pregatire-onapsis.html", root), html);
 fs.writeFileSync(new URL("./dist/bundle-check.js", root), data + "\n" + app);
-console.log("katas:", Object.keys(kataCode).join(","), "| schelete:", Object.keys(skelCode).length, "| explanations:", Object.keys(expl).length + "/" + P.mcq.length, "| terms:", gloss.length,
+console.log("katas:", Object.keys(kataCode).join(","), "| schelete:", Object.keys(skelCode).length, "| explanations:", Object.keys(expl).length + "/" + P.mcq.length, "| terms:", gloss.length, "| desfășurări:", Object.keys(dz.desf).join(",") || "-",
   "| bytes:", Buffer.byteLength(html), "| title in first 8KB:", html.slice(0, 8192).includes("<title>"));

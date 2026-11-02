@@ -555,7 +555,8 @@
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
-    ask: {}
+    ask: {},
+    dz: {}                                           // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
   };
 
   function snapshotUi() { try { return JSON.parse(JSON.stringify(ui)); } catch (e) { return null; } }
@@ -1667,6 +1668,40 @@
     }
     return h;
   }
+  // ---------- desfășurări (Studiu › Fișe) ----------
+  // Harta modulului și explicația pe larg a fiecărui punct (src/desf/<modul>.md, injectate la build în P.desf). Un modul are toate desfășurările sau niciuna;
+  // indexul unei desfășurări e indexul punctului. Starea deschis / închis stă în ui.dz.
+  const desfOf = id => (P.desf || {})[id] || null;
+  const dzSt = id => ui.dz[id] || (ui.dz[id] = { map: false, p: {} });
+  const dzRange = g => g.a === g.b ? String(g.a) : g.a + "–" + g.b;
+  const dzAllOpen = (d, st) => st.map && d.items.every((_, i) => st.p[i]);
+  function vDzMap(m, d, tc) {
+    return '<div class="dz dz-map" data-dz-map="' + m + '"><div class="dz-f"><span class="dz-l">Problema modulului</span>' + rich(d.map.p, tc) + '</div>' +
+      '<div class="dz-f"><span class="dz-l">Cum se grupează punctele</span><ul class="dz-groups">' + d.map.g.map(g => '<li><b class="mono">' + dzRange(g) + "</b> " + inlineRich(g.t, tc) + "</li>").join("") + "</ul></div></div>";
+  }
+  function vDz(m, i, tc) {
+    const x = desfOf(m).items[i];
+    const f = (cls, label, text) => '<div class="dz-f ' + cls + '"><span class="dz-l">' + label + "</span>" + rich(text, tc) + "</div>";
+    return '<div class="dz" data-dz="' + i + '">' + f("dz-p", "Problema", x.p) + f("dz-i", "Ideea", x.i) + (x.ex ? f("dz-ex", "Exemplu", x.ex) : "") + (x.an ? f("dz-an", "Analogie", x.an) : "") +
+      (x.cpp ? '<div class="dz-f dz-cpp"><span class="dz-l">În C++</span>' + rich(x.cpp, tc) + '<div class="dz-nu"><span class="dz-l">Unde nu ține</span>' + rich(x.nu, tc) + "</div></div>" : "") + (x.leg ? f("dz-leg", "Legătură", x.leg) : "") + "</div>";
+  }
+  function dzAct(a, b) {
+    const m = b.dataset.m, d = desfOf(m); if (!d) return;
+    const st = dzSt(m);
+    if (a === "dz") { const i = +b.dataset.i; if (st.p[i]) delete st.p[i]; else st.p[i] = true; }
+    else if (a === "dz-map") st.map = !st.map;
+    else { const close = dzAllOpen(d, st); st.map = !close; st.p = {}; if (!close) d.items.forEach((_, i) => { st.p[i] = true; }); }
+    render();
+  }
+  // Lista punctelor unei fișe; cu desfășurări, punctele sunt numerotate și au „Pe larg ›” (aceleași reguli de termeni din glosar ca în restul fișei).
+  function vPoints(m, s, tc) {
+    const d = desfOf(m.id);
+    if (!d) return '<ul class="pts">' + s.points.map(x => "<li>" + inlineRich(x, tc) + "</li>").join("") + "</ul>";
+    const st = dzSt(m.id);
+    return '<ul class="pts num">' + s.points.map((x, i) => '<li data-i="' + i + '"><span class="pn">' + (i + 1) + '</span><div class="pb"><span>' + inlineRich(x, tc) + "</span>" +
+      '<button class="more" data-a="dz" data-m="' + m.id + '" data-i="' + i + '" aria-expanded="' + !!st.p[i] + '">Pe larg <span class="chev" aria-hidden="true">›</span></button>' +
+      (st.p[i] ? vDz(m.id, i, tc) : "") + "</div></li>").join("") + "</ul>";
+  }
   function vSheets() {
     let h = '<p class="muted small">Ce trebuie să poți spune, pe module. Deschizi fișa, o citești, apoi faci grilele și cardurile orale ale modulului.</p>';
     [1, 2, 3, 4].forEach(p => {
@@ -1677,8 +1712,11 @@
         h += '<details class="sheet" id="sheet-' + m.id + '" data-m="' + m.id + '"' + (open ? " open" : "") + '><summary><span class="chip">' + m.code + '</span><span class="nm">' + esc(m.name) + '</span><span class="xs muted mono">' + pc(st.mastery) + "%</span></summary>";
         if (open) {
           const tc = { seen: new Set(), skip: new Set(TERM_SKIP[m.id] || []) };
-          h += '<div class="sheet-b"><p class="lead">' + inlineRich(s.lead, tc) + "</p>" + (s.diagram ? figure(s.diagram) : "") +
-            '<ul class="pts">' + s.points.map(x => "<li>" + inlineRich(x, tc) + "</li>").join("") + "</ul>" +
+          const d = desfOf(m.id), dst = d && dzSt(m.id);
+          h += '<div class="sheet-b">' + (d ? '<div class="dz-top"><button class="btn sm" data-a="dz-all" data-m="' + m.id + '">' + (dzAllOpen(d, dst) ? "Închide tot" : "Deschide tot") + "</button></div>" : "") +
+            '<p class="lead">' + inlineRich(s.lead, tc) + "</p>" +
+            (d ? '<button class="more" data-a="dz-map" data-m="' + m.id + '" aria-expanded="' + dst.map + '">Harta modulului <span class="chev" aria-hidden="true">›</span></button>' + (dst.map ? vDzMap(m.id, d, tc) : "") : "") +
+            (s.diagram ? figure(s.diagram) : "") + vPoints(m, s, tc) +
             (s.avoid ? '<div class="avoid"><b>De evitat la interviu</b>' + s.avoid.map(x => "<span>" + fmt(x) + "</span>").join("") + "</div>" : "") +
             '<div class="row">' + (nq ? '<button class="btn primary sm" data-a="mcq-mod" data-m="' + m.id + '">Grile (' + nq + ")</button>" : "") +
             (no ? '<button class="btn sm" data-a="oral-mod" data-m="' + m.id + '">Oral (' + no + ")</button>" : "") +
@@ -1967,6 +2005,7 @@
       case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
+      case "dz": case "dz-map": case "dz-all": dzAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
       case "go": goTask(b.dataset.id); break;
       case "plan-toggle": { const id = b.dataset.id; S.p[id] = { d: isDone(id) ? 0 : 1, t: now() }; commit(); render(); break; }
@@ -2258,11 +2297,13 @@
     gap: ["Explică mai simplu", "Dă-mi un exemplu", "Cum o spun la interviu?"]
   };
   const XFIELDS = [["scurt", "Pe scurt"], ["scop", "Scop"], ["mec", "Mecanism"], ["pas", "Pas cu pas"], ["apl", "Aplicare"], ["leg", "Legătură"], ["lim", "Limită"], ["intv", "La interviu"]];
+  const DZ_ASK = [["p", "Problema"], ["i", "Ideea"], ["ex", "Exemplu"], ["an", "Analogie"], ["cpp", "În C++"], ["nu", "Unde nu ține"], ["leg", "Legătură"]];
+  const ASK_DZ_MAX = 16000;                          // o fișă cu desfășurări are ~4× mai mult material decât una fără
   const askClip = (t, n) => { t = String(t == null ? "" : t); return t.length > n ? t.slice(0, n) + "…" : t; };
   // Contextul unui loc: { topic, material }. Cheia: mcq:<id>, sheet:<modul> sau gap:<card>:<punct>.
   function askCtx(key) {
     const [kind, a, b] = key.split(":");
-    let topic, lines;
+    let topic, lines, limit = 3500;
     if (kind === "mcq") {
       const q = QBY[a]; if (!q) return null;
       const x = EXPL[q.id] || {}, st = ui.ask[key] || {}, sh = P.sheets[q.m];
@@ -2280,6 +2321,12 @@
       topic = m.short;
       lines = ["Fișa „" + m.name + "”: " + sh.lead, "Puncte: " + sh.points.join(" ")];
       if (sh.avoid) lines.push("De evitat la interviu: " + sh.avoid.join(" "));
+      const d = desfOf(a);                           // harta și desfășurările, după punctele de azi; fără ele, contextul e cel de dinainte
+      if (d) {
+        lines.push("Harta modulului: " + d.map.p + " Grupuri: " + d.map.g.map(g => dzRange(g) + " " + g.t).join("; "));
+        d.items.forEach((x, i) => lines.push("Punctul " + (i + 1) + ": " + DZ_ASK.filter(([k]) => x[k]).map(([k, l]) => l + ": " + x[k]).join(" ")));
+        limit = ASK_DZ_MAX;
+      }
     } else if (kind === "gap") {
       const c = OBY[a], i = +b; if (!c || c.k[i] == null) return null;
       const e = S.o[c.id] || {}, src = gapSources(c, i);
@@ -2290,7 +2337,7 @@
       if (src.sp.length) lines.push("Din fișa modulului: " + src.sp.map(o => src.pts[o.i]).join(" "));
       if (e.w && e.w.length) lines.push("Afirmații marcate greșite în răspunsurile lui: " + e.w.join("; "));
     } else return null;
-    return { topic, material: askClip(lines.join("\n"), 3500) };
+    return { topic, material: askClip(lines.join("\n"), limit) };
   }
   function vAsk(key, extra) {
     const st = ui.ask[key] || (ui.ask[key] = { open: false, draft: "", hist: [], busy: false, err: null });

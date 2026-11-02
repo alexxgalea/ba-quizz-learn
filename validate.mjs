@@ -1,5 +1,5 @@
 // Loads the data files the way the page does and checks the schema.
-import { loadData, loadCode, buildExplanations } from "./lib.mjs";
+import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);
@@ -96,6 +96,11 @@ ex.errors.forEach(e => errors.push(e));
 const covered = {};
 for (const q of P.mcq) { covered[q.m] = covered[q.m] || [0, 0]; covered[q.m][1]++; if (ex.expl[q.id]) covered[q.m][0]++; }
 console.log("explanations:", Object.keys(ex.expl).length + "/" + P.mcq.length, "| terms:", ex.gloss.length, "|", Object.entries(covered).map(([m, [a, b]]) => m + " " + a + "/" + b).join(", "));
+// Desfășurările punctelor (src/desf/<modul>.md): modul complet sau absent; regulile sunt în lib.mjs (checkDesf).
+const dz = buildDesf(P, readDesfFiles(root));
+dz.errors.forEach(e => errors.push(e));
+console.log("desfășurări:", Object.entries(dz.desf).map(([m, d]) => m + " " + d.items.length).join(", ") || "niciuna");
+if (dz.warnings.length) console.log("desfășurări, în afara benzii (warning):\n  " + dz.warnings.join("\n  "));
 const long = [];
 const LIM = { scurt: 220, scop: 360, mec: 420, pas: 520, apl: 560, leg: 320, lim: 380, intv: 420, ver: 280, verR: 360 };
 for (const [id, x] of Object.entries(ex.expl)) for (const [k, n] of Object.entries(LIM)) if (x[k] && x[k].replace(/```[\s\S]*?```/g, "").length > n) long.push(id + "." + k + " (" + x[k].length + ")");

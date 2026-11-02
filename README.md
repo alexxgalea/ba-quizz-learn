@@ -36,6 +36,7 @@ src/
   data_*.js        module, grile, context, carduri orale, fișe, exerciții, schelete (data_skel.js), setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
   expl/glosar.md   glosarul
+  desf/<modul>.md  harta modulului și desfășurarea fiecărui punct al fișei (un fișier pe modul; vezi „Desfășurări”)
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
                    katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, vitest);
                    skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest);
@@ -44,7 +45,7 @@ katas/             exercițiile de live coding și testele lor: katas.py + k13_a
                    requirements-skel-ops.txt: pachetele de dev (PyYAML, Django, SQLAlchemy, strawberry-graphql); testele se sar fără ele
 katas/package.json dependențele de dev pentru TypeScript / TSX (tsc, vitest, jsdom, Testing Library, React);
                    doar aici: aplicația și rădăcina rămân fără dependențe, iar katas/node_modules nu se publică
-tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare
+tools/             teste de interfață (Playwright), teste de unitate în tools/unit (Node) și utilitare (desf_examples.mjs + desf_run.py: check-ul exemplelor din desfășurări)
 docs/              spec-ul Jarvis (docs/superpowers/specs), probele de aruncat (prototype-jarvis-probe.html, probe-lectie-metrou.html) și PWA-ul publicat pe Pages (docs/app)
 .scratch/          spec-urile și tichetele locale (de exemplu .scratch/lectie-live)
 export/            generatorul brief-ului trimis la Perplexity
@@ -76,6 +77,8 @@ python3 tools/test_jarvis.py     # ecranul Jarvis la 360 px, light și dark, cu 
 python3 tools/test_lesson.py     # Lecție: poziția și recomandarea în aplicație, butoanele, vederea lecției (360 px, light și dark)
 python3 tools/test_pwa.py        # manifest, iconițe, service worker, offline
 python3 tools/test_ask.py        # „Întreabă despre asta”: grilă, fișă, gol; sample, Gemini, DeepSeek
+python3 tools/test_desf.py       # Fișe: harta, „Pe larg ›”, „Deschide tot”, numerele, „Întreabă” cu desfășurări (360 px, light și dark)
+node tools/desf_examples.mjs     # rulează blocurile Python din desfășurări și compară cu `# → …` (npm run test:desf)
 ```
 
 Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:unit`, `npm run test:ui`, iar `npm run pages` copiază PWA-ul în `docs/app`.
@@ -128,6 +131,19 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
 
 Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
+
+## Desfășurări
+
+Fiecare punct al unei fișe are o **desfășurare**: explicația pe larg, în stilul refactoring.guru, deschisă din Studiu › Fișe cu „Pe larg ›” sub punct. Fișa primește și **harta modulului**, sub ideea principală. Punctele rămân recapitularea, neschimbate (în afară de erorile de fapt). Vocabularul e în `CONTEXT.md`; spec-ul și tichetele, în `.scratch/desfasurari/`.
+
+- **Sursa**: `src/desf/<modul>.md`, un fișier pe modul, separat de `src/expl/` (acolo id-urile sunt ale grilelor). `### harta` are `Problema:` și `Grupuri:` (rânduri `- 1–2: ce au în comun`); `### 1`, `### 2`… au câmpurile `Problema`, `Ideea`, `Exemplu`, `Analogie`, `În C++`, `Unde nu ține`, `Legătură` și, la punctele cu adevărat grele, `Greu: da`. Un modul are toate desfășurările plus harta sau nimic.
+- **Parsarea** (`lib.mjs`): `parseFields` e parserul generic de câmpuri (titlul și câmpurile se dau ca parametri); `parseExpl` îl folosește pentru grile, neschimbat, iar `parseDesf` pentru desfășurări. `buildDesf` le verifică și le pune la build în `window.PREP.desf[modul] = { map: { p, g: [{ a, b, t }] }, items: [{ p, i, ex, an, cpp, nu, leg, hard }] }`, indexat ca punctele.
+- **Regulile** (`checkDesf`, rulate de `validate.mjs` și `build.mjs`, limitele în `DESF_LIMITS`): câte o desfășurare pentru fiecare punct, în ordine; Problema și Ideea obligatorii; cel puțin unul dintre Exemplu și Analogie; `În C++` și `Unde nu ține` doar împreună; 50–100 de cuvinte fără cod (avertisment în afara benzii 60–90; până la 190 la punctele grele); Exemplu de cel mult 8 rânduri de cod; rânduri de cod de cel mult 36 de caractere; limbaje `python`, `cpp`, `ts`, `tsx`, `text`; harta cu Problema și grupuri care acoperă fiecare punct o singură dată.
+- **Exemplele Python** rulează înainte de publicare (`node tools/desf_examples.mjs`): fiecare bloc într-un proces `python3 -I`, într-un director gol, cu timeout. Ce afișează se compară în ordine cu comentariile `# → …` (o expresie simplă se verifică prin `repr`, ca în REPL). O excepție așteptată se marchează `# ! Tip`: blocul trebuie să se oprească exact cu acel tip, pe acea instrucțiune. Un bloc Python care nu rulează nu e permis; pseudo-codul se scrie ` ```text `. Exemplele TS / TSX și C++ nu se rulează.
+- **Ecranul** (`vSheets`, `vPoints`, `vDz`, `vDzMap`, `dzAct`): „Deschide tot” / „Închide tot” sus, „Harta modulului ›” sub ideea principală, numere și „Pe larg ›” la puncte, doar la modulele cu desfășurări (celelalte arată ca înainte). Totul e închis implicit; starea stă în `ui.dz`, nu în `S` (nu se salvează, nu se sincronizează, nu intră în export sau în brief). Textul trece prin `rich`: cod colorat doar pentru Python, termeni din glosar legați după aceleași reguli ca în punct.
+- **„Întreabă despre asta”** pe o fișă cu desfășurări primește, după punctele de azi, harta și desfășurările (`askCtx`; plafonul materialului urcă de la 3500 la `ASK_DZ_MAX` caractere doar pentru aceste fișe). Contextul grilelor, al golurilor și al fișelor fără desfășurări e neschimbat. Teoria de la goluri și brief-ul rămân pe puncte.
+- **Fapte**: cele C++ (C++11/17) sunt în `research/interview-facts.md`, secțiunea 19, verificate în draftul standardului și prin compilare cu `g++` și `clang++` (cppreference răspunde 403 din mediul de lucru).
+- Teste: `tools/unit/desf.test.mjs` (parsare și reguli, câte un caz care pică pe regulă), `tools/unit/desf_examples.test.mjs` (verificatorul, dovedit pe rezultat greșit și pe excepție greșită), `tools/test_desf.py` (ecranul).
 
 ## Schelete
 
