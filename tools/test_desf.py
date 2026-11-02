@@ -226,10 +226,11 @@ async def main():
             await open_sheet(pg, "design")
             D_ = "#sheet-design "
             check(tag + "design: the map and one explanation per point, numbered like the points", dfd and len(dfd["items"]) == n_ds == 9 and await pg.locator(D_ + "ul.pts > li .pn").count() == n_ds and await pg.locator(D_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "design: the map and the explanations start closed", await pg.locator(D_ + "[data-dz-map]").count() == 0 and await pg.locator(D_ + "[data-dz]").count() == 0)
             await pg.click(D_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
             check(tag + "design: 'Deschide tot' opens the map and every explanation", await pg.locator(D_ + "[data-dz]").count() == n_ds and await pg.locator(D_ + "[data-dz-map]").count() == 1)
             check(tag + "design: no C++ comparison anywhere (the module has no real C++ equivalent)", await pg.locator(D_ + ".dz-cpp").count() == 0 and not any(x.get("cpp") or x.get("nu") for x in dfd["items"]))
-            check(tag + "design: the Python examples are colored, the SQL blocks are not", await pg.locator(D_ + "pre.code .tk-k").count() > 0 and await pg.evaluate(f"[...document.querySelectorAll('{D_}pre.code')].filter(e => /ROW LEVEL SECURITY|OUTBOX|outbox/.test(e.textContent)).every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            check(tag + "design: the Python examples are colored, the SQL blocks are not", await pg.locator(D_ + "pre.code .tk-k").count() > 0 and await pg.evaluate(f"(() => {{ const sql = [...document.querySelectorAll('{D_}pre.code')].filter(e => /ROW LEVEL SECURITY|outbox/.test(e.textContent)); return sql.length === 2 && sql.every(e => e.querySelectorAll('[class^=tk-]').length === 0); }})()"))
             check(tag + "design: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
             check(tag + "design: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{D_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{D_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_design_{scheme}.png"), full_page=True)

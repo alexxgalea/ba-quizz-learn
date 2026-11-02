@@ -1,7 +1,7 @@
-<!-- Desfășurările fișei `design` (9 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 12, 13, 23 și 26. Fără C++: modulul nu are echivalent real. -->
+<!-- Desfășurările fișei `design` (9 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 12, 13, 15, 23 și 26. Fără C++: modulul nu are echivalent real. -->
 
 ### harta
-Problema: Într-un sistem distribuit nu există o tranzacție comună. Rețeaua pierde mesaje și le dublează, serviciile cad, iar clienții se înmulțesc. Dacă nu te gândești la asta de la început, pierzi evenimente, creezi duplicate sau lași un client să-l încurce pe altul. Modulul răspunde la șase întrebări: cum comunică serviciile, ce garanții de livrare ai, cum supraviețuiești eșecurilor, cum crești, cum izolezi clienții și cum vezi ce se întâmplă.
+Problema: Între serviciile unui sistem distribuit nu ai, de obicei, o tranzacție comună. Rețeaua pierde mesaje și le dublează, serviciile cad, iar clienții se înmulțesc. Dacă nu te gândești la asta de la început, pierzi evenimente, creezi duplicate sau lași un client să-l încurce pe altul. Modulul răspunde la șase întrebări: cum comunică serviciile, ce garanții de livrare ai, cum supraviețuiești eșecurilor, cum crești, cum izolezi clienții și cum vezi ce se întâmplă.
 Grupuri:
 - 1: cum comunică serviciile (sincron sau prin cozi)
 - 2–3: ce garanții de livrare ai și cum nu pierzi un eveniment (outbox)
@@ -66,6 +66,7 @@ print(len(a), len(b))  # → 1 5
 Legătură: DES-03, DES-07, RMQ-05 și CEL-04. Celery are `autoretry_for`, `retry_backoff` și `retry_jitter`; jitter-ul e activ implicit, backoff-ul nu. RabbitMQ trimite mesajul respins fără requeue într-un dead letter exchange.
 
 ### 5
+Greu: da
 Problema: Clientul trimite `POST /alerts`, iar răspunsul se pierde. Nu știe dacă alerta s-a creat, deci retrimite. Serverul creează o a doua alertă.
 Ideea: Clientul generează o cheie unică per operație (UUID) și o trimite în header-ul `Idempotency-Key`. Serverul o salvează cu rezultatul, sub o constrângere unică, în aceeași tranzacție cu efectul. La retry cu aceeași cheie întoarce rezultatul salvat. Cheia ține de operație, nu de încercare, și expiră după un TTL.
 Exemplu:
@@ -93,9 +94,10 @@ def p(k):
     return crc32(k.encode()) % 4
 print(p("s7"), p("s8"))  # → 1 0
 ```
-Legătură: DES-04, PG-06 și RMQ-06. Ai făcut-o în Docker Swarm cu `docker service scale`. Cu 100 de workeri ai peste 100 de conexiuni DB, de aceea PgBouncer. Ordinea mesajelor se strică cu mai mulți consumatori pe aceeași coadă.
+Legătură: DES-04, PG-06 și RMQ-06. Ai făcut-o în Docker Swarm cu `docker service scale`. Cu 100 de workeri ai cel puțin 100 de conexiuni DB, de aceea PgBouncer. Ordinea mesajelor se strică cu mai mulți consumatori pe aceeași coadă.
 
 ### 7
+Greu: da
 Problema: Producătorul trimite 10.000 de mesaje pe secundă, iar consumatorul procesează 1.000. Coada crește până se umple memoria brokerului, iar totul cade.
 Ideea: Backpressure înseamnă că partea lentă îi spune celei rapide să încetinească. O coadă limitată blochează producătorul sau îi respinge mesajul când e plină. Prefetch-ul limitează câte mesaje neconfirmate primește un consumator. Rate limit-ul per tenant respinge excesul cu `429`, ca un client zgomotos să nu-i încurce pe ceilalți.
 Exemplu:
@@ -123,11 +125,11 @@ CREATE POLICY t ON alerts USING (
 -- în tranzacția request-ului:
 SET LOCAL app.tenant_id = '2';
 ```
-Legătură: DES-06 și SEC-09. Rolul aplicației are doar drepturile de care are nevoie (least privilege). Aceeași alegere o ai la Elasticsearch: un index comun cu câmp `tenant`, un index per tenant sau clustere separate.
+Legătură: DES-06 și SEC-09. Rolul aplicației are doar drepturile de care are nevoie (least privilege). Aceeași alegere o ai la Elasticsearch: indexuri partajate, cu un câmp `tenant`, sau un index per tenant.
 
 ### 9
-Problema: Clienții se plâng că alertele vin cu 20 de minute întârziere. Dashboard-ul arată totul verde. Coada era plină de mult, dar nu se uita nimeni la ea.
-Ideea: Măsori de la început ce simte utilizatorul și cum stau cozile. Lag-ul e câte mesaje așteaptă; vârsta celui mai vechi mesaj spune cât așteaptă un job. Latența end-to-end e timpul de la eveniment la alertă. Alertezi pe vârstă, latență și rata de erori, nu pe CPU.
+Problema: Clienții se plâng că alertele vin cu 20 de minute întârziere. Dashboard-ul e verde. Coada era plină de mult, dar nu se uita nimeni la ea.
+Ideea: Măsori de la început ce simte utilizatorul și cum stau cozile. Lag-ul e câte mesaje așteaptă; vârsta celui mai vechi mesaj spune cât așteaptă un job. Latența end-to-end e timpul de la eveniment la alertă. Alertezi pe vârstă, latență și erori; CPU-ul singur nu arată cât așteaptă clientul.
 Exemplu:
 ```python
 n = 100  # acum, în secunde
@@ -136,4 +138,4 @@ b = [10, 50, 97]
 print(len(a), len(b))  # → 3 3
 print(n - a[0], n - b[0])  # → 5 90
 ```
-Legătură: DES-04. Scenariul SAP din Design are metrici asemănătoare la pasul 5. Google SRE: latency, traffic, errors, saturation.
+Legătură: DES-04. Scenariul SAP din Design are metrici la pasul 5. Google SRE: latency, traffic, errors, saturation.
