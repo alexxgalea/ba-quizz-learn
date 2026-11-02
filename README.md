@@ -39,7 +39,7 @@ src/
 katas/             exercițiile de live coding și testele lor: katas.py + k13_api.py (pytest; k13 cere fastapi și httpx),
                    katas_js.mjs (node:test), k15_alerts.tsx + test (React 19, vitest);
                    skel_<modul>.py + test_skel_<modul>.py: referințele scheletelor și testele lor (pytest);
-                   skel_js.mjs + skel_js.test.mjs (node:test), skel_ts.ts / .tsx + .test.ts / .tsx (tsc + vitest);
+                   skel_js.mjs + skel_js.test.mjs (node:test), skel_ts.ts + skel_react_*.tsx (React) + skel_tsx_*.tsx (TypeScript în React), fiecare cu .test.ts / .test.tsx (tsc + vitest); referința ESM e într-un comentariu bloc din skel_js.mjs, iar cea a testului RTL stă în skel_react_rtl.test.tsx;
                    fișierele de config (skel_docker.Dockerfile, skel_docker_compose.yml, skel_ops_gitlab_ci.yml) sunt verificate structural, nu rulate;
                    requirements-skel-ops.txt: pachetele de dev (PyYAML, Django, SQLAlchemy, strawberry-graphql); testele se sar fără ele
 katas/package.json dependențele de dev pentru TypeScript / TSX (tsc, vitest, jsdom, Testing Library, React);

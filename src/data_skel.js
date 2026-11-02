@@ -25,7 +25,7 @@ window.PREP.skel = [
       "Metodele nu folosesc `this`, deci merg și extrase (`const { inc } = c; inc()`), unde o metodă de clasă și-ar pierde contextul."
     ]
   },
-  // ---- frontend / JavaScript (tichetul 09) ----
+  // ---- frontend / JavaScript (tichetul 09; closure vine din 07) ----
   {
     id: "s-frontend-this", m: "frontend", g: "js", lang: "js",
     t: "this: metodă extrasă, bind și arrow",
@@ -45,7 +45,8 @@ window.PREP.skel = [
       "Mai întâi tot codul sincron (inclusiv corpul unei funcții `async` până la primul `await`), apoi microtask-urile, apoi următorul task (`setTimeout`).",
       "Microtask-urile sunt `.then`, `queueMicrotask` și continuarea de după `await`; rulează în ordinea în care au fost puse în coadă.",
       "Coada de microtask-uri se golește complet înainte să ruleze orice timer: și un microtask pus de alt microtask (`nested`) iese înaintea lui `setTimeout(…, 0)`.",
-      "`setTimeout(fn, 0)` nu rulează „imediat”: e un task nou, care așteaptă golirea stack-ului și a microtask-urilor."
+      "`setTimeout(fn, 0)` nu rulează „imediat”: e un task nou, care așteaptă golirea stack-ului și a microtask-urilor.",
+      "Ordinea corectă în `order()`: `async sync`, `sync`, `then`, `micro`, `await`, `nested`, `timeout`."
     ]
   },
   {
@@ -62,7 +63,7 @@ window.PREP.skel = [
   {
     id: "s-frontend-retry", m: "frontend", g: "js", lang: "js",
     t: "Retry cu backoff exponențial și timeout",
-    p: "Scrie `retry(fn, { tries = 3, base = 100, timeout = 1000 })`. Fiecare încercare apelează `fn(signal)` cu un `AbortSignal.timeout(timeout)` nou. Dacă eșuează, așteaptă `base * 2 ** i` ms și reîncearcă; după ultima încercare aruncă ultima eroare.",
+    p: "Scrie `retry(fn, opts)`; `opts` are `tries` (3), `base` (100 ms) și `timeout` (1000 ms). Fiecare încercare apelează `fn(signal)` cu un `AbortSignal.timeout(timeout)` nou. Dacă eșuează, așteaptă `base * 2 ** i` ms și reîncearcă; după ultima încercare aruncă ultima eroare.",
     k: [
       "Fiecare încercare primește propriul `AbortSignal.timeout(ms)` (la expirare semnalul se anulează cu `TimeoutError`); `fn` trebuie să-l dea mai departe (de pildă `fetch(url, { signal })`), altfel nu se oprește nimic. `Promise.race` cu un timer te eliberează din așteptare, dar lucrul continuă în fundal.",
       "Backoff exponențial: `base * 2 ** i` (100, 200, 400 ms). În producție adaugi și jitter, ca mai mulți clienți să nu reîncerce în același moment.",
@@ -147,6 +148,7 @@ window.PREP.skel = [
       "Modulul se execută o singură dată și e ținut în cache: importurile statice și dinamice ale aceluiași fișier văd aceeași stare. În Node, calea relativă are extensia (`./util.mjs`), iar fișierul e `.mjs` sau pachetul are `\"type\": \"module\"`."
     ]
   },
+  // ---- frontend / TypeScript (tichetele 07 și 10) ----
   {
     id: "s-frontend-union-never", m: "frontend", g: "ts", lang: "ts",
     t: "Union discriminat și switch exhaustiv cu never",
@@ -159,7 +161,6 @@ window.PREP.skel = [
       "Același tipar merge pe acțiuni: `Action` e un union discriminat de `type`, iar `reducer` cu `assertNever` în `default` e verificat de compilator; `useReducer(reducer, { status: \"loading\" })` deduce tipurile din el."
     ]
   },
-  // ---- frontend / TypeScript (tichetul 10) ----
   {
     id: "s-frontend-generics", m: "frontend", g: "ts", lang: "ts",
     t: "Generice cu constrângeri: pluck și byId",
@@ -199,7 +200,7 @@ window.PREP.skel = [
     p: "Declară `ROLES = [\"admin\", \"editor\", \"viewer\"]` și `Role` derivat din el, apoi `PERMS`, un obiect cu permisiunile fiecărui rol, verificat să aibă toate rolurile, dar cu literalii păstrați; `Perm` derivat din `PERMS`. Scrie `can(role, perm)` și `isRole(s: string): s is Role`.",
     k: [
       "`as const` face array-ul un tuple `readonly` de literali, iar `(typeof ROLES)[number]` scoate uniunea `\"admin\" | \"editor\" | \"viewer\"`: sursa de adevăr e o singură valoare, tipul se derivă.",
-      "`satisfies Record<Role, readonly string[]>` verifică forma (un rol lipsă sau o cheie în plus nu compilează), dar NU lărgește tipul: `PERMS.viewer[0]` rămâne `\"read\"`, nu `string`. O adnotare `: Record<…>` ar fi pierdut literalii.",
+      "`satisfies` (TypeScript 4.9+) cu `Record<Role, readonly string[]>` verifică forma (un rol lipsă sau o cheie în plus nu compilează), dar NU lărgește tipul: `PERMS.viewer[0]` rămâne `\"read\"`, nu `string`. O adnotare `: Record<…>` ar fi pierdut literalii.",
       "`Perm = (typeof PERMS)[Role][number]` derivă uniunea de permisiuni din date; `can(\"admin\", \"exec\")` nu compilează.",
       "`includes` pe un tuple de literali nu acceptă un `string` oarecare, de aceea îl privești ca `readonly string[]` în `isRole`; predicatul `s is Role` îngustează apoi `string`-ul."
     ]
@@ -233,7 +234,7 @@ window.PREP.skel = [
     k: [
       "Starea e un union discriminat (`status`), nu `{ data?: T; error?: string; loading: boolean }`: un `data` fără `ok` nu se poate citi, iar combinațiile imposibile (loading și error deodată) nu se pot reprezenta.",
       "`T` se deduce din `parse`, deci apelantul nu scrie `useFetch<User>(…)`. Răspunsul e tratat ca `unknown` și trece prin `parse`, nu printr-un cast `as T`, care ar minți compilatorul.",
-      "`useState<FetchState<T>>({ status: \"loading\" })` cu tipul explicit: altfel starea s-ar îngusta la tipul literalului inițial și `setState({ status: \"ok\", … })` n-ar compila.",
+      "`useState<FetchState<T>>({ status: \"loading\" })` cu tipul explicit: altfel tipul s-ar lărgi la `{ status: string }` și `setState({ status: \"ok\", data })` n-ar compila.",
       "Cleanup cu flag (`live = false`) ignoră răspunsul vechi. `parse` e în `deps`, deci trebuie să fie stabil (definit în afara componentei); o funcție nouă la fiecare randare ar reface cererea la nesfârșit."
     ]
   },
@@ -245,8 +246,7 @@ window.PREP.skel = [
     k: [
       "`setN((c) => c + 1)` primește starea în așteptare, deci două apeluri dau +2. `setN(n + 1)` de două ori dă +1, fiindcă `n` e un snapshot al acestei randări.",
       "Input controlat: `value={name}` și `onChange` care scrie `e.target.value` în stare. Starea e singura sursă de adevăr, de aceea `setName(\"\")` golește câmpul.",
-      "Handlerul de `onSubmit` începe cu `e.preventDefault()` (altfel formularul reîncarcă pagina), apoi validează (`trim()`, gol → return) și abia apoi apelează `onSave`.",
-      "Starea nu se modifică direct și nu se citește imediat după `set…`: până la următoarea randare variabila are tot valoarea veche."
+      "Handlerul de `onSubmit` începe cu `e.preventDefault()` (altfel formularul reîncarcă pagina), apoi validează (`trim()`, gol → return) și abia apoi apelează `onSave`."
     ]
   },
   {
@@ -255,7 +255,7 @@ window.PREP.skel = [
     p: "Scrie `useFetch<T>(url)`, care întoarce `{ data, error }` (ambele `null` la început). Efectul anulează cererea la demontare și la schimbarea lui `url`, trece un răspuns HTTP care nu e ok în `error` („HTTP 500”) și nu atinge starea după ce a fost anulat.",
     k: [
       "Efectul creează un `AbortController`, trimite `signal` la `fetch` și întoarce `() => ctrl.abort()` ca funcție de cleanup: se anulează la demontare și înainte de fiecare rulare nouă (schimbare de `url`).",
-      "După anulare nu atingi starea: `live = () => !ctrl.signal.aborted` verifică atât la `then`, cât și la `catch`. Abort-ul face `fetch` să respingă, dar fără verificare ai afișa eroarea unei cereri pe care ai anulat-o tu. Documentația React recomandă și un flag `ignore`, fiindcă abort singur nu acoperă toți pașii înlănțuiți.",
+      "După anulare nu atingi starea: `live = () => !ctrl.signal.aborted` verifică atât la `then`, cât și la `catch`. Abort-ul face `fetch` să respingă, dar fără verificare ai afișa eroarea unei cereri pe care ai anulat-o tu. Documentația React recomandă un flag `ignore` pe lângă abort; aici îl joacă `live()`.",
       "`fetch` nu respinge la HTTP 4xx / 5xx: verifici `r.ok` și arunci tu eroarea.",
       "`url` e singura dependență; la schimbare resetezi `data` și `error`, ca să nu vezi datele vechi sub url-ul nou. În dezvoltare, Strict Mode rulează efectul de două ori (setup, cleanup, setup): cu cleanup corect, a doua cerere o înlocuiește pe prima."
     ]
@@ -266,7 +266,6 @@ window.PREP.skel = [
     p: "Scrie `FilterList({ items })` pentru `items: { id: number; name: string }[]`: un câmp de căutare (fără diferență între majuscule) și o listă cu elementele care se potrivesc, plus un rând „2 din 5”. Starea ține doar textul căutat.",
     k: [
       "Lista filtrată se calculează în render (`items.filter(…)`), nu într-un `useEffect` care o pune în a doua stare: efectul ar da o randare în plus la fiecare tastă și două stări care se pot desincroniza. Dacă filtrul ar fi lent, `useMemo`, nu effect.",
-      "Starea minimă: doar `q`. Ce se poate deduce din props și din stare nu se pune în stare.",
       "`key={i.id}`: stabil și unic între frați. Indexul ca `key` strică starea și nodurile când lista se filtrează sau se reordonează; `Math.random()` le recreează la fiecare randare.",
       "`map` întoarce elementele de listă direct în JSX; un array gol nu randează nimic, deci „niciun rezultat” nu cere o ramură aparte."
     ]
@@ -300,7 +299,7 @@ window.PREP.skel = [
     k: [
       "`Promise.allSettled` nu respinge niciodată: fiecare rezultat e `{ status: \"fulfilled\", value }` sau `{ status: \"rejected\", reason }`. `Promise.all` ar respinge la prima eroare și ai pierde restul rezultatelor.",
       "Verifici `r.status === \"fulfilled\"`: așa TypeScript îngustează uniunea și `r.value` are tipul `T`, iar în ramura `else` există `r.reason`. Rezultatele vin în ordinea intrării, deci `ids[i]` corespunde lui `res[i]`.",
-      "`r.reason` și variabila din `catch` nu sunt tipate: sub `--strict`, `catch (e)` e `unknown`, deci verifici (`e instanceof Error ? e.message : String(e)`) înainte să citești `.message`. Se poate arunca orice, nu doar `Error`.",
+      "`r.reason` e `any`, iar `e` din `catch` e `unknown` sub `--strict`: în ambele cazuri verifici (`e instanceof Error ? e.message : String(e)`) înainte să citești `.message`. Se poate arunca orice, nu doar `Error`.",
       "`ids.map(async (id) => fetchOne(id))`: un `fetchOne` care aruncă sincron devine o rejecție, în loc să spargă `map` înainte de `allSettled`."
     ]
   },
