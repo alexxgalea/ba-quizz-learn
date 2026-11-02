@@ -1694,10 +1694,8 @@
     render();
   }
   // Lista punctelor unei fișe; cu desfășurări, punctele sunt numerotate și au „Pe larg ›” (aceleași reguli de termeni din glosar ca în restul fișei).
-  function vPoints(m, s, tc) {
-    const d = desfOf(m.id);
+  function vPoints(m, s, tc, d, st) {
     if (!d) return '<ul class="pts">' + s.points.map(x => "<li>" + inlineRich(x, tc) + "</li>").join("") + "</ul>";
-    const st = dzSt(m.id);
     return '<ul class="pts num">' + s.points.map((x, i) => '<li data-i="' + i + '"><span class="pn">' + (i + 1) + '</span><div class="pb"><span>' + inlineRich(x, tc) + "</span>" +
       '<button class="more" data-a="dz" data-m="' + m.id + '" data-i="' + i + '" aria-expanded="' + !!st.p[i] + '">Pe larg <span class="chev" aria-hidden="true">›</span></button>' +
       (st.p[i] ? vDz(m.id, i, tc) : "") + "</div></li>").join("") + "</ul>";
@@ -1716,7 +1714,7 @@
           h += '<div class="sheet-b">' + (d ? '<div class="dz-top"><button class="btn sm" data-a="dz-all" data-m="' + m.id + '">' + (dzAllOpen(d, dst) ? "Închide tot" : "Deschide tot") + "</button></div>" : "") +
             '<p class="lead">' + inlineRich(s.lead, tc) + "</p>" +
             (d ? '<button class="more" data-a="dz-map" data-m="' + m.id + '" aria-expanded="' + dst.map + '">Harta modulului <span class="chev" aria-hidden="true">›</span></button>' + (dst.map ? vDzMap(m.id, d, tc) : "") : "") +
-            (s.diagram ? figure(s.diagram) : "") + vPoints(m, s, tc) +
+            (s.diagram ? figure(s.diagram) : "") + vPoints(m, s, tc, d, dst) +
             (s.avoid ? '<div class="avoid"><b>De evitat la interviu</b>' + s.avoid.map(x => "<span>" + fmt(x) + "</span>").join("") + "</div>" : "") +
             '<div class="row">' + (nq ? '<button class="btn primary sm" data-a="mcq-mod" data-m="' + m.id + '">Grile (' + nq + ")</button>" : "") +
             (no ? '<button class="btn sm" data-a="oral-mod" data-m="' + m.id + '">Oral (' + no + ")</button>" : "") +

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseDesf, readDesfFiles, DESF_LABEL } from "../lib.mjs";
+import { parseDesf, readDesfFiles, codeBlocks, DESF_LABEL } from "../lib.mjs";
 
 const RUNNER = fileURLToPath(new URL("./desf_run.py", import.meta.url));
 const PY = process.env.PYTHON || "python3";
@@ -46,11 +46,7 @@ function judge(res) {
 export function extractExamples(parsed) {
   const out = [];
   for (const it of parsed.items) for (const [k, label] of Object.entries(DESF_LABEL)) {
-    let index = 0;
-    for (const m of String(it[k] || "").matchAll(/```(\w*)[^\n]*\n([\s\S]*?)```/g)) {
-      index++;
-      if (m[1] === "python" || m[1] === "py") out.push({ n: it.n, field: label, index, code: m[2].replace(/\s+$/, "") });
-    }
+    codeBlocks(it[k]).forEach((b, j) => { if (b.lang === "python" || b.lang === "py") out.push({ n: it.n, field: label, index: j + 1, code: b.code }); });
   }
   return out;
 }

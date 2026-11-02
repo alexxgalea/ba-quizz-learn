@@ -11,7 +11,7 @@ Grupuri:
 
 ### 1
 Problema: Două obiecte `Rule` cu aceleași date apar de două ori într-un `set`. În log vezi doar `<Rule object at 0x7f…>`.
-Ideea: `__repr__` spune cum arată obiectul în log. `__eq__` îl face egal cu altul de aceeași valoare. Un `__eq__` scris fără `__hash__` pune `__hash__ = None`, deci obiectul nu mai intră într-un `set`.
+Ideea: `__repr__` spune cum arată obiectul în log, iar `__eq__` îl face egal cu altul de aceeași valoare. Un `__eq__` scris fără `__hash__` pune `__hash__ = None`, deci obiectul nu mai intră într-un `set`.
 Exemplu:
 ```python
 class R:
@@ -28,7 +28,7 @@ Legătură: OOP-04 întreabă exact asta.
 
 ### 2
 Problema: Vrei un `Config()` care întoarce mereu aceeași instanță, sau o subclasă de `int`. `__init__` nu ajută: obiectul există deja când rulează.
-Ideea: `__new__` creează obiectul. `__init__` îl completează după aceea, doar dacă `__new__` a întors o instanță a lui `cls`. De obicei ai nevoie doar de `__init__`.
+Ideea: `__new__` creează obiectul; `__init__` îl completează după aceea, doar dacă `__new__` a întors o instanță a lui `cls`. De obicei ai nevoie doar de `__init__`.
 Exemplu:
 ```python
 class Pos(int):
@@ -43,7 +43,7 @@ Legătură: OOP-09 cere să alegi între cele două.
 
 ### 3
 Problema: Două obiecte `Scanner` primesc fiecare câte o regulă, dar amândouă o văd pe ambele. Lista era scrisă în corpul clasei.
-Ideea: Ce scrii în corpul clasei există o singură dată, la clasă. `self.x` caută întâi în instanță, apoi în clasă. Starea fiecărui obiect o creezi în `__init__`.
+Ideea: Ce scrii în corpul clasei există o singură dată, la clasă; `self.x` caută întâi în instanță, apoi în clasă. Starea fiecărui obiect o creezi în `__init__`.
 Exemplu:
 ```python
 class S:
@@ -60,7 +60,7 @@ Legătură: OOP-01 și OOP-10.
 
 ### 4
 Problema: Clasa ta expune `finding.score`, iar clienții îl citesc direct. Mâine scorul trebuie limitat sau calculat. Nu vrei să schimbi toate apelurile în `get_score()`.
-Ideea: `@property` păstrează sintaxa `obj.score` și rulează o metodă în spate. Începi cu un atribut simplu și adaugi property abia când ai nevoie. `cached_property` calculează o singură dată.
+Ideea: `@property` păstrează sintaxa `obj.score` și rulează o metodă în spate, deci începi cu un atribut simplu și adaugi property abia când ai nevoie. `cached_property` calculează o singură dată.
 Exemplu:
 ```python
 class F:
@@ -95,7 +95,7 @@ Legătură: OOP-03.
 
 ### 6
 Problema: `ScanJob` moștenește `EmailSender` ca să trimită alerte. Acum nu-l poți testa fără email real, iar trecerea la Slack înseamnă să rescrii clasa.
-Ideea: Compoziția înseamnă că `ScanJob` primește un `notify` în constructor și îl apelează. În test pui un fake în loc. Moștenirea e pentru „este un”, nu pentru „folosește un”.
+Ideea: Compoziția înseamnă că `ScanJob` primește un `notify` în constructor și îl apelează, iar în test pui un fake în loc. Moștenirea e pentru „este un”, nu pentru „folosește un”.
 Exemplu:
 ```python
 class Job:
@@ -112,7 +112,7 @@ Legătură: OOP-08 testează exact asta. Într-un proiect Django, clasa din `vie
 ### 7
 Greu: da
 Problema: `class D(B, C)`, iar `B` și `C` moștenesc amândouă `A`. Care `f()` rulează? Dacă fiecare clasă își cheamă părintele pe nume, `A` rulează de două ori sau deloc.
-Ideea: Python liniarizează ierarhia într-o listă, MRO, cu algoritmul C3: aici `D, B, C, A, object`. Fiecare clasă apare o singură dată, copiii vin înaintea părinților, iar ordinea din `class D(B, C)` se păstrează. `super()` nu înseamnă „părintele direct”: cheamă următoarea clasă din MRO-ul instanței. De aceea, într-un mixin cooperativ, fiecare clasă cheamă `super()`.
+Ideea: Python liniarizează ierarhia într-o listă, MRO, cu algoritmul C3: aici `D, B, C, A, object`. Fiecare clasă apare o dată, copiii vin înaintea părinților, iar ordinea din `class D(B, C)` se păstrează. `super()` nu înseamnă „părintele direct”: cheamă următoarea clasă din MRO-ul instanței, de aceea un mixin cooperativ cheamă `super()` în fiecare clasă.
 Exemplu:
 ```python
 class A:
@@ -146,7 +146,7 @@ Legătură: OOP-06 și OOP-07.
 
 ### 9
 Problema: La un `Finding` cu patru câmpuri scrii `__init__`, `__repr__` și `__eq__` de mână, iar o greșeală într-unul stă ascunsă luni.
-Ideea: `@dataclass` generează `__init__`, `__repr__` și `__eq__` din câmpurile adnotate. Cu `frozen=True` obiectul devine imutabil și hashable. `slots=True` și `kw_only=True` cer Python 3.10+.
+Ideea: `@dataclass` generează `__init__`, `__repr__` și `__eq__` din câmpurile adnotate. Cu `frozen=True` obiectul devine imutabil și hashable, iar `slots=True` și `kw_only=True` cer Python 3.10+.
 Exemplu:
 ```python
 from dataclasses import dataclass
@@ -163,7 +163,7 @@ Legătură: Pydantic, din FastAPI, validează tipurile; `dataclass` nu.
 
 ### 10
 Problema: Un `if tip == "email" … elif tip == "slack" …` crește cu fiecare client nou. Adaugi un canal, modifici codul care merge și îl poți strica.
-Ideea: O clasă are o singură responsabilitate. Extinzi prin strategii primite din afară, nu prin `if` nou. O subclasă respectă contractul părintelui (Liskov): aceeași semnătură, fără condiții mai stricte. Depinzi de abstracții date în constructor, ca să testezi cu fake-uri.
+Ideea: O clasă are o singură responsabilitate, iar extinderea vine din strategii primite din afară, nu dintr-un `if` nou. Subclasa respectă contractul părintelui (Liskov: aceeași semnătură, fără condiții mai stricte), iar codul depinde de abstracții date în constructor, ca să testezi cu fake-uri.
 Exemplu:
 ```python
 S = {
@@ -178,7 +178,7 @@ Legătură: OOP-12 arată o încălcare a lui Liskov; OOP-14 evită lanțul de `
 
 ### 11
 Problema: Scrii o clasă `Retry` cu o singură metodă, sau o clasă doar ca să închizi un fișier: cod în plus.
-Ideea: O strategie poate fi o funcție (`sorted(key=...)`). Cleanup-ul garantat e un context manager: `with` cheamă `__exit__` și la excepție. Un modul e deja un singleton: Python îl importă o dată.
+Ideea: O strategie poate fi o funcție (`sorted(key=...)`), iar cleanup-ul garantat e un context manager: `with` cheamă `__exit__` și la excepție. Un modul e deja un singleton: Python îl importă o dată.
 Exemplu:
 ```python
 import contextlib
@@ -195,6 +195,6 @@ Unde nu ține: În C++ destructorul rulează singur, pentru orice obiect. În Py
 
 ### 12
 Problema: Primești alerte de la Splunk, Sentinel și QRadar, fiecare cu alt API. Restul codului nu trebuie să afle de diferențe.
-Ideea: Adapter: câte o clasă per SIEM, cu aceeași interfață. Observer: ascultători la „alertă creată”. Strategy + registry: reguli interschimbabile. Unit of Work: `Session` din SQLAlchemy strânge modificările și le scrie într-o tranzacție. În Python multe devin funcții sau module.
+Ideea: Adapter pune câte o clasă per SIEM, cu aceeași interfață; Observer anunță ascultătorii la „alertă creată”; Strategy + registry schimbă regulile; Unit of Work (`Session` din SQLAlchemy) strânge modificările într-o tranzacție. În Python multe devin funcții sau module.
 Analogie: Adapterul e priza de călătorie. Aparatul rămâne la fel, iar adaptorul se potrivește la fiecare țară.
 Legătură: OOP-15 până la OOP-18 le exersează pe rând.

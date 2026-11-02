@@ -598,12 +598,11 @@ ul.pts.num > li { display: flex; gap: 10px; align-items: flex-start; }
 .dz-l { display: block; margin-bottom: 3px; font: 600 11px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .dz .rt { font-size: 14.5px; line-height: 1.5; }
 .dz .rt + .rt, .dz .rt + pre.code, .dz pre.code + .rt { margin-top: 6px; }
-.dz pre.code { font-size: 12px; padding: 10px; background: var(--code-bg); }
+.dz pre.code { font-size: 12px; padding: 10px 8px; background: var(--code-bg); }
 .dz-cpp { padding: 8px 10px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; }
 .dz-nu { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line-strong); }
 .dz-nu .dz-l { color: var(--warn); }
 .dz-groups { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .dz-groups b { margin-right: 6px; color: var(--accent); font-size: 13px; }
-/* panoul se întinde pe toată lățimea fișei (sub numărul punctului), ca rândurile de cod de 36 de caractere să încapă pe 360 px */
+/* panoul se întinde pe toată lățimea fișei (sub numărul punctului), ca rândurile de cod de 36 de caractere să încapă pe 360 px; 32px = lățimea .pn (22) + golul din li (10) */
 ul.pts.num .pb > .dz { width: calc(100% + 32px); margin-left: -32px; }
-.dz pre.code { padding: 10px 8px; }

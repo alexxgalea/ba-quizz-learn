@@ -75,7 +75,7 @@ test("rule: În C++ and Unde nu ține come together", () => {
 });
 
 test("rule: length 50–100 words, up to 190 on points marked hard; code is not counted", () => {
-  assert.equal([DESF_LIMITS.min, DESF_LIMITS.max, DESF_LIMITS.hard].join(), "50,100,190");
+  assert.equal([DESF_LIMITS.min, DESF_LIMITS.max, DESF_LIMITS.hard].join(), "50,100,180");
   has(errs(doc(MAP, item(1, { i: "Ideea: " + w(3), ex: null, an: "Analogie: " + w(3), p: "Problema: " + w(3) }), item(2), item(3))), /punctul 1.*prea scurt/);
   has(errs(doc(MAP, item(1, { an: "Analogie: " + w(60) }), item(2), item(3))), /punctul 1.*prea lung/);
   const long = { an: "Analogie: " + w(60) };   // 120 de cuvinte: prea lung, dar bun dacă punctul e marcat greu
@@ -118,6 +118,25 @@ test("rule: the map has Problema and groups that cover every point exactly once"
   assert.deepEqual(errs(doc(map("- 1: " + w(3) + "\n- 2-3: " + w(3)), item(1), item(2), item(3))), []);   // și cratimă simplă
 });
 
+test("rule: Greu is written 'Greu: da'", () => has(errs(doc(MAP, item(1, { hard: "Greu: poate" }), item(2), item(3))), /punctul 1.*Greu: da/));
+
+test("rule: the map needs a Grupuri field", () => has(errs(doc("### harta\nProblema: " + w(10) + "\n", item(1), item(2), item(3))), /harta.*Grupuri/i));
+
+test("the map heading is read in any case, and two map headings are a duplicate", () => {
+  const d = parseDesf(doc(MAP.replace("### harta", "### Harta"), item(1), item(2), item(3)), "oop.md");
+  assert.ok(d.map && d.map.g.length === 2);
+  assert.deepEqual(errs(doc(MAP.replace("### harta", "### Harta"), item(1), item(2), item(3))), []);
+  assert.throws(() => parseDesf(doc(MAP + "\n" + MAP.replace("### harta", "### HARTA"), item(1), item(2), item(3)), "oop.md"), /duplicate harta/);
+});
+
+test("warning: the material for the Ask context nears its cap", () => {
+  const P = { modules: [{ id: "oop" }], sheets: { oop: { lead: "x", points: Array(3).fill(w(20)) } } };
+  assert.deepEqual(buildDesf(P, { "oop.md": good() }).warnings, []);
+  const big = doc(MAP, item(1, { hard: "Greu: da", an: "Analogie: " + w(120) }), item(2), item(3));
+  const P2 = { modules: [{ id: "oop" }], sheets: { oop: { lead: "x", points: Array(3).fill(w(3000)) } } };
+  assert.ok(buildDesf(P2, { "oop.md": big }).warnings.some(x => /Întreabă/.test(x)));
+});
+
 test("buildDesf: a module that has no file simply has no explanations; an unknown module file is an error", () => {
   const P = { modules: [{ id: "oop" }], sheets: { oop: sheet(3) } };
   const files = { "oop.md": good() };
@@ -127,6 +146,7 @@ test("buildDesf: a module that has no file simply has no explanations; an unknow
   assert.equal(ok.desf.oop.items.length, 3);
   assert.deepEqual(buildDesf(P, {}).desf, {});
   has(buildDesf(P, { "nope.md": good() }).errors, /nope.*modul/i);
+  has(buildDesf({ modules: [{ id: "oop" }], sheets: {} }, { "oop.md": good() }).errors, /oop.*nu are fișă/i);
   has(buildDesf(P, { "oop.md": doc(MAP, item(1), item(2), item(2)) }).errors, /duplicate|dublat/i);
 });
 

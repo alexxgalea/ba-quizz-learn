@@ -151,7 +151,11 @@ async def main():
         await pg.click("#sheet-python .ask-open"); await pg.wait_for_timeout(100)
         await pg.fill("#sheet-python [data-ask]", "Ce e GIL?"); await pg.click('#sheet-python [data-a="ask-send"]'); await pg.wait_for_timeout(300)
         asks = await pg.evaluate("window.__asks")
-        check("ask: a sheet without explanations sends the same context as before", len(asks) == 2 and "Puncte:" in asks[1] and "Harta modulului" not in asks[1] and "Punctul 1:" not in asks[1] and "Fișa „" in asks[1], asks[1][:300] if len(asks) > 1 else "")
+        # contextul de dinainte, reconstruit din date: fișa, punctele, de evitat; același plafon de 3500 de caractere
+        expected = await pg.evaluate("""() => { const m = window.PREP.modules.find(x => x.id === 'python'), sh = window.PREP.sheets.python;
+            const lines = ['Fișa „' + m.name + '”: ' + sh.lead, 'Puncte: ' + sh.points.join(' ')]; if (sh.avoid) lines.push('De evitat la interviu: ' + sh.avoid.join(' '));
+            const t = lines.join('\\n'); return t.length > 3500 ? t.slice(0, 3500) + '…' : t; }""")
+        check("ask: a sheet without explanations sends exactly the same material as before", len(asks) == 2 and ("Material (contextul zonei de teorie):\n" + expected + "\n\n") in asks[1], asks[1][:400] if len(asks) > 1 else "")
         await ctx.close()
         await b.close()
     print("\n" + ("ALL PASS" if not fails else f"{len(fails)} FAILED: " + "; ".join(fails)))
