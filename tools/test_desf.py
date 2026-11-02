@@ -135,7 +135,7 @@ async def main():
             check(tag + "python: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
             # ---- gil (tichetul 04): harta și 8 desfășurări; C++ la 1, 4 și 7 (thread-uri, procese, mutex), fără echivalent în rest ----
-            await pg.evaluate(f"document.querySelector('{Y}summary').click()"); await pg.wait_for_timeout(150)
+            await pg.evaluate(f"document.querySelector('{Y}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa python, ca să se deschidă gil
             dg = await pg.evaluate("window.PREP.desf.gil")
             n_gil = await pg.evaluate("window.PREP.sheets.gil.points.length")
             await open_sheet(pg, "gil")

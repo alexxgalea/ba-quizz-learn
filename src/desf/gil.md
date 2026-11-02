@@ -1,7 +1,7 @@
 <!-- Desfășurările fișei `gil` (8 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 2, 16 și 21. -->
 
 ### harta
-Problema: Adaugi thread-uri ca să meargă mai repede și nu câștigi nimic. Sau câștigi viteză, dar contorul iese greșit. Cauza e GIL-ul: ce limitează, ce lasă liber și ce nu îți garantează. Modulul răspunde la patru întrebări: ce face GIL-ul, ce unealtă alegi pentru I/O și pentru CPU, cum lucrează asyncio și ce rămâne în grija ta.
+Problema: Adaugi thread-uri ca să meargă mai repede și nu câștigi nimic. Sau câștigi viteză, dar contorul iese greșit. Cauza e GIL-ul: ce limitează, ce lasă liber și ce nu îți garantează. Modulul răspunde la cinci întrebări: ce face GIL-ul, ce unealtă alegi pentru I/O și pentru CPU, cum lucrează asyncio, ce rămâne în grija ta și ce se schimbă fără GIL.
 Grupuri:
 - 1–2: ce limitează GIL-ul și când e eliberat (cod Python față de I/O și cod nativ)
 - 3–4: ce unealtă alegi pentru fiecare tip de sarcină și ce plătești la procese
@@ -14,9 +14,9 @@ Greu: da
 Problema: Rulezi un calcul în Python pur pe 4 thread-uri, pe o mașină cu 4 core-uri. Durează cam cât patru rulări una după alta, nu un sfert din timp.
 Ideea: În CPython, un lock global (GIL-ul) lasă un singur thread să execute bytecode Python la un moment dat. Celelalte așteaptă, iar interpretorul dă ștafeta la fiecare 5 ms (`sys.getswitchinterval()`). Deci thread-urile nu paralelizează cod Python CPU-bound. Limita ține de CPython, nu de limbaj.
 Analogie: Patru casieri, o singură casă de marcat. Toate stau la ghișeu, dar doar una tastează la un moment dat.
-În C++: Patru `std::thread` care fac același calcul pe 4 core-uri rulează deodată și termină în aproape un sfert din timp.
+În C++: Patru `std::thread` care fac același calcul pe 4 core-uri rulează deodată și termină de câteva ori mai repede decât patru rulări una după alta.
 Unde nu ține: În C++ nu există GIL: două thread-uri care scriu aceeași variabilă fără sincronizare sunt un data race, adică comportament nedefinit. Python își păstrează structurile interne întregi; riști doar un rezultat greșit (punctul 7).
-Legătură: GIL-01. Celery rulează implicit taskurile în procese (`prefork`), model recomandat pentru taskuri CPU-bound.
+Legătură: GIL-01. Celery rulează implicit task-urile în procese (`prefork`), model recomandat pentru task-uri CPU-bound.
 
 ### 2
 Greu: da
@@ -45,7 +45,7 @@ Legătură: GIL-02. Gunicorn are aceeași alegere: `--workers` sunt procese, iar
 ### 4
 Greu: da
 Problema: Trimiți unui `ProcessPoolExecutor` 100.000 de task-uri de câte o înmulțire și programul merge mai încet decât o buclă simplă. Altă dată îi dai o `lambda` și primești `PicklingError`.
-Ideea: Procesele au memorie separată. Argumentele și rezultatele sunt serializate cu pickle, trimise printr-un canal (IPC) și deserializate, deci procesul lucrează pe o copie. Serializarea costă: un task foarte mic cheltuie mai mult pe transport decât pe calcul, deci trimiți bucăți mari (`map(..., chunksize=…)`). Pickle cere obiecte găsite după nume: funcții de nivel de modul, nu `lambda`.
+Ideea: Procesele au memorie separată. Argumentele și rezultatele sunt serializate cu pickle, trimise printr-un canal (IPC) și deserializate, deci procesul lucrează pe o copie. Serializarea costă: un task foarte mic costă mai mult pe transport decât pe calcul, deci trimiți bucăți mari (`map(..., chunksize=…)`). Pickle cere obiecte găsite după nume: funcții de nivel de modul, nu `lambda`.
 Exemplu:
 ```python
 import pickle as p
@@ -56,9 +56,9 @@ print(x, y)  # → [1] [1, 2]
 f = lambda: 1
 p.dumps(f)  # ! PicklingError
 ```
-În C++: Biblioteca standard C++17 nu are procese (doar `std::system`); folosești `fork` (POSIX) sau o bibliotecă. Memoria e separată și acolo, iar datele trec prin pipe sau memorie partajată.
-Unde nu ține: În C++ serializezi tu bytes-ii, iar pentru CPU-bound de obicei ajung thread-urile (punctul 1). În Python procesele sunt calea obișnuită, iar pickle serializează în locul tău.
-Legătură: GIL-06. Celery trimite argumentele unui task prin broker, serializate (JSON implicit din 4.0), din același motiv: taskul rulează în alt proces.
+În C++: Biblioteca standard C++17 nu are procese (doar `std::system`); folosești `fork` (POSIX) sau o bibliotecă. Memoria e separată și acolo.
+Unde nu ține: În C++ trimiți tu octeții (pipe, memorie partajată), pe când pickle serializează în locul tău. Iar pentru CPU-bound ajung de obicei thread-urile (punctul 1); în Python procesele sunt calea obișnuită.
+Legătură: GIL-06. Celery trimite argumentele unui task prin broker, serializate (JSON implicit din 4.0), din același motiv: task-ul rulează în alt proces.
 
 ### 5
 Greu: da
@@ -79,7 +79,7 @@ Legătură: GIL-04 și GIL-11. În FastAPI, un endpoint `def` rulează într-un 
 
 ### 6
 Greu: da
-Problema: Pornești 10.000 de cereri cu `asyncio.gather`. Se deschid toate odată și rămâi fără conexiuni sau serverul te respinge. Iar când una pică, celelalte merg mai departe degeaba.
+Problema: Pornești 10.000 de cereri cu `asyncio.gather`. Se deschid toate odată și rămâi fără conexiuni sau serverul te respinge. Iar cu `gather`, când una pică, celelalte merg mai departe degeaba.
 Ideea: Limitezi concurența cu `asyncio.Semaphore(N)`: `async with sem:` lasă înăuntru cel mult N corutine. Alternativa e un grup de N workeri care iau din aceeași `asyncio.Queue`. `TaskGroup` (3.11+) anulează restul grupului la prima eroare dintr-un task, iar la ieșire ridică un `ExceptionGroup`.
 Analogie: Semaforul e o parcare cu N locuri. A N+1-a mașină așteaptă la barieră până pleacă una.
 Exemplu:
@@ -92,14 +92,15 @@ async def main():
         g.create_task(bad())
 aio.run(main())  # ! ExceptionGroup
 ```
-Legătură: GIL-07 și GIL-12. În Celery, `--concurrency` limitează tot câte taskuri rulează odată.
+Legătură: GIL-07 și GIL-12. În Celery, `--concurrency` limitează tot câte task-uri rulează odată.
 
 ### 7
 Greu: da
 Problema: 4 thread-uri incrementează câte 100.000 de ori același contor. Aștepți 400.000, dar poți obține mai puțin, și altceva la fiecare rulare.
-Ideea: `counter += 1` nu e o singură operație: interpretorul citește valoarea, adună 1 și scrie rezultatul. GIL-ul protejează fiecare instrucțiune de bytecode, nu secvența. Dacă thread-ul se schimbă între citire și scriere, un increment se pierde. Pe unele versiuni pierderea se vede rar, dar garanție nu ai. Același risc are „verifică, apoi scrie”. Rezolvi cu `with lock:` în jurul secvenței sau eviți starea partajată (o coadă, un rezultat per thread).
+Ideea: `counter += 1` nu e o singură operație: interpretorul citește valoarea, adună 1 și scrie rezultatul. GIL-ul nu protejează secvența: interpretorul poate schimba thread-ul între două instrucțiuni de bytecode. Dacă se întâmplă între citire și scriere, un increment se pierde. Pe unele versiuni pierderea se vede rar, dar garanție nu ai. Același risc are „verifică, apoi scrie”. Rezolvi cu `with lock:` în jurul secvenței sau eviți starea partajată (o coadă, un rezultat per thread).
 Exemplu:
 ```python
+# intercalare posibilă, simulată
 n = 0
 a = n      # A citește 0
 b = n      # B citește 0
@@ -120,4 +121,4 @@ Exemplu:
 import sys
 sys._is_gil_enabled()  # → True
 ```
-Legătură: GIL-10. Lock-ul din punctul 7 rămâne necesar și fără GIL.
+Legătură: GIL-10.
