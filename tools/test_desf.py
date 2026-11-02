@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md; un modul fără desfășurări (python) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md; un modul fără desfășurări (aws, Bonus: ultimul în ordine) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend.
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -112,11 +112,26 @@ async def main():
 
             # ---- a module without explanations looks as before ----
             await pg.evaluate(f"document.querySelector('{S}summary').click()"); await pg.wait_for_timeout(150)
-            await open_sheet(pg, "python")
-            P = "#sheet-python "
-            npy = await pg.evaluate("window.PREP.sheets.python.points.length")
-            check(tag + "python has no explanations in the data", await pg.evaluate("!window.PREP.desf.python"))
+            await open_sheet(pg, "aws")
+            P = "#sheet-aws "
+            npy = await pg.evaluate("window.PREP.sheets.aws.points.length")
+            check(tag + "aws has no explanations in the data", await pg.evaluate("!window.PREP.desf.aws"))
             check(tag + "a module without explanations: no numbers, no buttons, plain list", await pg.locator(P + ".pn").count() == 0 and await pg.locator(P + "[data-a^='dz']").count() == 0 and await pg.locator(P + "ul.pts > li").count() == npy)
+
+            # ---- python (tichetul 03): harta și 10 desfășurări, cu C++ doar unde există un echivalent ----
+            await pg.evaluate(f"document.querySelector('{P}summary').click()"); await pg.wait_for_timeout(150)
+            dp = await pg.evaluate("window.PREP.desf.python")
+            await open_sheet(pg, "python")
+            Y = "#sheet-python "
+            check(tag + "python: the map and one explanation per point (10), numbered like the points", dp and len(dp["items"]) == 10 and await pg.locator(Y + "ul.pts > li .pn").count() == 10 and await pg.locator(Y + '[data-a="dz-map"]').count() == 1)
+            await pg.click(Y + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "python: 'Deschide tot' opens the map and all 10", await pg.locator(Y + "[data-dz]").count() == 10 and await pg.locator(Y + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{Y}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "python: C++ with 'Unde nu ține' on 1-7 and 9 (no real equivalent at 8 and 10)", cpp == [True] * 7 + [False, True, False] and await pg.locator(Y + ".dz-cpp").count() == await pg.locator(Y + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "python: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "python: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Y}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Y}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_python_{scheme}.png"), full_page=True)
+            check(tag + "python: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
@@ -148,12 +163,12 @@ async def main():
         check("ask: the answer shows and the open explanation stays open", "Răspuns scurt." in await pg.locator(S + ".ask").inner_text() and await pg.locator(S + '[data-dz="6"]').count() == 1)
         await pg.click(S + '[data-a="ask-close"]'); await pg.wait_for_timeout(100)
         await pg.evaluate(f"document.querySelector('{S}summary').click()"); await pg.wait_for_timeout(150)
-        await open_sheet(pg, "python")
-        await pg.click("#sheet-python .ask-open"); await pg.wait_for_timeout(100)
-        await pg.fill("#sheet-python [data-ask]", "Ce e GIL?"); await pg.click('#sheet-python [data-a="ask-send"]'); await pg.wait_for_timeout(300)
+        await open_sheet(pg, "aws")
+        await pg.click("#sheet-aws .ask-open"); await pg.wait_for_timeout(100)
+        await pg.fill("#sheet-aws [data-ask]", "Ce e GIL?"); await pg.click('#sheet-aws [data-a="ask-send"]'); await pg.wait_for_timeout(300)
         asks = await pg.evaluate("window.__asks")
         # contextul de dinainte, reconstruit din date: fișa, punctele, de evitat; același plafon de 3500 de caractere
-        expected = await pg.evaluate("""() => { const m = window.PREP.modules.find(x => x.id === 'python'), sh = window.PREP.sheets.python;
+        expected = await pg.evaluate("""() => { const m = window.PREP.modules.find(x => x.id === 'aws'), sh = window.PREP.sheets.aws;
             const lines = ['Fișa „' + m.name + '”: ' + sh.lead, 'Puncte: ' + sh.points.join(' ')]; if (sh.avoid) lines.push('De evitat la interviu: ' + sh.avoid.join(' '));
             const t = lines.join('\\n'); return t.length > 3500 ? t.slice(0, 3500) + '…' : t; }""")
         check("ask: a sheet without explanations sends exactly the same material as before", len(asks) == 2 and ("Material (contextul zonei de teorie):\n" + expected + "\n\n") in asks[1], asks[1][:400] if len(asks) > 1 else "")
