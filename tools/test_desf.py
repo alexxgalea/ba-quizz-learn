@@ -79,15 +79,16 @@ async def main():
             check(tag + "the labels Problema and Ideea show; fields that are missing do not", "problema" in low and "ideea" in low and "analogie" not in low)
             check(tag + "a point with a C++ comparison shows 'În C++' with 'Unde nu ține' next to it", "în c++" in low and "unde nu ține" in low and await pg.evaluate(f"!!document.querySelector('{S}[data-dz=\"2\"] .dz-cpp .dz-nu')"))
             check(tag + "the opened button is marked expanded", await pg.get_attribute(S + '[data-a="dz"][data-i="2"]', "aria-expanded") == "true")
-            await pg.click(S + '[data-a="dz"][data-i="5"]'); await pg.wait_for_timeout(100)
-            t5 = (await pg.locator(S + '[data-dz="5"]').inner_text()).lower()
+            assert not data["items"][9].get("cpp"), "punctul 10 trebuie să rămână fără C++ (testul de mai jos se sprijină pe el)"
+            await pg.click(S + '[data-a="dz"][data-i="9"]'); await pg.wait_for_timeout(100)
+            t5 = (await pg.locator(S + '[data-dz="9"]').inner_text()).lower()
             check(tag + "opening another keeps the first one open; a point without C++ shows no C++ block", await pg.locator(S + "[data-dz]").count() == 2 and "în c++" not in t5 and "unde nu ține" not in t5 and "exemplu" in t5)
             await pg.click(S + '[data-a="dz"][data-i="2"]'); await pg.wait_for_timeout(100)
-            check(tag + "a second tap closes it", await pg.locator(S + '[data-dz="2"]').count() == 0 and await pg.locator(S + '[data-dz="5"]').count() == 1)
+            check(tag + "a second tap closes it", await pg.locator(S + '[data-dz="2"]').count() == 0 and await pg.locator(S + '[data-dz="9"]').count() == 1)
             check(tag + "a partly open sheet still offers 'Deschide tot'", "Deschide tot" in await pg.locator(S + '[data-a="dz-all"]').inner_text())
-            ex = await pg.evaluate(f"document.querySelectorAll('{S}[data-dz=\"5\"] pre.code .tk-k').length")
+            ex = await pg.evaluate(f"document.querySelectorAll('{S}[data-dz=\"9\"] pre.code .tk-k').length")
             check(tag + "Python examples are colored", ex > 0)
-            await pg.click(S + '[data-a="dz"][data-i="5"]')
+            await pg.click(S + '[data-a="dz"][data-i="9"]')
 
             # ---- the map ----
             await pg.click(S + '[data-a="dz-map"]'); await pg.wait_for_timeout(100)

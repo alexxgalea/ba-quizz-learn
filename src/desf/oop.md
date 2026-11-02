@@ -27,18 +27,21 @@ Unde nu ține: Python te lasă să scrii `__eq__` fără `__hash__`. Eroarea apa
 Legătură: OOP-04 întreabă exact asta.
 
 ### 2
-Problema: Vrei un `Config()` care întoarce mereu aceeași instanță, sau o subclasă de `int`. `__init__` nu ajută: obiectul există deja când rulează.
-Ideea: `__new__` creează obiectul; `__init__` îl completează după aceea, doar dacă `__new__` a întors o instanță a lui `cls`. De obicei ai nevoie doar de `__init__`.
+Greu: da
+Problema: Vrei un `Config()` care întoarce mereu aceeași instanță, sau o subclasă de `int` care ține doar valoarea absolută. `__init__` nu ajută: obiectul există deja când rulează, iar un `int` nu se mai schimbă după creare.
+Ideea: `__new__(cls, …)` creează instanța; e metodă statică implicită și primește clasa. `__init__(self, …)` o completează după aceea, dar rulează doar dacă `__new__` a întors o instanță a lui `cls`. Dacă întoarce alt tip, `__init__` nu rulează deloc. La un singleton făcut în `__new__`, `__init__` rulează din nou la fiecare `Config()`, pe același obiect. Regula practică: scrii doar `__init__`. `__new__` apare la tipuri imutabile (`int`, `str`, `tuple`), la cache de instanțe și la metaclase.
 Exemplu:
 ```python
-class Pos(int):
+class P(int):
     def __new__(cls, n):
         n = abs(n)
         return int.__new__(cls, n)
-print(Pos(-3))  # → 3
+    def __init__(self, n):
+        print("init")  # → init
+print(P(-3))  # → 3
 ```
 În C++: `new` alocă memoria, iar constructorul o inițializează. Seamănă cu `__new__` urmat de `__init__`.
-Unde nu ține: Constructorul C++ doar inițializează un obiect deja alocat. `__new__` poate întoarce și alt obiect, chiar unul existent.
+Unde nu ține: Constructorul C++ doar inițializează un obiect deja alocat și nu poate înlocui obiectul cu altul. `__new__` poate întoarce și alt obiect, chiar unul existent, iar `__init__` rulează apoi pe el, din nou.
 Legătură: OOP-09 cere să alegi între cele două.
 
 ### 3
@@ -94,8 +97,9 @@ Unde nu ține: `@classmethod` n-are echivalent. O funcție `static` nu poate fi 
 Legătură: OOP-03.
 
 ### 6
-Problema: `ScanJob` moștenește `EmailSender` ca să trimită alerte. Acum nu-l poți testa fără email real, iar trecerea la Slack înseamnă să rescrii clasa.
-Ideea: Compoziția înseamnă că `ScanJob` primește un `notify` în constructor și îl apelează, iar în test pui un fake în loc. Moștenirea e pentru „este un”, nu pentru „folosește un”.
+Greu: da
+Problema: `ScanJob` moștenește `EmailSender` ca să trimită alerte. Acum nu-l poți testa fără email real, iar trecerea la Slack înseamnă să rescrii clasa. Orice schimbare în `EmailSender` poate strica și `ScanJob`.
+Ideea: Compoziția înseamnă că `ScanJob` primește un `notify` în constructor și îl apelează. În test pui un fake, în producție email sau Slack, fără să atingi `ScanJob`. Moștenirea e pentru „este un”: un `ScanJob` nu este un `EmailSender`. Ea leagă copilul de detaliile părintelui. Moștenești când subclasa poate sta oriunde stă părintele; altfel o ții ca atribut.
 Exemplu:
 ```python
 class Job:
@@ -107,6 +111,8 @@ sent = []
 Job(sent.append).run()
 print(sent)  # → ['gata']
 ```
+În C++: `Job` ține un `std::unique_ptr<Notifier>` primit în constructor, iar `Notifier` are o funcție `virtual … = 0`. În test pasezi un fake derivat din `Notifier`.
+Unde nu ține: În Python nu ai nevoie de o clasă-interfață: `notify` poate fi orice apelabil, chiar și `sent.append`. Duck typing în locul lui `virtual`.
 Legătură: OOP-08 testează exact asta. Într-un proiect Django, clasa din `views` primește serviciile ca argumente, nu le importă direct, ca să le poți înlocui în teste.
 
 ### 7
@@ -129,8 +135,9 @@ Unde nu ține: C++ nu liniarizează: alegi tu explicit `B::f()`, pe nume. `super
 Legătură: Django cere `LoginRequiredMixin` înaintea lui `View` în lista de baze, tocmai din cauza MRO. OOP-05.
 
 ### 8
-Problema: Ai `send(alert)` pentru Slack și email. Cineva uită metoda într-o clasă nouă și afli abia în producție.
-Ideea: ABC + `@abstractmethod` e contract nominal: subclasa fără metoda cerută dă `TypeError` la instanțiere. `Protocol` e contract structural: nu moștenești nimic, iar verificarea o face doar type checkerul.
+Greu: da
+Problema: Ai `send(alert)` pentru Slack și email. Cineva uită metoda într-o clasă nouă și afli abia în producție. Pe de altă parte, nu poți cere unei clase dintr-o bibliotecă să moștenească din clasa ta.
+Ideea: ABC + `@abstractmethod` e contract nominal: moștenești explicit, iar o subclasă fără metoda cerută dă `TypeError` la instanțiere. `Protocol` e contract structural: nu moștenești nimic, iar verificarea o face type checkerul, static. La rulare, `Protocol` nu verifică nimic. Cu `@runtime_checkable`, `isinstance` verifică doar prezența metodelor, nu semnăturile. Alegi ABC când controlezi ierarhia și vrei eroarea la instanțiere, `Protocol` când vrei duck typing verificat static.
 Exemplu:
 ```python
 from abc import ABC, abstractmethod
@@ -162,8 +169,9 @@ Unde nu ține: Un `@dataclass` e o clasă obișnuită cu cod generat. Nu verific
 Legătură: Pydantic, din FastAPI, validează tipurile; `dataclass` nu.
 
 ### 10
-Problema: Un `if tip == "email" … elif tip == "slack" …` crește cu fiecare client nou. Adaugi un canal, modifici codul care merge și îl poți strica.
-Ideea: O clasă are o singură responsabilitate, iar extinderea vine din strategii primite din afară, nu dintr-un `if` nou. Subclasa respectă contractul părintelui (Liskov: aceeași semnătură, fără condiții mai stricte), iar codul depinde de abstracții date în constructor, ca să testezi cu fake-uri.
+Greu: da
+Problema: Un `if tip == "email" … elif tip == "slack" …` crește cu fiecare client nou. Adaugi un canal, modifici codul care merge și îl poți strica. Testele clasei trebuie să acopere acum toate ramurile.
+Ideea: O clasă are o singură responsabilitate. Extinzi prin strategii primite din afară, nu printr-un `if` nou (Open/Closed). Subclasa respectă contractul părintelui (Liskov): aceeași semnătură, fără precondiții mai stricte. Codul depinde de abstracții primite în constructor (Dependency Inversion), deci testezi cu fake-uri. În Python, un dict de funcții ține locul unei ierarhii de clase `Strategy`.
 Exemplu:
 ```python
 S = {
@@ -177,8 +185,9 @@ send("slack", "hi")  # → 'slack:hi'
 Legătură: OOP-12 arată o încălcare a lui Liskov; OOP-14 evită lanțul de `if`.
 
 ### 11
-Problema: Scrii o clasă `Retry` cu o singură metodă, sau o clasă doar ca să închizi un fișier: cod în plus.
-Ideea: O strategie poate fi o funcție (`sorted(key=...)`), iar cleanup-ul garantat e un context manager: `with` cheamă `__exit__` și la excepție. Un modul e deja un singleton: Python îl importă o dată.
+Greu: da
+Problema: Scrii o clasă `Retry` cu o singură metodă, sau o clasă doar ca să închizi un fișier: cod în plus, fără nimic de păstrat între apeluri. Și un `close()` pus la sfârșit nu rulează dacă apare o excepție.
+Ideea: Fără stare de păstrat, ajunge o funcție. O strategie poate fi o funcție (`sorted(key=...)`). Cleanup-ul garantat e un context manager: `with` cheamă `__exit__` și la excepție, iar `@contextlib.contextmanager` îl scrie ca un generator cu `try/finally`. Un modul e deja un singleton: Python îl importă o dată și îl ține în `sys.modules`. Semnal de alarmă: o clasă cu o singură metodă publică și fără stare e, de fapt, o funcție.
 Exemplu:
 ```python
 import contextlib
@@ -194,7 +203,18 @@ print(log)  # → ['work', 'close']
 Unde nu ține: În C++ destructorul rulează singur, pentru orice obiect. În Python `with` îl scrii la locul apelului, iar `__del__` nu e destructor: nu garantează când rulează.
 
 ### 12
-Problema: Primești alerte de la Splunk, Sentinel și QRadar, fiecare cu alt API. Restul codului nu trebuie să afle de diferențe.
-Ideea: Adapter pune câte o clasă per SIEM, cu aceeași interfață; Observer anunță ascultătorii la „alertă creată”; Strategy + registry schimbă regulile; Unit of Work (`Session` din SQLAlchemy) strânge modificările într-o tranzacție. În Python multe devin funcții sau module.
+Greu: da
+Problema: Primești alerte de la Splunk, Sentinel și QRadar, fiecare cu alt API. Restul codului nu trebuie să afle de diferențe. Iar când apare o alertă, trei module vor să afle.
+Ideea: Adapter pune câte o clasă per SIEM, toate cu aceeași interfață. Observer anunță ascultătorii înregistrați la „alertă creată”. Strategy + registry schimbă regulile, alese după nume dintr-un dict. Unit of Work (`Session` din SQLAlchemy) strânge modificările într-o tranzacție. Factory (`@classmethod from_dict`) construiește obiectul din date. În Python, Strategy și Observer devin adesea funcții, iar un singleton devine un modul.
+Exemplu:
+```python
+ls, out = [], []
+on = ls.append
+on(lambda a: out.append("L"+a))
+on(lambda a: out.append("M"+a))
+for f in ls:
+    f("1")
+print(out)  # → ['L1', 'M1']
+```
 Analogie: Adapterul e priza de călătorie. Aparatul rămâne la fel, iar adaptorul se potrivește la fiecare țară.
 Legătură: OOP-15 până la OOP-18 le exersează pe rând.
