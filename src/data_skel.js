@@ -150,12 +150,158 @@ window.PREP.skel = [
   {
     id: "s-frontend-union-never", m: "frontend", g: "ts", lang: "ts",
     t: "Union discriminat și switch exhaustiv cu never",
-    p: "Modelează rezultatul unei cereri ca union discriminat de `status`: `loading`, `ok` (cu `data: string[]`) și `error` (cu `message`). Scrie `label(r)` cu un `switch` exhaustiv, astfel încât un caz nou în union să nu compileze până nu primește ramura lui.",
+    p: "Modelează rezultatul unei cereri ca union discriminat de `status`: `loading`, `ok` (cu `data: string[]`) și `error` (cu `message`). Scrie `label(r)` cu un `switch` exhaustiv, astfel încât un caz nou în union să nu compileze până nu primește ramura lui. Apoi același tipar pe acțiuni: `Action` (`fetch`, `done` cu `data`, `fail` cu `message`) și `reducer(state, action)`, ca pentru `useReducer`.",
     k: [
       "Uniunea e discriminată de un câmp literal comun (`status`), nu de câmpuri opționale; în fiecare `case` tipul se îngustează (`r.data` există doar la `ok`).",
       "`default` apelează `assertNever(r)`, iar parametrul ei are tipul `never`: după ce toate cazurile sunt tratate, `r` nu mai poate avea alt tip.",
       "Un caz nou în union face `r` ne-`never` în `default`, deci eroarea apare la compilare, nu în producție.",
-      "`assertNever` aruncă și la runtime (date din afara tipului, de pildă un JSON) și întoarce `never`, deci funcția nu are nevoie de alt `return`."
+      "`assertNever` aruncă și la runtime (date din afara tipului, de pildă un JSON) și întoarce `never`, deci funcția nu are nevoie de alt `return`.",
+      "Același tipar merge pe acțiuni: `Action` e un union discriminat de `type`, iar `reducer` cu `assertNever` în `default` e verificat de compilator; `useReducer(reducer, { status: \"loading\" })` deduce tipurile din el."
+    ]
+  },
+  // ---- frontend / TypeScript (tichetul 10) ----
+  {
+    id: "s-frontend-generics", m: "frontend", g: "ts", lang: "ts",
+    t: "Generice cu constrângeri: pluck și byId",
+    p: "Scrie `pluck(items, key)`, care întoarce valorile câmpului `key` din fiecare element, cu tipul rezultatului dedus din cheia aleasă (`string[]` pentru `\"name\"`, `number[]` pentru `\"age\"`), și `byId(items)`, care indexează elemente cu un câmp `id: string` într-un `Record`. O cheie inexistentă nu trebuie să compileze.",
+    k: [
+      "`pluck<T, K extends keyof T>`: `K` e restrâns la cheile lui `T`, deci `pluck(users, \"nope\")` nu compilează, iar tipul întors `T[K][]` urmează cheia (indexed access type).",
+      "Fără constrângere (`key: string`) ai pierde atât verificarea cheii, cât și tipul valorii (`any` sau eroare la `x[key]`).",
+      "`byId<T extends { id: string }>`: constrângerea cere doar câmpul `id`, dar `T` rămâne tipul întreg al elementului, deci `map[\"a\"].age` își păstrează tipul; nu scrii `byId(items: { id: string }[])`, care ar întoarce un tip mai sărac.",
+      "Argumentele de tip se deduc din apel; nu scrii `pluck<User, \"name\">(…)` decât când inferența nu ajunge."
+    ]
+  },
+  {
+    id: "s-frontend-narrowing", m: "frontend", g: "ts", lang: "ts",
+    t: "Narrowing, type guard și unknown din JSON",
+    p: "Scrie `isUser(x: unknown): x is User` pentru `User = { id: number; name: string }`, `parseUser(json)` care parsează textul, validează cu `isUser` și aruncă `Error(\"JSON invalid\")` altfel, și `show(v: string | number | null)`, care îngustează cu `null` și `typeof`.",
+    k: [
+      "`JSON.parse` întoarce `any`; îl pui într-un `unknown` și nu citești nimic din el până nu l-ai verificat. `unknown` te obligă să verifici, `any` te lasă să greșești în tăcere.",
+      "Type predicate-ul `x is User` face ca, după `if (!isUser(data)) throw …`, `data` să fie `User`. Verificarea trebuie să fie completă (`object`, nu `null`, `id` număr, `name` șir): compilatorul are încredere în funcție, nu o verifică.",
+      "`\"id\" in x` îngustează un `object` și, de la TypeScript 4.9, permite apoi `typeof x.id`; `x.id` rămâne `unknown`, deci `typeof` e tot necesar.",
+      "`typeof` și `=== null` îngustează uniunile (`show`): în fiecare ramură tipul e mai precis (`toUpperCase` doar pe `string`, `toFixed` doar pe `number`)."
+    ]
+  },
+  {
+    id: "s-frontend-utility-types", m: "frontend", g: "ts", lang: "ts",
+    t: "Utility types și un mapped type",
+    p: "Pentru `Todo = { id: number; title: string; done: boolean }` scrie `TodoPatch` (toate câmpurile opționale, fără `id`), `TodoRow` (doar `id` și `title`) și `Nullable<T>` ca mapped type (fiecare câmp poate fi și `null`). Apoi `patch(todo, p)`, care întoarce un `Todo` nou, și `toRow(todo)`.",
+    k: [
+      "Compui tipurile din cele existente: `Partial<Omit<Todo, \"id\">>` și `Pick<Todo, \"id\" | \"title\">`. Dacă `Todo` se schimbă, cele derivate se schimbă cu el, fără copii de scris de mână.",
+      "Mapped type: `{ [K in keyof T]: T[K] | null }` parcurge cheile lui `T` și păstrează cheile și numele; toate rămân obligatorii (nu e `Partial`).",
+      "`TodoPatch` fără `id` face ca `patch(todo, { id: 2 })` să nu compileze: ID-ul nu se schimbă printr-un patch. `Partial` face câmpurile opționale, `Omit` scoate cheia.",
+      "`{ ...t, ...p }` întoarce un obiect nou, iar ordinea contează: patch-ul vine al doilea, ca să-l suprascrie pe cel vechi."
+    ]
+  },
+  {
+    id: "s-frontend-const-satisfies", m: "frontend", g: "ts", lang: "ts",
+    t: "as const, uniune de literali și satisfies",
+    p: "Declară `ROLES = [\"admin\", \"editor\", \"viewer\"]` și `Role` derivat din el, apoi `PERMS`, un obiect cu permisiunile fiecărui rol, verificat să aibă toate rolurile, dar cu literalii păstrați; `Perm` derivat din `PERMS`. Scrie `can(role, perm)` și `isRole(s: string): s is Role`.",
+    k: [
+      "`as const` face array-ul un tuple `readonly` de literali, iar `(typeof ROLES)[number]` scoate uniunea `\"admin\" | \"editor\" | \"viewer\"`: sursa de adevăr e o singură valoare, tipul se derivă.",
+      "`satisfies Record<Role, readonly string[]>` verifică forma (un rol lipsă sau o cheie în plus nu compilează), dar NU lărgește tipul: `PERMS.viewer[0]` rămâne `\"read\"`, nu `string`. O adnotare `: Record<…>` ar fi pierdut literalii.",
+      "`Perm = (typeof PERMS)[Role][number]` derivă uniunea de permisiuni din date; `can(\"admin\", \"exec\")` nu compilează.",
+      "`includes` pe un tuple de literali nu acceptă un `string` oarecare, de aceea îl privești ca `readonly string[]` în `isRole`; predicatul `s is Role` îngustează apoi `string`-ul."
+    ]
+  },
+  {
+    id: "s-frontend-interface-type", m: "frontend", g: "ts", lang: "ts",
+    t: "interface vs type",
+    p: "Scrie `Shape` (cu `area()`) și `Named` ca `interface`, `Circle` care le extinde, și o clasă `Square` care implementează `Shape`. Apoi, ca `type`: `Id` (șir sau număr), `Pair` (tuple) și `Labeled` (`Named` plus `label`). La final arată că un `interface` se poate redeschide: `Config` declarat de două ori.",
+    k: [
+      "Pentru forma unui obiect, ambele merg (și `implements` funcționează cu amândouă). Documentația spune: folosești `interface` până ai nevoie de ceva ce doar `type` poate.",
+      "Doar `type` poate denumi o uniune (`string | number`), un tuple sau un primitiv; un `interface` descrie doar forma unui obiect.",
+      "Doar `interface` se poate redeschide (declaration merging): două `interface Config` se îmbină, iar două `type Config` dau „Duplicate identifier”. Așa se extind tipuri din biblioteci (de pildă `Window`).",
+      "Extinderea: `interface B extends A` pentru interfețe; pentru `type` folosești intersecția `A & { … }`. `extends` e de obicei mai ieftin pentru compilator decât intersecțiile."
+    ]
+  },
+  {
+    id: "s-frontend-tsx-props", m: "frontend", g: "ts", lang: "tsx",
+    t: "Props tipate în React: children și ChangeEvent",
+    p: "Scrie componenta `Field` cu props `label: string`, `value: string`, `onChange: (value: string) => void` și `children` opțional. Randează un `<label>` cu un `<input>` controlat; handlerul primește un `ChangeEvent<HTMLInputElement>` și trimite mai departe doar valoarea.",
+    k: [
+      "Props-urile au un `interface` (sau `type`) propriu; un prop obligatoriu lipsă sau cu tip greșit (`value={1}`) nu compilează, deci greșeala se vede în editor, nu în browser.",
+      "`children?: ReactNode` acceptă text, elemente, array-uri și `null`; fiind opțional, componenta merge și fără copii.",
+      "Handlerul are evenimentul tipat explicit, `ChangeEvent<HTMLInputElement>`: așa `e.target.value` e `string`. Fără tip, parametrul ar fi `any` implicit, adică eroare în modul strict.",
+      "`onChange` primește valoarea, nu evenimentul: API-ul componentei nu scurge detalii de DOM, iar părintele scrie `onChange={setName}`."
+    ]
+  },
+  {
+    id: "s-frontend-tsx-usefetch", m: "frontend", g: "ts", lang: "tsx",
+    t: "Hook generic useFetch<T> cu rezultat tipat ca union",
+    p: "Scrie `useFetch<T>(url, parse)`, un hook care întoarce `FetchState<T>`: `loading`, `ok` (cu `data: T`) sau `error` (cu `message`). `parse: (json: unknown) => T` validează răspunsul; cererea veche nu trebuie să suprascrie starea după o schimbare de `url`.",
+    k: [
+      "Starea e un union discriminat (`status`), nu `{ data?: T; error?: string; loading: boolean }`: un `data` fără `ok` nu se poate citi, iar combinațiile imposibile (loading și error deodată) nu se pot reprezenta.",
+      "`T` se deduce din `parse`, deci apelantul nu scrie `useFetch<User>(…)`. Răspunsul e tratat ca `unknown` și trece prin `parse`, nu printr-un cast `as T`, care ar minți compilatorul.",
+      "`useState<FetchState<T>>({ status: \"loading\" })` cu tipul explicit: altfel starea s-ar îngusta la tipul literalului inițial și `setState({ status: \"ok\", … })` n-ar compila.",
+      "Cleanup cu flag (`live = false`) ignoră răspunsul vechi. `parse` e în `deps`, deci trebuie să fie stabil (definit în afara componentei); o funcție nouă la fiecare randare ar reface cererea la nesfârșit."
+    ]
+  },
+  // ---- frontend / React (tichetul 10) ----
+  {
+    id: "s-frontend-react-form", m: "frontend", g: "react", lang: "tsx",
+    t: "useState funcțional și formular controlat",
+    p: "Scrie `Counter`, un buton „n = 0” care la un click face două update-uri într-un singur handler și ajunge la 2. Apoi `NameForm({ onSave })`: un `<input>` controlat și un buton; la trimitere oprește reîncărcarea paginii, ignoră un nume gol, apelează `onSave` cu numele fără spații la capete și golește câmpul.",
+    k: [
+      "`setN((c) => c + 1)` primește starea în așteptare, deci două apeluri dau +2. `setN(n + 1)` de două ori dă +1, fiindcă `n` e un snapshot al acestei randări.",
+      "Input controlat: `value={name}` și `onChange` care scrie `e.target.value` în stare. Starea e singura sursă de adevăr, de aceea `setName(\"\")` golește câmpul.",
+      "Handlerul de `onSubmit` începe cu `e.preventDefault()` (altfel formularul reîncarcă pagina), apoi validează (`trim()`, gol → return) și abia apoi apelează `onSave`.",
+      "Starea nu se modifică direct și nu se citește imediat după `set…`: până la următoarea randare variabila are tot valoarea veche."
+    ]
+  },
+  {
+    id: "s-frontend-react-usefetch", m: "frontend", g: "react", lang: "tsx",
+    t: "useFetch cu AbortController",
+    p: "Scrie `useFetch<T>(url)`, care întoarce `{ data, error }` (ambele `null` la început). Efectul anulează cererea la demontare și la schimbarea lui `url`, trece un răspuns HTTP care nu e ok în `error` („HTTP 500”) și nu atinge starea după ce a fost anulat.",
+    k: [
+      "Efectul creează un `AbortController`, trimite `signal` la `fetch` și întoarce `() => ctrl.abort()` ca funcție de cleanup: se anulează la demontare și înainte de fiecare rulare nouă (schimbare de `url`).",
+      "După anulare nu atingi starea: `live = () => !ctrl.signal.aborted` verifică atât la `then`, cât și la `catch`. Abort-ul face `fetch` să respingă, dar fără verificare ai afișa eroarea unei cereri pe care ai anulat-o tu. Documentația React recomandă și un flag `ignore`, fiindcă abort singur nu acoperă toți pașii înlănțuiți.",
+      "`fetch` nu respinge la HTTP 4xx / 5xx: verifici `r.ok` și arunci tu eroarea.",
+      "`url` e singura dependență; la schimbare resetezi `data` și `error`, ca să nu vezi datele vechi sub url-ul nou. În dezvoltare, Strict Mode rulează efectul de două ori (setup, cleanup, setup): cu cleanup corect, a doua cerere o înlocuiește pe prima."
+    ]
+  },
+  {
+    id: "s-frontend-react-list", m: "frontend", g: "react", lang: "tsx",
+    t: "Listă cu key și filtru derivat, fără effect",
+    p: "Scrie `FilterList({ items })` pentru `items: { id: number; name: string }[]`: un câmp de căutare (fără diferență între majuscule) și o listă cu elementele care se potrivesc, plus un rând „2 din 5”. Starea ține doar textul căutat.",
+    k: [
+      "Lista filtrată se calculează în render (`items.filter(…)`), nu într-un `useEffect` care o pune în a doua stare: efectul ar da o randare în plus la fiecare tastă și două stări care se pot desincroniza. Dacă filtrul ar fi lent, `useMemo`, nu effect.",
+      "Starea minimă: doar `q`. Ce se poate deduce din props și din stare nu se pune în stare.",
+      "`key={i.id}`: stabil și unic între frați. Indexul ca `key` strică starea și nodurile când lista se filtrează sau se reordonează; `Math.random()` le recreează la fiecare randare.",
+      "`map` întoarce elementele de listă direct în JSX; un array gol nu randează nimic, deci „niciun rezultat” nu cere o ramură aparte."
+    ]
+  },
+  {
+    id: "s-frontend-react-context", m: "frontend", g: "react", lang: "tsx",
+    t: "Context și hook propriu: ThemeProvider și useTheme",
+    p: "Scrie `ThemeProvider` (stare `light` / `dark` și o funcție `toggle`, expuse prin context) și `useTheme()`, care întoarce valoarea contextului. Dacă hook-ul e folosit în afara Provider-ului, aruncă o eroare clară, iar tipul întors nu conține `null`.",
+    k: [
+      "`createContext<Ctx | null>(null)`: valoarea implicită `null` marchează „fără Provider”; ea se folosește doar când nu există niciun Provider deasupra.",
+      "Providerul ține starea (`useState`) și o pune în `value`; toți consumatorii văd aceeași stare, iar `toggle` o schimbă pentru toți. `children` e `ReactNode`.",
+      "`useTheme` învelește `useContext`: aruncă dacă valoarea e `null`, deci tipul întors e `Ctx` fără `null` și consumatorii nu verifică nimic. Componentele nu importă contextul direct.",
+      "Toți consumatorii se randează din nou când `value` se schimbă (comparat cu `Object.is`); un obiect nou la fiecare randare a Provider-ului îi reface mereu, deci la aplicații mari îl stabilizezi cu `useMemo`. În React 19 poți scrie și `<ThemeContext value={…}>`."
+    ]
+  },
+  {
+    id: "s-frontend-react-rtl", m: "frontend", g: "react", lang: "tsx",
+    t: "Test cu Testing Library: getByRole, userEvent și findBy",
+    p: "Componenta `Greeter({ fetchGreeting })` are un câmp „Nume”, un buton „Salută” și, după trimitere, un `<p role=\"status\">` cu răspunsul lui `fetchGreeting(name)` sau un `<p role=\"alert\">` cu mesajul erorii. Scrie două teste vitest: trimitere reușită (cu `fetchGreeting` fals, apelat cu „Ana”) și eroare.",
+    k: [
+      "Cauți elementele ca utilizatorul, după rol și nume accesibil: `getByRole(\"button\", { name: \"Salută\" })`, `getByLabelText(\"Nume\")`. `getByRole` e prima alegere în documentația Testing Library; `getByTestId` rămâne ultima.",
+      "Interacțiunea: `const user = userEvent.setup()`, apoi `await user.type(…)` și `await user.click(…)`. Sunt asincrone, deci `await`.",
+      "Ce apare după un pas asincron se așteaptă cu `findBy…` (reîncearcă până la ~1 s); `getBy…` ar pica imediat. Absența se verifică cu `queryBy…`, care întoarce `null`, nu aruncă.",
+      "Dependența se înlocuiește cu un mock (`vi.fn().mockResolvedValue(…)` / `mockRejectedValue(…)`) și verifici apelul (`toHaveBeenCalledWith(\"Ana\")`). Fără `globals`, `afterEach(cleanup)` curăță DOM-ul între teste."
+    ]
+  },
+  {
+    id: "s-frontend-allsettled", m: "frontend", g: "react", lang: "ts",
+    t: "Promise.allSettled și erori tipate",
+    p: "Scrie `loadAll<T>(ids, fetchOne)`: cere toate id-urile în paralel și întoarce `{ ok: T[], failed: { id, reason }[] }`, în ordinea intrării, fără ca un eșec să strice restul. `reasonOf(e: unknown)` transformă orice a fost aruncat într-un șir. Un `fetchOne` care aruncă sincron e tratat ca un eșec.",
+    k: [
+      "`Promise.allSettled` nu respinge niciodată: fiecare rezultat e `{ status: \"fulfilled\", value }` sau `{ status: \"rejected\", reason }`. `Promise.all` ar respinge la prima eroare și ai pierde restul rezultatelor.",
+      "Verifici `r.status === \"fulfilled\"`: așa TypeScript îngustează uniunea și `r.value` are tipul `T`, iar în ramura `else` există `r.reason`. Rezultatele vin în ordinea intrării, deci `ids[i]` corespunde lui `res[i]`.",
+      "`r.reason` și variabila din `catch` nu sunt tipate: sub `--strict`, `catch (e)` e `unknown`, deci verifici (`e instanceof Error ? e.message : String(e)`) înainte să citești `.message`. Se poate arunca orice, nu doar `Error`.",
+      "`ids.map(async (id) => fetchOne(id))`: un `fetchOne` care aruncă sincron devine o rejecție, în loc să spargă `map` înainte de `allSettled`."
     ]
   },
   // ---- python (tichetul 05) ----
