@@ -16,6 +16,10 @@ _Avoid_: cheat sheet, foaie
 Una dintre ideile de reținut ale unei fișe, într-o frază sau două. E unitatea pe care o recitești, din care Jarvis face o bucată și de care se leagă golurile.
 _Avoid_: card (cardul e oral), bullet, idee
 
+**Desfășurare**:
+Explicația pe larg a unui punct, în stilul refactoring.guru: problema concretă pe care o rezolvă, ideea, un exemplu sau o analogie și, unde există un echivalent real, comparația cu C++ și locul unde ea nu mai ține. Punctul rămâne recapitularea; desfășurarea e prima întâlnire cu ideea.
+_Avoid_: explicație (e a grilelor), lecție, detaliu
+
 **Kata**:
 O problemă de live coding (brute force, LRU cache, token bucket) pe care Alex o rezolvă în ~20 de minute, cu voce tare. Exersează gândirea, nu forma.
 _Avoid_: exercițiu (prea vag), problemă
