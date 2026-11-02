@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md și src/desf/python.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md și src/desf/gil.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend.
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -133,6 +133,23 @@ async def main():
             check(tag + "python: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Y}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Y}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_python_{scheme}.png"), full_page=True)
             check(tag + "python: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
+            # ---- gil (tichetul 04): harta și 8 desfășurări; C++ la 1, 4 și 7 (thread-uri, procese, mutex), fără echivalent în rest ----
+            await pg.evaluate(f"document.querySelector('{Y}summary').click()"); await pg.wait_for_timeout(150)
+            dg = await pg.evaluate("window.PREP.desf.gil")
+            n_gil = await pg.evaluate("window.PREP.sheets.gil.points.length")
+            await open_sheet(pg, "gil")
+            G = "#sheet-gil "
+            check(tag + "gil: the map and one explanation per point, numbered like the points", dg and len(dg["items"]) == n_gil == 8 and await pg.locator(G + "ul.pts > li .pn").count() == n_gil and await pg.locator(G + '[data-a="dz-map"]').count() == 1)
+            await pg.click(G + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "gil: 'Deschide tot' opens the map and every explanation", await pg.locator(G + "[data-dz]").count() == n_gil and await pg.locator(G + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{G}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "gil: the C++ block shows only at 1, 4 and 7, and always with 'Unde nu ține'", cpp == [True, False, False, True, False, False, True, False] and cpp == [bool(x.get("cpp")) for x in dg["items"]] and await pg.locator(G + ".dz-cpp").count() == await pg.locator(G + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "gil: Python examples are colored", await pg.evaluate(f"document.querySelectorAll('{G}pre.code .tk-k').length") > 0)
+            check(tag + "gil: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "gil: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{G}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{G}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_gil_{scheme}.png"), full_page=True)
+            check(tag + "gil: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
