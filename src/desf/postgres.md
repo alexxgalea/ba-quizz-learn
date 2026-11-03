@@ -21,7 +21,7 @@ UPDATE t SET v = 11;
 SELECT ctid, v FROM t; -- → (0,2)
 -- versiunea (0,1) e moartă acum
 ```
-Legătură: PG-03 și PG-04. De aceea o conexiune uitată „idle in transaction” umflă tabelele. Punctul 10 o oprește cu un timeout.
+Legătură: PG-03 și PG-04. De aceea o conexiune uitată „idle in transaction”, care a scris ceva (sau lucrează la `REPEATABLE READ`), umflă tabelele. Punctul 10 o oprește cu un timeout.
 
 ### 2
 Greu: da
@@ -41,7 +41,7 @@ Legătură: PG-01. Django merge implicit pe `READ COMMITTED`; nivelul se schimb�
 ### 3
 Greu: da
 Problema: Doi workeri citesc stocul, 5. Fiecare scade 1 în Python și scrie 4. Stocul trebuia să ajungă la 3.
-Ideea: Între citire și scriere, celălalt worker scrie. Remedii: un `UPDATE` atomic (`SET qty = qty - 1`); `SELECT … FOR UPDATE`, care ține rândul blocat până la commit; o coloană `version` verificată în `WHERE` (dacă `rowcount` e 0, reiei); `SERIALIZABLE` cu retry. La `READ COMMITTED`, al doilea `FOR UPDATE` așteaptă, apoi primește versiunea nouă a rândului.
+Ideea: Între citire și scriere, celălalt worker scrie. Patru remedii. Un `UPDATE` atomic (`SET qty = qty - 1`). `SELECT … FOR UPDATE`, care ține rândul blocat până la commit. O coloană `version` verificată în `WHERE`; dacă `rowcount` e 0, reiei. `SERIALIZABLE` cu retry. La `READ COMMITTED`, al doilea `FOR UPDATE` așteaptă, apoi primește versiunea nouă a rândului.
 Exemplu:
 ```python
 stoc = 5
@@ -59,6 +59,7 @@ Unde nu ține: Lock-ul de rând trăiește în bază, e văzut de toate procesel
 Legătură: PG-02. În Django, `F("qty") - 1` și `select_for_update()` fac asta.
 
 ### 4
+Greu: da
 Problema: Patru workeri iau joburi din tabela `jobs` cu `SELECT … LIMIT 1`. Toți primesc același job. Cu `FOR UPDATE` simplu, unul lucrează, iar ceilalți trei așteaptă după el.
 Ideea: `FOR UPDATE SKIP LOCKED` sare peste rândurile blocate de alții și le ia pe următoarele libere. Lock-ul ține până la `COMMIT`, deci preiei și procesezi jobul în aceeași tranzacție. Dacă workerul cade, rollback-ul eliberează jobul. Documentația avertizează că vederea asupra datelor e inconsistentă, așa că folosești asta doar pentru tabele-coadă.
 Exemplu:
@@ -114,6 +115,7 @@ ALTER TABLE ev DETACH PARTITION
 Legătură: PG-07. La Elasticsearch, indexurile pe zi se șterg întregi, ca partițiile de aici.
 
 ### 8
+Greu: da
 Problema: Importi 5 milioane de rânduri dintr-un CSV cu un `INSERT` și un `COMMIT` pe rând. Durează ore: fiecare commit așteaptă ca jurnalul (WAL) să ajungă pe disc.
 Ideea: `COPY` încarcă tot fluxul într-o singură comandă, cu mult mai puțin overhead decât `INSERT`-urile, chiar grupate într-o tranzacție. Dacă n-ai `COPY`, grupezi `INSERT`-urile în loturi, un commit per lot. Dacă o linie e greșită, tot `COPY`-ul pică. `COPY` nu are `ON CONFLICT`.
 Exemplu:
@@ -150,7 +152,8 @@ ALTER ROLE app
 BEGIN;
 SET LOCAL lock_timeout = '2s';
 ALTER TABLE t ADD COLUMN c int;
--- → ERROR: lock timeout, tx anulată
+-- → ERROR: canceling statement
+--   due to lock timeout
 ```
 Legătură: PG-04. În Alembic pui `lock_timeout` la începutul migrației. Ultimul timeout rezolvă și conexiunea uitată de la punctul 1.
 

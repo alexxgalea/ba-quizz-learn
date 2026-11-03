@@ -25,6 +25,7 @@ print(r, r.n)  # → (7,) 7
 Legătură: SQA-12. În Django lucrezi aproape numai prin modele. Aici alegi: Core pentru bulk și ETL, ORM pentru logica pe obiecte.
 
 ### 2
+Greu: da
 Problema: Un tutorial scrie `session.query(User)` și `id = Column(Integer)`, altul `select(User)`. Amesteci stilurile, iar type checkerul nu știe ce tip are `user.id`.
 Ideea: În stilul 2.0 coloanele sunt `Mapped[int] = mapped_column(...)`, deci type checkerul vede tipul atributului. Nullabilitatea vine din adnotare: `Mapped[str | None]` permite NULL, `Mapped[str]` e NOT NULL. Query-ul e un `select()`, ca în Core, dat sesiunii. `scalars()` dă obiectele `User`, nu rânduri. `Session.query()` e API legacy, dar încă merge.
 Exemplu:
@@ -69,13 +70,14 @@ s.scalars(select(User)).all()
 # → [Ana]
 s2.scalars(select(User)).all()
 # → [] (încă necomis)
-s.commit()  # s2 vede [Ana]
+s.commit()  # → s2 vede [Ana]
 ```
 Legătură: SQA-04 și SQA-14. În Django `obj.save()` trimite INSERT imediat și, în autocommit, îl comite; aici `add()` nu trimite nimic. `transaction.atomic()` seamănă cu `with session.begin()`.
 
 ### 5
+Greu: da
 Problema: Într-un request încarci `User` 7 în handler, iar un helper îl încarcă din nou. Modifici un obiect și citești celălalt: vezi valoarea veche. La commit, o copie o suprascrie pe cealaltă.
-Ideea: În aceeași sesiune, un rând (după cheia primară) are un singur obiect Python. `session.get(User, 7)` îl ia din map, fără SQL. Un `select()` tot trimite SQL, dar îți dă obiectul deja încărcat. Map-ul aparține sesiunii, deci nu e un cache între request-uri.
+Ideea: Sesiunea ține un dicționar (identity map) de la cheia primară la obiect, deci același rând dă mereu același obiect Python. `session.get(User, 7)` îl ia din map, fără SQL. Un `select()` tot trimite SQL, dar îți dă obiectul deja încărcat. Map-ul aparține sesiunii, deci nu e un cache între request-uri.
 Exemplu:
 ```text
 a = s.get(User, 7)  # SELECT
@@ -130,6 +132,7 @@ for u in us:
     len(u.orders)  # +1 SELECT
 q = select(User).options(
     selectinload(User.orders))
+us = s.scalars(q).all()
 # → 2 SELECT-uri în total
 ```
 Legătură: SQA-02 și SQA-03. Problema există și în Django, cu aceleași remedii: `select_related` e ca `joinedload`, `prefetch_related` ca `selectinload` (DJ-01).
@@ -169,6 +172,7 @@ s.execute(q)  # fără eroare
 Legătură: SQA-09. Un consumator idempotent din design (punctul 2) se bazează pe asta. În Django, `bulk_create(ignore_conflicts=True)` ignoră rândurile care încalcă o constrângere.
 
 ### 11
+Greu: da
 Problema: Un endpoint de căutare face `text(f"… WHERE name = '{name}'")`. Clientul trimite `' OR 1=1 --`, iar condiția devine adevărată pentru toate rândurile.
 Ideea: Cu parametri legați, SQL-ul conține doar un marcaj (`:name`), iar valoarea ajunge separat, la driver. `select().where(User.name == name)` și `text("… :name")` fac asta; f-string-ul, `%` și `+` nu. Numele de tabele sau coloane nu pot fi parametri; pe acelea le alegi dintr-o listă fixă.
 Exemplu:

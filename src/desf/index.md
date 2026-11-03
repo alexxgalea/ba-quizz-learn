@@ -11,7 +11,7 @@ Grupuri:
 
 ### 1
 Problema: `WHERE email = $1` durează secunde pe 5 milioane de rânduri. Postgres citește tot tabelul (full scan).
-Ideea: Indexul e o structură sortată după coloană, cu pointeri spre rânduri. B-tree-ul implicit din Postgres coboară ca o căutare binară: O(log n), nu O(n).
+Ideea: Indexul e o structură sortată după coloană, cu pointeri spre rânduri. B-tree-ul implicit din Postgres coboară pe niveluri: O(log n), nu O(n).
 Exemplu:
 ```python
 k = 765_432  # cheia căutată
@@ -31,7 +31,7 @@ Legătură: IDX-01 și IDX-12.
 Greu: da
 Problema: Importul de noapte, 10 milioane de rânduri într-o tabelă cu șase indexuri, durează mult mai mult decât într-una fără. Baza ocupă și mai mult disc, deși n-a apărut niciun query nou.
 Ideea: Indexul trebuie ținut sincron cu tabela. Fiecare `INSERT` adaugă câte o intrare în fiecare index, iar un `UPDATE` pe o coloană indexată mută intrarea. `VACUUM` curăță apoi din indexuri versiunile moarte de rânduri. Un `UPDATE` care nu atinge nicio coloană indexată poate sări peste indexuri (HOT update), dacă rândul nou încape în aceeași pagină. Indexezi ce citești des, nu tot.
-Analogie: Indexul alfabetic de la finalul unui manual. Cine caută un termen îl găsește imediat, dar fiecare pagină adăugată sau mutată te obligă să corectezi indexul. Cu șase indexuri corectezi șase liste, iar ele ocupă și ele hârtie.
+Analogie: Indexul alfabetic de la finalul unui manual. Cine caută un termen îl găsește imediat, dar fiecare pagină adăugată sau mutată te obligă să corectezi indexul. Cu șase indexuri corectezi șase liste, iar ele ocupă loc.
 Legătură: IDX-04. Indexurile nefolosite se șterg: costă la scriere și nu aduc nimic la citire.
 
 ### 3
@@ -53,7 +53,7 @@ Legătură: IDX-01. Django creează implicit un index pe fiecare `ForeignKey` (`
 ### 4
 Greu: da
 Problema: Ai un index pe `(tenant_id, created_at)`. „Alertele tenantului 5, cele mai noi” zboară. Apoi cineva cere alertele de azi pentru toți tenanții, doar după `created_at`, și iar e lent.
-Ideea: Indexul compus e sortat după prima coloană, iar în fiecare valoare a ei după a doua, ca o agendă după nume și apoi prenume. De aceea ajută la `a = ?`, la `a = ? AND b = ?` și la `ORDER BY a, b`. Pentru `b = ?` singur, valorile lui `b` sunt împrăștiate prin tot indexul, deci îl parcurgi întreg. Postgres 18 poate sări peste valorile lui `a` (skip scan), în special când sunt puține. Egalitățile merg înaintea intervalelor: intervalul scanat îl limitează egalitățile din față și primul interval.
+Ideea: Indexul compus e sortat după prima coloană, iar în fiecare valoare a ei după a doua, ca o agendă după nume și apoi prenume. De aceea ajută la `a = ?`, la `a = ? AND b = ?` și la `ORDER BY a, b`. Pentru `b = ?` singur, valorile lui `b` sunt împrăștiate prin tot indexul, deci îl parcurgi întreg. Postgres 18 poate sări peste valorile lui `a` (skip scan), în special când sunt puține. Ordinea contează: coloanele cu `=` merg înaintea celei cu interval, iar după primul interval coloanele următoare nu mai restrâng scanarea.
 Exemplu:
 ```python
 ix = [(1, "x"), (1, "y"),
@@ -70,7 +70,7 @@ Legătură: IDX-02.
 
 ### 5
 Greu: da
-Problema: `orders.status` are trei valori: două treimi `done`, o treime `open`, 1% `pending`. Pui un index pe `status`, dar `WHERE status = 'done'` face tot Seq Scan. Echipa vrea doar comenzile `pending`.
+Problema: `orders.status` are trei valori: 66% `done`, 33% `open`, 1% `pending`. Pui un index pe `status`, dar `WHERE status = 'done'` face tot Seq Scan. Echipa vrea doar comenzile `pending`.
 Ideea: Indexul dă rândurile din pagini împrăștiate, iar Postgres socotește o pagină citită aleator de patru ori mai scumpă decât una citită în ordine (`random_page_cost` 4,0 față de `seq_page_cost` 1,0). Când ceri o fracțiune mare din tabel, citirea întregului tabel costă mai puțin, deci planner-ul alege Seq Scan. Valorile frecvente nu merită indexate, de aceea un index parțial acoperă doar rândurile rare. Query-ul îl folosește când `WHERE` implică predicatul indexului.
 Exemplu:
 ```text
@@ -127,7 +127,7 @@ SELECT total, status FROM orders
   WHERE customer_id = 7;
 -- Index Only Scan, Heap Fetches: 0
 ```
-Legătură: IDX-11. Nu-l pui pe coloane late: un tuplu prea mare pentru pagină dă eroare la inserare.
+Legătură: IDX-11. Nu-l pui pe coloane mari: un tuplu prea mare pentru pagină dă eroare la inserare.
 
 ### 9
 Greu: da
@@ -146,7 +146,7 @@ Legătură: IDX-09. În Alembic folosești `op.get_context().autocommit_block()`
 ### 10
 Greu: da
 Problema: Ai adăugat indexul, iar pagina e tot lentă. Fără plan, ghicești: poate Postgres nu-l folosește, poate estimează rânduri greșit.
-Ideea: `EXPLAIN` arată planul ales. `EXPLAIN ANALYZE` rulează query-ul și adaugă timpii și rândurile reale. `BUFFERS` arată paginile citite: `hit` din cache, `read` de pe disc. Cauți Seq Scan unde te așteptai la Index Scan și rânduri estimate față de cele reale; o diferență mare poate însemna statistici vechi, deci rulezi `ANALYZE` pe tabelă. Atenție: `ANALYZE` execută comanda, deci un `UPDATE` sau `DELETE` se aplică; îl pui într-o tranzacție și faci `ROLLBACK`.
+Ideea: `EXPLAIN` arată planul ales. `EXPLAIN ANALYZE` rulează query-ul și adaugă timpii și rândurile reale. `BUFFERS` arată paginile citite: `hit` din cache, `read` de pe disc. Cauți Seq Scan unde te așteptai la Index Scan și rânduri estimate față de cele reale; o diferență mare poate însemna statistici vechi, deci rulezi `ANALYZE` pe tabelă. Atenție: `EXPLAIN ANALYZE` execută comanda, deci un `UPDATE` sau `DELETE` se aplică; îl pui într-o tranzacție și faci `ROLLBACK`.
 Exemplu:
 ```text
 EXPLAIN (ANALYZE, BUFFERS)
@@ -159,7 +159,7 @@ Legătură: IDX-08. `Rows Removed by Filter` mare lângă un Seq Scan înseamnă
 
 ### 11
 Greu: da
-Problema: În Postgres „index” e o structură auxiliară; în Elasticsearch e locul unde stau documentele. Iar `LIKE '%login%'` ar citi tot tabelul.
+Problema: Colegul zice „am creat indexul pentru loguri”, iar tu îți imaginezi un B-tree pe o coloană. El a creat în Elasticsearch o colecție de documente. Discutați zece minute despre lucruri diferite.
 Ideea: În Elasticsearch, un index e un spațiu logic cu o colecție de documente, cam cât un tabel. Dedesubt, un index inversat ține, pentru fiecare termen, documentele care îl conțin. Căutarea unui cuvânt e un lookup în dicționarul de termeni.
 Exemplu:
 ```python
