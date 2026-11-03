@@ -27,7 +27,6 @@ print(q["stoc"])  # → ['#7']
 Legătură: RMQ-10 și CEL-14. Exemplul e o simulare în Python.
 
 ### 2
-Greu: da
 Problema: Alertele au chei ca `alert.critical.db` sau `alert.low.web`. Echipa web vrea toate alertele web, oricare ar fi severitatea. Cu chei exacte ai nevoie de câte un binding pentru fiecare severitate.
 Ideea: Direct: mesajul merge unde cheia lui e egală cu cea din binding. Fanout: ignoră cheia și copiază mesajul în toate cozile legate. Topic: cheia are cuvinte separate prin `.`; în binding, `*` ține locul exact unui cuvânt, iar `#` a zero sau mai multor cuvinte. Headers: potrivește pe antetele mesajului, nu pe cheie.
 Exemplu:
