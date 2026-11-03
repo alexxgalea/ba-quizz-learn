@@ -65,11 +65,11 @@ Ideea: `basic.qos(prefetch_count=N)` limitează câte mesaje neconfirmate are un
 Exemplu:
 ```python
 from operator import mul
-cost = [1, 3]  # s / mesaj
+s = [1, 3]  # s / mesaj
 n = 12
 rr = [n // 2] * 2  # pe rând
-t1 = max(map(mul, rr, cost))
-t2 = n / sum(1 / c for c in cost)
+t1 = max(map(mul, rr, s))
+t2 = n / sum(1 / x for x in s)
 print(t1, round(t2))  # → 18 9
 ```
 Legătură: RMQ-03, DES-04 și punctul 3. Exemplul simulează timpul total pentru 12 mesaje: pe rând durează 18 secunde, cu prefetch 1 durează 9. Fără ack nu primești nimic nou.
@@ -85,7 +85,7 @@ ch.queue_declare("facturi",
 ch.confirm_delivery()
 ch.basic_publish("", "facturi",
   body, pika.BasicProperties(
-    delivery_mode=2))  # persistent
+    delivery_mode=2))  # pe disc
 ```
 Legătură: RMQ-04 și DES-01. Confirmările acoperă drumul până la broker; outbox-ul din DES-01 acoperă drumul de la baza de date până la publicare.
 
@@ -127,8 +127,8 @@ Exemplu:
 ```python
 q = ["add", "edit"]
 done = []
-a = q.pop(0)      # consumatorul A
-b = q.pop(0)      # consumatorul B
+a = q.pop(0)  # consumator A
+b = q.pop(0)  # consumator B
 done += [b, a]  # B e primul
 print(done)  # → ['edit', 'add']
 ```
