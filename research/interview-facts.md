@@ -1067,6 +1067,53 @@ Rulat pe Linux (4 core-uri, 16 GB), Python 3.13.16, NumPy 2.5.3, `g++ 13.3` (`-s
 
 **Erori de fapt în punctele fișei `perf`**: niciuna găsită; punctele nu au fost modificate. Precizări, nu erori: la punctul 1, `py-spy` nu cere întotdeauna root: pe Linux e nevoie de root sau de `ptrace_scope` relaxat, iar în container de `SYS_PTRACE`; la punctul 3, `COPY` și pipelining reduc costul fix per rând, dar pipeline-urile uriașe consumă memorie pe server (loturi de ~10 000); la punctul 4, `re` are un cache al modelelor recente, deci `re.compile` contează în principal pentru modelele folosite des (docs), nu e o optimizare spectaculoasă; la punctul 7, `ProcessPoolExecutor.map` pornește cu `chunksize=1`, iar `Pool.map` își calculează singur unul, deci „chunksize mare” e o necesitate mai ales la executor; „fiecare proces are propriul GIL” e adevărat pentru procese separate (la sub-interpretoare, din 3.12, GIL-ul e per interpretor).
 
+## 38b. Corecturi după review, valul 3 (redis, rabbitmq, docker, ops, linux, perf; 3 noiembrie 2026)
+
+Note care completează secțiunile 33–38.
+
+### Corecturi după review: `redis` și `rabbitmq` (tichetul 17; verificat 3 noiembrie 2026)
+
+De adăugat la secțiunea 34 (`rabbitmq`):
+
+- ✅ **`global` la `basic.qos`** (https://www.rabbitmq.com/docs/consumer-prefetch): „Global (per-channel) QoS prefetch is deprecated and disabled by default starting with RabbitMQ 4.3. Use per-consumer prefetch instead.” Pagina nu pomenește quorum queues. Desfășurarea 4 nu mai vorbește despre `global`; spune doar că limita se aplică fiecărui consumator.
+- ⚠️ **Prefetch mare**: „o valoare mare poate crește debitul, dar lasă mai multe mesaje să aștepte la consumator” rămâne un raționament (formulat cu „poate”), nu un citat din documentație.
+- ⚠️ **`delivery-limit` în exemplul 7**: simularea (limita 3, ieșire după a treia încercare) e ilustrativă; nu s-a rulat un broker, deci numărătoarea exactă (de câte ori e „redelivered” față de limită) nu e afirmată.
+- ✅ **DLX prin policy**: documentația recomandă policy; argumentele `x-dead-letter-exchange` din cod merg, dar nu se pot schimba fără redeploy (secțiunea 13 și https://www.rabbitmq.com/docs/dlx). Desfășurarea spune acum „se recomandă policy”.
+- **Fără C++ la `rabbitmq`** (comparația `std::queue` + `std::mutex` + `std::condition_variable` de la punctul 1 a fost scoasă: o coadă în proces nu are exchange, routing, ack sau persistență). Secțiunea 34, ultima intrare („C++ (punctul 1)”), se șterge. `rabbitmq` rămâne fără C++, iar `redis` doar cu punctul 1.
+
+De adăugat la secțiunea 33 (`redis`): niciun fapt nou. Rezultatele din blocurile `text` (punctele 2, 3, 9) sunt ieșirea reală a `redis-cli` (7.0.15); cursorul 5 de la `SCAN` e ilustrativ (depinde de tabela de hash).
+
+### Corecturi după review (tichetul 18: `docker` și `ops`; verificat 3 noiembrie 2026)
+
+De lipit după secțiunile 35 și 36 din `research/interview-facts.md`.
+
+**`docker`**
+- ✅ **Multi-stage, rulat** (Docker 29.9.1): Dockerfile-ul din desfășurarea 3 (`FROM python:3.13 AS build`, `COPY requirements.txt .`, `RUN pip install --prefix=/install -r requirements.txt`, `FROM python:3.13-slim`, `COPY --from=build /install /usr/local`) a fost construit cu `requirements.txt` = `six`, plus două linii doar pentru sandbox (`COPY ca.crt` și `ENV PIP_CERT=/ca.crt`, certificatul proxy-ului). În imaginea finală, `import six` merge (versiunea 1.17.0) și `which gcc` nu găsește nimic, pe când în `python:3.13` există `gcc` (Debian 14.2.0). Dimensiuni locale: `python:3.13` 1,62 GB, `python:3.13-slim` 178 MB, imaginea finală 176 MB. Imaginea `python:3.13` a fost trasă prin `mirror.gcr.io/library/python:3.13` (Docker Hub dădea 429 Too Many Requests) și etichetată local.
+- ✅ **Oprire cu și fără handler** (secțiunea 35, rulat): cu handler SIGTERM în `app.py`, forma shell → ~10 s și exit 137, forma exec → imediat, exit 0; fără handler, forma exec → 10 s și exit 137. Exemplul din desfășurarea 5 spune acum „app.py instalează handler SIGTERM”.
+- ✅ **Swarm, replici** (rulat): `docker service create --name api --replicas 3 alpine sleep 600`; după `docker rm -f $(docker ps -q --filter name=api.1)`, `docker service ls` arată imediat `2/3`, iar după câteva secunde din nou `3/3`. Desfășurarea 8 scrie „după câteva secunde”.
+- ✅ **Layere** (corectura de la `docker.points[0]`, rulat): `WORKDIR` creează și el un layer de fișiere când creează directorul (în rularea din secțiunea 35: 8 kB), deci lista `RUN`, `COPY`, `ADD` e doar exemplificativă. Formularea finală: „câte unul per instrucțiune care schimbă fișiere, de pildă `RUN`, `COPY`, `ADD`; `ENV` și `CMD` adaugă doar metadate”. Contextul grilei `dk-02` aliniat: „Instrucțiunile care schimbă fișiere (`RUN`, `COPY`, `ADD`) produc layere, iar `ENV` și `CMD` adaugă doar metadate.”
+- ⚠️ Nerulat încă: YAML-ul Compose din desfășurarea 7 (cu `postgres:16`); mecanismul a fost verificat cu servicii alpine (secțiunea 35). Cheia `services:` e acum în exemplu.
+- ℹ️ Nicio grilă `DK-*` nu acoperă slim vs alpine; desfășurarea 9 trimite la cardul oral `o-dk-1` (Dockerfile de producție, imagine slim).
+
+**`ops`**
+- ✅ **YAML GitLab corectat**: exemplul din punctul 7 avea jobul `image` (cuvânt cheie global rezervat: `image`, `services`, `stages`, `cache`, `variables`, `default`, `include`, `workflow`…) cu `stage: build` și `needs: [unit]`, unde `unit` era în `test`, iar ordinea implicită a stage-urilor (`.pre`, `build`, `test`, `deploy`, `.post`, secțiunea 14) pune `build` înaintea lui `test`, deci `needs` spre un stage ulterior era eroare. Versiunea nouă: `unit` (`stage: test`, `services: [postgres:16]`, `script: pytest`) și `deploy` (`stage: deploy`, `needs: [unit]`, `script: ./deploy.sh`), pe stage-urile implicite. Verificat cu PyYAML și un control scris de mână (fiecare job are `script`, niciun nume rezervat, fiecare `needs` arată spre un job dintr-un stage anterior în ordinea implicită). ⚠️ Nerulat în GitLab (nu există instanță) și nevalidat cu `glab` / CI Lint.
+- ✅ **Paralel și variabile protejate**: „Jobs in the same stage run in parallel” depinde de runnerii disponibili, deci textul scrie „pot rula în paralel”. Variabilele protejate sunt disponibile „only to pipelines that run on protected branches or protected tags” (https://docs.gitlab.com/ci/variables/); textul scrie „ramuri și taguri protejate”.
+- ⚠️ **Scoase ca neverificate**: „New Relic APM … defalcă tranzacția pe componente” (nu e în pagina New Relic citită), „O alertă bună ține cont de bugetul de erori” și explicațiile din Legături care aduceau fapte noi (valoarea 2000 e p95, `traceparent`, DK-02 și cache-ul de pip). `traceparent` e acum în Idee, cu faptul din secțiunea 36.
+- ⚠️ **Nuanțat**: „SLI-ul e o percentilă” → „la latență, SLI-ul poate fi o percentilă” (inferență din preferința pentru percentile din capitolul SLO al cărții SRE, nu definiție); „workerul pune ID-ul în context din headerele task-ului” → „workerul îl poate pune în contextul lui” (documentația Celery descrie `before_task_publish` și `headers`, nu cum se citește la worker); RED nu mai e opus lui USE pentru workeri (task-urile Celery au tot rată, erori și durată), textul spune „în plus” pentru adâncimea și vârsta cozii.
+- ℹ️ Exemplul de la punctul 1 are acum comentariul „valori ilustrative”.
+
+## Corecturi tichetul 19 (linux, perf; 3 noiembrie 2026): fapte noi sau schimbate față de secțiunile 37 și 38
+
+- ✅ Rulat (root, sandbox): un script `#!/bin/sh` cu modul `600` (fără bit `x`) dă `Permission denied` (cod 126) chiar ca root; cu `100` rulează. Un fișier cu modul `000` poate fi citit de root. `capabilities(7)`: `CAP_DAC_OVERRIDE` = „Bypass file read, write, and execute permission checks”; pagina nu spune condiția bitului `x` (vine din rularea de mai sus), deci în `linux` 7 formularea e „root ignoră de obicei aceste drepturi, dar nu rulează un fișier fără niciun bit `x`”.
+- `linux` 7: scoase `În C++` și `Unde nu ține` (`chmod` e POSIX, nu C++ standard, iar `0640` față de `0o640` e doar sintaxă literală); fraza despre `0640` ca `SyntaxError` a trecut în Legătură (rulat: `SyntaxError: leading zeros in decimal integer literals are not permitted`). Secțiunea 37, punctul 7, rămâne valabilă pentru restul; C++ la `linux` e acum doar la 1 și 5.
+- `linux` 2 și 4: „`docker inspect` arată de obicei `OOMKilled: true`” (sursă secundară, ⚠️ în 37) și „Connection refused înseamnă de obicei că nimic nu ascultă; un firewall poate da și el un refuz” (REJECT).
+- `perf` 2: exemplul Python cu `run(xs) > 50 * run(s)` a fost înlocuit cu un bloc `text` ilustrativ. Rulat (Python 3.13, 10 000 de căutări, fiecare element al unei liste de 10 000, o dată): `x in lista` 0,70 s, `x in set` 0,001 s (cel mai rău caz, `9999 in xs` de 10 000 de ori: 1,75 s). „Cu 100 000, de o sută de ori mai mult” e extrapolare pătratică, nemăsurată. Blocurile `python` din `perf.md` sunt acum 3 (punctele 5, 6, 8); `text`: 1, 2, 3, 4, 7.
+- `perf` 2, Legătură: scos „N+1 e tot un O(n²)”: N+1 înseamnă N query-uri (O(N) apeluri), nu O(n²); legătura trimite acum doar la fișa sqlalchemy, punctul 8.
+- `perf` 3, 4, 7: toate cifrele de timp sunt marcate „ilustrativ, depinde de mașină”; „ore” și „minute” (nemăsurate) au fost scoase din Problemă. La 7, `chunksize=1` cu `ProcessPoolExecutor.map`: 53–57 s în rulări pe acest sandbox, 15–19 s cu `Pool.map(chunksize=1)`; exemplul scrie `~55 s` și „variază mult”.
+- `perf` 1: `cProfile` se pornește fie cu `python -m cProfile`, fie în cod cu `Profile().enable()` (docs.python.org/3/library/profile.html).
+- `perf` 4: `orjson` — „extensie nativă” în loc de „în Rust” (README-ul nu spune explicit Rust); `re` ține în cache modelele recente (docs `re`, deja în 38).
+- `perf` 6: „la RabbitMQ `prefetch` joacă *de obicei* un rol asemănător” (⚠️ nerulat în 38). `perf` 7: „de obicei, ce trece între procese e pickle” (există și memorie partajată).
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.
