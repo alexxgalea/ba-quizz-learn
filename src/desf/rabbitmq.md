@@ -49,10 +49,10 @@ Ideea: La ack manual brokerul ține mesajul „în zbor” până primește `bas
 Exemplu:
 ```python
 def run(auto_ack):
-    q, flight = [], ["m1"]  # livrat
+    q, f = [], ["m1"]  # livrat
     if auto_ack:
-        flight.clear()  # șters acum
-    return q + flight  # cade
+        f.clear()  # șters acum
+    return q + f  # cade
 print(run(True))   # → []
 print(run(False))  # → ['m1']
 ```
@@ -65,12 +65,12 @@ Ideea: `basic.qos(prefetch_count=N)` limitează câte mesaje neconfirmate are un
 Exemplu:
 ```python
 from operator import mul
-cost = [1, 3]      # secunde / mesaj
+cost = [1, 3]  # s / mesaj
 n = 12
-rr = [n // 2] * 2  # fără prefetch
-t_rr = max(map(mul, rr, cost))
-fair = n / sum(1 / c for c in cost)
-print(t_rr, round(fair))  # → 18 9
+rr = [n // 2] * 2  # pe rând
+t1 = max(map(mul, rr, cost))
+t2 = n / sum(1 / c for c in cost)
+print(t1, round(t2))  # → 18 9
 ```
 Legătură: RMQ-03, DES-04 și punctul 3. Exemplul simulează timpul total pentru 12 mesaje: pe rând durează 18 secunde, cu prefetch 1 durează 9. Fără ack nu primești nimic nou.
 
@@ -111,10 +111,10 @@ Exemplu:
 q, dlq, tries = ["bad"], [], 0
 while q:
     msg = q.pop(0); tries += 1
-    if tries >= 3:          # limita
+    if tries >= 3:  # limita
         dlq.append(msg)
     else:
-        q.append(msg)       # nack
+        q.append(msg)  # nack
 print(tries, dlq)  # → 3 ['bad']
 ```
 Legătură: RMQ-05 și DES-07. Exemplul simulează `delivery-limit` cu o limită de 3.
@@ -144,7 +144,7 @@ queue = ["e1", "e2"]
 log = ["e1", "e2"]
 queue.pop(0)  # ack: dispare
 print(queue)  # → ['e2']
-# jurnalul: recitești de la offset 0
+# jurnal: reciți de la 0
 print(log)  # → ['e1', 'e2']
 ```
 Legătură: RMQ-07. Exemplul simulează în Python o coadă cu ack și un jurnal cu offset.

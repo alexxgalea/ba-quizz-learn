@@ -74,11 +74,11 @@ Exemplu:
 subs, log = [], []
 def publish(m):
     for q in subs: q.append(m)
-    log.append(m)      # doar stream
-publish("e1")          # fără abonat
+    log.append(m)  # doar stream
+publish("e1")  # fără abonat
 subs.append(late := [])
 publish("e2")
-print(late, len(log))  # → ['e2'] 2
+print(len(late), len(log))  # → 1 2
 ```
 Legătură: RD-01 și RMQ-02. Exemplul simulează ambele în Python; în Redis, `PUBLISH` întoarce numărul de abonați care au primit mesajul (0 aici). Un consumer group seamănă cu o coadă RabbitMQ cu ack manual.
 
@@ -103,12 +103,12 @@ Problema: Două workere Celery pornesc la miezul nopții același job de export 
 Ideea: `SET lock token NX PX 30000` face totul într-o comandă: `NX` creează cheia doar dacă lipsește, iar `PX` îi pune TTL, deci lock-ul dispare dacă workerul moare. Token-ul e unic pentru fiecare client. Eliberezi doar dacă valoarea e a ta, cu un script Lua (din Redis 8.4, `DELEX key IFEQ token`); un `DEL` simplu poate șterge lock-ul altuia după ce al tău a expirat. TTL-ul nu garantează exclusivitatea: un proces blocat peste TTL scrie totuși. Pentru corectitudine strictă, resursa verifică un fencing token crescător și respinge numerele mai mici.
 Exemplu:
 ```python
-store = {"lock": "B"}  # A a expirat
+lock = {"v": "B"}  # A a expirat
 def release(tok):
-    if store.get("lock") == tok:
-        del store["lock"]
+    if lock.get("v") == tok:
+        del lock["v"]
 release("A")  # A termină târziu
-print(store)  # → {'lock': 'B'}
+print(lock)  # → {'v': 'B'}
 ```
 Legătură: RD-02 și PG-05. `SKIP LOCKED` urmărește același scop: un singur worker preia resursa. Exemplul simulează în Python verificarea token-ului, pe care în Redis o face scriptul.
 
@@ -118,13 +118,14 @@ Problema: Limita e 100 de cereri pe minut per cheie API, dar ai 4 replici, fieca
 Ideea: Contorul stă în Redis, comun tuturor replicilor. Fixed window: `INCR rl:cheie:minut` plus `EXPIRE`, atomic (`MULTI`/`EXEC` sau Lua). Dacă `EXPIRE` lipsește, cheia rămâne fără TTL. Defect: la granița ferestrei poți primi până la 2× limita. Sliding window: un sorted set cu timestamp-uri; `ZREMRANGEBYSCORE` șterge ce e vechi, `ZCARD` numără. Token bucket: un script Lua care reumple și scade atomic. La depășire răspunzi 429.
 Exemplu:
 ```python
-count = {}
+c = {}
 def allow(t):
     w = t // 60
-    count[w] = count.get(w, 0) + 1
-    return count[w] <= 5
+    c[w] = c.get(w, 0) + 1
+    return c[w] <= 5
 ts = [59] * 5 + [60] * 5
-print(sum(map(allow, ts)))  # → 10
+n = sum(map(allow, ts))
+print(n)  # → 10
 ```
 Legătură: RD-06 și scheletul `s-redis-ratelimit`. Exemplul simulează fereastra fixă în Python: 10 cereri trec în două secunde, deși limita e 5 pe minut.
 
