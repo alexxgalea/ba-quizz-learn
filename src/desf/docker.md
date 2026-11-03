@@ -61,11 +61,11 @@ Exemplu:
 # .dockerignore
 .git
 .env
-# Dockerfile: ARG TOKEN, RUN $TOKEN
+# ARG TOKEN + RUN cu $TOKEN
 docker build --build-arg \
   TOKEN=abc123 -t img .
 docker history --no-trunc img
-# → RUN |1 TOKEN=abc123 /bin/sh …
+# → RUN |1 TOKEN=abc123 …
 ```
 Legătură: DK-05 și DK-06. În Swarm, secretele se dau serviciului cu `docker secret` și se montează în `/run/secrets`, în afara imaginii.
 

@@ -81,7 +81,7 @@ def line(m):
     return f"{rid.get()} {m}"
 print(line("start"))  # → a1b2 start
 ```
-Legătură: OBS-05. Pentru trace-uri, standardul este header-ul `traceparent` (W3C), pe care OpenTelemetry îl propagă singur.
+Legătură: OBS-05. Pentru trace-uri, standardul este header-ul `traceparent` (W3C): trace-id-ul e corelația făcută standard.
 
 ### 7
 Greu: da

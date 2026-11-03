@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md și src/desf/runtime.md și src/desf/security.md și src/desf/celery.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md și src/desf/runtime.md și src/desf/security.md și src/desf/celery.md și src/desf/docker.md și src/desf/ops.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -337,6 +337,38 @@ async def main():
             check(tag + "celery: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{C_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{C_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_celery_{scheme}.png"), full_page=True)
             check(tag + "celery: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- docker (tichetul 18): harta și 9 desfășurări; fără C++ (containerele sunt procese Linux, fără echivalent real în C++11/17); toate exemplele sunt ```text (Dockerfile, shell, YAML), deci niciunul nu e colorat ca Python ----
+            await pg.evaluate(f"document.querySelector('{C_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa precedentă, ca să se deschidă docker
+            dkd = await pg.evaluate("window.PREP.desf.docker")
+            n_dk = await pg.evaluate("window.PREP.sheets.docker.points.length")
+            await open_sheet(pg, "docker")
+            Dk_ = "#sheet-docker "
+            check(tag + "docker: the map and one explanation per point, numbered like the points", dkd and len(dkd["items"]) == n_dk == 9 and len(dkd["map"]["g"]) == 5 and await pg.locator(Dk_ + "ul.pts > li .pn").count() == n_dk and await pg.locator(Dk_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "docker: the map and the explanations start closed", await pg.locator(Dk_ + "[data-dz-map]").count() == 0 and await pg.locator(Dk_ + "[data-dz]").count() == 0)
+            await pg.click(Dk_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "docker: 'Deschide tot' opens the map and every explanation", await pg.locator(Dk_ + "[data-dz]").count() == n_dk and await pg.locator(Dk_ + "[data-dz-map]").count() == 1)
+            check(tag + "docker: no C++ block (and so no 'Unde nu ține'): the module has no real C++ equivalent", not any(x.get("cpp") or x.get("nu") for x in dkd["items"]) and await pg.locator(Dk_ + ".dz-cpp").count() == 0 and await pg.locator(Dk_ + ".dz-nu").count() == 0)
+            check(tag + "docker: every example is a ```text block (Dockerfile, shell, YAML), so none is colored as Python", await pg.locator(Dk_ + "pre.code").count() == 9 and await pg.evaluate("(sel) => [...document.querySelectorAll(sel + ' pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)", "#sheet-docker"))
+            check(tag + "docker: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "docker: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Dk_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Dk_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_docker_{scheme}.png"), full_page=True)
+            check(tag + "docker: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- ops (tichetul 18): harta și 7 desfășurări; fără C++; exemple Python colorate (2, 3, 4, 6) și ```text necolorat (1, 5, 7) ----
+            await pg.evaluate(f"document.querySelector('{Dk_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa precedentă, ca să se deschidă ops
+            obd = await pg.evaluate("window.PREP.desf.ops")
+            n_ob = await pg.evaluate("window.PREP.sheets.ops.points.length")
+            await open_sheet(pg, "ops")
+            Ob_ = "#sheet-ops "
+            check(tag + "ops: the map and one explanation per point, numbered like the points", obd and len(obd["items"]) == n_ob == 7 and len(obd["map"]["g"]) == 4 and await pg.locator(Ob_ + "ul.pts > li .pn").count() == n_ob and await pg.locator(Ob_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "ops: the map and the explanations start closed", await pg.locator(Ob_ + "[data-dz-map]").count() == 0 and await pg.locator(Ob_ + "[data-dz]").count() == 0)
+            await pg.click(Ob_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "ops: 'Deschide tot' opens the map and every explanation", await pg.locator(Ob_ + "[data-dz]").count() == n_ob and await pg.locator(Ob_ + "[data-dz-map]").count() == 1)
+            check(tag + "ops: no C++ block (and so no 'Unde nu ține'): the module has no real C++ equivalent", not any(x.get("cpp") or x.get("nu") for x in obd["items"]) and await pg.locator(Ob_ + ".dz-cpp").count() == 0 and await pg.locator(Ob_ + ".dz-nu").count() == 0)
+            check(tag + "ops: Python examples (2, 3, 4, 6) are colored, ```text examples (1, 5, 7) are not", await pg.evaluate("(sel) => [2, 3, 4, 6].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code [class^=tk-]').length > 0)", "#sheet-ops") and await pg.evaluate("(sel) => [1, 5, 7].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-ops"))
+            check(tag + "ops: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "ops: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Ob_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Ob_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_ops_{scheme}.png"), full_page=True)
+            check(tag + "ops: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
