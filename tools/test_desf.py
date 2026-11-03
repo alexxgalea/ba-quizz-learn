@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md și src/desf/design.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md și src/desf/sqlalchemy.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -235,6 +235,24 @@ async def main():
             check(tag + "design: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{D_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{D_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_design_{scheme}.png"), full_page=True)
             check(tag + "design: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
+            # ---- sqlalchemy (tichetul 11): harta și 12 desfășurări; C++ doar la 6 (RAII față de `with Session`); Python la 1, 3, 6 și 11 (colorat), restul ```text (necolorat) ----
+            await pg.evaluate(f"document.querySelector('{D_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa design, ca să se deschidă sqlalchemy
+            dsq = await pg.evaluate("window.PREP.desf.sqlalchemy")
+            n_sq = await pg.evaluate("window.PREP.sheets.sqlalchemy.points.length")
+            await open_sheet(pg, "sqlalchemy")
+            Q_ = "#sheet-sqlalchemy "
+            check(tag + "sqlalchemy: the map and one explanation per point, numbered like the points", dsq and len(dsq["items"]) == n_sq == 12 and await pg.locator(Q_ + "ul.pts > li .pn").count() == n_sq and await pg.locator(Q_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "sqlalchemy: the map and the explanations start closed", await pg.locator(Q_ + "[data-dz-map]").count() == 0 and await pg.locator(Q_ + "[data-dz]").count() == 0)
+            await pg.click(Q_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "sqlalchemy: 'Deschide tot' opens the map and every explanation", await pg.locator(Q_ + "[data-dz]").count() == n_sq and await pg.locator(Q_ + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{Q_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "sqlalchemy: the C++ block shows only at 6, and always with 'Unde nu ține'", cpp == [i == 5 for i in range(12)] and cpp == [bool(x.get("cpp")) for x in dsq["items"]] and await pg.locator(Q_ + ".dz-cpp").count() == await pg.locator(Q_ + ".dz-cpp .dz-nu").count() == 1, cpp)
+            check(tag + "sqlalchemy: Python examples (1, 3, 6, 11) are colored, ```text examples are not", await pg.evaluate("(sel) => { const col = n => [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')].map(e => e.querySelectorAll('[class^=tk-]').length); return [1, 3, 6, 11].every(n => col(n).length === 1 && col(n)[0] > 0) && [2, 4, 5, 7, 8, 9, 10, 12].every(n => col(n).length === 1 && col(n)[0] === 0); }", "#sheet-sqlalchemy"))
+            check(tag + "sqlalchemy: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "sqlalchemy: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Q_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Q_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_sqlalchemy_{scheme}.png"), full_page=True)
+            check(tag + "sqlalchemy: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
