@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md și src/desf/design.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md și src/desf/index.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -235,6 +235,24 @@ async def main():
             check(tag + "design: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{D_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{D_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_design_{scheme}.png"), full_page=True)
             check(tag + "design: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
+            # ---- index (tichetul 13): harta și 11 desfășurări; C++ la 1, 4, 7 și 11 (std::map, cheie pair, unordered_map, index inversat); exemple Python colorate (1, 4, 6, 11) și SQL ```text necolorat ----
+            await pg.evaluate(f"document.querySelector('{D_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa design, ca să se deschidă index
+            dix = await pg.evaluate("window.PREP.desf.index")
+            n_ix = await pg.evaluate("window.PREP.sheets.index.points.length")
+            await open_sheet(pg, "index")
+            I_ = "#sheet-index "
+            check(tag + "index: the map and one explanation per point, numbered like the points", dix and len(dix["items"]) == n_ix == 11 and await pg.locator(I_ + "ul.pts > li .pn").count() == n_ix and await pg.locator(I_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "index: the map and the explanations start closed", await pg.locator(I_ + "[data-dz-map]").count() == 0 and await pg.locator(I_ + "[data-dz]").count() == 0)
+            await pg.click(I_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "index: 'Deschide tot' opens the map and every explanation", await pg.locator(I_ + "[data-dz]").count() == n_ix and await pg.locator(I_ + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{I_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "index: the C++ block shows only at 1, 4, 7 and 11, and always with 'Unde nu ține'", cpp == [True, False, False, True, False, False, True, False, False, False, True] and cpp == [bool(x.get("cpp")) for x in dix["items"]] and await pg.locator(I_ + ".dz-cpp").count() == await pg.locator(I_ + ".dz-cpp .dz-nu").count(), cpp)
+            check(tag + "index: Python examples (1, 4, 6, 11) are colored, SQL ```text examples (3, 5, 7, 8, 9, 10) are not", await pg.evaluate("(sel) => [1, 4, 6, 11].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code .tk-k').length > 0)", "#sheet-index") and await pg.evaluate("(sel) => [3, 5, 7, 8, 9, 10].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-index"))
+            check(tag + "index: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "index: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{I_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{I_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_index_{scheme}.png"), full_page=True)
+            check(tag + "index: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
