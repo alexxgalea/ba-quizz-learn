@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md și src/desf/runtime.md și src/desf/security.md și src/desf/celery.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md și src/desf/runtime.md și src/desf/security.md și src/desf/celery.md și src/desf/linux.md și src/desf/perf.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -337,6 +337,40 @@ async def main():
             check(tag + "celery: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{C_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{C_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_celery_{scheme}.png"), full_page=True)
             check(tag + "celery: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- linux (tichetul 19): harta și 8 desfășurări; C++ doar la 1 (std::signal), 5 (RAII) și 7 (chmod, literal octal); Python colorat la 1, 2, 5, 7 și ```text necolorat la 3, 4, 6, 8 ----
+            await pg.evaluate(f"document.querySelector('{C_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa celery, ca să se deschidă linux
+            dlx = await pg.evaluate("window.PREP.desf.linux")
+            n_lx = await pg.evaluate("window.PREP.sheets.linux.points.length")
+            await open_sheet(pg, "linux")
+            LX_ = "#sheet-linux "
+            check(tag + "linux: the map and one explanation per point, numbered like the points", dlx and len(dlx["items"]) == n_lx == 8 and len(dlx["map"]["g"]) == 4 and await pg.locator(LX_ + "ul.pts > li .pn").count() == n_lx and await pg.locator(LX_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "linux: the map and the explanations start closed", await pg.locator(LX_ + "[data-dz-map]").count() == 0 and await pg.locator(LX_ + "[data-dz]").count() == 0)
+            await pg.click(LX_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "linux: 'Deschide tot' opens the map and every explanation", await pg.locator(LX_ + "[data-dz]").count() == n_lx and await pg.locator(LX_ + "[data-dz-map]").count() == 1)
+            cpp_lx = await pg.evaluate(f"[...document.querySelectorAll('{LX_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "linux: the C++ block shows only at 1, 5 and 7, and always with 'Unde nu ține'", cpp_lx == [True, False, False, False, True, False, True, False] and cpp_lx == [bool(x.get("cpp")) for x in dlx["items"]] and await pg.locator(LX_ + ".dz-cpp").count() == 3 and await pg.locator(LX_ + ".dz-cpp .dz-nu").count() == 3, cpp_lx)
+            check(tag + "linux: Python examples (1, 2, 5, 7) are colored, the ```text examples (3, 4, 6, 8) are not", await pg.evaluate("(sel) => [1, 2, 5, 7].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code .tk-k').length > 0)", "#sheet-linux") and await pg.evaluate("(sel) => [3, 4, 6, 8].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-linux"))
+            check(tag + "linux: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "linux: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{LX_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{LX_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_linux_{scheme}.png"), full_page=True)
+            check(tag + "linux: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- perf (tichetul 19): harta și 8 desfășurări; C++ doar la 1 (perf, callgrind), 2 (vector, unordered_set, deque) și 7 (std::thread); Python colorat la 2, 5, 6, 8 și ```text necolorat la 1, 3, 4, 7 ----
+            await pg.evaluate(f"document.querySelector('{LX_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa linux, ca să se deschidă perf
+            dpf = await pg.evaluate("window.PREP.desf.perf")
+            n_pf = await pg.evaluate("window.PREP.sheets.perf.points.length")
+            await open_sheet(pg, "perf")
+            PF_ = "#sheet-perf "
+            check(tag + "perf: the map and one explanation per point, numbered like the points", dpf and len(dpf["items"]) == n_pf == 8 and len(dpf["map"]["g"]) == 5 and await pg.locator(PF_ + "ul.pts > li .pn").count() == n_pf and await pg.locator(PF_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "perf: the map and the explanations start closed", await pg.locator(PF_ + "[data-dz-map]").count() == 0 and await pg.locator(PF_ + "[data-dz]").count() == 0)
+            await pg.click(PF_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "perf: 'Deschide tot' opens the map and every explanation", await pg.locator(PF_ + "[data-dz]").count() == n_pf and await pg.locator(PF_ + "[data-dz-map]").count() == 1)
+            cpp_pf = await pg.evaluate(f"[...document.querySelectorAll('{PF_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "perf: the C++ block shows only at 1, 2 and 7, and always with 'Unde nu ține'", cpp_pf == [True, True, False, False, False, False, True, False] and cpp_pf == [bool(x.get("cpp")) for x in dpf["items"]] and await pg.locator(PF_ + ".dz-cpp").count() == 3 and await pg.locator(PF_ + ".dz-cpp .dz-nu").count() == 3, cpp_pf)
+            check(tag + "perf: Python examples (2, 5, 6, 8) are colored, the ```text examples (1, 3, 4, 7) are not", await pg.evaluate("(sel) => [2, 5, 6, 8].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code .tk-k').length > 0)", "#sheet-perf") and await pg.evaluate("(sel) => [1, 3, 4, 7].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-perf"))
+            check(tag + "perf: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "perf: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{PF_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{PF_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_perf_{scheme}.png"), full_page=True)
+            check(tag + "perf: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
