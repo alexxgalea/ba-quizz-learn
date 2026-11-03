@@ -436,6 +436,22 @@ async def main():
             check(tag + "perf: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{PF_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{PF_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_perf_{scheme}.png"), full_page=True)
             check(tag + "perf: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- domain (tichetul 20): harta și 11 desfășurări; fără C++ (nicio comparație reală); exemple Python colorate (3, 4, 10, 11), ```text necolorat (2, 6, 7, 8, 9), fără cod la 1 și 5 (analogii) ----
+            await pg.evaluate(f"document.querySelector('{PF_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa perf, ca să se deschidă domain
+            ddm = await pg.evaluate("window.PREP.desf.domain")
+            n_dm = await pg.evaluate("window.PREP.sheets.domain.points.length")
+            await open_sheet(pg, "domain")
+            DM_ = "#sheet-domain "
+            check(tag + "domain: the map and one explanation per point, numbered like the points", ddm and len(ddm["items"]) == n_dm == 11 and len(ddm["map"]["g"]) == 6 and await pg.locator(DM_ + "ul.pts > li .pn").count() == n_dm and await pg.locator(DM_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "domain: the map and the explanations start closed", await pg.locator(DM_ + "[data-dz-map]").count() == 0 and await pg.locator(DM_ + "[data-dz]").count() == 0)
+            await pg.click(DM_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "domain: 'Deschide tot' opens the map and every explanation", await pg.locator(DM_ + "[data-dz]").count() == n_dm and await pg.locator(DM_ + "[data-dz-map]").count() == 1)
+            check(tag + "domain: no C++ block (and so no 'Unde nu ține'): the module has no real C++ equivalent", not any(x.get("cpp") or x.get("nu") for x in ddm["items"]) and await pg.locator(DM_ + ".dz-cpp").count() == 0 and await pg.locator(DM_ + ".dz-nu").count() == 0)
+            check(tag + "domain: Python examples (3, 4, 10, 11) are colored, ```text examples (2, 6, 7, 8, 9) are not, points 1 and 5 have no code", await pg.evaluate("(sel) => [3, 4, 10, 11].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code .tk-k').length > 0)", "#sheet-domain") and await pg.evaluate("(sel) => [2, 6, 7, 8, 9].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-domain") and await pg.evaluate("(sel) => [1, 5].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code').length === 0)", "#sheet-domain"))
+            check(tag + "domain: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "domain: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{DM_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{DM_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_domain_{scheme}.png"), full_page=True)
+            check(tag + "domain: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
