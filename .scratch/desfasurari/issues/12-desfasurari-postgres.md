@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `postgres`: fără C++ în general; Analogia 
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -35,3 +35,5 @@ Unghiul C++ și legăturile pentru `postgres`: fără C++ în general; Analogia 
 - `SET LOCAL` cu PgBouncer în transaction pooling (punctul 6) e o deducție, nu o afirmație din documentația PgBouncer (tabelul de funcții nu îl listează); e marcat ⚠️ în fapte.
 - `tools/test_desf.py` are un bloc pentru `postgres` (după `design`): 11 desfășurări numerotate ca punctele, harta și desfășurările pornesc închise, „Deschide tot” le deschide, C++ doar la 3 și 5 și mereu cu `Unde nu ține`, un singur bloc Python colorat și restul necolorat, fără overflow la 360 px, light și dark, starea `S` neschimbată, fără erori de consolă. Rulat: ALL PASS.
 - Verificat: `node validate.mjs` (OK), `node build.mjs`, `node --check dist/bundle-check.js`, `node tools/desf_examples.mjs`, `python3 tools/test_desf.py`, screenshot la 360 px în light și dark cu „Deschide tot” (citit). Nu am rulat restul suitei de interfață și nici testele de unitate (le rulează integratorul).
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corecturi aplicate după el: `Greu: da` la punctele cu mai multe idei, procente care adunau 101% (index 5), `EXPLAIN ANALYZE` în loc de `ANALYZE` (index 10), Problema concretă la index 11, mesajul real `canceling statement due to lock timeout` (postgres 8), „idle in transaction” doar după o scriere (postgres 1), rezultatele `# →` lângă linia care le produce (sqlalchemy 5, 8). Publicat la același link (versiunea 39) și în PWA (`docs/app`). Verificat: `validate`, `build`, `node --check`, `desf_examples` (69 de exemple, 0 picate), `npm run test:unit` (338 trec), `test_desf.py`, `test_skel`, `test_skel_ai`, `test_ask`, `test_pwa`, `test_prepapp`, `test_jarvis`, `test_audio`, `test_ai`. Trei teste de interfață pică identic și pe commitul dinainte (`e30262f`): `test_interview`, `test_gaps`, `test_lesson`; planul lor cere seri rămase până la interviu, iar azi (3 noiembrie) e ziua interviului. Nu au legătură cu desfășurările.

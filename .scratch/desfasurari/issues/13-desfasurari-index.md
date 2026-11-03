@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `index`: structurile de date C++ ajută: B-tr
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -33,3 +33,5 @@ Unghiul C++ și legăturile pentru `index`: structurile de date C++ ajută: B-tr
 - Erori de fapt în punctele fișei: niciuna. Precizări, nu erori: la 2, `DELETE` nu scoate imediat intrările din index (le curăță `VACUUM`), iar un `UPDATE` poate evita indexurile (HOT); la 4, `b = ?` singur poate totuși folosi indexul `(a, b)`, parcurgându-l întreg (observat pe PG 16), iar PG 18 poate sări peste valorile lui `a`; la 6, `created_at::date` merge în index doar pe `timestamp`, nu pe `timestamptz` (eroare `IMMUTABLE`); la 8, câștigul depinde de harta de vizibilitate; la 10, din PG 18 `BUFFERS` e inclus automat în `EXPLAIN ANALYZE`.
 - `tools/test_desf.py` are acum o secțiune pentru `index` (11 desfășurări, C++ la 1, 4, 7 și 11 cu `Unde nu ține`, Python colorat la 1, 4, 6, 11 și SQL necolorat la 3, 5, 7, 8, 9, 10, fără overflow la 360 px, light și dark, starea `S` neschimbată).
 - Verificat înainte de commit: `validate` (OK), `build`, `node --check`, `desf_examples` (64, 0 picate), `fencew 36` (nimic în `desf/index.md`), `xcheck index`, `test_desf.py` (ALL PASS), screenshot la 360 px în light și dark cu „Deschide tot” (`shots/desf_index_*.png`). Rămân pentru publicare: suita completă de teste și publicarea la același link.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corecturi aplicate după el: `Greu: da` la punctele cu mai multe idei, procente care adunau 101% (index 5), `EXPLAIN ANALYZE` în loc de `ANALYZE` (index 10), Problema concretă la index 11, mesajul real `canceling statement due to lock timeout` (postgres 8), „idle in transaction” doar după o scriere (postgres 1), rezultatele `# →` lângă linia care le produce (sqlalchemy 5, 8). Publicat la același link (versiunea 39) și în PWA (`docs/app`). Verificat: `validate`, `build`, `node --check`, `desf_examples` (69 de exemple, 0 picate), `npm run test:unit` (338 trec), `test_desf.py`, `test_skel`, `test_skel_ai`, `test_ask`, `test_pwa`, `test_prepapp`, `test_jarvis`, `test_audio`, `test_ai`. Trei teste de interfață pică identic și pe commitul dinainte (`e30262f`): `test_interview`, `test_gaps`, `test_lesson`; planul lor cere seri rămase până la interviu, iar azi (3 noiembrie) e ziua interviului. Nu au legătură cu desfășurările.
