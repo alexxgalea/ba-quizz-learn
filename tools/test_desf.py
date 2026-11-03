@@ -337,6 +337,40 @@ async def main():
             check(tag + "celery: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{C_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{C_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_celery_{scheme}.png"), full_page=True)
             check(tag + "celery: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- redis (tichetul 17): harta și 10 desfășurări; C++ doar la 1 (cu 'Unde nu ține'); exemple Python colorate (1, 5, 6, 7, 8), ```text necolorat (2, 3, 4, 9) ----
+            await pg.evaluate(f"document.querySelector('{C_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa precedentă, ca să se deschidă redis
+            drd = await pg.evaluate("window.PREP.desf.redis")
+            n_rd = await pg.evaluate("window.PREP.sheets.redis.points.length")
+            await open_sheet(pg, "redis")
+            RD_ = "#sheet-redis "
+            check(tag + "redis: the map and one explanation per point, numbered like the points", drd and len(drd["items"]) == n_rd == 10 and len(drd["map"]["g"]) == 6 and await pg.locator(RD_ + "ul.pts > li .pn").count() == n_rd and await pg.locator(RD_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "redis: the map and the explanations start closed", await pg.locator(RD_ + "[data-dz-map]").count() == 0 and await pg.locator(RD_ + "[data-dz]").count() == 0)
+            await pg.click(RD_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "redis: 'Deschide tot' opens the map and every explanation", await pg.locator(RD_ + "[data-dz]").count() == n_rd and await pg.locator(RD_ + "[data-dz-map]").count() == 1)
+            cpp_re = await pg.evaluate("(sel) => [...document.querySelectorAll(sel + ' [data-dz]')].map(e => !!e.querySelector('.dz-cpp'))", "#sheet-redis")
+            check(tag + "redis: the C++ block shows only at 1, and always with 'Unde nu ține'", cpp_re == [True, False, False, False, False, False, False, False, False, False] and cpp_re == [bool(x.get("cpp")) for x in drd["items"]] and await pg.locator(RD_ + ".dz-cpp").count() == 1 and await pg.locator(RD_ + ".dz-nu").count() == 1 and all(bool(x.get("nu")) == bool(x.get("cpp")) for x in drd["items"]))
+            check(tag + "redis: Python examples (1, 5, 6, 7, 8) are colored, ```text examples (2, 3, 4, 9) are not, [10] has no code", await pg.evaluate("(sel) => [1, 5, 6, 7, 8].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code [class^=tk-]').length > 0)", "#sheet-redis") and await pg.evaluate("(sel) => [2, 3, 4, 9].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-redis") and await pg.evaluate("(sel) => [10].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code').length === 0)", "#sheet-redis"))
+            check(tag + "redis: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "redis: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{RD_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{RD_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_redis_{scheme}.png"), full_page=True)
+            check(tag + "redis: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- rabbitmq (tichetul 17): harta și 9 desfășurări; C++ doar la 1 (cu 'Unde nu ține'); exemple Python colorate (1, 3, 4, 6, 7, 8, 9), ```text necolorat (2, 5) ----
+            await pg.evaluate(f"document.querySelector('{RD_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa precedentă, ca să se deschidă rabbitmq
+            drb = await pg.evaluate("window.PREP.desf.rabbitmq")
+            n_rb = await pg.evaluate("window.PREP.sheets.rabbitmq.points.length")
+            await open_sheet(pg, "rabbitmq")
+            RB_ = "#sheet-rabbitmq "
+            check(tag + "rabbitmq: the map and one explanation per point, numbered like the points", drb and len(drb["items"]) == n_rb == 9 and len(drb["map"]["g"]) == 6 and await pg.locator(RB_ + "ul.pts > li .pn").count() == n_rb and await pg.locator(RB_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "rabbitmq: the map and the explanations start closed", await pg.locator(RB_ + "[data-dz-map]").count() == 0 and await pg.locator(RB_ + "[data-dz]").count() == 0)
+            await pg.click(RB_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "rabbitmq: 'Deschide tot' opens the map and every explanation", await pg.locator(RB_ + "[data-dz]").count() == n_rb and await pg.locator(RB_ + "[data-dz-map]").count() == 1)
+            cpp_ra = await pg.evaluate("(sel) => [...document.querySelectorAll(sel + ' [data-dz]')].map(e => !!e.querySelector('.dz-cpp'))", "#sheet-rabbitmq")
+            check(tag + "rabbitmq: the C++ block shows only at 1, and always with 'Unde nu ține'", cpp_ra == [True, False, False, False, False, False, False, False, False] and cpp_ra == [bool(x.get("cpp")) for x in drb["items"]] and await pg.locator(RB_ + ".dz-cpp").count() == 1 and await pg.locator(RB_ + ".dz-nu").count() == 1 and all(bool(x.get("nu")) == bool(x.get("cpp")) for x in drb["items"]))
+            check(tag + "rabbitmq: Python examples (1, 3, 4, 6, 7, 8, 9) are colored, ```text examples (2, 5) are not, [] has no code", await pg.evaluate("(sel) => [1, 3, 4, 6, 7, 8, 9].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code [class^=tk-]').length > 0)", "#sheet-rabbitmq") and await pg.evaluate("(sel) => [2, 5].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-rabbitmq") and await pg.evaluate("(sel) => [].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code').length === 0)", "#sheet-rabbitmq"))
+            check(tag + "rabbitmq: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "rabbitmq: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{RB_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{RB_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_rabbitmq_{scheme}.png"), full_page=True)
+            check(tag + "rabbitmq: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------

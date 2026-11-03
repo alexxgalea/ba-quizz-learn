@@ -1,0 +1,149 @@
+<!-- Desfășurările fișei `redis` (10 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/_desf_facts_redis.md (secțiunea 33) și research/interview-facts.md, secțiunile 13 și 26. Exemplele Python sunt simulări în Python pur (check-ul nu are server Redis); comenzile Redis stau în blocuri `text`, rulate de mână pe Redis 7.0.15. C++ doar la 1 (singurul punct cu echivalent real). -->
+
+### harta
+Problema: Aplicația ta are nevoie de o stare comună și rapidă: contoare, cache, lock-uri, o coadă mică de evenimente. Dacă fiecare operație lovește Postgres, baza ajunge la limita de conexiuni și încetinește. Redis ține datele în RAM și le dă prin comenzi simple, dar RAM-ul e limitat, iar un restart poate șterge totul. Modulul răspunde la patru întrebări: cum lucrează Redis și ce ții în el, cum rămâne în limita memoriei și pe disc, ce tipare construiești cu el și ce eviți.
+Grupuri:
+- 1–2: cum lucrează Redis (comenzi atomice) și ce structuri oferă
+- 3–4: memoria și discul (TTL, evacuare, persistență)
+- 5: mesaje (Pub/Sub și Streams)
+- 6–8: tipare de aplicație (cache, lock, rate limiting)
+- 9: operare fără să blochezi serverul (SCAN)
+- 10: alternativa Valkey
+
+### 1
+Greu: da
+Problema: Două replici ale API-ului numără vizitele paginii. Fiecare citește contorul cu `GET`, adaugă 1 în Python și scrie înapoi cu `SET`. La două vizite deodată, contorul crește cu 1, nu cu 2.
+Ideea: Redis execută comenzile una câte una, deci o comandă nu e întreruptă de alta. `INCR` citește, adaugă și scrie într-o singură comandă, deci e atomică. `GET` urmat de `SET` sunt două comenzi, iar între ele se strecoară alt client. Pentru mai multe comenzi legate folosești `MULTI`/`EXEC` sau un script Lua. Thread-urile din versiunile noi fac alte treburi; comenzile rămân pe unul.
+Exemplu:
+```python
+hits = 0
+a = hits       # A: GET
+b = hits       # B: GET
+hits = a + 1   # A: SET
+hits = b + 1   # B: SET
+# INCR ar fi dat 2
+print(hits)  # → 1
+```
+În C++: `fetch_add(1)` pe un `std::atomic<int>` e un `INCR`, iar `load()` urmat de `store()` e `GET` plus `SET`.
+Unde nu ține: `std::atomic` protejează o variabilă între thread-urile unui proces, printr-o instrucțiune de procesor. Redis e un server cu un singur executor de comenzi, la care vin cereri prin rețea de la mai multe procese. Atomicitatea acoperă o comandă (sau un bloc `MULTI`/script), nu două comenzi separate.
+Legătură: RD-08 și RD-10. Exemplul simulează în Python cele două comenzi; în Redis, `INCR` e una singură. `MULTI`/`EXEC` nu face rollback, spre deosebire de o tranzacție Postgres.
+
+### 2
+Greu: da
+Problema: Vrei clasamentul primilor 100 de jucători dintr-un milion. Ții scorurile într-un singur string JSON. La fiecare punctaj citești tot, sortezi în Python și rescrii tot, iar două scrieri simultane se calcă.
+Ideea: Redis are structuri, fiecare cu comenzi proprii, executate pe server. String: o valoare, un contor (`INCR`) sau un lock (`SET NX PX`). Hash: câmpurile unui obiect. List: o coadă simplă. Set: elemente unice. Sorted set: elemente ordonate după scor, pentru clasamente și ferestre glisante. Stream: jurnal cu consumer groups și ack. Pub/Sub nu stochează nimic, doar dirijează mesaje către cei conectați.
+Exemplu:
+```text
+ZADD lb 30 ana 50 bob 40 cip
+ZREVRANGE lb 0 1 WITHSCORES
+-- bob 50, apoi cip 40
+```
+Legătură: RD-10. Un sorted set face ce ai face în Python cu `sorted(d.items(), key=...)`, dar ordinea se ține la scriere, nu se recalculează la citire. Ferestrele glisante apar la punctul 8, iar Streams la 5.
+
+### 3
+Greu: da
+Problema: Cache-ul de sesiuni nu șterge niciodată nimic. După o lună memoria serverului e plină și scrierile nu mai merg.
+Ideea: TTL face cheia să dispară singură: `SET k v EX 100` sau `EXPIRE`. Un `SET` nou pe aceeași cheie șterge TTL-ul; `INCR` îl lasă. `maxmemory` pune plafonul (implicit 0, fără limită). La plafon decide `maxmemory-policy`. `noeviction`, valoarea implicită, refuză scrierile cu eroare, dar citirile merg. `allkeys-lru` șterge cheile folosite cel mai demult, ca la un cache. Variantele `volatile-*` aleg doar dintre cheile cu TTL.
+Exemplu:
+```text
+SET k 5 EX 100
+INCR k    -- 6, TTL rămâne
+SET k 7   -- TTL dispare
+TTL k     -- -1
+```
+Legătură: RD-07 și RD-11. `allkeys-lru` e ca `functools.lru_cache(maxsize=...)` pe tot Redis-ul. Dacă același Redis ține și cozi Celery, evacuarea le poate șterge, deci separi instanțele.
+
+### 4
+Greu: da
+Problema: Redis se repornește la 3 noaptea. Sesiunile și cozile erau doar în RAM. Dimineața baza e goală sau lipsesc ultimele minute.
+Ideea: RDB face, la intervale, un snapshot compact al întregii baze. Pornirea e rapidă, dar pierzi ce s-a scris după ultimul snapshot, de obicei minute. AOF adaugă într-un jurnal fiecare comandă de scriere și o rejoacă la pornire. Cu `appendfsync everysec` (implicit) pierzi cel mult o secundă; `always` scrie la fiecare comandă, mai lent. Le poți combina, iar la pornire Redis folosește AOF. Implicit, RDB e pornit și AOF oprit. Pentru un cache pur poți renunța la ambele.
+Exemplu:
+```text
+save 60 1000
+appendonly yes
+appendfsync everysec
+```
+Legătură: RD-09. AOF seamănă cu WAL-ul din Postgres, iar RDB cu un `pg_dump` periodic. Documentația recomandă ambele când vrei siguranță comparabilă cu Postgres.
+
+### 5
+Greu: da
+Problema: Serviciul de facturi se repornește 10 secunde. În acest timp serviciul de comenzi publică 20 de evenimente pe un canal Pub/Sub. Facturile nu le primesc niciodată.
+Ideea: Pub/Sub livrează doar abonaților conectați în clipa publicării (at-most-once). Fără abonat, mesajul se pierde definitiv. Un stream păstrează intrările (`XADD`). Un consumer group (`XREADGROUP`) le împarte între consumatori, iar fiecare intrare livrată stă în lista de pending până la `XACK`. Dacă un consumator cade, altul preia intrarea cu `XAUTOCLAIM`. Livrarea e at-least-once, deci handlerul trebuie să fie idempotent.
+Exemplu:
+```python
+subs, log = [], []
+def publish(m):
+    for q in subs: q.append(m)
+    log.append(m)  # doar stream
+publish("e1")  # fără abonat
+subs.append(late := [])
+publish("e2")
+print(len(late), len(log))  # → 1 2
+```
+Legătură: RD-01 și RMQ-02. Exemplul simulează ambele în Python; în Redis, `PUBLISH` întoarce numărul de abonați care au primit mesajul (0 aici). Un consumer group seamănă cu o coadă RabbitMQ cu ack manual.
+
+### 6
+Greu: da
+Problema: Pagina de start vine din cache cu TTL de 60 de secunde. La secunda 60 cheia expiră și 500 de cereri o ratează deodată. Toate rulează același query scump, iar Postgres cade.
+Ideea: În cache-aside, aplicația citește cheia. La miss citește din DB și scrie în cache cu TTL. La scriere în DB șterge cheia din cache. Stampede apare când multe cereri ratează aceeași cheie simultan. Single-flight (un lock) lasă o singură cerere să reconstruiască valoarea, iar celelalte așteaptă sau primesc valoarea veche. TTL cu jitter (TTL aleator în jurul unei valori) împiedică expirarea simultană a multor chei.
+Exemplu:
+```python
+cache = {}
+miss = [k for k in ["home"] * 5
+        if k not in cache]
+print(len(miss))  # → 5
+# single-flight: un singur query
+print(len(set(miss)))  # → 1
+```
+Legătură: RD-03, RD-04 și punctul 7 (lock-ul). Exemplul simulează cele 5 cereri care văd cache-ul gol în același moment. Ordinea „scrii sursa, apoi ștergi cheia” lasă o fereastră mică în care o citire concurentă poate repune o valoare veche.
+
+### 7
+Greu: da
+Problema: Două workere Celery pornesc la miezul nopții același job de export și trimit emailul de două ori. Vrei ca doar unul să ruleze.
+Ideea: `SET lock token NX PX 30000` face totul într-o comandă: `NX` creează cheia doar dacă lipsește, iar `PX` îi pune TTL, deci lock-ul dispare dacă workerul moare. Token-ul e unic pentru fiecare client. Eliberezi doar dacă valoarea e a ta, cu un script Lua (din Redis 8.4, `DELEX key IFEQ token`); un `DEL` simplu poate șterge lock-ul altuia după ce al tău a expirat. TTL-ul nu garantează exclusivitatea: un proces blocat peste TTL scrie totuși. Pentru corectitudine strictă, resursa verifică un fencing token crescător și respinge numerele mai mici.
+Exemplu:
+```python
+lock = {"v": "B"}  # A a expirat
+def release(tok):
+    if lock.get("v") == tok:
+        del lock["v"]
+release("A")  # A termină târziu
+print(lock)  # → {'v': 'B'}
+```
+Legătură: RD-02 și PG-05. `SKIP LOCKED` urmărește același scop: un singur worker preia resursa. Exemplul simulează în Python verificarea token-ului, pe care în Redis o face scriptul.
+
+### 8
+Greu: da
+Problema: Limita e 100 de cereri pe minut per cheie API, dar ai 4 replici, fiecare cu contor în memoria proprie. Un client primește de fapt 400 pe minut, iar contorul dispare la restart.
+Ideea: Contorul stă în Redis, comun tuturor replicilor. Fixed window: `INCR rl:cheie:minut` plus `EXPIRE`, atomic (`MULTI`/`EXEC` sau Lua). Dacă `EXPIRE` lipsește, cheia rămâne fără TTL. Defect: la granița ferestrei poți primi până la 2× limita. Sliding window: un sorted set cu timestamp-uri; `ZREMRANGEBYSCORE` șterge ce e vechi, `ZCARD` numără. Token bucket: un script Lua care reumple și scade atomic. La depășire răspunzi 429.
+Exemplu:
+```python
+c = {}
+def allow(t):
+    w = t // 60
+    c[w] = c.get(w, 0) + 1
+    return c[w] <= 5
+ts = [59] * 5 + [60] * 5
+n = sum(map(allow, ts))
+print(n)  # → 10
+```
+Legătură: RD-06 și scheletul `s-redis-ratelimit`. Exemplul simulează fereastra fixă în Python: 10 cereri trec în două secunde, deși limita e 5 pe minut.
+
+### 9
+Greu: da
+Problema: Un dev rulează `KEYS session:*` pe Redis-ul de producție ca să numere sesiunile. Sunt 20 de milioane de chei. Cât parcurge Redis toate cheile, niciun alt client nu primește răspuns, iar site-ul îngheață.
+Ideea: Redis rulează comenzile pe rând, deci `KEYS` (O(N)) îi blochează pe toți. `SCAN` întoarce o bucată de chei și un cursor; repeți cu cursorul primit până revine 0. Fiecare apel e scurt, deci ceilalți clienți trec printre ele. Prețul: același element poate veni de mai multe ori, iar `COUNT` (implicit 10) e doar o sugestie.
+Exemplu:
+```text
+SCAN 0 MATCH u:* COUNT 2
+-- cursor 5 și cheile u:3, u:1
+SCAN 5 MATCH u:* COUNT 2
+-- continui până cursorul e 0
+```
+Legătură: RD-05. `SCAN` e ca paginarea cu cursor dintr-un API sau ca `search_after` din Elasticsearch: iei datele pe bucăți.
+
+### 10
+Problema: Juridicul întreabă dacă poți rula Redis 7.4 în produs. Licența nu mai e BSD, ci RSALv2 sau SSPLv1.
+Ideea: Valkey e un fork al Redis sub Linux Foundation, cu licență BSD. E compatibil cu Redis OSS 7.2, iar clienții Redis se conectează fără modificări. AWS îl oferă ca ElastiCache for Valkey. Redis a adăugat AGPLv3 la versiunea 8.0.
+Analogie: Ca un fork de repo pe GitHub: cod comun până la un punct, apoi drumuri separate.
+Legătură: RD-10. Alegerea ține de licență și de ce oferă furnizorul de cloud, nu de cod.
