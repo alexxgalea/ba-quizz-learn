@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md și src/desf/design.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md și src/desf/postgres.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -235,6 +235,24 @@ async def main():
             check(tag + "design: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{D_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{D_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_design_{scheme}.png"), full_page=True)
             check(tag + "design: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
+            # ---- postgres (tichetul 12): harta și 11 desfășurări; C++ doar la 3 (lost update) și 5 (deadlock), exemple SQL în blocuri `text` (necolorate), un singur exemplu Python (colorat) ----
+            await pg.evaluate(f"document.querySelector('{D_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa design, ca să se deschidă postgres
+            dfp = await pg.evaluate("window.PREP.desf.postgres")
+            n_pg = await pg.evaluate("window.PREP.sheets.postgres.points.length")
+            await open_sheet(pg, "postgres")
+            G_ = "#sheet-postgres "
+            check(tag + "postgres: the map and one explanation per point, numbered like the points", dfp and len(dfp["items"]) == n_pg == 11 and len(dfp["map"]["g"]) == 5 and await pg.locator(G_ + "ul.pts > li .pn").count() == n_pg and await pg.locator(G_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "postgres: the map and the explanations start closed", await pg.locator(G_ + "[data-dz-map]").count() == 0 and await pg.locator(G_ + "[data-dz]").count() == 0)
+            await pg.click(G_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "postgres: 'Deschide tot' opens the map and every explanation", await pg.locator(G_ + "[data-dz]").count() == n_pg and await pg.locator(G_ + "[data-dz-map]").count() == 1)
+            cpp_pg = [bool(x.get("cpp")) for x in dfp["items"]]
+            check(tag + "postgres: the C++ block shows only at 3 and 5, and always with 'Unde nu ține'", cpp_pg == [False, False, True, False, True, False, False, False, False, False, False] and await pg.locator(G_ + ".dz-cpp").count() == 2 and await pg.locator(G_ + ".dz-cpp .dz-nu").count() == 2, cpp_pg)
+            check(tag + "postgres: only the one Python example is colored; the SQL blocks (and the psycopg snippet) are not", await pg.locator(G_ + "pre.code").count() == 11 and await pg.evaluate(f"(() => {{ const b = [...document.querySelectorAll('{G_}pre.code')]; const col = b.filter(e => e.querySelectorAll('[class^=tk-]').length > 0); return col.length === 1 && /stoc/.test(col[0].textContent) && b.filter(e => /SKIP LOCKED|DETACH PARTITION|cp.write_row/.test(e.textContent)).every(e => e.querySelectorAll('[class^=tk-]').length === 0); }})()"))
+            check(tag + "postgres: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "postgres: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{G_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{G_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_postgres_{scheme}.png"), full_page=True)
+            check(tag + "postgres: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
