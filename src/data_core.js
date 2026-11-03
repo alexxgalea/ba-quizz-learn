@@ -259,7 +259,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
     docker: {
       lead: "Imaginea e template-ul, containerul e procesul care rulează.",
       points: [
-        "Imagine = layere read-only (câte unul per instrucțiune); container = instanță a imaginii + layer de scriere + proces izolat (namespaces, cgroups).",
+        "Imagine = layere read-only (câte unul per instrucțiune care schimbă fișiere: `RUN`, `COPY`, `ADD`; `ENV` și `CMD` adaugă doar metadate); container = instanță a imaginii + layer de scriere + proces izolat (namespaces, cgroups).",
         "Cache de layere: copiezi întâi `requirements.txt`/`pyproject.toml` și instalezi, apoi `COPY . .`.",
         "Multi-stage build: stage de build (compilatoare, wheels) + stage final minimal → imagine mică, suprafață de atac redusă.",
         "`.dockerignore` (venv, .git, secrete). User non-root. Fără secrete în ENV/ARG (rămân în istoric).",
