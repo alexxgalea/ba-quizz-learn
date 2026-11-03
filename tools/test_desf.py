@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md și src/desf/runtime.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md și src/desf/runtime.md și src/desf/security.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -304,6 +304,23 @@ async def main():
             check(tag + "runtime: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{R_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{R_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_runtime_{scheme}.png"), full_page=True)
             check(tag + "runtime: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- security (tichetul 16): harta și 11 desfășurări; C++ doar la 3 (std::system / execvp) și 10 (random_device, memcmp); Python colorat la 1–8 și 10, ```text necolorat la 9 și 11 ----
+            await pg.evaluate(f"document.querySelector('{R_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa runtime, ca să se deschidă security
+            dsc = await pg.evaluate("window.PREP.desf.security")
+            n_sc = await pg.evaluate("window.PREP.sheets.security.points.length")
+            await open_sheet(pg, "security")
+            S_ = "#sheet-security "
+            check(tag + "security: the map and one explanation per point, numbered like the points", dsc and len(dsc["items"]) == n_sc == 11 and len(dsc["map"]["g"]) == 5 and await pg.locator(S_ + "ul.pts > li .pn").count() == n_sc and await pg.locator(S_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "security: the map and the explanations start closed", await pg.locator(S_ + "[data-dz-map]").count() == 0 and await pg.locator(S_ + "[data-dz]").count() == 0)
+            await pg.click(S_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "security: 'Deschide tot' opens the map and every explanation", await pg.locator(S_ + "[data-dz]").count() == n_sc and await pg.locator(S_ + "[data-dz-map]").count() == 1)
+            cpp_sc = await pg.evaluate(f"[...document.querySelectorAll('{S_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "security: the C++ block shows only at 3 and 10, and always with 'Unde nu ține'", cpp_sc == [False, False, True, False, False, False, False, False, False, True, False] and cpp_sc == [bool(x.get("cpp")) for x in dsc["items"]] and await pg.locator(S_ + ".dz-cpp").count() == 2 and await pg.locator(S_ + ".dz-cpp .dz-nu").count() == 2, cpp_sc)
+            check(tag + "security: Python examples (1–8, 10) are colored, the ```text examples (9, 11) are not", await pg.evaluate("(sel) => [1, 2, 3, 4, 5, 6, 7, 8, 10].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code .tk-k').length > 0)", "#sheet-security") and await pg.evaluate("(sel) => [9, 11].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-security"))
+            check(tag + "security: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "security: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{S_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{S_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_security_{scheme}.png"), full_page=True)
+            check(tag + "security: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
