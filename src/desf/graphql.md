@@ -1,4 +1,4 @@
-<!-- Desfășurările fișei `graphql` (7 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/_desf_facts_graphql.md (secțiunea 41) și research/interview-facts.md, secțiunea 14. Fără C++: modulul nu are echivalent real. Exemplele de query și de schemă sunt în blocuri `text` (nerulate); cele Python sunt simulări fără biblioteci. -->
+<!-- Desfășurările fișei `graphql` (7 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 41 și 14. Fără C++: modulul nu are echivalent real. Exemplele de query și de schemă sunt în blocuri `text` (nerulate); cele Python sunt simulări fără biblioteci. -->
 
 ### harta
 Problema: Un ecran React are nevoie de alerte, de sistemul fiecăreia și de userul care a deschis-o. Cu REST faci mai multe apeluri și primești și câmpuri pe care nu le folosești. GraphQL lasă clientul să ceară exact ce vrea, dar serverul plătește: multe query-uri spre baza de date, cereri scumpe și erori greu de văzut. Modulul răspunde la șase întrebări: ce e un API GraphQL și ce câștigă clientul, ce plătește serverul, cum îl scrii în Python, cum vezi erorile, cum îl aperi și cum îl schimbi fără `/v2`.
@@ -38,43 +38,41 @@ query {
   }
 }
 ```
-Legătură: GQL-03. În React, un ecran își declară datele într-un singur query.
+Legătură: GQL-03.
 
 ### 3
 Greu: da
-Problema: Query-ul de la punctul 2 cere 100 de alerte, fiecare cu `system { name }`. Serverul apelează resolverul câmpului `system` separat pentru fiecare alertă. Rezultă 1 query pentru listă și 100 pentru sisteme, adică 101.
-Ideea: Un resolver e funcția care produce valoarea unui câmp. Pentru o listă, serverul o apelează pentru fiecare element. Un query pentru listă plus N pentru elemente se numește N+1. DataLoader strânge cheile cerute în același moment al event loop-ului și cheamă o singură dată `load_fn` cu toate. Funcția întoarce valorile în ordinea cheilor, cu `None` unde lipsesc. Loaderul ține și un cache, iar la fiecare request creezi unul nou, altfel servește date vechi.
+Problema: Query-ul de la punctul 2 cere 20 de alerte, fiecare cu `system { name }`. Serverul apelează resolverul câmpului `system` separat pentru fiecare alertă. Rezultă 1 query pentru listă și 20 pentru sisteme, adică 21.
+Ideea: Un resolver e funcția care produce valoarea unui câmp. Pentru o listă, serverul o apelează pentru fiecare element. Un query pentru listă plus N pentru elemente se numește N+1. DataLoader strânge cheile cerute în același moment al event loop-ului și cheamă o singură dată funcția de încărcare (`load_fn`) cu toate. Ea întoarce valorile în ordinea cheilor, cu `None` unde lipsesc. Loaderul ține și un cache, iar la fiecare request creezi unul nou, altfel servește date vechi.
 Exemplu:
 ```python
-fara, cu = [], []  # queries
 ids = [1, 2, 2, 3]  # system_id
-for i in ids:
-    fara.append([i])
-cu.append(sorted(set(ids)))
-print(len(fara))  # → 4
-print(cu)  # → [[1, 2, 3]]
+fara = 1 + len(ids)  # N+1
+lot = sorted(set(ids))
+cu = 1 + 1  # lista + un lot
+print(fara, cu)  # → 5 2
+print(lot)  # → [1, 2, 3]
 ```
-Legătură: GQL-01. `selectinload` din SQLAlchemy și `prefetch_related` din Django rezolvă același N+1.
+Legătură: GQL-01, fișa sqlalchemy (punctul 8) și fișa django (punctul 1).
 
 ### 4
 Problema: Ai deja FastAPI cu type hints și Pydantic. Pentru GraphQL poți scrie schema de mână într-un fișier separat sau o poți genera din codul Python.
-Ideea: Strawberry e code-first: scrii clase Python cu type hints, iar schema se generează din ele. Se montează în FastAPI cu `GraphQLRouter`. Graphene e tot code-first, dar mai vechi, cu tipurile lui (`ObjectType`, `String()`), nu cu type hints. Ariadne e schema-first: scrii schema în SDL și legi funcții Python de ea.
+Ideea: Strawberry e code-first: scrii clase Python cu type hints, iar schema se generează (`title: str` devine `title: String!`). Se montează în FastAPI cu `GraphQLRouter`. Graphene e tot code-first, dar mai vechi, cu tipurile lui (`ObjectType`, `String()`), nu cu type hints. Ariadne e schema-first: scrii schema în SDL și legi funcții Python de ea.
 Exemplu:
-```text
-@strawberry.type
+```python
 class Alert:
+    id: int
     title: str
-# generează în schemă:
-# type Alert {
-#   title: String!
-# }
+# Strawberry citește hint-urile:
+a = Alert.__annotations__
+print(list(a))  # → ['id', 'title']
 ```
 Legătură: GQL-07. Ca Pydantic în FastAPI, tipurile din cod devin contractul API-ului.
 
 ### 5
 Greu: da
 Problema: Dashboard-ul de monitorizare alertează la 5xx. După trecerea la GraphQL, câmpul `system` pică pentru o alertă, iar userii văd `null`. Dashboard-ul rămâne verde, fiindcă răspunsul e 200.
-Ideea: Un răspuns GraphQL are `data` și, dacă ceva a mers prost, `errors`, cu un `path` către câmp. Un câmp care pică devine `null`, iar restul datelor vin. La un câmp cu `!`, `null` urcă la cel mai apropiat părinte care îl acceptă. Specificația GraphQL peste HTTP recomandă 2xx când `data` există și nu e `null`, chiar cu erori. O cerere invalidă primește de obicei 400, dar unele servere vechi răspund tot 2xx. Deci numeri răspunsurile cu `errors` din corp.
+Ideea: Un răspuns GraphQL are `data` și, dacă ceva a mers prost, `errors`, cu un `path` către câmp. Un câmp care pică devine `null`, iar restul datelor vin. La un câmp cu `!`, `null` urcă la cel mai apropiat părinte care îl acceptă. Draftul GraphQL over HTTP cere, pentru `application/graphql-response+json`, un cod 2xx când `data` există și nu e `null`, chiar cu `errors`. Când `data` lipsește, cere 4xx sau 5xx, de exemplu la o cerere care nu trece validarea. Unele servere vechi, cu `application/json`, răspund tot 2xx. Deci numeri răspunsurile cu `errors` din corp.
 Exemplu:
 ```python
 s = 200  # status HTTP
@@ -84,12 +82,12 @@ b = {"data": {"a": None},
 print(s >= 500)  # → False
 print("errors" in b)  # → True
 ```
-Legătură: OBS-03. RED numără erorile după 5xx, aici le citești din `errors`.
+Legătură: OBS-03.
 
 ### 6
 Greu: da
 Problema: Fiecare alertă are 100 de reguli, iar fiecare regulă are 100 de alerte. Un client trimite un query cu trei niveluri din astea: un singur request cere un milion de obiecte. Alt user își cere o alertă, apoi `rule { alerts }`, și vede alertele altor clienți.
-Ideea: Clientul alege forma query-ului, deci serverul îi pune limite: adâncime (în Strawberry, `QueryDepthLimiter`), complexitate, timeout și pagini de dimensiune maximă. Autorizarea o faci în resolvere sau în stratul de date, pe obiect și pe câmp. Persisted queries lasă serverul să execute doar documente cunoscute, dar nu merg la un API public cu clienți terți. Introspecția o oprești în producție doar la un API pentru clienții tăi, și nu ține loc de autorizare.
+Ideea: Clientul alege forma query-ului, deci serverul îi pune limite. Adâncimea o limitezi (în Strawberry, `QueryDepthLimiter`). Complexitatea înseamnă un cost pe câmp, iar peste un prag cererea se respinge. Mai pui timeout și pagini de dimensiune maximă. Autorizarea o faci în resolvere sau în stratul de date, pe obiect și pe câmp. Persisted queries, în varianta allowlist (trusted documents pe graphql.org), lasă serverul să execute doar documente cunoscute; nu merg la un API public cu clienți terți. Introspecția e interogarea prin care un client află schema. O oprești în producție doar la un API pentru clienții tăi. Nu ține loc de autorizare.
 Exemplu:
 ```python
 n = 3  # niveluri

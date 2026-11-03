@@ -1,7 +1,7 @@
 <!-- Desfășurările fișei `domain` (11 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunea 39 (Onapsis, SAP, SOC; verificate pe onapsis.com, sap.com, learning.sap.com, NIST, MITRE), plus 20 și 22 la exemplele Python. Fără C++: modulul nu are echivalent real (spec și tichet). Ce spune Onapsis despre propriile produse e marcat în text drept afirmația firmei („după Onapsis”, „pagina produsului”); exemplele Python arată ideea în mic, nu codul Defend. -->
 
 ### harta
-Problema: O companie mare își ține facturile, salariile și stocurile într-un sistem SAP, deci o compromitere îi oprește business-ul. Un SIEM generic primește logurile lui, dar nu înțelege contextul SAP: nu știe care rând e un atac. Modulul răspunde la șase întrebări: ce vinde Onapsis și pe ce zone lucrează inginerii, cum detectează Defend atacurile, ce dovezi reale are Onapsis, cum arată platforma de azi, ce vocabular trebuie să știi și ce ai construi tu în jurul detecției.
+Problema: O companie mare își ține facturile, salariile și stocurile într-un sistem SAP, deci o compromitere îi oprește business-ul. După fișă, un SIEM generic primește logurile lui, dar nu înțelege contextul SAP și nu știe care rând e un atac. Modulul răspunde la șase întrebări: ce vinde Onapsis și pe ce zone lucrează inginerii, cum detectează Defend atacurile, ce dovezi reale are Onapsis, cum arată platforma de azi, ce vocabular trebuie să știi și ce ai construi tu în jurul detecției.
 Grupuri:
 - 1–2: ce vinde Onapsis și pe ce zone de produs lucrează inginerii
 - 3–5: cum detectează Defend (monitorizare, reguli, alerte în SIEM, pre-patch protection)
@@ -18,12 +18,15 @@ Legătură: Cardul oral o-dom-1 cere prezentarea.
 
 ### 2
 Problema: Anunțul numește trei zone de produs: Threat Detection & Response, Vulnerability Management și Compliance Automation. Pentru cineva din afară sună la fel, iar la interviu le amesteci.
-Ideea: Fiecare zonă răspunde la altă întrebare a unui client SAP. Detecția întreabă dacă cineva atacă acum. Managementul vulnerabilităților întreabă ce găuri sunt deschise. Compliance-ul întreabă dacă poți dovedi unui auditor că regulile se respectă. Pe site, Defend e detecția, iar Assess e vulnerabilitățile și compliance-ul.
+Ideea: Fiecare zonă răspunde la altă nevoie a unui client SAP. Detecția prinde un atac în desfășurare. Managementul vulnerabilităților găsește și prioritizează găurile deschise. Compliance-ul dă auditorului dovezi că regulile se respectă. Pe pagina principală, Defend e detecția, iar Assess acoperă vulnerabilitățile și compliance-ul.
 Exemplu:
 ```text
-Defend: ne atacă cineva acum?
-Assess: ce vulnerabilități avem?
-Assess: putem dovedi conformitatea?
+„Cineva exploatează o breșă acum”
+  → detecție (Defend)
+„Lipsește un patch pe 40 de sisteme”
+  → vulnerabilități (Assess)
+„Auditorul cere dovezi SOX”
+  → compliance (Assess)
 ```
 Legătură: Zonele vin din anunțul RO-1186 (research/job-8805551002-gaps.md).
 
@@ -43,7 +46,7 @@ Legătură: DOM-01.
 ### 4
 Greu: da
 Problema: Un sistem SAP scrie evenimente non-stop, iar un analist nu le poate citi rând cu rând. Un login ciudat arată ca oricare altul până când o regulă îl recunoaște.
-Ideea: Defend rulează reguli de detecție peste evenimente. Pagina produsului spune „over 2,600 detection rules” și vorbește separat de „600+ exclusive, proprietary exploit rules”. Datasheet-ul spune „2,000+”: cifra diferă între documente. Datasheet-ul numește ABAP, Java, HANA și SAProuter. Pagina de azi adaugă on-prem, cloud, RISE și BTP. Același produs vorbește de „AI-powered anomaly scoring”. O regulă e o condiție pe un eveniment; exemplul încearcă două.
+Ideea: Defend rulează reguli de detecție peste evenimentele unui sistem SAP. O regulă e o condiție pe un eveniment, iar exemplul încearcă două. Pagina produsului spune „over 2,600 detection rules”. Tot acolo apar „600+ exclusive, proprietary exploit rules”. Datasheet-ul spune „2,000+”, deci cifra diferă între documente. Datasheet-ul numește ABAP, Java, HANA și SAProuter. Pagina de azi adaugă on-prem, cloud, RISE și BTP. Ea vorbește și de „AI-powered anomaly scoring”.
 Exemplu:
 ```python
 def brute(e): return e["fail"] > 4
@@ -65,12 +68,12 @@ Legătură: DOM-05 și DOM-08.
 ### 6
 Greu: da
 Problema: Spui la interviu „Onapsis e singura platformă aprobată de SAP”, iar intervievatorul cere un exemplu. Ai dat o afirmație mai tare decât site-ul și niciun caz concret.
-Ideea: Site-ul spune „Endorsed by SAP” despre platformă. „The only SAP-endorsed automated SAP application security testing software” apare la Control și e afirmația firmei. RECON (CVE-2020-6287, CVSS 10) e din NetWeaver AS Java, cu patch în iulie 2020. Numele înseamnă Remotely Exploitable Code On NetWeaver. ICMAD, din februarie 2022, include CVE-2022-22536, tot CVSS 10, plus două defecte mai mici. Onapsis a lucrat cu SAP la ambele.
+Ideea: La interviu spui „Endorsed by SAP” și dai un caz. Site-ul folosește „Endorsed by SAP” despre platformă. „The only SAP-endorsed automated SAP application security testing software” apare la Control și e afirmația firmei. RECON (CVE-2020-6287, CVSS 10) e din NetWeaver AS Java, cu patch în iulie 2020. Numele înseamnă Remotely Exploitable Code On NetWeaver. ICMAD, din februarie 2022, include CVE-2022-22536, tot CVSS 10, plus două defecte mai mici. Onapsis a lucrat cu SAP la ambele.
 Exemplu:
 ```text
-iul. 2020: RECON, CVE-2020-6287
-feb. 2022: ICMAD, CVE-2022-22536
-ambele CVE-uri: CVSS 10
+„Platforma e Endorsed by SAP.
+ Research Labs a găsit RECON,
+ CVSS 10, în NetWeaver Java.”
 ```
 Legătură: OVERPASS (punctul 7) e al treilea caz.
 
@@ -90,36 +93,34 @@ Research Labs găsește defectul
 Legătură: E exemplul tău pentru pre-patch protection (DOM-08).
 
 ### 8
-Greu: da
 Problema: Intervievatorul întreabă cum folosești AI în lucru. Dacă nu știi că și produsul Onapsis are straturi de AI, răspunsul rămâne generic.
-Ideea: Platforma include mai multe produse. Assess ține vulnerabilitățile. Defend face detecție și răspuns. Control analizează codul și transporturile SAP. Security Advisor dă ghidare cu AI. Peste ele stă „Agentic AI Fabric”, care rulează agenți: Autonomous SOC, VulnOps, remediere, compliance, threat intel. Anunțul cere experiență practică cu Cursor, GitHub Copilot, Claude Code, LLM APIs și scripturi agentice.
+Ideea: Pagina principală spune că platforma livrează prin „Agentic AI Fabric”. Agenții ei includ Autonomous SOC, VulnOps, Remediation, Compliance și Threat Intel. Meniul are și Security Advisor, „AI-powered SAP security guidance”. Anunțul cere experiență practică cu Cursor, GitHub Copilot, Claude Code, LLM APIs și scripturi agentice.
 Exemplu:
 ```text
-Assess: vulnerabilități
-Defend: detecție și răspuns
-Control: cod și transporturi
-Security Advisor: ghidare cu AI
-peste ele: Agentic AI Fabric
+1. unealta: Cursor, Claude Code…
+2. ce ai livrat mai repede
+3. ce ai verificat tu
+4. legătura: produsul are agenți
 ```
 Legătură: Cardul o-beh-5 cere un exemplu concret cu AI în livrare.
 
 ### 9
+Greu: da
 Problema: Anunțul și grilele spun „SAP”, „ERP”, „ABAP” și „S/4HANA”. Dacă le amesteci, spui că ABAP e o bază de date sau că S/4HANA e un limbaj.
 Ideea: SAP e firma, iar produsul ei de bază e un ERP. Un ERP ține procesele de bază ale unei companii: finanțe, contabilitate, HR, logistică. ABAP e limbajul propriu SAP pentru aplicații de business. HANA e baza de date în memorie. S/4HANA e „next-generation ERP” al SAP și rulează doar pe HANA.
 Exemplu:
 ```text
-SAP: firma și produsele ei
-ERP: finanțe, logistică, HR
-ABAP: limbajul aplicațiilor SAP
-HANA: baza de date în memorie
-S/4HANA: ERP nou, doar pe HANA
+„ABAP e o bază de date.”
+  → nu: e limbajul, baza e HANA
+„S/4HANA e un limbaj.”
+  → nu: e ERP-ul, pe HANA
 ```
-Legătură: DOM-02 întreabă exact asta.
+Legătură: DOM-02 întreabă ce e SAP; explicația lui pomenește ERP, ABAP și S/4HANA.
 
 ### 10
 Greu: da
 Problema: Intervievatorul întreabă: „Cum scazi MTTD fără să crească alert fatigue?” Dacă nu știi termenii, nu poți răspunde, chiar dacă știi tehnic.
-Ideea: SIEM adună și corelează evenimentele de securitate. IoC e un artefact observabil care sugerează un atac sau o compromitere (NIST). MITRE ATT&CK e o bază de cunoștințe cu tacticile și tehnicile atacatorilor. Fals-pozitivul e o alertă pe ceva legitim. Prea multe duc la alert fatigue: analiștii încep să le ignore. MTTD e timpul mediu până la detecție. La MTTR, R poate fi repair, recovery, respond sau resolve, deci întrebi ce înseamnă la ei.
+Ideea: După fișă, SIEM adună și corelează evenimentele de securitate (NIST SP 800-92 spune doar „centralized logging”). IoC e un artefact observabil care sugerează un atac sau o compromitere (NIST). MITRE ATT&CK e o bază de cunoștințe cu tacticile și tehnicile atacatorilor. Fals-pozitivul e o alertă pe ceva legitim. Prea multe duc la alert fatigue: analiștii încep să le ignore. MTTD e timpul mediu până la detecție. La MTTR, R poate fi repair, recovery, respond sau resolve, deci întrebi ce înseamnă la ei.
 Exemplu:
 ```python
 from statistics import mean
@@ -133,16 +134,16 @@ Legătură: DOM-04, DOM-05 și DOM-06.
 ### 11
 Greu: da
 Problema: Un worker pică și coada retrimite evenimentele. Clientul primește aceeași alertă de două ori, iar SOC-ul o investighează de două ori.
-Ideea: Fluxul e: ingestie de loguri, normalizare, reguli, alerte, integrare cu SIEM. Ordinea contează per sistem, deci partiționezi după `system_id`. Idempotența cere o cheie de alertă, ca o retrimitere să nu dubleze. Multi-tenant înseamnă că și cheia include clientul. Regulile le testezi pe loguri reale, anonimizate.
+Ideea: Fluxul e: ingestie de loguri, normalizare, reguli, alerte, integrare cu SIEM. Ordinea contează per sistem, deci partiționezi după `system_id`. Idempotența înseamnă că aceeași alertă trimisă de două ori are efectul uneia. O ții cu o cheie. Multi-tenant înseamnă mai mulți clienți în același sistem, deci cheia îi separă. Regulile le testezi pe loguri reale, anonimizate.
 Exemplu:
 ```python
 seen = set()
-def send(k):
-    new = k not in seen
-    seen.add(k)
-    return new
-k = ("A", "P1", 5)
-print(send(k))  # → True
-print(send(k))  # → False
+def send(tenant, system, ts):
+    k = (tenant, system, ts)
+    if k in seen: return False
+    seen.add(k); return True
+print(send("A", "P1", 5))  # → True
+print(send("A", "P1", 5))  # → False
+print(send("B", "P1", 5))  # → True
 ```
 Legătură: Kata k2 (deduplicare de alerte), DOM-07 și fișa celery, punctul 3.

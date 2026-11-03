@@ -1,4 +1,4 @@
-<!-- Desfășurările fișei `behav` (5 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/_desf_facts_behav.md (secțiunea 40). Conținutul vine doar din fișă, din Studiu → Comportamental (P.extra.behav) și din cardurile o-beh-1…5; ce ține de Onapsis e verificat pe onapsis.com. Fără C++ și fără cod: exemplele sunt răspunsuri-model în blocuri `text`, cu cifrele reale lăsate în paranteze pătrate pentru Alex. -->
+<!-- Desfășurările fișei `behav` (5 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunea 40. Conținutul vine doar din fișă, din Studiu → Comportamental (P.extra.behav) și din cardurile o-beh-1…5; ce ține de Onapsis e verificat pe onapsis.com. Fără C++ și fără cod: exemplele sunt răspunsuri-model în blocuri `text`, cu cifrele reale lăsate în paranteze pătrate pentru Alex. -->
 
 ### harta
 Problema: Ți se spune „Spune-mi câte ceva despre tine” sau „Povestește-mi un incident”. Dacă improvizezi, pierzi firul, povestești ce a făcut echipa și uiți rezultatul. Modulul răspunde la patru întrebări: cum te prezinți în 90 de secunde, cum spui o poveste, ce povești ai gata și cum răspunzi când nu ai folosit o tehnologie sau când ți se dă cuvântul la final.
@@ -26,7 +26,7 @@ Legătură: cardul o-beh-1. Textul complet e în Studiu → Comportamental.
 ### 2
 Greu: da
 Problema: Povestești incidentul așa: „S-a stricat clusterul, am încercat mai multe lucruri și până la urmă a mers.” Ascultătorul nu află ce ai făcut tu și nici ce s-a rezolvat.
-Ideea: STAR are patru părți. Situația e contextul, într-o propoziție. Task-ul e ce trebuia obținut. Acțiunea e ce ai făcut tu, cu verbe la persoana I: „am reinițializat clusterul”, nu „s-a reinițializat”. Rezultatul vine cu un număr, dacă există. Dacă nu ai număr, spui ce s-a schimbat după. Cifrele le pui tu, din ce s-a întâmplat.
+Ideea: STAR are patru părți. Situația e contextul, într-o propoziție. Task-ul e ce trebuia obținut. Acțiunea e ce ai făcut tu, cu verbe la persoana I: „am reinițializat clusterul”, nu „s-a reinițializat”. Rezultatul vine cu un număr, dacă există, de exemplu cât a durat incidentul. Dacă nu ai număr, spui ce s-a schimbat după.
 Exemplu:
 ```text
 S: Un nod manager Swarm și-a
@@ -38,7 +38,7 @@ A: Am reinițializat clusterul
    rețeaua overlay a Redis.
 R: [durata; ce am schimbat]
 ```
-Legătură: o-beh-3 și o-beh-4. Intervievatorul AI cere ce lipsește din STAR: ce ai făcut tu, rezultatul, o cifră.
+Legătură: o-beh-3 și o-beh-4.
 
 ### 3
 Problema: Ți se cere „un incident”, apoi „o problemă de securitate”, apoi „un design”. Dacă inventezi fiecare răspuns pe loc, pierzi timp cu detaliile și nu mai ajungi la rezultat.
@@ -68,11 +68,11 @@ trece pe server: N+1, limite
 de adâncime. Aș începe cu
 Strawberry pe FastAPI.
 ```
-Legătură: Harta din Studiu → Comportamental pune RabbitMQ, AWS, GraphQL și New Relic ca puncte de legătură. Diferența REST / GraphQL e în GQL-03.
+Legătură: harta „Stack-ul Onapsis ↔ experiența ta” din Studiu → Comportamental și GQL-03.
 
 ### 5
 Problema: La final auzi „Aveți întrebări pentru noi?” și răspunzi „Nu, mi-ați spus tot.” Interviul se termină fără să fi arătat ce te interesează la rol.
-Ideea: Pregătești două-trei întrebări. Le alegi pe cele despre cum se construiește detecția, produsul pe care îl scrie echipa: drumul unei detecții noi, unde rulează Defend și cum se testează, cum arată succesul după trei–șase luni. Pe cele despre rol le poți pune managerului, iar pe cele tehnice colegilor din echipă.
+Ideea: Pregătești două-trei întrebări, câte una dintr-o zonă: cum lucrează echipa (drumul unei detecții), ce probleme ridică produsul (unde rulează) și ce se așteaptă de la tine (succesul în rol). Toate arată că te interesează cum se construiește detecția. Pe cele despre rol le poți pune managerului, iar pe cele tehnice colegilor din echipă.
 Exemplu:
 ```text
 1. Cum ajunge o detecție nouă
