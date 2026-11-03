@@ -13,13 +13,13 @@ Problema: La „Spune-mi câte ceva despre tine” începi cu liceul, treci prin
 Ideea: Pitch-ul de 90 de secunde are trei părți, în ordinea asta: prezent, trecut, de ce rolul ăsta. Prezentul spune ce construiești și cu ce stack. Trecutul alege două-trei realizări, nu tot CV-ul. Ultima parte leagă ce ai făcut de ce construiește Onapsis: detecție de amenințări pentru sisteme SAP. Îl repeți cu voce tare până sună natural, nu recitat.
 Exemplu:
 ```text
-Prezent: full-stack, platformă de
-video analytics (DRF, React).
+Prezent: full-stack, platformă
+de video analytics (DRF, React).
 Trecut: dashboard builder,
-integrarea Milestone, incidentul
-Swarm.
-De ce aici: backend Python la volum
-și securitate.
+integrarea Milestone,
+incidentul Swarm.
+De ce aici: backend Python
+la volum și securitate.
 ```
 Legătură: cardul o-beh-1. Textul complet e în Studiu → Comportamental.
 
@@ -30,13 +30,13 @@ Ideea: STAR are patru părți. Situația e contextul, într-o propoziție. Task-
 Exemplu:
 ```text
 S: Un nod manager Swarm și-a
-   schimbat IP-ul, quorum pierdut.
-T: Readuc clusterul în stare bună.
-A: Am reinițializat clusterul pe
-   managerul sănătos, am scos
+   schimbat IP-ul; fără quorum.
+T: Readuc clusterul la viață.
+A: Am reinițializat clusterul
+   pe managerul sănătos, am scos
    nodurile vechi, am reparat
    rețeaua overlay a Redis.
-R: [cât a durat; ce am schimbat]
+R: [durata; ce am schimbat]
 ```
 Legătură: o-beh-3 și o-beh-4. Intervievatorul AI cere ce lipsește din STAR: ce ai făcut tu, rezultatul, o cifră.
 
@@ -45,11 +45,11 @@ Problema: Ți se cere „un incident”, apoi „o problemă de securitate”, a
 Ideea: Pregătești patru povești, câte una pe tip de întrebare. Fiecare are deja STAR-ul scris în Studiu → Comportamental. Cifrele și durata le completezi tu. La interviu alegi povestea după întrebare, nu după ce îți vine în minte.
 Exemplu:
 ```text
-întrebare   -> povestea
-incident    -> Swarm, quorum pierdut
-securitate  -> injecție în ES
-design      -> dashboard builder
-integrare   -> Milestone
+întrebare  -> povestea
+incident   -> Swarm, quorum
+securitate -> injecție în ES
+design     -> dashboard builder
+integrare  -> Milestone
 ```
 Legătură: o-beh-3 și o-beh-4. Studiu → Comportamental mai are două povești: auditul Celery și AI în livrare.
 
@@ -59,13 +59,14 @@ Problema: Ești întrebat „Ai lucrat cu GraphQL?”, iar tu nu l-ai folosit î
 Ideea: Spui direct că nu ai folosit tehnologia în producție. Numești ce ai folosit pentru aceeași problemă. Spui ce diferă. Încheii cu felul în care ai începe. Puntea arată că înțelegi problema, nu doar numele uneltei.
 Exemplu:
 ```text
-N-am folosit GraphQL în producție.
-Am făcut API-uri REST cu DRF, unde
-serializer-ul fixează forma.
-În GraphQL o fixează clientul, iar
-costul trece pe server: N+1,
-limite de adâncime.
-Aș începe cu Strawberry pe FastAPI.
+N-am folosit GraphQL în
+producție. Am făcut API-uri
+REST cu DRF: serializer-ul
+fixează forma. În GraphQL o
+fixează clientul, iar costul
+trece pe server: N+1, limite
+de adâncime. Aș începe cu
+Strawberry pe FastAPI.
 ```
 Legătură: Harta din Studiu → Comportamental pune RabbitMQ, AWS, GraphQL și New Relic ca puncte de legătură. Diferența REST / GraphQL e în GQL-03.
 
@@ -74,11 +75,12 @@ Problema: La final auzi „Aveți întrebări pentru noi?” și răspunzi „Nu
 Ideea: Pregătești două-trei întrebări. Le alegi pe cele despre cum se construiește detecția, produsul pe care îl scrie echipa: drumul unei detecții noi, unde rulează Defend și cum se testează, cum arată succesul după trei–șase luni. Pe cele despre rol le poți pune managerului, iar pe cele tehnice colegilor din echipă.
 Exemplu:
 ```text
-1. Cum ajunge o detecție nouă de
-   la cercetare la un client?
-2. Unde rulează Defend: la client
-   sau în cloud? Cum testați?
-3. Cum arată succesul în rol după
-   trei–șase luni?
+1. Cum ajunge o detecție nouă
+   de la cercetare la client?
+2. Unde rulează Defend: la
+   client sau în cloud? Cum
+   testați?
+3. Cum arată succesul în rol
+   după trei–șase luni?
 ```
 Legătură: Studiu → Comportamental are lista de întrebări, din care alegi două-trei.

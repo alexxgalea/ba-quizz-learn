@@ -11,7 +11,7 @@ Grupuri:
 - 7: cum îl schimbi (`@deprecated`, fără `/v2`)
 
 ### 1
-Problema: Backend-ul are zece endpoint-uri REST și nicio descriere comună. Frontend-ul vrea un ecran nou și află ce întoarce fiecare endpoint abia când îl apelează.
+Problema: Backend-ul are mai multe endpoint-uri REST și nicio descriere comună. Frontend-ul vrea un ecran nou și află ce întoarce fiecare endpoint abia când îl apelează.
 Ideea: GraphQL are un singur endpoint, de obicei `/graphql`, și o schemă tipată. Schema e contractul dintre client și server, iar fiecare cerere se validează față de ea înainte să ruleze. Punctele de intrare sunt trei tipuri speciale: `Query` pentru citire, `Mutation` pentru scriere și `Subscription` pentru un flux de evenimente. Semnul `!` înseamnă că valoarea nu poate fi `null`.
 Exemplu:
 ```text
@@ -46,12 +46,12 @@ Problema: Query-ul de la punctul 2 cere 100 de alerte, fiecare cu `system { name
 Ideea: Un resolver e funcția care produce valoarea unui câmp. Pentru o listă, serverul o apelează pentru fiecare element. Un query pentru listă plus N pentru elemente se numește N+1. DataLoader strânge cheile cerute în același moment al event loop-ului și cheamă o singură dată `load_fn` cu toate. Funcția întoarce valorile în ordinea cheilor, cu `None` unde lipsesc. Loaderul ține și un cache, iar la fiecare request creezi unul nou, altfel servește date vechi.
 Exemplu:
 ```python
-fara, cu = [], []
+fara, cu = [], []  # queries
 ids = [1, 2, 2, 3]  # system_id
 for i in ids:
-    fara.append([i])  # per alertă
-cu.append(sorted(set(ids)))  # lot
-print(len(fara), len(cu))  # → 4 1
+    fara.append([i])
+cu.append(sorted(set(ids)))
+print(len(fara))  # → 4
 print(cu)  # → [[1, 2, 3]]
 ```
 Legătură: GQL-01. `selectinload` din SQLAlchemy și `prefetch_related` din Django rezolvă același N+1.
@@ -78,12 +78,13 @@ Ideea: Un răspuns GraphQL are `data` și, dacă ceva a mers prost, `errors`, cu
 Exemplu:
 ```python
 s = 200  # status HTTP
-b = {"data": {"alert": None},
-     "errors": [{"message": "x"}]}
+e = [{"path": ["a"]}]
+b = {"data": {"a": None},
+     "errors": e}
 print(s >= 500)  # → False
 print("errors" in b)  # → True
 ```
-Legătură: OBS-03. RED numără erorile după 5xx; aici le citești din `errors`.
+Legătură: OBS-03. RED numără erorile după 5xx, aici le citești din `errors`.
 
 ### 6
 Greu: da
@@ -91,11 +92,12 @@ Problema: Fiecare alertă are 100 de reguli, iar fiecare regulă are 100 de aler
 Ideea: Clientul alege forma query-ului, deci serverul îi pune limite: adâncime (în Strawberry, `QueryDepthLimiter`), complexitate, timeout și pagini de dimensiune maximă. Autorizarea o faci în resolvere sau în stratul de date, pe obiect și pe câmp. Persisted queries lasă serverul să execute doar documente cunoscute, dar nu merg la un API public cu clienți terți. Introspecția o oprești în producție doar la un API pentru clienții tăi, și nu ține loc de autorizare.
 Exemplu:
 ```python
-nivele = 3
-print(100 ** nivele)  # → 1000000
-print(20 ** nivele)  # → 8000
+n = 3  # niveluri
+print(100 ** n)  # → 1000000
+p = 20  # pagină maximă
+print(p ** n)  # → 8000
 ```
-Legătură: GQL-02, GQL-05 și SEC-08. Cifra 20 e dimensiunea maximă a paginii.
+Legătură: GQL-02, GQL-05 și SEC-08.
 
 ### 7
 Problema: Backend-ul vrea `severityLevel` (număr) în locul lui `severity` (text). Un client vechi încă cere `severity`. În REST ai scoate un `/v2`; dacă ștergi câmpul, clientul vechi pică.
