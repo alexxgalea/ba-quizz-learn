@@ -84,7 +84,7 @@ Research Labs găsește defectul
 → îl raportează la SAP
 → Defend detectează tentative
    (după Onapsis)
-→ Patch Day: Security Note 3747649
+→ Patch Day: Note 3747649
 → clientul aplică patch-ul
 ```
 Legătură: E exemplul tău pentru pre-patch protection (DOM-08).

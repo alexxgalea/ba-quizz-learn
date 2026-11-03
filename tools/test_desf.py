@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md, src/desf/runtime.md, src/desf/security.md și src/desf/celery.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md, src/desf/runtime.md, src/desf/security.md, src/desf/celery.md și src/desf/domain.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -337,6 +337,22 @@ async def main():
             check(tag + "celery: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{C_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{C_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_celery_{scheme}.png"), full_page=True)
             check(tag + "celery: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- domain (tichetul 20): harta și 11 desfășurări; fără C++ (nicio comparație reală); exemple Python colorate (3, 4, 10, 11), ```text necolorat (2, 6, 7, 8, 9), fără cod la 1 și 5 (analogii) ----
+            await pg.evaluate(f"document.querySelector('{C_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa celery, ca să se deschidă domain
+            ddm = await pg.evaluate("window.PREP.desf.domain")
+            n_dm = await pg.evaluate("window.PREP.sheets.domain.points.length")
+            await open_sheet(pg, "domain")
+            DM_ = "#sheet-domain "
+            check(tag + "domain: the map and one explanation per point, numbered like the points", ddm and len(ddm["items"]) == n_dm == 11 and len(ddm["map"]["g"]) == 6 and await pg.locator(DM_ + "ul.pts > li .pn").count() == n_dm and await pg.locator(DM_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "domain: the map and the explanations start closed", await pg.locator(DM_ + "[data-dz-map]").count() == 0 and await pg.locator(DM_ + "[data-dz]").count() == 0)
+            await pg.click(DM_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "domain: 'Deschide tot' opens the map and every explanation", await pg.locator(DM_ + "[data-dz]").count() == n_dm and await pg.locator(DM_ + "[data-dz-map]").count() == 1)
+            check(tag + "domain: no C++ block (and so no 'Unde nu ține'): the module has no real C++ equivalent", not any(x.get("cpp") or x.get("nu") for x in ddm["items"]) and await pg.locator(DM_ + ".dz-cpp").count() == 0 and await pg.locator(DM_ + ".dz-nu").count() == 0)
+            check(tag + "domain: Python examples (3, 4, 10, 11) are colored, ```text examples (2, 6, 7, 8, 9) are not, points 1 and 5 have no code", await pg.evaluate("(sel) => [3, 4, 10, 11].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code .tk-k').length > 0)", "#sheet-domain") and await pg.evaluate("(sel) => [2, 6, 7, 8, 9].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-domain") and await pg.evaluate("(sel) => [1, 5].every(n => document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code').length === 0)", "#sheet-domain"))
+            check(tag + "domain: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "domain: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{DM_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{DM_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_domain_{scheme}.png"), full_page=True)
+            check(tag + "domain: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
