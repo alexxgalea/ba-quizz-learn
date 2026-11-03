@@ -11,10 +11,10 @@ Grupuri:
 - 11: cum arată pipeline-ul pe care l-ai construi
 
 ### 1
-Problema: O companie mare își ține facturile, salariile și stocurile într-un sistem SAP. Antivirusul și firewall-ul nu văd ce se petrece în aplicație. Dacă sistemul e compromis, se oprește business-ul.
-Ideea: Onapsis vinde securitate pentru aplicații business-critical, mai ales SAP și Oracle. Research Labs caută vulnerabilități în ele și le raportează producătorului. Un comunicat din 2022 vorbește de peste 1.000 de vulnerabilități zero-day descoperite și remediate.
-Analogie: Paznicul unei bănci știe ce înseamnă ușa seifului deschisă noaptea. Paznicul unui bloc de birouri vede doar o ușă.
-Legătură: Cardul oral o-dom-1 cere exact prezentarea asta.
+Problema: O companie mare își ține facturile, salariile și stocurile într-un sistem SAP. Antivirusul și firewall-ul nu văd în aplicație. Dacă e compromis, se oprește business-ul.
+Ideea: Onapsis vinde securitate pentru aplicații business-critical, mai ales SAP și Oracle. Research Labs caută vulnerabilități în ele și le raportează producătorului. Un comunicat din 2022 spune că a găsit și a ajutat la remedierea a peste 1.000 de zero-day-uri.
+Analogie: Paznicul unei bănci știe ce înseamnă ușa seifului deschisă noaptea. Cel dintr-un bloc de birouri vede doar o ușă.
+Legătură: Cardul oral o-dom-1 cere prezentarea.
 
 ### 2
 Problema: Anunțul numește trei zone de produs: Threat Detection & Response, Vulnerability Management și Compliance Automation. Pentru cineva din afară sună la fel, iar la interviu le amesteci.
@@ -43,7 +43,7 @@ Legătură: DOM-01.
 ### 4
 Greu: da
 Problema: Un sistem SAP scrie evenimente non-stop, iar un analist nu le poate citi rând cu rând. Un login ciudat arată ca oricare altul până când o regulă îl recunoaște.
-Ideea: Defend rulează reguli de detecție peste evenimente. Pagina produsului spune „over 2,600 detection rules”, din care „600+ exclusive, proprietary exploit rules”. Datasheet-ul mai vechi spune „2,000+”, deci cifra crește. Datasheet-ul numește ABAP, Java, HANA și SAProuter. Pagina de azi adaugă on-prem, cloud, RISE și BTP. Același produs vorbește de „AI-powered anomaly scoring”. O regulă e o condiție pe un eveniment; exemplul încearcă două.
+Ideea: Defend rulează reguli de detecție peste evenimente. Pagina produsului spune „over 2,600 detection rules” și vorbește separat de „600+ exclusive, proprietary exploit rules”. Datasheet-ul spune „2,000+”: cifra diferă între documente. Datasheet-ul numește ABAP, Java, HANA și SAProuter. Pagina de azi adaugă on-prem, cloud, RISE și BTP. Același produs vorbește de „AI-powered anomaly scoring”. O regulă e o condiție pe un eveniment; exemplul încearcă două.
 Exemplu:
 ```python
 def brute(e): return e["fail"] > 4
@@ -65,19 +65,19 @@ Legătură: DOM-05 și DOM-08.
 ### 6
 Greu: da
 Problema: Spui la interviu „Onapsis e singura platformă aprobată de SAP”, iar intervievatorul cere un exemplu. Ai dat o afirmație mai tare decât site-ul și niciun caz concret.
-Ideea: Site-ul spune „Endorsed by SAP” despre platformă. „The only SAP-endorsed automated SAP application security testing software” apare doar la Control și e afirmația firmei. RECON (CVE-2020-6287, CVSS 10) e din NetWeaver AS Java, cu patch în iulie 2020. Numele înseamnă Remotely Exploitable Code On NetWeaver. ICMAD, din februarie 2022, include CVE-2022-22536, tot CVSS 10, plus două defecte mai mici. Onapsis le-a anunțat împreună cu SAP.
+Ideea: Site-ul spune „Endorsed by SAP” despre platformă. „The only SAP-endorsed automated SAP application security testing software” apare la Control și e afirmația firmei. RECON (CVE-2020-6287, CVSS 10) e din NetWeaver AS Java, cu patch în iulie 2020. Numele înseamnă Remotely Exploitable Code On NetWeaver. ICMAD, din februarie 2022, include CVE-2022-22536, tot CVSS 10, plus două defecte mai mici. Onapsis a lucrat cu SAP la ambele.
 Exemplu:
 ```text
 iul. 2020: RECON, CVE-2020-6287
 feb. 2022: ICMAD, CVE-2022-22536
-amândouă: CVSS 10
+ambele CVE-uri: CVSS 10
 ```
 Legătură: OVERPASS (punctul 7) e al treilea caz.
 
 ### 7
 Greu: da
 Problema: În septembrie 2026 apare un defect cu scor maxim în kernelul SAP, exploatabil de la distanță și fără parolă. Clientul trebuie să testeze patch-ul înainte să-l pună în producție. Până atunci sistemul rămâne expus.
-Ideea: OVERPASS (CVE-2026-44756) e un defect în procesarea Extended Passport (EPP), structura SAP de tracing atașată cererilor. Are CVSS 10.0. Onapsis Research Labs l-a găsit și l-a raportat la SAP. Patch-ul e Security Note 3747649, din Patch Day-ul din septembrie 2026. Onapsis spune că Defend putea detecta încercările de exploatare înainte de patch. Tot după Onapsis, nu exista exploatare activă observată la publicarea articolului.
+Ideea: OVERPASS (CVE-2026-44756) e un defect în procesarea Extended Passport (EPP), structura SAP de tracing atașată cererilor. Are CVSS 10.0. Onapsis Research Labs l-a găsit și l-a raportat la SAP. Patch-ul e Security Note 3747649, din Patch Day-ul din septembrie 2026. Onapsis spune că Defend putea detecta încercările de exploatare înainte de patch. Articolul spune și că Onapsis nu observase exploatare in the wild.
 Exemplu:
 ```text
 Research Labs găsește defectul
@@ -92,7 +92,7 @@ Legătură: E exemplul tău pentru pre-patch protection (DOM-08).
 ### 8
 Greu: da
 Problema: Intervievatorul întreabă cum folosești AI în lucru. Dacă nu știi că și produsul Onapsis are straturi de AI, răspunsul rămâne generic.
-Ideea: Platforma de azi are patru produse. Assess ține vulnerabilitățile. Defend face detecție și răspuns. Control analizează codul și transporturile SAP. Security Advisor dă ghidare cu AI. Peste ele stă „Agentic AI Fabric”, care rulează agenți: Autonomous SOC, VulnOps, remediere, compliance, threat intel. Anunțul cere experiență practică cu Cursor, GitHub Copilot, Claude Code, LLM APIs și scripturi agentice.
+Ideea: Platforma include mai multe produse. Assess ține vulnerabilitățile. Defend face detecție și răspuns. Control analizează codul și transporturile SAP. Security Advisor dă ghidare cu AI. Peste ele stă „Agentic AI Fabric”, care rulează agenți: Autonomous SOC, VulnOps, remediere, compliance, threat intel. Anunțul cere experiență practică cu Cursor, GitHub Copilot, Claude Code, LLM APIs și scripturi agentice.
 Exemplu:
 ```text
 Assess: vulnerabilități
@@ -109,10 +109,10 @@ Ideea: SAP e firma, iar produsul ei de bază e un ERP. Un ERP ține procesele de
 Exemplu:
 ```text
 SAP: firma și produsele ei
-ERP: finanțe, supply chain, HR
+ERP: finanțe, logistică, HR
 ABAP: limbajul aplicațiilor SAP
 HANA: baza de date în memorie
-S/4HANA: ERP-ul actual, pe HANA
+S/4HANA: ERP nou, doar pe HANA
 ```
 Legătură: DOM-02 întreabă exact asta.
 
