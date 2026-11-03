@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `docker` și `ops`: fără C++ în general; L
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -35,3 +35,6 @@ Unghiul C++ și legăturile pentru `docker` și `ops`: fără C++ în general; L
 - Precizări, nu erori (în desfășurări, punctele rămân neschimbate): `docker` 5, exec form nu ajunge: PID 1 nu primește acțiunea implicită a SIGTERM, deci aplicația are nevoie de handler sau de `--init` (rulat: 10 s și exit 137 fără handler, 0 s și exit 0 cu handler); `docker` 6, Docker simplu doar marchează containerul `unhealthy`, nu îl repornește (rulat); `docker` 9, „alpine poate rupe wheels” e valabil doar pentru pachetele fără wheel `musllinux` (`torch`), nu pentru toate (`psycopg2-binary` are azi); `ops` 2, RED e pentru servicii cu request-uri, USE și vârsta mesajelor pentru un worker fără HTTP; `ops` 3, percentilele nu se mediază între instanțe; `ops` 6, `X-Request-ID` e o convenție, iar standardul pentru trace-uri e `traceparent` (W3C); `ops` 7, `cache` nu are garanții.
 - `tools/test_desf.py` are două blocuri noi, după `celery`: `docker` (9 desfășurări, hartă cu 5 grupuri, fără C++, toate exemplele necolorate) și `ops` (7 desfășurări, hartă cu 4 grupuri, fără C++, exemplele Python 2, 3, 4, 6 colorate și 1, 5, 7 necolorate), cu aceleași verificări ca la celelalte module (numere, închis implicit, „Deschide tot”, overflow la 360 px, light și dark, starea `S`, consola). Rulat: ALL PASS.
 - Verificat: `node validate.mjs` (OK, fără avertismente pentru fișierele mele), `node build.mjs`, `node --check dist/bundle-check.js`, `node tools/desf_examples.mjs`, `node tools/fencew.mjs 36` (curat pentru `docker.md` și `ops.md`), `python3 tools/test_desf.py` (ALL PASS) și screenshot la 360 px în light și dark cu „Deschide tot” (citit pe bucăți). Nu am rulat restul suitei de interfață și nici testele de unitate (le rulează integratorul).
+
+**3 nov. 2026 (închidere):** Eroare de fapt corectată în punctele fișei: `docker`, punctul 1, în `src/data_core.js`. Înainte: „layere read-only (câte unul per instrucțiune)”. Acum: „câte unul per instrucțiune care schimbă fișiere, de pildă `RUN`, `COPY`, `ADD`; `ENV` și `CMD` adaugă doar metadate” (verificat cu `docker history`; `WORKDIR` creează și el un layer de fișiere). Contextul grilei `dk-02` (`src/data_ctx.js`) spunea „Fiecare instrucțiune produce un layer” și a fost aliniat; variantele grilei și explicația ei nu s-au schimbat (`dk-02` nu depinde de formularea veche).
+Review (`/code-review`, Standards și Spec): corecturi aplicate. `docker` 3: exemplul multi-stage e construit și rulat (imaginea finală nu are `gcc`); `docker` 5: arată și handler-ul SIGTERM (fără el, `docker stop` așteaptă 10 s și iese cu 137); `ops` 7: exemplul GitLab era invalid (jobul `image` e cuvânt rezervat, iar `needs` arăta spre un stage ulterior); acum e redenumit și ordonat (verificat cu PyYAML și manual, nerulat în GitLab); `ops` 2: „în plus” în loc de „nu cu RED”; valori ilustrative marcate la `ops` 1; Legăturile sunt trimiteri. Publicat la același link (versiunea 41) și în PWA.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `linux` și `perf`: C++ ajută la `perf` (pro
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -35,3 +35,5 @@ Unghiul C++ și legăturile pentru `linux` și `perf`: C++ ajută la `perf` (pro
 - Cifrele din exemplele `text` de la `perf` depind de mașină (4 core-uri, sandbox) și variază mult între rulări; în desfășurare sunt rotunjite, iar concluzia (ordinul de mărime) e cea stabilă. La `perf` 7, `chunksize=1` a durat 53–55 s în două rulări.
 - `tools/test_desf.py` are acum câte o secțiune pentru `linux` și `perf` (8 desfășurări, harta cu 4 și 5 grupuri; C++ la 1, 5 și 7, respectiv 1, 2 și 7, cu `Unde nu ține`; Python colorat la 1, 2, 5, 7, respectiv 2, 5, 6, 8; `text` necolorat la restul; fără overflow la 360 px, light și dark, starea `S` neschimbată, fără erori de consolă).
 - Verificat înainte de commit: `validate` (OK), `build`, `node --check`, `desf_examples` (99, 0 picate), `xcheck` și `fencew 36` (nimic în `desf/linux.md` și `desf/perf.md`), `tests/unit` pentru `desf` (39 pass), `test_desf.py` (ALL PASS), screenshot la 360 px în light și dark, cu „Deschide tot” (`shots/desf_linux_*.png`, `shots/desf_perf_*.png`; felii din cele patru). Câteva rânduri de cod au 33–36 de caractere și se frâng la 360 px; rămân în limita validării. Rămân pentru publicare: suita completă de teste și publicarea la același link.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): corecturi aplicate. `perf` 2: „durează minute” era exagerat (acum măsurat: listă ~0,7 s, set ~0,001 s, ilustrativ), iar „N+1 e O(n²)” era greșit; cifrele de timp de la `perf` 3, 4 și 7 sunt marcate „ilustrativ, depinde de mașină”; `perf` 4 spune acum și că `re` ține în cache modelele recente; harta `perf` n-are fraza „împarți un cost fix” (contrazicea punctele 2, 6, 8); `linux` 4: și un firewall poate da „connection refused”; `linux` 7: comparația C++ (`chmod` față de `0o640`) e scoasă (era doar o diferență de sintaxă, iar `chmod` e POSIX), deci `linux` are C++ la 1 și 5; „root ignoră drepturile” nuanțat (fără bit `x` un fișier nu rulează). Publicat la același link (versiunea 41) și în PWA.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `redis` și `rabbitmq`: fără C++ în genera
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -35,3 +35,5 @@ Livrat: `src/desf/redis.md` (harta cu 6 grupuri și 10 desfășurări), `src/des
 - **Exemple**: 5 blocuri Python la `redis` (1, 5, 6, 7, 8) și 7 la `rabbitmq` (1, 3, 4, 6, 7, 8, 9) rulează în `node tools/desf_examples.mjs` (103 în total, picate 0); sunt simulări în Python pur, anunțate ca atare în Legătură. Comenzile Redis din blocurile `text` (2, 3, 4, 9) au fost rulate de mână pe Redis 7.0.15 (`redis-cli` / `redis-py`). **RabbitMQ nu e instalabil în mediu**: nimic din `rabbitmq` n-a rulat pe un broker; tabelul topic (2) și codul `pika` (5) sunt în blocuri `text`, cu faptele din documentația RabbitMQ (4.3.x), marcate ca neexecutate în `_desf_facts_rabbitmq.md`.
 - **Verificări rulate**: `node validate.mjs` (OK, fără avertismente pentru cele două fișiere), `node build.mjs`, `node --check dist/bundle-check.js`, `node tools/desf_examples.mjs`, `node tools/fencew.mjs 36` (nimic din desfășurări), `node tools/xcheck.mjs redis rabbitmq`, `python3 tools/test_desf.py` (ALL PASS, light și dark, inclusiv blocurile noi și nicio eroare de consolă), screenshot-uri la 360 px, citite pe fișe cu „Deschide tot” (rândurile de cod scurtate la ≤ 32 de caractere unde s-a putut).
 - **Nesiguranțe**: pagina Streams (277 000 de caractere) a fost citită doar în primele 100 000, deci `XREADGROUP` / `XPENDING` / `XAUTOCLAIM` sunt din rulare, nu citate; „fork al Redis 7.2.4, martie 2024” e din surse secundare, deci desfășurarea spune doar „fork” și „compatibil cu 7.2”; compromisul prefetch mare (rabbitmq 4) și remediile de ordine (rabbitmq 8) sunt raționamente; calculul 18 s față de 9 s (rabbitmq 4) e un model aritmetic. Ultimul criteriu (testele complete, publicarea) rămâne pentru integrator.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante, dar multe corecturi, aplicate: hărțile numesc câte o întrebare pe grup; rezultatele din blocurile Redis nu mai folosesc `--` (e ieșirea reală de `redis-cli`); `redis` 3 spune „cu `maxmemory` setat”; la `rabbitmq` 4, `global` la `basic.qos` e scos (depreciat și oprit implicit din RabbitMQ 4.3) și raționamentul despre prefetch mare spune „poate”; la `rabbitmq` 7, DLX prin policy e „recomandat”, iar simularea cu `delivery-limit` e declarată ilustrativă; trimiterile greșite (DES-04, RMQ-02) sunt reparate; Legăturile sunt trimiteri, iar faptele au trecut în Idee; comparația cu C++ de la `rabbitmq` 1 (`std::queue`) e scoasă (o coadă în proces nu are exchange, routing, ack sau persistență), deci doar `redis` 1 are C++. Publicat la același link (versiunea 41) și în PWA.
