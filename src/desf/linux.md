@@ -1,4 +1,4 @@
-<!-- Desfășurările fișei `linux` (8 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/_desf_facts_linux.md (secțiunea 37), man7.org și kernel.org. C++ doar la 1 (std::signal), 5 (RAII față de descriptori) și 7 (chmod, octal); la restul nu există un echivalent real. -->
+<!-- Desfășurările fișei `linux` (8 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/_desf_facts_linux.md (secțiunea 37), man7.org și kernel.org. C++ doar la 1 (std::signal) și 5 (RAII față de descriptori); la restul nu există un echivalent real. -->
 
 ### harta
 Problema: Un serviciu Python pe Linux se oprește fără urmă, nu mai primește conexiuni sau nu poate citi un fișier, iar tu ai doar un terminal, adesea într-un container fără IDE. Fără comenzile potrivite ghicești. Modulul răspunde la patru întrebări: cum se oprește un proces și ce spune codul lui de ieșire, ce face mașina chiar acum, ce a scris serviciul și cine are voie să citească, și ce este de fapt un container.
@@ -28,7 +28,7 @@ Legătură: LX-01 și DK-04 (`docker stop`); schelet: `s-linux-sigterm`.
 ### 2
 Greu: da
 Problema: Un container repornește în buclă cu „exit code 137”. În log nu e nicio excepție Python, nici măcar un traceback.
-Ideea: Un proces oprit de semnalul N e raportat de shell ca 128 + N: SIGKILL dă 137, SIGTERM dă 143. 137 vine adesea de la OOM killer: procesul a trecut de limita de memorie a cgroup-ului, iar kernelul îl oprește cu SIGKILL, fără traceback și fără cleanup. Același cod apare și după `docker kill`. `docker inspect` arată dacă a fost `OOMKilled`. Python vede același eveniment ca `-9`, nu ca 137.
+Ideea: Un proces oprit de semnalul N e raportat de shell ca 128 + N: SIGKILL dă 137, SIGTERM dă 143. 137 vine adesea de la OOM killer: procesul a trecut de limita de memorie a cgroup-ului, iar kernelul îl oprește cu SIGKILL, fără traceback și fără cleanup. Același cod apare și după `docker kill`. `docker inspect` arată de obicei `OOMKilled: true` în acest caz. Python vede același eveniment ca `-9`, nu ca 137.
 Exemplu:
 ```python
 import subprocess as sp
@@ -39,9 +39,10 @@ c = "sh -c 'kill -9 $$'; echo $?"
 r = sp.check_output(c, shell=True)
 r  # → b'137\n'
 ```
-Legătură: LX-07. PF-05 descrie finalul tipic: `.all()` pe 5M de rânduri, apoi 137.
+Legătură: LX-07; PF-05 (`.all()` pe 5M de rânduri) arată cum se umple memoria.
 
 ### 3
+Greu: da
 Problema: Alerta spune „disc 95%”, iar serverul răspunde greu. Nu știi dacă vina e discul, memoria sau un proces.
 Ideea: Fiecare comandă răspunde la o întrebare. `ps aux` listează procesele cu %CPU și %MEM, iar `top` le arată live. `free -m` dă memoria în MiB; te uiți la `available`, nu la `free`, fiindcă cache-ul de disc e recuperabil. `df -h` arată cât e plin fiecare disc montat. `du -sh *` arată cât ocupă fiecare element din director.
 Exemplu:
@@ -56,8 +57,9 @@ $ du -sh *
 Legătură: LX-07 (memoria din container); `py-spy top` (PF-07) e `top` pe funcții Python.
 
 ### 4
+Greu: da
 Problema: Serviciul „nu răspunde”. Poate nu rulează, poate ascultă pe alt port, poate DNS-ul dă altă adresă, poate un firewall blochează.
-Ideea: O comandă pe întrebare. `ss -tlnp` arată ce ascultă local (`-t` TCP, `-l` doar în ascultare, `-n` numeric, `-p` procesul). `dig nume` arată ce IP dă DNS-ul. `nc -zv host port` deschide o conexiune TCP fără să trimită date. `curl -v` arată conexiunea, header-ele și răspunsul HTTP. „Connection refused” înseamnă că nimic nu ascultă pe port.
+Ideea: O comandă pe întrebare. `ss -tlnp` arată ce ascultă local (`-t` TCP, `-l` doar în ascultare, `-n` numeric, `-p` procesul). `dig nume` arată ce IP dă DNS-ul. `nc -zv host port` deschide o conexiune TCP fără să trimită date. `curl -v` arată conexiunea, header-ele și răspunsul HTTP. „Connection refused” înseamnă de obicei că nimic nu ascultă pe port. Un firewall poate da și el un refuz.
 Exemplu:
 ```text
 $ nc -zv 127.0.0.1 8000
@@ -71,7 +73,7 @@ Legătură: LX-02. În Docker, portul poate fi ținut de un container (`docker p
 ### 5
 Greu: da
 Problema: Serviciul merge bine ore întregi, apoi orice conexiune nouă pică cu „Too many open files”, deși memoria și discul sunt libere.
-Ideea: Un fișier, un socket sau o conexiune ocupă un descriptor. Fiecare proces are o limită (`ulimit -n`), iar peste ea `open()` și `socket()` eșuează cu EMFILE. `lsof -p PID` listează descriptorii unui proces, iar `lsof -i :8000` listează procesele care folosesc portul 8000. Un număr care crește mereu înseamnă leak; un număr stabil, dar aproape de limită, înseamnă că limita e mică. Creșterea limitei amână un leak, nu îl repară.
+Ideea: Un fișier, un socket sau o conexiune ocupă un descriptor. Fiecare proces are o limită (`ulimit -n`), iar peste ea `open()` și `socket()` eșuează cu EMFILE. `lsof -p PID` listează descriptorii unui proces. `lsof -i :8000` listează procesele care folosesc portul 8000. Un număr care crește mereu înseamnă leak. Un număr stabil, dar aproape de limită, înseamnă că limita e mică. Creșterea limitei amână un leak, nu îl repară.
 Exemplu:
 ```python
 import resource as r
@@ -90,7 +92,7 @@ Legătură: LX-04. `with` garantează închiderea (PY-08).
 ### 6
 Greu: da
 Problema: După un incident ai un `access.log` de 2 GB. Editorul nu îl deschide, iar tu cauți cine a lovit endpoint-ul de login.
-Ideea: `tail -f` urmărește un fișier care crește; `journalctl -u serviciu -f` face asta pentru un serviciu systemd. `grep` filtrează: `-i` ignoră majusculele, `-v` păstrează liniile fără potrivire, `-E` folosește regex extins (`|`, `+`), `-r` caută recursiv. `awk '{print $1}'` extrage prima coloană. `uniq -c` numără doar liniile identice consecutive, deci pui `sort` înainte.
+Ideea: `tail -f` urmărește un fișier care crește. `journalctl -u serviciu -f` face asta pentru un serviciu systemd. `grep` filtrează: `-i` ignoră majusculele, `-v` păstrează liniile fără potrivire, `-E` ia regex extins, `-r` caută recursiv. `awk '{print $1}'` extrage prima coloană. `uniq -c` numără doar liniile identice consecutive, deci pui `sort` înainte.
 Exemplu:
 ```text
 $ awk '{print $1}' access.log \
@@ -99,11 +101,12 @@ $ awk '{print $1}' access.log \
       1 10.0.0.3
       1 10.0.0.2
 ```
-Legătură: LX-03; `uniq` are capcana lui `groupby` (PY-10), grupează doar vecinii. Echivalent SQL: `GROUP BY ip ORDER BY 2 DESC`.
+Legătură: LX-03; `uniq` are capcana lui `groupby` (PY-10): grupează doar vecinii.
 
 ### 7
-Problema: Fișierul `.env` poate fi citit de orice user de pe mașină. Un `chmod 777` „ca să meargă” l-ar face și scriibil de oricine.
-Ideea: Cifrele octale sunt sume: 4 (r) + 2 (w) + 1 (x), în ordinea owner, grup, ceilalți. `640` înseamnă `rw-`, `r--`, `---`. Root ignoră aceste drepturi. `os.chmod("f", 640)` e o greșeală: 640 zecimal este `0o1200`.
+Greu: da
+Problema: Fișierul `.env` poate fi citit de orice user de pe mașină. Un `chmod 777` „ca să meargă” l-ar face și modificabil de oricine.
+Ideea: Cifrele octale sunt sume: 4 (r) + 2 (w) + 1 (x), în ordinea owner, grup, ceilalți. `640` înseamnă `rw-`, `r--`, `---`. Root ignoră de obicei aceste drepturi: citește și scrie orice, dar nu rulează un fișier fără niciun bit `x`. `os.chmod("f", 640)` e o greșeală: 640 zecimal este `0o1200`.
 Exemplu:
 ```python
 import os, stat
@@ -113,14 +116,12 @@ m = os.stat("f").st_mode
 stat.filemode(m)  # → '-rw-r-----'
 oct(640)  # → '0o1200'
 ```
-În C++: `chmod("f", 0640)` din `<sys/stat.h>` (POSIX) primește același număr, scris cu un 0 în față.
-Unde nu ține: În Python 3, `0640` e `SyntaxError`; literalul octal e `0o640`.
-Legătură: LX-05 și DK-06 (aplicația rulează ca user non-root).
+Legătură: LX-05 și DK-06 (aplicația rulează ca user non-root). În Python 3, `0640` e `SyntaxError`: scrii `0o640`.
 
 ### 8
 Greu: da
 Problema: Cineva spune că un container e „o mașină virtuală mică”. Dar pe gazdă `ps` îi arată procesul, iar `uname -r` dă același kernel ca în afară.
-Ideea: Un container e un proces Linux obișnuit, pornit în namespaces proprii: PID, rețea, mount, hostname. Ele izolează ce vede procesul. Cgroups îi limitează cât consumă (CPU, memorie); la depășirea memoriei, kernelul îl oprește. Kernelul e al gazdei. Primul proces din namespace-ul PID e PID 1 și primește un semnal doar dacă are handler pentru el; SIGKILL vine de la gazdă oricum.
+Ideea: Un container e un proces Linux obișnuit, pornit în namespaces proprii: PID, rețea, mount, hostname. Ele izolează ce vede procesul. Cgroups îi limitează cât consumă (CPU, memorie). La depășirea memoriei, kernelul îl oprește. Kernelul e al gazdei. Primul proces din namespace-ul PID e PID 1 și primește un semnal doar dacă are handler pentru el. SIGKILL vine de la gazdă oricum.
 Exemplu:
 ```text
 # unshare --pid --fork \
