@@ -1,5 +1,5 @@
 # Studiu › Fișe: harta modulului și desfășurările punctelor ("Pe larg ›", "Deschide tot"), la 360 px, în light și dark.
-# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md, src/desf/runtime.md, src/desf/security.md, src/desf/celery.md, src/desf/redis.md, src/desf/rabbitmq.md, src/desf/docker.md, src/desf/ops.md, src/desf/linux.md și src/desf/perf.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
+# Datele reale sunt cele din src/desf/oop.md, src/desf/python.md, src/desf/gil.md, src/desf/asyncio.md, src/desf/asgi.md, src/desf/pytest.md, src/desf/frontend.md, src/desf/design.md, src/desf/sqlalchemy.md, src/desf/postgres.md, src/desf/index.md, src/desf/runtime.md, src/desf/security.md, src/desf/celery.md, src/desf/redis.md, src/desf/rabbitmq.md, src/desf/docker.md, src/desf/ops.md, src/desf/linux.md, src/desf/perf.md, src/desf/domain.md, src/desf/behav.md și src/desf/graphql.md; un modul fără desfășurări (aws, Bonus; când primește desfășurări, controlul se mută pe alt modul fără ele) trebuie să arate ca înainte. Pentru C++ / TSX și termenii din glosar
 # se injectează în pagină (window.PREP.desf, același obiect pe care îl citește aplicația) o desfășurare de probă la modulul frontend (care are acum date reale: fixture-ul le suprascrie).
 # "Întreabă despre asta" primește harta și desfășurările în context: modelul e un `sample` fals care reține cererile.
 import asyncio, json, pathlib
@@ -452,6 +452,38 @@ async def main():
             check(tag + "domain: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{DM_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{DM_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_domain_{scheme}.png"), full_page=True)
             check(tag + "domain: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- behav (tichetul 21): harta și 5 desfășurări; fără C++ și fără cod Python: cele 5 exemple sunt răspunsuri-model în ```text, necolorate ----
+            await pg.evaluate(f"document.querySelector('{DM_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa domain, ca să se deschidă behav
+            dbh = await pg.evaluate("window.PREP.desf.behav")
+            n_bh = await pg.evaluate("window.PREP.sheets.behav.points.length")
+            await open_sheet(pg, "behav")
+            Bh_ = "#sheet-behav "
+            check(tag + "behav: the map and one explanation per point, numbered like the points", dbh and len(dbh["items"]) == n_bh == 5 and len(dbh["map"]["g"]) == 4 and await pg.locator(Bh_ + "ul.pts > li .pn").count() == n_bh and await pg.locator(Bh_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "behav: the map and the explanations start closed", await pg.locator(Bh_ + "[data-dz-map]").count() == 0 and await pg.locator(Bh_ + "[data-dz]").count() == 0)
+            await pg.click(Bh_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "behav: 'Deschide tot' opens the map and every explanation", await pg.locator(Bh_ + "[data-dz]").count() == n_bh and await pg.locator(Bh_ + "[data-dz-map]").count() == 1)
+            check(tag + "behav: no C++ block (and so no 'Unde nu ține'): the module has no real C++ equivalent", not any(x.get("cpp") or x.get("nu") for x in dbh["items"]) and await pg.locator(Bh_ + ".dz-cpp").count() == 0 and await pg.locator(Bh_ + ".dz-nu").count() == 0)
+            check(tag + "behav: every example is one ```text model answer, shown without Python coloring", await pg.evaluate("(sel) => [...document.querySelectorAll(sel + ' [data-dz]')].every(d => { const b = [...d.querySelectorAll('pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0 && e.textContent.trim().length > 0); })", "#sheet-behav"))
+            check(tag + "behav: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "behav: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Bh_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Bh_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_behav_{scheme}.png"), full_page=True)
+            check(tag + "behav: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+            # ---- graphql (tichetul 21): harta și 7 desfășurări; fără C++ (nicio comparație reală); exemple Python colorate (3, 5, 6) și ```text necolorat (1, 2, 4, 7) ----
+            await pg.evaluate(f"document.querySelector('{Bh_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa behav, ca să se deschidă graphql
+            dgq = await pg.evaluate("window.PREP.desf.graphql")
+            n_gq = await pg.evaluate("window.PREP.sheets.graphql.points.length")
+            await open_sheet(pg, "graphql")
+            Gq_ = "#sheet-graphql "
+            check(tag + "graphql: the map and one explanation per point, numbered like the points", dgq and len(dgq["items"]) == n_gq == 7 and len(dgq["map"]["g"]) == 6 and await pg.locator(Gq_ + "ul.pts > li .pn").count() == n_gq and await pg.locator(Gq_ + '[data-a="dz-map"]').count() == 1)
+            check(tag + "graphql: the map and the explanations start closed", await pg.locator(Gq_ + "[data-dz-map]").count() == 0 and await pg.locator(Gq_ + "[data-dz]").count() == 0)
+            await pg.click(Gq_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "graphql: 'Deschide tot' opens the map and every explanation", await pg.locator(Gq_ + "[data-dz]").count() == n_gq and await pg.locator(Gq_ + "[data-dz-map]").count() == 1)
+            check(tag + "graphql: no C++ block (and so no 'Unde nu ține'): the module has no real C++ equivalent", not any(x.get("cpp") or x.get("nu") for x in dgq["items"]) and await pg.locator(Gq_ + ".dz-cpp").count() == 0 and await pg.locator(Gq_ + ".dz-nu").count() == 0)
+            check(tag + "graphql: Python examples (3, 5, 6) are colored, ```text examples (1, 2, 4, 7) are not", await pg.evaluate("(sel) => [3, 5, 6].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b[0].querySelectorAll('[class^=tk-]').length > 0; })", "#sheet-graphql") and await pg.evaluate("(sel) => [1, 2, 4, 7].every(n => { const b = [...document.querySelectorAll(sel + ' [data-dz=\"' + (n - 1) + '\"] pre.code')]; return b.length === 1 && b.every(e => e.querySelectorAll('[class^=tk-]').length === 0); })", "#sheet-graphql"))
+            check(tag + "graphql: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "graphql: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{Gq_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{Gq_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_graphql_{scheme}.png"), full_page=True)
+            check(tag + "graphql: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
             await ctx.close()
 
         # ---------- TSX / C++ without Python coloring, glossary terms (fixture on frontend) ----------
