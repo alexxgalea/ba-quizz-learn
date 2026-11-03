@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `domain`: fără C++ în general; faptele des
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -36,3 +36,5 @@ Unghiul C++ și legăturile pentru `domain`: fără C++ în general; faptele des
 - Rândurile de cod din `domain.md` au cel mult 36 de caractere; `fencew 36` nu raportează nimic pentru fișier.
 - `tools/test_desf.py` are acum o secțiune pentru `domain` (11 desfășurări și 6 grupuri în hartă, fără C++, Python colorat la 3, 4, 10 și 11, `text` necolorat la 2, 6, 7, 8 și 9, fără cod la 1 și 5, fără overflow la 360 px, light și dark, starea `S` neschimbată, fără erori de consolă).
 - Verificat înainte de commit: `validate` (OK, fără avertismente pentru `domain.md`), `build`, `node --check`, `desf_examples` (95, 0 picate), `fencew 36`, `test_desf.py` (ALL PASS), screenshot la 360 px în light și dark cu „Deschide tot” (felii din elementul fișei). Rămân pentru publicare: suita completă de teste, îmbinarea secțiunii 39 în `interview-facts.md` și publicarea la același link.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corectate după el: „Agentic AI Fabric” nu mai stă „peste” produse (pagina principală Onapsis spune doar „livrează prin”); Assess acoperă vulnerabilitățile și compliance-ul, ca la punctul 2 din fișă; SIEM e atribuit „după fișă”, cu definiția NIST SP 800-92 alături; Ideea de la 4 pornește de la ce e o regulă, apoi cifrele atribuite; trimiterea la DOM-02 reformulată; exemplele nu mai repetă lista din Idee; `Greu: da` la 9, nu la 8. Precizări rămase, nu erori: cifra 2.600 e de pe pagina produsului, „SAP = ERP” confundă firma cu produsul, definiția SIEM din fișă e mai largă decât cea NIST. Publicat la același link (versiunea 42) și în PWA.

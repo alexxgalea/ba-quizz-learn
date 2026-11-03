@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `behav` și `graphql`: fără C++; la `behav`
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -34,3 +34,5 @@ Unghiul C++ și legăturile pentru `behav` și `graphql`: fără C++; la `behav`
 - Precizări de stil din review-urile valurilor trecute, aplicate de la început: Legătura e doar trimitere plus cel mult o propoziție; exemplele au rânduri de cel mult ~31 de caractere (pe 360 px codul se rupe în jur de 32, deși limita validată e 36), ca răspunsurile-model și schemele să nu se frângă în screenshot.
 - `tools/test_desf.py` are acum blocuri pentru `behav` (5 desfășurări, 4 grupuri, fără C++, 5 exemple ```text necolorate) și `graphql` (7 desfășurări, 6 grupuri, fără C++, Python colorat la 3, 5, 6 și ```text necolorat la 1, 2, 4, 7), light și dark, fără overflow la 360 px și cu starea `S` neschimbată.
 - Verificat: `node validate.mjs` (OK), `node build.mjs`, `node --check dist/bundle-check.js`, `node tools/desf_examples.mjs`, `node tools/fencew.mjs 36` (nimic nou la fișele mele), `python3 tools/test_desf.py` (ALL PASS), screenshot la 360 px, light și dark, cu „Deschide tot”, pe ambele fișe. `xcheck` nu se aplică: nicio explicație de grilă nu s-a schimbat.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corectate după el: `graphql` 3 are acum 20 de alerte în ambele locuri; `graphql` 5 urmează draftul GraphQL over HTTP (2xx când `data` e ne-null, 4xx/5xx când lipsește; cazul `data` + `errors` nu e afirmat, pagina e ambiguă); `graphql` 6 spune „persisted queries în varianta allowlist (trusted documents)” și explică introspecția și complexitatea; exemplul de la `graphql` 4 e Python rulabil; Legăturile sunt trimiteri; antetele fișierelor trimit la secțiunile 40 și 41 din `research/interview-facts.md`. `behav` nu inventează biografie sau cifre (cifrele rămân în paranteze pătrate). Publicat la același link (versiunea 42) și în PWA.

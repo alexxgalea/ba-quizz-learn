@@ -1168,6 +1168,14 @@ Python rulat pe 3.13.16 cu strawberry-graphql 0.339.1 (aceeași versiune ca în 
 
 **Erori de fapt în punctele fișei `graphql`**: niciuna găsită; punctele nu au fost modificate. Precizări, nu erori: la punctul 5, „de obicei cu HTTP 200” e SHOULD în draftul GraphQL over HTTP, iar cererile invalide primesc de obicei 400 cu `application/graphql-response+json` (serverele vechi cu `application/json` pot răspunde 2xx); la punctul 6, „introspecție oprită în producție” se aplică cu precădere la API-urile pentru clienți proprii și nu ține loc de autorizare (graphql.org), iar „persisted queries” înseamnă aici allowlist, nu APQ-ul Apollo; la punctul 4, Graphene 3.4.3 e încă publicat, „mai vechi” rămâne formularea punctului; la punctul 7, locațiile lui `@deprecated` din ediția 2025 a specificației includ și argumentele și câmpurile de input.
 
+### Corecturi după review, valul 4 (domain; 3 noiembrie 2026)
+
+Completare la secțiunea 39 (`domain`), verificat 3 noiembrie 2026:
+
+- ✅ **Agentic AI Fabric** (https://onapsis.com/): pagina principală spune că platforma „delivers end-to-end SAP cybersecurity and compliance capabilities through our Agentic AI Fabric”, „powered by the world's leading SAP vulnerability research, threat intelligence and proprietary agentic systems”. Agenții afișați: Autonomous SOC, VulnOps, Remediation, Compliance, Threat Intel, Custom AI, SAP Joule, SAP Change Impact, SAP Migration, SAP Ops. Pagina NU spune explicit că Fabric-ul stă „peste” produse și nu leagă agenții de un pilon; desfășurarea 8 spune doar „livrează prin”. Security Advisor apare doar în meniu („AI-powered SAP security guidance”).
+- ✅ **Piloni pe pagina principală**: Control („Secure AI & Human SAP Code”, „Secure CleanCore”, „Full DevSecOps”), Assess („SAP Exposure Management”, „Threat Mitigation”, „Compliance Automation”), Defend („SAP Threat Detection & Response”, „Zero-Day & Exploit Detection”, „Compensating Controls”). Confirmă că Compliance Automation e sub Assess (desfășurarea 2).
+- ⚠️ **SIEM**: desfășurarea 10 atribuie acum definiția fișei („adună și corelează”) și citează NIST SP 800-92 („centralized logging”).
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.
