@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `celery`: fără C++ în general; Legătura c
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -35,3 +35,5 @@ Livrat: `src/desf/celery.md` (harta cu 7 grupuri și 12 desfășurări), `resear
 - **Exemple**: 5 blocuri Python rulează în `node tools/desf_examples.mjs` (Celery 5.6.3 e instalat în mediul de build; broker `memory://` și `.apply()`, fără worker): 1 (`PENDING`), 2 (4 apeluri = 1 + 3 reîncercări), 5 (rutare), 6 (chain, group), 11 (`# ! EncodeError`). Ce cere un worker real (3, 4, 7, 9, 10) e în blocuri `text`, dar fiecare a fost rulat de mână pe un worker Celery 5.6.3 cu Redis 7.0.15: confirmare timpurie față de `acks_late` cu `kill -9`, prefetch cu două workere, două procese Beat (12 față de 6 mesaje), limite de timp, `visibility_timeout` cu `countdown` (task rulat de 3 ori). Verificat că check-ul pică pe un rezultat greșit și pe o excepție greșită în acest modul.
 - **Verificări rulate**: `node validate.mjs` (OK, fără avertismente pentru celery), `node build.mjs`, `node --check dist/bundle-check.js`, `node tools/desf_examples.mjs` (74, picate 0), `node tools/fencew.mjs 36` (nimic din desfășurări), `node tools/xcheck.mjs celery`, `python3 tools/test_desf.py` (ALL PASS, inclusiv blocul `celery` și nicio eroare de consolă), screenshot-uri la 360 px, light și dark, cu „Deschide tot”, citite pe toată fișa (rândurile de cod au fost scurtate la ≤ 32 de caractere, ca să nu se împacheteze pe telefon).
 - **Nesiguranțe**: `app.amqp.router` (exemplul 5) e API intern, folosit doar ca să arate ce coadă alege Celery fără broker; re-livrarea cu `visibility_timeout` implicit (1 h) n-a fost așteptată, doar cu 3 s; `consumer_timeout` RabbitMQ (30 min) și `urllib3.Retry` vin din explicațiile existente, nereverificate aici. Ultimul criteriu (testele complete, publicarea) rămâne pentru integrator.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corectate după el: harta numără acum cele șapte întrebări ale grupurilor; `urllib3.Retry` scos din Legătura de la 2 (jitter-ul lui e 0 implicit, deci „același tipar” era prea tare); Problema și Ideea de la 3 nu mai repetă același lucru; deadlock-ul de la 6 spune „poate” și că Celery refuză implicit `.get()` într-un task; la 9, limitele cer pool-ul prefork și `soft_time_limit` nu merge la gevent / eventlet; la 10, „Peste 1 oră rulează din nou” (contrazicea exemplul) e acum „poate rula de mai multe ori”, Redis nu mai e opus RabbitMQ, iar ridicarea `visibility_timeout` e notată ca nerecomandată; `Greu: da` la 4, 9 și 12. Judecăți asumate: unele Legături poartă un fapt scurt lângă trimitere; `app.amqp.router` (5) e API intern, anunțat în text.

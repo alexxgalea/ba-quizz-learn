@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `security`: C++ rar (buffer overflow ca probl
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -34,3 +34,5 @@ Unghiul C++ și legăturile pentru `security`: C++ rar (buffer overflow ca probl
 - Rândurile de cod din `security.md` au cel mult 32 de caractere, ca să nu se împacheteze la 360 px (limita validării rămâne 36).
 - `tools/test_desf.py` are acum o secțiune pentru `security` (11 desfășurări, C++ la 3 și 10 cu `Unde nu ține`, Python colorat la 1–8 și 10, `text` necolorat la 9 și 11, fără overflow la 360 px, light și dark, starea `S` neschimbată, fără erori de consolă).
 - Verificat înainte de commit: `validate` (OK), `build`, `node --check`, `desf_examples` (78, 0 picate), `fencew 36` (nimic în `desf/security.md`), `test_desf.py` (ALL PASS), screenshot la 360 px în light și dark cu „Deschide tot”, toată fișa (`shots/desf_security_*.png` și felii din elementul fișei). Rămân pentru publicare: suita completă de teste și publicarea la același link.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corectate după el: `yaml.load` e periculos cu `Loader` / `UnsafeLoader` (nu cu `FullLoader`), la 2; lista albă și verificarea IP-ului rezolvat nu se mai contrazic, la 4; scrypt vine înaintea lui bcrypt, după OWASP (precizare: punctul 5 zice „Argon2id sau bcrypt”); typosquatting scos de la 11 (nu era în fapte); `Greu: da` la 11.

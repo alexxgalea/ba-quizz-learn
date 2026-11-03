@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Calibrarea: Alex citește `oop` pe telefon)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: `.scratch/desfasurari/spec.md`. Vocabular: `CONTEXT.md` (Fișă, Punct, Desfășurare, Harta modulului).
 
@@ -20,7 +20,7 @@ Unghiul C++ și legăturile pentru `runtime`: aici C++ are cel mai mult de spus:
 - [x] Faptele noi (Python și C++) sunt verificate pe surse primare și trecute în fișierul de fapte verificate.
 - [x] Validarea trece (câmpuri, lungimi, rânduri de cod ≤ 36, hartă completă), iar check-ul de exemple trece pe toate exemplele Python.
 - [x] `xcheck` / `fencew` curate; screenshot la 360 px, light și dark, pe fișă cu „Deschide tot”.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec; publicat la același link (artifact și PWA); mesaj scurt către Alex, în română.
 
 ## Comments
 
@@ -33,3 +33,5 @@ Unghiul C++ și legăturile pentru `runtime`: aici C++ are cel mai mult de spus:
 - Erori de fapt în punctele fișei: niciuna. Precizări, nu erori: la 1, doar modulele importate se salvează ca `.pyc`, scriptul pornit direct se recompilează; la 2, „JIT oprit implicit” e adevărat pentru build-urile obișnuite 3.13 / 3.14 (3.15 l-a îmbunătățit; starea lui implicită nu a fost confirmată); la 3, `TypeError` apare la rulare fiindcă compilarea verifică doar sintaxa; la 5, „ignorate de interpretor” = nu sunt verificate (până la 3.13 expresia se evaluează la `def`, `NameError`; din 3.14 leneș); la 6, „erorile de tip nu ajung în producție” se referă la erorile prinse de verificarea de tipuri, nu la toate; la 7, „GC generațional” e adevărat pe 3.13 și pe 3.14.5+ (3.14.0–3.14.4 au avut un GC incremental, revenit) și „eliberare imediată” e detaliu al CPython; la 8, motivul gărzii e că importul execută corpul, iar un fișier pornit ca script și importat apoi rulează de două ori.
 - `tools/test_desf.py` are acum o secțiune pentru `runtime` (8 desfășurări, C++ la 1, 3, 4, 6, 7 și 8 cu `Unde nu ține`, toate exemplele Python colorate, fără overflow la 360 px, light și dark, starea `S` neschimbată).
 - Verificat înainte de commit: `validate` (OK, fără avertismente pentru `runtime`), `build`, `node --check`, `desf_examples` (77, 0 picate), `fencew 36` (nimic în `desf/runtime.md`), `test_desf.py` (ALL PASS), `npm run test:unit` (338, 0 picate), screenshot la 360 px în light și dark cu „Deschide tot”, citit pe toată fișa. Rămân pentru publicare: suita completă de teste de interfață și publicarea la același link.
+
+**3 nov. 2026 (închidere):** Review (`/code-review`, Standards și Spec): fără defecte blocante. Corectate după el: trimiterea de la 3 merge acum la punctul 8 din `oop` (duck typing și `Protocol`), nu la 6; harta spune patru întrebări, ca grupurile; „(compilat)” scos din 7 și propoziția despre ciclu împărțită în două.

@@ -26,7 +26,7 @@ Legătură: Fișa sqlalchemy, punctul 11: `text()` cu `:nume` face același lucr
 
 ### 2
 Problema: Sesiunile stau în Redis, serializate cu `pickle`. Cineva ajunge să scrie în cheia unei sesiuni (o instanță fără parolă, un serviciu compromis). La următorul `loads`, serverul tău rulează codul lui.
-Ideea: `pickle` reconstruiește un obiect apelând o funcție indicată chiar în date (`__reduce__`), deci `loads` poate apela orice. În exemplu e `print`; ar putea fi `os.system`. `yaml.load` cu `Loader` face la fel, iar `yaml.safe_load` construiește doar tipuri simple. Pentru date nesigure folosești JSON și validare (Pydantic).
+Ideea: `pickle` reconstruiește un obiect apelând o funcție indicată chiar în date (`__reduce__`), deci `loads` poate apela orice. În exemplu e `print`; ar putea fi `os.system`. `yaml.load` cu `Loader` sau `UnsafeLoader` face la fel, iar `yaml.safe_load` construiește doar tipuri simple. Pentru date nesigure folosești JSON și validare (Pydantic).
 Exemplu:
 ```python
 import pickle
@@ -58,7 +58,7 @@ Legătură: SEC-05.
 ### 4
 Greu: da
 Problema: Endpoint-ul `/preview?url=…` descarcă o pagină și o arată. Cineva trimite `http://169.254.169.254/latest/meta-data/`. Serverul, aflat în rețeaua internă, citește metadatele instanței, care pot conține chei temporare ale rolului lui.
-Ideea: Compari host-ul cu o listă albă, nu cu una de interzise: acelea se ocolesc. Rezolvi tu numele prin DNS, verifici IP-ul (nu privat, nu loopback, nu link-local, deci nu `169.254.169.254`) și te conectezi la exact acel IP. Un al doilea lookup poate da altă adresă (DNS rebinding). Dezactivezi redirect-urile, fiindcă un host permis te poate trimite spre unul interzis. Pe AWS, IMDSv2 cere întâi un `PUT` cu header-e, iar multe SSRF-uri fac doar `GET`.
+Ideea: Compari host-ul cu o listă albă, nu cu una de interzise: acelea se ocolesc. Rezolvi tu numele prin DNS, verifici și IP-ul, ca în exemplu (nu privat, nu loopback, nu link-local, deci nu `169.254.169.254`) și te conectezi la exact acel IP. Un al doilea lookup poate da altă adresă (DNS rebinding). Dezactivezi redirect-urile, fiindcă un host permis te poate trimite spre unul interzis. Pe AWS, IMDSv2 cere întâi un `PUT` cu header-e, iar multe SSRF-uri fac doar `GET`.
 Exemplu:
 ```python
 from ipaddress import ip_address
@@ -75,7 +75,7 @@ Legătură: SEC-06. În OWASP 2025, SSRF a intrat în Broken Access Control (pun
 ### 5
 Greu: da
 Problema: Baza de date scapă la un atacator, iar parolele erau `sha256(parola)`. Pe un GPU, SHA-256 se calculează de miliarde de ori pe secundă, deci parolele slabe cad repede. Doi utilizatori cu aceeași parolă au același hash.
-Ideea: Salt-ul e aleator și unic per parolă, deci aceeași parolă dă hash-uri diferite, iar tabelele precalculate nu ajută. Algoritmul e lent intenționat. OWASP pune pe primul loc Argon2id (minim 19 MiB, 2 iterații, paralelism 1). bcrypt e pentru sisteme vechi, cu limită de 72 de octeți. PBKDF2-HMAC-SHA256, cu 600 000 de iterații, e pentru mediile cu cerințe FIPS. Valoarea stocată ține algoritmul, parametrii și salt-ul, ca să poți crește costul mai târziu. Criptarea e reversibilă: cine ia cheia citește toate parolele.
+Ideea: Salt-ul e aleator și unic per parolă, deci aceeași parolă dă hash-uri diferite, iar tabelele precalculate nu ajută. Algoritmul e lent intenționat. OWASP pune pe primul loc Argon2id (minim 19 MiB, 2 iterații, paralelism 1), apoi scrypt. bcrypt e pentru sisteme vechi, cu limită de 72 de octeți. PBKDF2-HMAC-SHA256, cu 600 000 de iterații, e pentru mediile cu cerințe FIPS. Valoarea stocată ține algoritmul, parametrii și salt-ul, ca să poți crește costul mai târziu. Criptarea e reversibilă: cine ia cheia citește toate parolele.
 Exemplu:
 ```python
 import hashlib, os
@@ -173,7 +173,8 @@ Unde nu ține: `std::random_device` poate fi implementat cu un generator pseudo-
 Legătură: SEC-07.
 
 ### 11
-Problema: `requirements.txt` listează `requests` fără versiune. Peste o lună, `pip install` aduce altă versiune sau un pachet cu nume asemănător (typosquatting). O dependență are de luni o vulnerabilitate cunoscută, iar nimeni nu știe.
+Greu: da
+Problema: `requirements.txt` listează `requests` fără versiune. Peste o lună, `pip install` aduce altă versiune a lui `requests`, deci build-ul nu se mai repetă. O dependență are de luni o vulnerabilitate cunoscută, iar nimeni nu știe.
 Ideea: Fixezi versiunile exacte, și pe cele indirecte, cu hash-uri: cu `--require-hashes`, pip verifică fiecare fișier. `pip-audit` compară ce ai instalat cu vulnerabilitățile cunoscute și rulează în CI. OWASP Top 10:2025 are A03, Software Supply Chain Failures, care extinde A06:2021 (componente vulnerabile) la tot lanțul, pipeline-ul CI/CD inclus.
 Exemplu:
 ```text

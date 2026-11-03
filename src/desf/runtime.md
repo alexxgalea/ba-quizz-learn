@@ -1,7 +1,7 @@
 <!-- Desfășurările fișei `runtime` (8 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunea 31 (și 4, 5, 19, 20). -->
 
 ### harta
-Problema: Un script Python merge în dezvoltare, dar în producție aduce surprize: o eroare de tip apare abia pe o ramură rară, memoria rămâne ocupată după `del`, iar importul unui modul pornește un server. Toate vin din felul în care rulează Python: ce se întâmplă între sursă și execuție, când se verifică tipurile și cine ține obiectele în viață. Modulul răspunde la trei întrebări: ce face `python app.py`, ce garanții de tip ai și cum se curăță memoria și se încarcă modulele.
+Problema: Un script Python merge în dezvoltare, dar în producție aduce surprize: o eroare de tip apare abia pe o ramură rară, memoria rămâne ocupată după `del`, iar importul unui modul pornește un server. Toate vin din felul în care rulează Python: ce se întâmplă între sursă și execuție, când se verifică tipurile și cine ține obiectele în viață. Modulul răspunde la patru întrebări: ce face `python app.py`, ce garanții de tip ai, cum se curăță memoria și cum se încarcă modulele.
 Grupuri:
 - 1–2: ce face `python app.py`: compilare în bytecode, apoi interpretor (nu cod C/C++)
 - 3–6: tipurile: dinamice, dar puternice, hint-uri neverificate de interpretor, față de limbajele compilate AOT
@@ -58,7 +58,7 @@ add(1, "2")  # ! TypeError
 ```
 În C++: Acolo tipul aparține variabilei: `auto x = 1; x = "unu";` nu compilează. Cel mai aproape de „tipul e al obiectului” e un `Base*` spre un obiect cu `virtual`, care își știe tipul real.
 Unde nu ține: Variabila rămâne legată de `Base`, deci apelezi doar ce are `Base`, iar operatorii se verifică la compilare. În Python orice nume arată spre orice.
-Legătură: RT-02. Duck typing-ul din fișa oop (punctul 6) se sprijină pe aceeași tipare dinamică.
+Legătură: RT-02. Duck typing-ul din fișa oop (punctul 8) se sprijină pe aceeași tipizare dinamică.
 
 ### 4
 Greu: da
@@ -108,7 +108,7 @@ Legătură: RT-02 și RT-04. TypeScript are `tsc` ca verificator de build, dar d
 ### 7
 Greu: da
 Problema: Un arbore de obiecte ține în fiecare copil o referință la părinte. Ștergi rădăcina, dar memoria nu se eliberează la `del`: părintele și copilul își țin unul altuia contorul peste zero.
-Ideea: CPython ține pentru fiecare obiect un contor de referințe. La 0, obiectul e eliberat imediat. Un ciclu (a → b → a) nu ajunge la 0, iar asta rezolvă colectorul de cicluri din modulul `gc`, generațional: obiectele noi sunt verificate mai des decât cele vechi. `del x` șterge doar numele și scade contorul. Eliberarea imediată e detaliu al CPython, nu garanție a limbajului.
+Ideea: CPython ține pentru fiecare obiect un contor de referințe. La 0, obiectul e eliberat imediat. Un ciclu (a → b → a) nu ajunge la 0. Îl rezolvă colectorul de cicluri din modulul `gc`, generațional: obiectele noi sunt verificate mai des decât cele vechi. `del x` șterge doar numele și scade contorul. Eliberarea imediată e detaliu al CPython, nu garanție a limbajului.
 Exemplu:
 ```python
 import gc, weakref
@@ -121,7 +121,7 @@ w() is None  # → False
 gc.collect() and w()  # → None
 ```
 În C++: Echivalentul e `std::shared_ptr`: ține un contor și distruge obiectul la 0. Doi `shared_ptr` care se țin reciproc nu ajung la 0, ca ciclul din Python. `std::weak_ptr` rupe ciclul, ca `weakref`.
-Unde nu ține: C++ nu are colector de cicluri: ciclul de `shared_ptr` nu se eliberează niciodată, iar destructorul nu rulează (compilat). Contorul e opțional: obiectele obișnuite le curăță scope-ul (RAII) sau `unique_ptr`, fără contor. În CPython fiecare obiect are unul.
+Unde nu ține: C++ nu are colector de cicluri: ciclul de `shared_ptr` nu se eliberează niciodată, iar destructorul nu rulează. Contorul e opțional: obiectele obișnuite le curăță scope-ul (RAII) sau `unique_ptr`, fără contor. În CPython fiecare obiect are unul.
 Legătură: RT-05. Pentru cleanup garantat folosești `with` (fișa python, punctul 6), nu `__del__`.
 
 ### 8

@@ -1,7 +1,7 @@
 <!-- Desfășurările fișei `celery` (12 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 12, 26 și 30. Fără C++: modulul nu are echivalent real. Exemplele Python rulează cu Celery 5.6.3 (broker `memory://`, task-uri apelate cu `.apply()` sau doar publicate); ce cere un worker real (ack, prefetch, Beat, visibility timeout, limite de timp) e în blocuri `text`, verificat de mână pe un worker Celery 5.6.3 cu Redis (secțiunea 30). -->
 
 ### harta
-Problema: O aplicație web face tot în request: trimite email-uri, generează rapoarte, apelează servicii lente. Un request lung ține ocupat un worker web, iar un crash pierde munca fără urmă. Munca mutată pe o coadă aduce alte probleme: mesajul poate rula de două ori sau deloc, workerii se blochează pe task-uri lungi, iar un task periodic poate porni de mai multe ori. Modulul răspunde la cinci întrebări: de ce scoți munca din request, ce se întâmplă când ceva pică, cum ajunge munca la workeri, cum compui și programezi task-uri și cum rulează fiecare task. La final vin capcanele din broker și din mesaj, plus cum îți povestești cazul la interviu.
+Problema: O aplicație web face tot în request: trimite email-uri, generează rapoarte, apelează servicii lente. Un request lung ține ocupat un worker web, iar un crash pierde munca fără urmă. Munca mutată pe o coadă aduce alte probleme: mesajul poate rula de două ori sau deloc, workerii se blochează pe task-uri lungi, iar un task periodic poate porni de mai multe ori. Modulul răspunde la șapte întrebări: de ce scoți munca din request, ce se întâmplă când ceva pică, cum ajunge munca la workeri, cum compui și programezi task-uri, cum rulează fiecare task, ce capcane ascund brokerul și mesajul și cum îți povestești cazul la interviu.
 Grupuri:
 - 1: de ce coadă, nu request
 - 2–3: ce se întâmplă când pică (retry și confirmarea mesajului)
@@ -30,7 +30,7 @@ Legătură: CEL-01 și CEL-15. Ai făcut deja asta în Django. Starea rămâne `
 ### 2
 Greu: da
 Problema: Un task apelează un API extern care pică 3 secunde. Fără retry, raportul lipsește. Cu retry imediat, o mie de task-uri lovesc deodată API-ul care abia și-a revenit.
-Ideea: `autoretry_for=(OSError,)` reîncearcă task-ul când apare excepția; implicit nu reîncearcă nimic. `max_retries` (implicit 3) limitează reîncercările, deci task-ul rulează cel mult 1 + 3 ori. `retry_backoff=True` dublează pauza (1, 2, 4, 8 s…, până la `retry_backoff_max`, implicit 600 s), iar `retry_jitter` (implicit `True`) o alege aleatoriu între 0 și valoarea calculată. Pentru control fin: `bind=True` și `raise self.retry(exc=exc, countdown=…)`. Reîncerci doar erori tranzitorii (timeout, 503), nu un input greșit: pică din nou.
+Ideea: `autoretry_for=(OSError,)` reîncearcă task-ul când apare excepția. Implicit nu reîncearcă nimic. `max_retries` (implicit 3) limitează reîncercările, deci task-ul rulează cel mult 1 + 3 ori. `retry_backoff=True` dublează pauza (1, 2, 4, 8 s…), până la `retry_backoff_max` (implicit 600 s). `retry_jitter` (implicit `True`) alege pauza aleatoriu între 0 și valoarea calculată. Pentru control fin: `bind=True` și `raise self.retry(exc=exc, countdown=…)`. Reîncerci doar erori tranzitorii (timeout, 503), nu un input greșit: pică din nou.
 Exemplu:
 ```python
 from celery import Celery
@@ -42,12 +42,12 @@ def f():
 f.apply()
 print(len(n))  # → 4
 ```
-Legătură: CEL-04. Backoff-ul cu jitter e același tipar ca `urllib3.Retry` și ca retry-ul din design (punctul 4). Cu `.apply()` pauzele sunt ignorate, deci exemplul rulează instant.
+Legătură: CEL-04. Backoff-ul cu jitter e același tipar ca retry-ul din design (punctul 4). Cu `.apply()` pauzele sunt ignorate, deci exemplul rulează instant.
 
 ### 3
 Greu: da
-Problema: Containerul unui worker e oprit forțat (`kill -9`) în mijlocul unui export de 10 minute. Implicit, brokerul a primit confirmarea (ack) când a început exportul, deci mesajul a dispărut: exportul nu mai rulează niciodată.
-Ideea: Implicit, workerul confirmă mesajul înainte de rulare, deci task-ul început nu se mai repetă, dar o cădere îl pierde. Cu `acks_late=True` confirmă după rulare. Dacă workerul cade, brokerul retrimite mesajul, iar task-ul rulează din nou: poate rula de două ori, deci trebuie să fie idempotent. Dacă moare doar procesul copil care rulează task-ul, mesajul se confirmă oricum, afară de cazul în care activezi `task_reject_on_worker_lost`.
+Problema: Containerul unui worker e oprit forțat (`kill -9`) în mijlocul unui export de 10 minute. După repornire, exportul nu mai apare nicăieri: mesajul a dispărut din coadă.
+Ideea: Implicit, workerul confirmă mesajul (ack) înainte de rulare, deci brokerul îl șterge din coadă, iar o cădere pierde task-ul. Cu `acks_late=True` confirmă după rulare. Dacă workerul cade, brokerul retrimite mesajul, iar task-ul rulează din nou: poate rula de două ori, deci trebuie să fie idempotent. Dacă moare doar procesul copil care rulează task-ul, mesajul se confirmă oricum, afară de cazul în care activezi `task_reject_on_worker_lost`.
 Exemplu:
 ```text
 implicit:
@@ -61,6 +61,7 @@ acks_late:
 Legătură: CEL-02, CEL-03 și design, punctul 2. Același compromis ca la RabbitMQ: auto-ack înseamnă at-most-once (RMQ-02). Pe Redis, re-livrarea după o cădere vine abia după `visibility_timeout` (punctul 10).
 
 ### 4
+Greu: da
 Problema: Un worker cu un singur proces primește patru mesaje: un export de 30 de minute și trei task-uri mici. Le rezervă pe toate dinainte. Al doilea worker, liber, nu le poate lua, iar cele trei așteaptă 30 de minute.
 Ideea: Prefetch-ul e câte mesaje își rezervă un worker dinainte: `worker_prefetch_multiplier` (implicit 4) înmulțit cu numărul de procese. Pentru task-uri lungi pui 1 și `acks_late=True`: task-ul rulat rămâne neconfirmat, deci workerul nu mai rezervă altele. Cu confirmare timpurie ar mai rezerva unul.
 Exemplu:
@@ -92,7 +93,7 @@ Legătură: CEL-08. Workerul pentru `heavy` pornește cu `celery -A proj worker 
 
 ### 6
 Greu: da
-Problema: Un import are trei pași: descarcă, parsează, salvează. Dacă task-ul de descărcare pornește parsarea și așteaptă cu `.get()` rezultatul ei, blochează un proces din pool. Când pool-ul se umple, task-urile se așteaptă între ele și apare un deadlock.
+Problema: Un import are trei pași: descarcă, parsează, salvează. Dacă task-ul de descărcare pornește parsarea și așteaptă cu `.get()` rezultatul ei, blochează un proces din pool. Când pool-ul se umple, task-urile se așteaptă între ele și poate apărea un deadlock. De aceea Celery refuză implicit un `.get()` făcut din interiorul unui task (`RuntimeError`).
 Ideea: Compui task-urile fără să aștepți. `chain` le rulează pe rând, iar rezultatul pasului anterior intră ca prim argument în următorul (`.si()` îl ignoră). `group` le rulează în paralel. `chord` e un group urmat de un callback, care primește lista rezultatelor; cere un result backend. Un group legat cu `|` de alt task devine automat chord.
 Exemplu:
 ```python
@@ -135,8 +136,9 @@ celery -A app worker \
 Legătură: CEL-12 și GIL-02. Aceeași regulă ca la GIL: CPU-bound înseamnă procese, I/O-bound înseamnă thread-uri sau asyncio.
 
 ### 9
+Greu: da
 Problema: Un task apelează un serviciu care nu răspunde niciodată. Fără limită, ocupă un proces din pool pe vecie. După câteva ore, toate procesele sunt blocate și nu mai rulează nimic.
-Ideea: `soft_time_limit` aruncă `SoftTimeLimitExceeded` în task, care o prinde, face curățenie și iese. `time_limit` e plasa de siguranță: procesul care rulează task-ul e ucis cu forța și înlocuit, iar task-ul nu mai prinde nimic. Soft e mai mic decât hard (60 și 90 s), ca să rămână timp de curățenie.
+Ideea: `soft_time_limit` aruncă `SoftTimeLimitExceeded` în task, care o prinde, face curățenie și iese. `time_limit` e plasa de siguranță: pe pool-ul prefork, procesul care rulează task-ul e ucis cu forța și înlocuit, iar task-ul nu mai prinde nimic. La gevent și eventlet `soft_time_limit` nu merge. Soft e mai mic decât hard (60 și 90 s), ca să rămână timp de curățenie.
 Exemplu:
 ```text
 soft_time_limit=60  # excepție
@@ -151,7 +153,7 @@ Legătură: CEL-13. E ca `--timeout` de la Gunicorn, dar cu avertizare înainte.
 ### 10
 Greu: da
 Problema: Programezi un task cu `countdown=7200` (2 ore) pe Redis. Se întâmplă să ruleze de mai multe ori, deși l-ai trimis o singură dată.
-Ideea: Redis nu are confirmări ca RabbitMQ: un mesaj neconfirmat în `visibility_timeout` (implicit 1 oră) e redat altui worker. Un task cu ETA sau `countdown` stă neconfirmat în worker până îi vine ora. Peste 1 oră, mesajul revine și rulează din nou, apoi iar. La fel pățește un task cu `acks_late` mai lung de o oră. Ridici `visibility_timeout` peste cel mai lung ETA, folosești RabbitMQ sau ții termenele lungi în baza de date.
+Ideea: Pe Redis, un mesaj rămas neconfirmat peste `visibility_timeout` (implicit 1 oră) e redat altui worker. Un task cu ETA sau `countdown` stă neconfirmat în worker până îi vine ora. După o oră fără confirmare, brokerul îl redă, deci task-ul poate rula de mai multe ori. La fel pățește un task cu `acks_late` mai lung de o oră. Ridici `visibility_timeout` peste cel mai lung ETA (documentația o descrie ca nerecomandată) sau ții termenele lungi în baza de date și trimiți task-ul abia când e ora.
 Exemplu:
 ```text
 0 h  apply_async(countdown=7200)
@@ -179,6 +181,7 @@ send.delay(o)  # ! EncodeError
 Legătură: CEL-06 și CEL-07. E aceeași regulă ca la Django cu Celery: trimiți `pk`-ul, nu instanța. Un `pickle.loads` pe date din Redis are același risc.
 
 ### 12
+Greu: da
 Problema: La interviu povestești un task Celery scris de tine. Răspunzi „rulează periodic și citește din Redis”. Eșecul lipsește: Redis cade, task-ul rulează de două ori, o rulare ține mai mult decât intervalul.
 Ideea: Spui patru lucruri. Frecvența: Beat trimite mesajul la fiecare N minute. Eșecul: retry doar la erori tranzitorii; următoarea rulare, care citește starea curentă, recuperează una pierdută. Idempotența: rulat de două ori, scrie același rezultat. Suprapunerea: Beat trimite următorul mesaj chiar dacă cel vechi rulează.
 Exemplu:
