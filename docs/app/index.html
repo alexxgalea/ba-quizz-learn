@@ -1051,7 +1051,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
   // ---------- interviu & plan ----------
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
-  P.cfg = { interview: "2026-11-03", hours: 2.5, company: "Onapsis", role: "SDET III – Python & JavaScript · Onapsis" };
+  P.cfg = { interview: "2026-11-10", hours: 2.5, company: "Onapsis", role: "SDET III – Python & JavaScript · Onapsis" };
   // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou
@@ -9382,7 +9382,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/app/";
-  const BUILD = "4dd62e9";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
+  const BUILD = "5f9adf8";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };
