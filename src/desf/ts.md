@@ -116,7 +116,7 @@ Pick "name" | "email": name, email
 Partial: name?, email?
 keyof User: "id" | "name" | "email"
 ```
-Legătură: TS-06. Un PATCH către FastAPI se tipează așa. `Omit<User, "id">` e complementul lui `Pick`, bun pentru formularul de creare.
+Legătură: TS-06 și FE-10. Un PATCH către FastAPI se tipează așa, iar tipurile generate din OpenAPI-ul lui (`openapi-typescript`) sunt tipuri obișnuite, deci `Pick`, `Omit` și `Partial` merg direct pe ele. `Omit<User, "id">` e bun pentru formularul de creare.
 
 ### 6
 Greu: da
