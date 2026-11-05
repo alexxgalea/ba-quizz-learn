@@ -32,6 +32,7 @@ Unde nu ține: C++ e nominal: numele tipului hotărăște, nu conținutul. În T
 Legătură: TS-01 și TS-02. În React, un obiect trecut printr-o variabilă ca props nu declanșează verificarea de la literal.
 
 ### 2
+Greu: da
 Problema: O bibliotecă îți cere să adaugi un câmp la un tip existent, iar cu `type` primești „Duplicate identifier”. Un coleg încearcă un `interface` pentru o uniune și nu merge.
 Ideea: Ambele descriu forma unui obiect și, în cod obișnuit, sunt aproape interschimbabile. `interface` se poate redeschide: două declarații cu același nume se îmbină (declaration merging), și se extinde cu `extends`. `type` nu se poate redeclara (TS2300), dar poate numi uniuni, primitive și tupluri. La câmpuri conflictuale, `extends` dă eroare (TS2430), iar `&` dă `never`. Alege una și fii consecvent în proiect.
 Exemplu:
@@ -159,6 +160,7 @@ const onChange = (
 Legătură: TS-08. Fișa `react` explică inputurile controlate (punctul 4), la care se leagă `onChange`.
 
 ### 8
+Greu: da
 Problema: Pornești `strict` și crezi că ești acoperit, dar `names[5]` tot are tipul `string`, iar `JSON.parse` întoarce `any`, deci bug-urile din date trec.
 Ideea: `strict` pornește o familie de verificări: `strictNullChecks` (`null` și `undefined` nu mai intră în orice tip), `noImplicitAny` (un parametru fără tip e eroare), `strictPropertyInitialization`, `useUnknownInCatchVariables` (`e` din `catch` e `unknown`) și altele. E implicit activ în TypeScript 6 și 7. `noUncheckedIndexedAccess` nu face parte din el: abia cu el `arr[0]` are tipul `T | undefined`. `strict` nu prinde `as`, `any` din biblioteci sau datele din rețea: acolo validezi la graniță.
 Exemplu:

@@ -41,7 +41,7 @@ Verificare: `const c: P = { ...o }` compilează?
 Răspuns verificare: Da. Proprietățile care vin dintr-un spread nu declanșează verificarea.
 Varianta greșită B: `a` nu dă eroare: `o` e o variabilă, nu un literal. `y` în plus e permis prin tiparea structurală.
 Varianta greșită C: Tocmai `a` trece. Tipul lui `o` conține `x: number`, deci e compatibil cu `P`.
-Varianta greșită D: Tiparea structurală acceptă câmpuri în plus, dar nu la un literal proaspăt. Acolo `y` e semnalat.
+Varianta greșită D: Tocmai pentru literale există TS2353: acolo un câmp în plus e semnalat, ca o posibilă greșeală de scriere.
 
 ### ts-03
 Pe scurt: `I` primește ambele câmpuri, iar al doilea `T` dă „Duplicate identifier” (TS2300).

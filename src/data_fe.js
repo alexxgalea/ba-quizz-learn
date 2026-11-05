@@ -208,7 +208,7 @@ first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar al treil
       "`T` e un parametru de tip, dedus din argumente: `first<T>(xs: T[]): T` păstrează legătura dintre intrare și ieșire",
       "Constrângerea `T extends { id: number }` spune ce poți face cu `T`; fără ea, `T` e orice și `x.id` pică (TS2339)",
       "Valori implicite și mai mulți parametri: `<T, K extends keyof T>`",
-      "C++: template-uri; ambele sunt polimorfism la compilare, cu constrângeri (concepts)",
+      "C++: template-uri; tipul se deduce din argument la fel, iar fără constrângere eroarea apare la instanțiere",
       "Diferența: TypeScript șterge tipurile, nu instanțiază o copie pe tip; nu poți apela `T()` sau face `typeof T` la runtime"],
       model: "Un generic e o funcție sau un tip parametrizat cu un tip, `T`, pe care compilatorul îl deduce din argumente. `first<T>(xs: T[]): T` păstrează legătura: dacă dau `User[]`, primesc `User`. Fără constrângere, `T` e orice tip, deci nu pot citi `x.id`. Cu `T extends { id: number }` cer ca `T` să aibă `id`, iar compilatorul mă lasă să-l citesc. E apropiat de template-urile din C++, dar TypeScript nu instanțiază câte o copie pe tip: tipurile se șterg la compilare, deci la runtime nu pot face `new T()` și nici nu pot afla ce e `T`." }
   ]);
