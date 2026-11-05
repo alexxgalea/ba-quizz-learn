@@ -22,6 +22,7 @@ window.claude = { use: async name => (name === 'sample' ? sample : null) };
 FIXTURE = """() => {
   const n = window.PREP.sheets.frontend.points.length;
   const items = Array.from({ length: n }, (_, i) => ({ p: 'Problema ' + i, i: 'Ideea ' + i, an: 'Analogie ' + i }));
+  items[1] = { p: 'Contorul rămâne la 1.', i: 'Fiecare render are propriul n.', an: 'Un snapshot.', pas: '```text\\nrender 1: n = 0\\nclick: setN(0 + 1)\\nrender 2: n = 1\\n```' };
   items[0] = { p: 'Un GIL blochează aplicația.', i: 'Ideea unu.', ex: '```tsx\\nclass A { return x; }\\nconst f = (a: number) => a;\\n```',
     cpp: 'Cod C++:\\n```cpp\\nclass B { int f() { return 1; } };\\n```', nu: 'Nu ține peste tot.' };
   window.PREP.desf.frontend = { map: { p: 'Harta de probă.', g: [{ a: 1, b: n, t: 'toate' }] }, items };
@@ -219,8 +220,31 @@ async def main():
             await pg.screenshot(path=str(SHOTS / f"desf_frontend_{scheme}.png"), full_page=True)
             check(tag + "frontend: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
+            # ---- js (frontend extins, tichetul 02): harta și 8 desfășurări; C++ la 3 (lambdă cu captură) și 4 (`[this]`); Pas cu pas la 1, 2, 3, 4, 7 și 8; exemple JS fără colorare Python ----
+            await pg.evaluate(f"document.querySelector('{E_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa frontend, ca să se deschidă js
+            djs = await pg.evaluate("window.PREP.desf.js")
+            n_js = await pg.evaluate("window.PREP.sheets.js.points.length")
+            order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|frontend):/.test(x))")
+            check(tag + "js: a P1 module that sits right before frontend", order == ["js:1", "frontend:1"] and await pg.evaluate("window.PREP.modules.map(m => m.id).indexOf('frontend') - window.PREP.modules.map(m => m.id).indexOf('js')") == 1, order)
+            await open_sheet(pg, "js")
+            J_ = "#sheet-js "
+            check(tag + "js: the map and one explanation per point, numbered like the points", djs and len(djs["items"]) == n_js == 8 and await pg.locator(J_ + "ul.pts > li .pn").count() == n_js and await pg.locator(J_ + '[data-a="dz-map"]').count() == 1)
+            await pg.click(J_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "js: 'Deschide tot' opens the map and every explanation", await pg.locator(J_ + "[data-dz]").count() == n_js and await pg.locator(J_ + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{J_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "js: the C++ block shows only at 3 and 4, and always with 'Unde nu ține'", cpp == [False, False, True, True, False, False, False, False] and cpp == [bool(x.get("cpp")) for x in djs["items"]] and await pg.locator(J_ + ".dz-cpp").count() == await pg.locator(J_ + ".dz-cpp .dz-nu").count(), cpp)
+            pas = await pg.evaluate(f"[...document.querySelectorAll('{J_}[data-dz]')].map(e => !!e.querySelector('.dz-pas'))")
+            check(tag + "js: Pas cu pas at 1, 2, 3, 4, 7 and 8, labelled, as a block with at most 8 rows", pas == [True, True, True, True, False, False, True, True] and pas == [bool(x.get("pas")) for x in djs["items"]] and await pg.evaluate(f"[...document.querySelectorAll('{J_}.dz-pas')].every(e => /Pas cu pas/.test(e.querySelector('.dz-l').textContent) && e.querySelectorAll('pre.code').length === 1 && e.querySelector('pre.code').textContent.trim().split('\\n').length <= 8)"), pas)
+            check(tag + "js: the JS / C++ examples and the steps are shown without Python coloring", await pg.locator(J_ + "pre.code").count() >= 16 and await pg.evaluate(f"[...document.querySelectorAll('{J_}pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            check(tag + "js: the examples that show a mistake mark it with ✗ and the fix with ✓", await pg.evaluate(f"[...document.querySelectorAll('{J_}.dz-ex')].filter(e => /✗/.test(e.textContent)).length >= 4 && [...document.querySelectorAll('{J_}.dz-ex')].filter(e => /✓/.test(e.textContent)).length >= 3"))
+            check(tag + "js: the glossary terms are tappable in the explanations (closure, TDZ, promisiune…)", await pg.locator(J_ + "[data-dz] .term").count() >= 3)
+            check(tag + "js: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "js: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{J_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{J_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_js_{scheme}.png"), full_page=True)
+            check(tag + "js: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
             # ---- design (tichetul 09): harta și 9 desfășurări; fără C++ (nu există echivalent real), exemple Python colorate și blocuri `text` (SQL) necolorate ----
-            await pg.evaluate(f"document.querySelector('{E_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa frontend, ca să se deschidă design
+            await pg.evaluate(f"document.querySelector('{J_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa js, ca să se deschidă design
             dfd = await pg.evaluate("window.PREP.desf.design")
             n_ds = await pg.evaluate("window.PREP.sheets.design.points.length")
             await open_sheet(pg, "design")
@@ -495,6 +519,9 @@ async def main():
         check("fixture: all explanations open on a second module", await pg.locator(F + "[data-dz]").count() == n)
         blocks = await pg.evaluate(f"[...document.querySelectorAll('{F}[data-dz=\"0\"] pre.code')].map(e => ({{ spans: e.querySelectorAll('[class^=tk-]').length, text: e.textContent }}))")
         check("TSX and C++ blocks are shown without Python coloring", len(blocks) == 2 and all(x["spans"] == 0 for x in blocks) and "class A" in blocks[0]["text"] and "class B" in blocks[1]["text"], blocks)
+        pas = await pg.evaluate(f"[...document.querySelectorAll('{F}[data-dz]')].map(e => !!e.querySelector('.dz-pas'))")
+        check("Pas cu pas: shown only where the explanation has it, labelled, as a block without Python coloring", pas == [False, True] + [False] * (n - 2) and await pg.evaluate("(() => { const e = document.querySelector('#sheet-frontend [data-dz=\"1\"] .dz-pas'); return !!e && /Pas cu pas/.test(e.querySelector('.dz-l').textContent) && e.querySelectorAll('pre.code').length === 1 && e.querySelectorAll('pre.code [class^=tk-]').length === 0 && /render 2: n = 1/.test(e.textContent); })()"), pas)
+        check("Pas cu pas: sits after the analogy", await pg.evaluate("(() => { const d = document.querySelector('#sheet-frontend [data-dz=\"1\"]'), a = d.querySelector('.dz-an'), s = d.querySelector('.dz-pas'); return !!a && !!s && !!(a.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); })()"))
         check("glossary terms are tappable inside an explanation", await pg.locator(F + '[data-dz="0"] .term').count() >= 1 and await pg.evaluate(f"document.querySelector('{F}[data-dz=\"0\"] .term').textContent") == "GIL")
         await pg.click(F + '[data-dz="0"] .term'); await pg.wait_for_timeout(200)
         check("tapping a term opens its definition", await pg.evaluate("!document.querySelector('.gsheet').hidden"))
@@ -524,6 +551,15 @@ async def main():
             const lines = ['Fișa „' + m.name + '”: ' + sh.lead, 'Puncte: ' + sh.points.join(' ')]; if (sh.avoid) lines.push('De evitat la interviu: ' + sh.avoid.join(' '));
             const t = lines.join('\\n'); return t.length > 3500 ? t.slice(0, 3500) + '…' : t; }""")
         check("ask: a sheet without explanations sends exactly the same material as before", len(asks) == 2 and ("Material (contextul zonei de teorie):\n" + expected + "\n\n") in asks[1], asks[1][:400] if len(asks) > 1 else "")
+        await ctx.close()
+
+        # ---------- "Întreabă": și Pas cu pas intră în context ----------
+        ctx, pg = await new_page(b, "light", SAMPLE)
+        await pg.evaluate(FIXTURE); await open_sheet(pg, "frontend")
+        await pg.click("#sheet-frontend .ask-open"); await pg.wait_for_timeout(100)
+        await pg.fill("#sheet-frontend [data-ask]", "Explică pașii."); await pg.click('#sheet-frontend [data-a="ask-send"]'); await pg.wait_for_timeout(300)
+        asks = await pg.evaluate("window.__asks")
+        check("ask: the step-by-step of an explanation is in the context, under its label", len(asks) == 1 and "Pas cu pas:" in asks[0] and "render 2: n = 1" in asks[0], asks[0][:300] if asks else "")
         await ctx.close()
         await b.close()
     print("\n" + ("ALL PASS" if not fails else f"{len(fails)} FAILED: " + "; ".join(fails)))

@@ -140,7 +140,7 @@ export const SHEET_DZ = {
   desf: [
     { p: "Două `Rule` cu aceleași date apar de două ori într-un `set`.", i: "`__eq__` fără `__hash__` pune `__hash__ = None`.", ex: "```python\nclass R:\n    def __eq__(self, o):\n        return True\n{R()}  # ! TypeError\n```", cpp: "Pentru `std::unordered_set<R>` scrii `std::hash<R>`.", nu: "Python te lasă să scrii `__eq__` fără `__hash__`.", leg: "OOP-04 întreabă exact asta." },
     { p: "Vrei un `Config()` care întoarce mereu aceeași instanță.", i: "`__new__` creează obiectul; `__init__` îl completează.", an: "`__new__` e atelierul, `__init__` e vopseaua." },
-    { p: "Două `Scanner` văd amândouă aceeași listă de reguli.", i: "Corpul clasei rulează o singură dată.", ex: "```python\nclass S:\n    rules = []\n```" }
+    { p: "Două `Scanner` văd amândouă aceeași listă de reguli.", i: "Corpul clasei rulează o singură dată.", ex: "```python\nclass S:\n    rules = []\n```", pas: "```text\nclasa S se definește: rules = []\ns1.rules -> nu e pe s1 -> S.rules\n```" }
   ]
 };
 

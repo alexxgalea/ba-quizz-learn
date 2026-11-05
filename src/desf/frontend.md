@@ -107,7 +107,7 @@ Greu: da
 Problema: O listă de utilizatori apare în trei componente. Fiecare mount pornește un fetch nou, deși datele au venit acum 2 secunde. Iar la întoarcerea pe tab, rețeaua pornește din nou.
 Ideea: TanStack Query ține datele într-un cache după `queryKey`. `staleTime` (implicit 0) e cât timp datele sunt proaspete. Când devin stale, se refetch-uiesc la mount, la focus și la reconectare. `gcTime` (implicit 5 min) e cât stau în cache datele nefolosite. Erorile se reîncearcă de 3 ori, cu backoff exponențial.
 Exemplu:
-```ts
+```tsx
 useQuery({
   queryKey: ["users"],
   queryFn: fetchUsers,

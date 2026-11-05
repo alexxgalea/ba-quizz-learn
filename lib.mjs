@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_katas.js", "data_skel.js"];
+export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_fe.js", "data_katas.js", "data_skel.js"];
 
 // Modulele Jarvis (Live, Audio, Call, Jarvis) și cele pentru „Întreabă despre asta” (Ask, GeminiText): declarații globale, încărcate înaintea lui app.js. Aceleași fișiere rulează și în Node, în tools/unit.
 export const LIB_FILES = ["live.js", "audio.js", "call.js", "jarvis.js", "ask.js", "gemini_text.js"];
@@ -190,14 +190,18 @@ export function buildExplanations(root, P) {
 //   Grupuri:                        În C++: …   Unde nu ține: …   Legătură: …   Greu: da
 //   - 1–2: ce au în comun
 // Modul complet sau absent: câte o desfășurare pentru fiecare punct, plus harta.
-export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "Analogie": "an", "În C++": "cpp", "Unde nu ține": "nu", "Legătură": "leg", "Grupuri": "g", "Greu": "hard" };
+export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "Analogie": "an", "Pas cu pas": "pas", "În C++": "cpp", "Unde nu ține": "nu", "Legătură": "leg", "Grupuri": "g", "Greu": "hard" };
 // Cuvinte (fără blocurile de cod): erori în afara [min, max] (≤ hard la punctele marcate grele), avertisment în afara benzii 60–90.
-export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, cols: 36 };
+export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, stepLines: 8, cols: 36 };
+// Modulele frontend sunt teritoriu nou pentru Alex: desfășurări mai lungi, exemplu cu ✗ / ✓ alături. Pragul de jos rămâne 50, ca fișele scrise înainte să rămână valide.
+export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandMax: 140, exLines: 14, stepLines: 8, cols: 36 };
+export const DESF_FE_MODULES = ["js", "ts", "react", "frontend", "fedebug"];
+export const desfLimits = id => (DESF_FE_MODULES.includes(id) ? DESF_LIMITS_FE : DESF_LIMITS);
 // „Întreabă” taie materialul la ASK_DZ_MAX (src/app.js); sub acest prag (cu loc pentru etichete) nu se pierde nimic din coadă.
 export const DESF_ASK_BUDGET = 15000;
-export const DESF_LANGS = ["python", "py", "cpp", "ts", "tsx", "text"];
+export const DESF_LANGS = ["python", "py", "cpp", "ts", "tsx", "js", "jsx", "text"];
 const DESF_TEXT = ["p", "i", "ex", "an", "cpp", "nu", "leg"];
-export const DESF_LABEL = { p: "Problema", i: "Ideea", ex: "Exemplu", an: "Analogie", cpp: "În C++", nu: "Unde nu ține", leg: "Legătură" };
+export const DESF_LABEL = { p: "Problema", i: "Ideea", ex: "Exemplu", an: "Analogie", pas: "Pas cu pas", cpp: "În C++", nu: "Unde nu ține", leg: "Legătură" };
 const FENCE_RE = /```(\w*)[^\n]*\n([\s\S]*?)```/g;
 const GROUP_RE = /^[-*]\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*:\s*(\S.*)$/;
 
@@ -227,7 +231,7 @@ const wordCount = text => String(text || "").replace(FENCE_RE, " ").split(/\s+/)
 
 // Regulile de conținut. Întoarce { errors, warnings }, fiecare mesaj cu numele fișierului.
 export function checkDesf(parsed, sheet, file) {
-  const errors = [], warnings = [], L = DESF_LIMITS;
+  const errors = [], warnings = [], L = desfLimits(String(file).replace(/\.md$/, ""));
   const E = m => errors.push(file + ": " + m), W = m => warnings.push(file + ": " + m);
   const N = sheet.points.length, items = parsed.items;
   if (items.length !== N) E(items.length + " desfășurări pentru " + N + " puncte (câte una pentru fiecare punct)");
@@ -251,6 +255,13 @@ export function checkDesf(parsed, sheet, file) {
         b.code.split("\n").forEach((l, j) => { lines++; if ([...l].length > L.cols) E(at + "în " + DESF_LABEL[k] + ", rândul " + (j + 1) + " de cod are " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
       }
       if (k === "ex" && lines > L.exLines) E(at + "Exemplu are " + lines + " rânduri de cod (maxim " + L.exLines + " rânduri)");
+    }
+    if (it.pas !== undefined) {
+      // „Pas cu pas”: urmărirea în timp, în afara numărului de cuvinte; cel mult stepLines rânduri scurte.
+      const rows = it.pas.split("\n").filter(l => l.trim() && !/^\s*```/.test(l));
+      if (!rows.length) E(at + "Pas cu pas e gol");
+      if (rows.length > L.stepLines) E(at + "Pas cu pas are " + rows.length + " rânduri (maxim " + L.stepLines + " rânduri)");
+      rows.forEach((l, j) => { if ([...l].length > L.cols) E(at + "în Pas cu pas, rândul " + (j + 1) + " are " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
     }
     const max = it.hard === true ? L.hard : L.max;
     if (words < L.min) E(at + "prea scurt (" + words + " cuvinte, minim " + L.min + ")");
@@ -293,7 +304,7 @@ export function buildDesf(P, files) {
     try { parsed = parseDesf(md, f); } catch (e) { errors.push(e.message); continue; }
     const r = checkDesf(parsed, P.sheets[id], f);
     errors.push(...r.errors); warnings.push(...r.warnings);
-    const sh = P.sheets[id], size = [sh.lead, ...sh.points, ...(sh.avoid || []), parsed.map.p, ...parsed.map.g.map(g => g.t), ...parsed.items.flatMap(it => DESF_TEXT.map(k => it[k] || ""))].join(" ").length;
+    const sh = P.sheets[id], size = [sh.lead, ...sh.points, ...(sh.avoid || []), parsed.map.p, ...parsed.map.g.map(g => g.t), ...parsed.items.flatMap(it => [...DESF_TEXT, "pas"].map(k => it[k] || ""))].join(" ").length;
     if (size > DESF_ASK_BUDGET) warnings.push(f + ": materialul pentru „Întreabă” are ~" + size + " de caractere (> " + DESF_ASK_BUDGET + "): urcă ASK_DZ_MAX în src/app.js sau scurtează");
     if (r.errors.length) continue;
     desf[id] = { map: { p: parsed.map.p, g: parsed.map.g }, items: parsed.items.map(({ n, ...rest }) => rest) };

@@ -809,6 +809,14 @@ test("a chunk of a module with unfoldings brings the unfolding of its point as m
   assert.deepEqual(r2.desf, { problema: SHEET_DZ.desf[1].p, ideea: SHEET_DZ.desf[1].i, analogie: SHEET_DZ.desf[1].an });
 });
 
+test("the step-by-step of an unfolding reaches the model too, under its own key, after the example", async () => {
+  const t = await begin(setup(), "oop");
+  await t.tool("next_chunk"); await t.tool("next_chunk");
+  const r3 = await t.tool("next_chunk");
+  assert.deepEqual(Object.keys(r3.desf), ["problema", "ideea", "exemplu", "pas_cu_pas"]);
+  assert.equal(r3.desf.pas_cu_pas, SHEET_DZ.desf[2].pas);
+});
+
 test("with an unfolding the chunk instruction asks for its example, not an invented one, and for the code to be told, not read out", async () => {
   const t = await begin(setup(), "oop");
   const r = await t.tool("next_chunk");

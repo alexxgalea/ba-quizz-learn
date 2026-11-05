@@ -101,7 +101,7 @@ const Jarvis = (() => {
       "Cum conduci lecția:",
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
       "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale și cu un exemplu legat de experiența lui Alex (Django/DRF, Celery, Keycloak, Docker Swarm, Elasticsearch, computer vision). Rămâi la ce ai primit: fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
-      "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare ține locul exemplului din experiența lui Alex: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
+      "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare ține locul exemplului din experiența lui Alex: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
       "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
       "5. Când next_chunk dă „closing”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
@@ -255,7 +255,7 @@ const Jarvis = (() => {
       sync();
     }
     // Desfășurarea unui punct, cu chei pe înțelesul modelului (aceleași câmpuri ca DESF_FIELDS din lib.mjs; jarvis.js se testează în Node, deci nu le importă); câmpurile care lipsesc nu apar. Indexul ei e indexul punctului.
-    const DZ_KEYS = [["p", "problema"], ["i", "ideea"], ["ex", "exemplu"], ["an", "analogie"], ["cpp", "in_cpp"], ["nu", "unde_nu_tine"], ["leg", "legatura"]];
+    const DZ_KEYS = [["p", "problema"], ["i", "ideea"], ["ex", "exemplu"], ["an", "analogie"], ["pas", "pas_cu_pas"], ["cpp", "in_cpp"], ["nu", "unde_nu_tine"], ["leg", "legatura"]];
     function dzMaterial(sh, n) {
       const x = sh.desf && sh.desf[n - 1];
       if (!x) return null;
@@ -275,7 +275,7 @@ const Jarvis = (() => {
         const dz = dzMaterial(sh, n);
         if (dz) {
           r.desf = dz;
-          r.instruction = "Explică bucata pornind de la desfășurare: problema, ideea, apoi exemplul din desfășurare sau analogia și, dacă există, comparația cu C++ cu „unde nu ține”. Folosește exemplul din desfășurare, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Cu vorbele tale, în 1–1,5 minute. Fără fapte noi, nici față de punct, nici față de desfășurare.";
+          r.instruction = "Explică bucata pornind de la desfășurare: problema, ideea, apoi exemplul din desfășurare sau analogia, pașii din „pas_cu_pas” (dacă există), în ordine, și, dacă există, comparația cu C++ cu „unde nu ține”. Folosește exemplul din desfășurare, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Cu vorbele tale, în 1–1,5 minute. Fără fapte noi, nici față de punct, nici față de desfășurare.";
         }
       } else {
         r = { kind: "closing", module: lz.name, lead: sh.lead, recap_from: [sh.lead].concat(sh.points), instruction: "Spune capcanele la interviu (dacă există), apoi o recapitulare în trei propoziții și un rămas-bun." };

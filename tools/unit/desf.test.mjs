@@ -1,7 +1,7 @@
 // Desfășurările punctelor: parsarea (src/desf/<modul>.md) și regulile de validare. Fiecare regulă are un caz care pică; la final, datele reale trec.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseDesf, checkDesf, buildDesf, readDesfFiles, parseExpl, loadData, DESF_LIMITS } from "../../lib.mjs";
+import { parseDesf, checkDesf, buildDesf, readDesfFiles, parseExpl, loadData, DESF_LIMITS, DESF_LIMITS_FE, desfLimits } from "../../lib.mjs";
 
 const w = n => Array.from({ length: n }, (_, i) => "cuvânt" + i).join(" ");   // n cuvinte
 const fence = (lang, ...lines) => "```" + lang + "\n" + lines.join("\n") + "\n```";
@@ -15,7 +15,8 @@ function item(n, over = {}) {
 const MAP = "### harta\nProblema: " + w(10) + "\nGrupuri:\n- 1–2: " + w(4) + "\n- 3: " + w(4) + "\n";
 const doc = (map, ...items) => (map === null ? "" : map + "\n") + items.join("\n");
 const sheet = n => ({ points: Array(n).fill("punct") });
-const errs = (md, n = 3) => checkDesf(parseDesf(md, "oop.md"), sheet(n), "oop.md").errors;
+const errs = (md, n = 3, file = "oop.md") => checkDesf(parseDesf(md, file), sheet(n), file).errors;
+const warns = (md, n = 3, file = "oop.md") => checkDesf(parseDesf(md, file), sheet(n), file).warnings;
 const good = () => doc(MAP, item(1), item(2), item(3));
 const has = (list, re) => assert.ok(list.some(e => re.test(e)), "așteptat /" + re + "/ în:\n" + list.join("\n"));
 
@@ -148,6 +149,64 @@ test("buildDesf: a module that has no file simply has no explanations; an unknow
   has(buildDesf(P, { "nope.md": good() }).errors, /nope.*modul/i);
   has(buildDesf({ modules: [{ id: "oop" }], sheets: {} }, { "oop.md": good() }).errors, /oop.*nu are fișă/i);
   has(buildDesf(P, { "oop.md": doc(MAP, item(1), item(2), item(2)) }).errors, /duplicate|dublat/i);
+});
+
+// ---- modulele frontend: limite proprii (tichetul 02 din .scratch/frontend-extins) ----
+const FE = ["js", "ts", "react", "frontend", "fedebug"];
+const feErrs = (md, file = "js.md") => errs(md, 3, file);
+
+test("frontend modules have their own limits; the other modules keep the old ones", () => {
+  assert.equal([DESF_LIMITS_FE.bandMin, DESF_LIMITS_FE.bandMax, DESF_LIMITS_FE.hard, DESF_LIMITS_FE.exLines, DESF_LIMITS_FE.stepLines].join(), "90,140,250,14,8");
+  for (const m of FE) assert.equal(desfLimits(m), DESF_LIMITS_FE, m);
+  for (const m of ["oop", "python", "asyncio", "design"]) assert.equal(desfLimits(m), DESF_LIMITS, m);
+});
+
+test("frontend: 120 words pass in js, but the same item fails in oop (max 100)", () => {
+  const long = { an: "Analogie: " + w(60) };   // 120 de cuvinte
+  assert.deepEqual(feErrs(doc(MAP, item(1, long), item(2), item(3))), []);
+  has(errs(doc(MAP, item(1, long), item(2), item(3))), /punctul 1.*prea lung/);
+});
+
+test("frontend: the 'hard' ceiling is 250 words, and 180 is still the ceiling elsewhere", () => {
+  const w200 = { an: "Analogie: " + w(140), hard: "Greu: da" };   // ≈ 200 de cuvinte
+  assert.deepEqual(feErrs(doc(MAP, item(1, w200), item(2), item(3))), []);
+  has(errs(doc(MAP, item(1, w200), item(2), item(3))), /punctul 1.*prea lung.*180/);
+  has(feErrs(doc(MAP, item(1, { an: "Analogie: " + w(200), hard: "Greu: da" }), item(2), item(3))), /punctul 1.*prea lung.*250/);
+});
+
+test("frontend: the band is 90–140 (warning), the old 60–90 band is not used there", () => {
+  assert.ok(warns(doc(MAP, item(1), item(2), item(3)), 3, "js.md").some(x => /punctul 1.*60 cuvinte.*90–140/.test(x)), "60 de cuvinte ar trebui să avertizeze în js");
+  assert.deepEqual(warns(doc(MAP, item(1), item(2), item(3))), []);   // în oop, 60 e în bandă
+  const ok = { an: "Analogie: " + w(40) };   // 100 de cuvinte
+  assert.deepEqual(warns(doc(MAP, item(1, ok), item(2, ok), item(3, ok)), 3, "js.md"), []);
+});
+
+test("frontend: the example may have 14 lines of code, not 15; elsewhere still 8", () => {
+  const ex = n => "Exemplu:\n" + fence("ts", ...Array(n).fill("x = 1")) + "\n" + w(20);
+  assert.deepEqual(feErrs(doc(MAP, item(1, { ex: ex(14) }), item(2), item(3))), []);
+  has(feErrs(doc(MAP, item(1, { ex: ex(15) }), item(2), item(3))), /punctul 1.*Exemplu.*14 rânduri/);
+  has(errs(doc(MAP, item(1, { ex: ex(9) }), item(2), item(3))), /punctul 1.*Exemplu.*8 rânduri/);
+});
+
+test("languages: js and jsx are accepted (frontend examples run in Node)", () => {
+  for (const lang of ["js", "jsx"]) assert.deepEqual(feErrs(doc(MAP, item(1, { ex: "Exemplu:\n" + fence(lang, "let x = 1;") + "\n" + w(20) }), item(2), item(3))), [], lang);
+});
+
+test("Pas cu pas: parsed as its own field, shown after the example, not counted in the words", () => {
+  const steps = "Pas cu pas:\n" + fence("text", "render 1: n = 0", "click → setN(1)", "render 2: n = 1");
+  const d = parseDesf(doc(MAP, item(1, { pas: steps }), item(2), item(3)), "js.md");
+  assert.match(d.items[0].pas, /render 1: n = 0/);
+  assert.deepEqual(feErrs(doc(MAP, item(1, { pas: steps }), item(2), item(3))), []);
+  // 64 de cuvinte în 8 rânduri scurte: item (60) + pas (64) ar depăși 100 în oop, deci trece doar dacă pasul nu se numără
+  const many = "Pas cu pas:\n" + fence("text", ...Array(8).fill("a b c d e f g h"));
+  assert.deepEqual(errs(doc(MAP, item(1, { pas: many }), item(2), item(3))), []);
+});
+
+test("Pas cu pas: at most 8 short lines, and not empty", () => {
+  const steps = (n, line = "x") => "Pas cu pas:\n" + fence("text", ...Array(n).fill(line));
+  has(feErrs(doc(MAP, item(1, { pas: steps(9) }), item(2), item(3))), /punctul 1.*Pas cu pas.*8 rânduri/);
+  has(feErrs(doc(MAP, item(1, { pas: steps(2, "x".repeat(40)) }), item(2), item(3))), /punctul 1.*Pas cu pas.*rândul 1.*36/);
+  has(feErrs(doc(MAP, item(1, { pas: "Pas cu pas:\n" }), item(2), item(3))), /punctul 1.*Pas cu pas.*gol/);
 });
 
 test("the real data passes the rules", () => {
