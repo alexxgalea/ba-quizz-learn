@@ -268,6 +268,8 @@ async def main():
         check("pickTechMock: 7 distinct cards, one per slot, in the order of the technical round (BE + FE)", okslots, slots[0])
         fe = await pg.evaluate("() => ({ drawn: [...new Set(Array.from({ length: 300 }, () => window.__prep.pickTechMock()[4].m))].sort(), reach: ['frontend', 'react', 'js', 'ts'].filter(m => window.PREP.oral.some(c => c.m === m)).sort() })")
         check("pickTechMock: the frontend slot can draw from every frontend module that has oral cards (js included)", fe["drawn"] == fe["reach"] and "js" in fe["reach"], fe)
+        snip = await pg.evaluate("() => { const ids = new Set(); const mods = new Set(); for (let i = 0; i < 600; i++) { const c = window.__prep.pickTechMock()[5]; mods.add(c.m); if (c.m === 'fedebug') ids.add(c.id); } return { fd: [...ids].sort(), mods: [...mods].sort(), have: window.PREP.oral.filter(c => c.m === 'fedebug' && c.code).length }; }")
+        check("pickTechMock: the snippet slot can draw a broken snippet from fedebug (cards with code only)", "fedebug" in snip["mods"] and len(snip["fd"]) >= 1 and snip["have"] == 10 and all(i.startswith("o-fd-") for i in snip["fd"]), snip)
         await pg.click('.tab[data-tab="oral"]'); await pg.wait_for_timeout(100)
         check("oral home offers the technical simulated interview", await pg.locator('[data-a="iv-mock"]').count() == 1 and "Interviu tehnic simulat" in await pg.inner_text('[data-a="iv-mock"]'))
         await pg.screenshot(path=str(SHOTS / "iv8-home.png"), full_page=True)

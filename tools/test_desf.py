@@ -265,8 +265,30 @@ async def main():
             await pg.screenshot(path=str(SHOTS / f"desf_react_{scheme}.png"), full_page=True)
             check(tag + "react: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
+            # ---- fedebug (frontend extins, tichetul 04): harta și 6 desfășurări; fără C++; Pas cu pas la 1, 2 și 5; exemple JS / TS / TSX fără colorare Python ----
+            await pg.evaluate(f"document.querySelector('{R_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa react, ca să se deschidă fedebug
+            dfd_ = await pg.evaluate("window.PREP.desf.fedebug")
+            n_fd = await pg.evaluate("window.PREP.sheets.fedebug.points.length")
+            order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|react|frontend|fedebug):/.test(x))")
+            check(tag + "fedebug: a P1 module right after frontend", order == ["js:1", "react:1", "frontend:1", "fedebug:1"], order)
+            await open_sheet(pg, "fedebug")
+            D_ = "#sheet-fedebug "
+            check(tag + "fedebug: the map and one explanation per point, numbered like the points", dfd_ and len(dfd_["items"]) == n_fd == 6 and await pg.locator(D_ + "ul.pts > li .pn").count() == n_fd and await pg.locator(D_ + '[data-a="dz-map"]').count() == 1)
+            await pg.click(D_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "fedebug: 'Deschide tot' opens the map and every explanation", await pg.locator(D_ + "[data-dz]").count() == n_fd and await pg.locator(D_ + "[data-dz-map]").count() == 1)
+            check(tag + "fedebug: no C++ block", await pg.locator(D_ + ".dz-cpp").count() == 0 and not any(x.get("cpp") for x in dfd_["items"]))
+            pas = await pg.evaluate(f"[...document.querySelectorAll('{D_}[data-dz]')].map(e => !!e.querySelector('.dz-pas'))")
+            check(tag + "fedebug: Pas cu pas at 1, 2 and 5, labelled, as a block with at most 8 rows", pas == [True, True, False, False, True, False] and pas == [bool(x.get("pas")) for x in dfd_["items"]] and await pg.evaluate(f"[...document.querySelectorAll('{D_}.dz-pas')].every(e => /Pas cu pas/.test(e.querySelector('.dz-l').textContent) && e.querySelectorAll('pre.code').length === 1 && e.querySelector('pre.code').textContent.trim().split('\\n').length <= 8)"), pas)
+            check(tag + "fedebug: the examples are shown without Python coloring", await pg.locator(D_ + "pre.code").count() >= 9 and await pg.evaluate(f"[...document.querySelectorAll('{D_}pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            check(tag + "fedebug: the examples that show a mistake mark it with ✗ and the fix with ✓", await pg.evaluate(f"[...document.querySelectorAll('{D_}.dz-ex')].filter(e => /✗/.test(e.textContent)).length >= 4 && [...document.querySelectorAll('{D_}.dz-ex')].filter(e => /✓/.test(e.textContent)).length >= 5"))
+            check(tag + "fedebug: the glossary terms are tappable in the explanations and in the map", await pg.locator(D_ + "[data-dz] .term").count() >= 1 and await pg.locator(D_ + "[data-dz-map] .term").count() >= 1)
+            check(tag + "fedebug: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "fedebug: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{D_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{D_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_fedebug_{scheme}.png"), full_page=True)
+            check(tag + "fedebug: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
             # ---- design (tichetul 09): harta și 9 desfășurări; fără C++ (nu există echivalent real), exemple Python colorate și blocuri `text` (SQL) necolorate ----
-            await pg.evaluate(f"document.querySelector('{R_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa react, ca să se deschidă design
+            await pg.evaluate(f"document.querySelector('{D_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa fedebug, ca să se deschidă design
             dfd = await pg.evaluate("window.PREP.desf.design")
             n_ds = await pg.evaluate("window.PREP.sheets.design.points.length")
             await open_sheet(pg, "design")
