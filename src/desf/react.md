@@ -123,6 +123,7 @@ Problema: `Filter` și `List` au fiecare propriul `useState` pentru textul căut
 Ideea: Când două componente au nevoie de aceeași informație, o muți în cel mai apropiat părinte comun. Părintele ține state-ul și îl dă copiilor prin props, împreună cu un callback prin care copilul cere schimbarea. Datele curg într-o singură direcție, în jos, iar evenimentele urcă prin callback-uri. Fiecare bucată de state are un singur proprietar: o copie în doi copii ajunge să difere. Ce se poate calcula din state, cum e lista filtrată, nu devine state separat.
 Exemplu:
 ```tsx
+// ✓ q stă în părintele comun
 function Page({ all }: Props) {
   const [q, setQ] = useState("");
   const shown = all.filter((x) =>
@@ -170,6 +171,7 @@ Legătură: RE-06. FE-02 detaliază re-randarea consumatorilor. În React 19 pro
 
 ### 7
 
+Greu: da
 Problema: Două componente au același cod de zece rânduri pentru un contor cu `useState`. Îl muți într-un hook și te aștepți ca ambele să arate același număr, dar fiecare numără pe cont propriu.
 Ideea: Un custom hook e o funcție al cărei nume începe cu `use` și care apelează alte hook-uri. Partajează logică, nu valori: fiecare componentă care îl apelează primește propriul state, independent de celelalte. Dacă două componente trebuie să vadă același număr, state-ul urcă în părinte (punctul 5) sau trece prin Context (punctul 6). Regulile hook-urilor se aplică și în interiorul lui: apel doar la nivelul de sus.
 Exemplu:
@@ -184,6 +186,7 @@ function useCounter(start = 0) {
 const a = useCounter();
 const b = useCounter();
 // inc din a: a.n = 1, b.n = 0
+// ✓ comun: state în părinte
 ```
 Legătură: RE-07. Ca o funcție fabrică în Python: fiecare apel `Counter()` produce un obiect nou. `useQuery` din TanStack Query e tot un custom hook (FE-04).
 

@@ -20,7 +20,7 @@ function Badge({ n }: P) {
 }
 ```
 Legătură: E ideea unei funcții pure din Python: fără efecte laterale, același rezultat pentru aceleași argumente. Un template Django face la fel: citește contextul și produce HTML. Strict Mode e și motivul pentru care un `useEffect` rulează de două ori în dev (FE-07).
-Limită: Doar randarea trebuie să fie pură. Un handler de click sau un effect pot modifica ce vor.
+Limită: Doar randarea trebuie să fie pură. Un handler de click sau un `useEffect` pot modifica ce vor.
 La interviu: „O componentă e o funcție pură de props și state. În timpul randării nu modific variabile din afară, props sau state. Strict Mode o apelează de două ori în dev tocmai ca să prindă asta.”
 Verificare: Ai `const items: string[] = []` declarat în interiorul componentei, iar în corp faci `items.push("x")`. Încalcă regula de puritate?
 Răspuns verificare: Nu. Array-ul e creat chiar în funcție, la fiecare apel, deci modificarea lui e locală. Regula interzice doar modificarea a ce exista înainte de render.
@@ -77,9 +77,9 @@ const add = (x: string) =>
 Legătură: JS-01 și PY-13: copia superficială împarte referințele. Același efect îl dă `sort()` pe state (JS-06).
 Limită: Elementul adăugat cu `push` apare totuși la următorul render, produs de altceva (alt `setState`). De aceea bug-ul pare intermitent.
 La interviu: „React compară state-ul prin `Object.is`. Dacă modific array-ul pe loc și îl dau înapoi, referința e aceeași și nu re-randează. Dau mereu o copie nouă.”
-Verificare: De ce `setItems(prev => [...prev, x])` e mai sigur decât `setItems([...items, x])` când apeși de două ori repede?
+Verificare: De ce `setItems(prev => [...prev, x])` e mai sigur decât `setItems([...items, x])` când handlerul adaugă două elemente la rând?
 Răspuns verificare: `items` e valoarea din render-ul curent. Două apeluri în același handler pleacă amândouă de la ea. `prev` e starea după actualizările deja puse în coadă.
-Varianta greșită B: `setItems` nu așteaptă un click următor. Problema e referința neschimbată.
+Varianta greșită B: `setItems` nu amână nimic până la un click următor: comparația se face imediat.
 Varianta greșită C: `push` întoarce lungimea, dar valoarea lui nu se folosește aici: `setItems` primește `items`.
 Varianta greșită D: `const` nu împiedică `push`, fiindcă legarea nu se schimbă. Și `let` ar fi dat același rezultat.
 
@@ -118,7 +118,7 @@ Scop: Știi unde pui state-ul când două componente depind de el. E o întrebar
 Mecanism: Fiecare apel `useState` creează o variabilă separată, deci `q` din `Filter` și `q` din `List` sunt două variabile. Informația comună trebuie să aibă un singur proprietar: cel mai apropiat părinte. El dă valoarea în jos prin props și primește schimbarea printr-un callback.
 Pas cu pas:
 ```text
-Page: q = "" 
+Page: q = ""
 Filter scrie „ro" → onQ('ro')
 Page: setQ('ro')
 Page se re-randează
@@ -166,9 +166,9 @@ Limită: În Strict Mode, React apelează reducer-ul de două ori ca să prindă
 La interviu: „Un reducer e pur: ia starea și acțiunea și întoarce starea nouă. Dacă o modific pe loc și întorc același obiect, React compară prin `Object.is` și nu actualizează ecranul.”
 Verificare: Ce e mai mult în cod decât un `useState`, și ce câștigi?
 Răspuns verificare: Scrii reducer-ul și acțiunile. Câștigi logica de actualizare într-un singur loc, testabilă separat de componentă.
-Varianta greșită B: Reducer-ul rulează la `dispatch`, dar rezultatul lui e aceeași referință, deci ecranul nu se schimbă.
-Varianta greșită C: Nu aruncă nicio eroare: React nu blochează modificarea pe loc. Efectul este o stare neschimbată.
-Varianta greșită D: `dispatch` nu amână acțiunea cu un click. Problema este referința, nu momentul.
+Varianta greșită B: Reducer-ul chiar rulează, dar asta nu ajunge: React afișează doar ce vede diferit de starea veche.
+Varianta greșită C: React nu blochează modificarea pe loc și nu aruncă nicio eroare. Defectul se vede doar pe ecran.
+Varianta greșită D: Ecranul nu se actualizează deloc la acest `dispatch`, deci nici cu un element, nici cu două.
 
 ### re-07
 Pe scurt: `B` arată `0`: fiecare apel al hook-ului are propriul state, deci `A` și `B` au câte un contor.
@@ -198,7 +198,7 @@ Limită: Două componente care cer același cache de date par să partajeze stat
 La interviu: „Un custom hook partajează logică, nu state. Fiecare componentă care îl apelează are state-ul ei. Pentru state comun îl ridic în părinte sau folosesc Context.”
 Verificare: Ce reguli respecți când scrii un custom hook?
 Răspuns verificare: Numele începe cu `use`, iar hook-urile se apelează doar la nivelul de sus, nu în condiții sau bucle. Linter-ul din `eslint-plugin-react-hooks` le verifică.
-Varianta greșită B: Contorul din `A` nu ajunge în `B`: state-ul nu stă în hook, ci în componentă.
+Varianta greșită B: Un hook nu e un loc comun de stocare: `useState` din interiorul lui creează state pentru cine îl apelează.
 Varianta greșită C: Re-render-ul părintelui nu leagă cele două contoare. Fiecare are propria valoare.
 Varianta greșită D: Un hook poate fi apelat în câte componente vrei. Regula este doar despre locul apelului.
 
@@ -224,6 +224,6 @@ Limită: O componentă definită în interiorul alteia e un tip nou la fiecare r
 La interviu: „React păstrează state-ul unei componente cât timp același tip rămâne pe aceeași poziție. Ca să resetez un formular, îi dau o `key` care se schimbă. Nu definesc componente în interiorul altora.”
 Verificare: De ce un `useEffect` care golește câmpul la schimbarea `mode` e mai slab decât `key`?
 Răspuns verificare: Effect-ul rulează după randare, deci utilizatorul vede un render cu textul vechi, apoi altul cu câmpul gol. `key` reface componenta din prima, fără render în plus.
-Varianta greșită B: Ramura a doua nu e alt element: e același tip pe aceeași poziție.
+Varianta greșită B: Pentru React contează tipul și poziția, nu ramura de cod din care vine elementul.
 Varianta greșită C: Props noi nu resetează state-ul. Resetarea cere alt tip sau altă cheie.
 Varianta greșită D: Un `useEffect` ar merge, dar nu e singura soluție; `key` e cea recomandată.

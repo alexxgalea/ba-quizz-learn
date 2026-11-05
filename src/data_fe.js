@@ -172,7 +172,7 @@ function List({ items }: { items: string[] }) {
     return state;
   }
   return state;
-}`, o: ["Ecranul rămâne neschimbat: întoarce aceeași referință, iar React vede „neschimbat”", "Ecranul se actualizează cu `x`, fiindcă reducer-ul rulează la `dispatch`", "Aruncă eroare: un reducer nu poate modifica `state`", "Ecranul se actualizează, dar abia la `dispatch`-ul următor"],
+}`, o: ["Ecranul rămâne neschimbat: întoarce aceeași referință, iar React vede „neschimbat”", "Ecranul se actualizează cu `x`, fiindcă reducer-ul rulează la `dispatch`", "Aruncă eroare: un reducer nu poate modifica `state`", "Ecranul se actualizează cu `x` de două ori"],
       ctx: "Reducer-ul primește starea veche și o acțiune și întoarce starea nouă. React compară rezultatul cu starea veche prin `Object.is`.",
       e: "Reducer-ul modifică starea pe loc și întoarce același obiect, deci `Object.is` zice că nimic nu s-a schimbat și ecranul rămâne la fel. Nu aruncă nicio eroare. Reducer-ul trebuie să fie pur: `return { ...state, items: [...state.items, a.item] }`." },
     { id: "re-07", lvl: 1, q: "Apeși „+” din `A`. Ce arată `B`?", code: R`function useCounter() {
