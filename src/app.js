@@ -32,7 +32,7 @@
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const TERM_RE = TERM_FORM.size ? new RegExp("(^|[^\\p{L}\\p{N}_])(" + [...TERM_FORM.keys()].sort((a, b) => b.length - a.length).map(reEsc).join("|") + ")(?![\\p{L}\\p{N}_])", "gu") : null;
   // termeni care, într-un anumit loc, au alt sens decât cel din glosar
-  const TERM_SKIP = { "obs-01": ["coada"], domain: ["tranzactie"] };
+  const TERM_SKIP = { "obs-01": ["coada"], domain: ["tranzactie"], frontend: ["coada"] };
   function termsIn(text) {
     const s = new Set(); if (!TERM_RE || !text) return s;
     for (const m of String(text).matchAll(TERM_RE)) s.add(TERM_FORM.get(m[2]));

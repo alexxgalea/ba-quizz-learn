@@ -1176,6 +1176,14 @@ Completare la secțiunea 39 (`domain`), verificat 3 noiembrie 2026:
 - ✅ **Piloni pe pagina principală**: Control („Secure AI & Human SAP Code”, „Secure CleanCore”, „Full DevSecOps”), Assess („SAP Exposure Management”, „Threat Mitigation”, „Compliance Automation”), Defend („SAP Threat Detection & Response”, „Zero-Day & Exploit Detection”, „Compensating Controls”). Confirmă că Compliance Automation e sub Assess (desfășurarea 2).
 - ⚠️ **SIEM**: desfășurarea 10 atribuie acum definiția fișei („adună și corelează”) și citează NIST SP 800-92 („centralized logging”).
 
+## 42. Glosarul de frontend (frontend extins, tichetul 01; verificat 5 noiembrie 2026)
+
+- ✅ **Batching automat din React 18**: „Without automatic batching, we only batched updates inside React event handlers. Updates inside of promises, setTimeout, native event handlers, or any other event were not batched in React by default.” Din 18: „these updates will be batched automatically”. Batching = „when React groups multiple state updates into a single re-render”. Sursă: https://react.dev/blog/2022/03/29/react-v18
+- ✅ **Error boundaries**: nu prind erori din event handlers, din server side rendering, din boundary-ul însuși și din cod asincron (`setTimeout`, `requestAnimationFrame`), cu excepția funcției din `startTransition`. „There is currently no way to write an Error Boundary as a function component”; docs recomandă `react-error-boundary`. Sursă: https://react.dev/reference/react/Component
+- ✅ **Preflight CORS**: cerere simplă = `GET` / `HEAD` / `POST`, doar header-e safelisted (`Accept`, `Accept-Language`, `Content-Language`, `Content-Type`, `Range`), iar `Content-Type` doar `application/x-www-form-urlencoded`, `multipart/form-data` sau `text/plain`. Deci `application/json` și `Authorization` declanșează preflight-ul, care e o cerere `OPTIONS` cu `Access-Control-Request-Method` / `-Headers`. Sursă: https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS
+- ✅ **Input controlat**: „To render a controlled input, pass the `value` prop to it”; `value` fără `onChange` dă în consolă „You provided a `value` prop to a form field without an `onChange` handler. This will render a read-only field…”; un input nu trece între controlat și necontrolat. Sursă: https://react.dev/reference/react-dom/components/input
+- ✅ **Rulat (Node 22.22)**: `{ f(); let x = 1; function f() { return x; } }` → `ReferenceError` (TDZ); `var` citit înainte de declarație → `undefined`; `setTimeout(a, 0)` + `Promise.resolve().then(b)` → `b, a`; `for (var i…)` + `setTimeout` → `3 3 3`; `Object.hasOwn([1, 2], "map")` → `false`, `"map" in Array.prototype` → `true`.
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.

