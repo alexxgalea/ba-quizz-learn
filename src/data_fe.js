@@ -229,7 +229,7 @@ function B() {
     points: [
       "Un proces fix: reproduc bug-ul (pași, date, browser), îl izolez (scot cod până rămâne minimul), formulez o ipoteză, o verific cu un experiment (breakpoint sau log), repar și scriu un test de regresie care pică fără reparație. Citești întâi eroarea, nu ghicești.",
       "Un mesaj de eroare se citește întreg, apoi stack trace-ul de sus în jos: primul rând din codul tău arată locul. `Cannot read properties of undefined (reading 'x')` înseamnă că valoarea dinaintea punctului e `undefined`, nu `x`. `x is not a function` înseamnă că `x` nu e funcție. Source maps leagă codul minificat de sursa originală, dacă build-ul le generează și serverul le servește.",
-      "`debugger;` oprește execuția la acea linie cât timp DevTools e deschis. Un breakpoint condițional se oprește doar când condiția e adevărată, iar „pause on exceptions” oprește chiar la linia care aruncă. Un logpoint scrie în consolă fără să modifici codul. `console.table` afișează un array de obiecte ca tabel. În CoderPad nu te bazezi pe DevTools: pregătește-te cu `console.log` cu etichetă.",
+      "`debugger;` oprește execuția la acea linie cât timp DevTools e deschis. Un breakpoint condițional se oprește doar când condiția e adevărată, iar „pause on exceptions” oprește chiar la linia care aruncă. Un logpoint scrie în consolă fără să modifici codul. `console.table` afișează un array de obiecte ca tabel. Nu e sigur că ai DevTools în CoderPad (documentația pentru React nu le pomenește), deci pregătește-te și cu `console.log` cu etichetă.",
       "Tab-ul Network arată pentru fiecare cerere statusul (200, 4xx, 5xx sau `CORS error`), payload-ul trimis și răspunsul primit. O cerere către alt origin cu `Content-Type: application/json` sau cu un header propriu face browserul să trimită întâi un preflight `OPTIONS`; serverul trebuie să răspundă cu `Access-Control-Allow-Origin`, `-Methods` și `-Headers`. Postman și curl nu aplică CORS: îl aplică doar browserul.",
       "React DevTools are tab-ul Components (props și state pe fiecare componentă) și Profiler (înregistrezi randările și cât durează). `Too many re-renders` vine dintr-un `setState` necondiționat în render, de obicei `onClick={f()}` în loc de `onClick={f}`. Un effect fără array de dependențe care setează state intră într-o buclă; React avertizează cu `Maximum update depth exceeded`.",
       "Un error boundary e o componentă-clasă cu `getDerivedStateFromError` (sau pachetul `react-error-boundary`) care arată un fallback când un copil aruncă la randare. Nu prinde erorile din event handlers, din cod asincron (`setTimeout`, promisiuni), din SSR sau din el însuși. Acolo folosești `try` / `catch`, `.catch` și, ca plasă de siguranță, evenimentul `unhandledrejection`."
@@ -238,7 +238,7 @@ function B() {
   };
 
   Q("fedebug", [
-    { id: "fd-01", lvl: 1, q: "Mesajul e `TypeError: Cannot read properties of undefined (reading 'name')`. Ce e `undefined`?", code: R`const label = user.profile.name;`, o: ["`user.profile`: eroarea citește `name` dintr-o valoare `undefined`", "`name`: proprietatea nu există pe obiect", "`user`: altfel obiectul din care se citește ar fi fost `user`", "Nu poți ști fără să rulezi codul cu un breakpoint"],
+    { id: "fd-01", lvl: 1, q: "Mesajul e `TypeError: Cannot read properties of undefined (reading 'name')`. Ce e `undefined`?", code: R`const label = user.profile.name;`, o: ["`user.profile`: eroarea citește `name` dintr-o valoare `undefined`", "`name`: proprietatea nu există pe obiect", "`user`: altfel mesajul ar fi spus `reading 'profile'`", "Nu poți ști fără să rulezi codul cu un breakpoint"],
       ctx: "Mesajul numește proprietatea pe care codul a încercat s-o citească, nu valoarea care lipsește. Valoarea lipsă e cea din fața punctului.",
       e: "`reading 'name'` spune că `name` s-a citit dintr-o valoare `undefined`. Valoarea din fața lui `.name` e `user.profile`. Dacă `user` ar fi fost `undefined`, mesajul ar fi spus `reading 'profile'`." },
     { id: "fd-02", lvl: 2, q: "Pagina e pe alt origin decât API-ul. Ce apare în Network înainte de POST?", code: R`void fetch("https://api.x.ro/items", {
@@ -306,7 +306,8 @@ function B() {
       "Cauză: fără array de dependențe efectul rulează după fiecare render, iar `setRes(d)` cu un obiect nou produce alt render",
       "Reparație: dependențe `[id]`, ca efectul să ruleze doar când se schimbă `id`",
       "Răspunsurile vechi pot suprascrie unul nou: flag `ignore` sau `AbortController` în cleanup",
-      "Cum verific: Network și un `console.log` în effect; sau TanStack Query în locul fetch-ului manual"],
+      "Cum verific: Network și un `console.log` în effect",
+      "În proiect: TanStack Query în locul fetch-ului manual"],
       model: "Efectul nu are array de dependențe, deci rulează după fiecare render. Fiecare răspuns face `setRes` cu un obiect nou, ceea ce produce un render, care rulează efectul, care face altă cerere. Din asta văd în Network cereri la nesfârșit. Repar cu `[id]`, ca efectul să ruleze doar când se schimbă `id`. Adaug și cleanup cu `AbortController` sau un flag `ignore`, ca un răspuns întârziat să nu-l suprascrie pe cel nou. În proiect aș folosi TanStack Query, care se ocupă de asta." },
     { id: "o-fd-4", q: "Butonul adaugă elemente, dar contorul rămâne la 1. Ce nu merge, de ce și cum repari?", code: R`function Todos() {
   const [l, setL] = useState(["a"]);
@@ -323,9 +324,8 @@ function B() {
       "Simptom: la click nimic nu se schimbă pe ecran",
       "Cauză: `push` modifică același array, iar `setL(l)` dă aceeași referință; `Object.is` zice „neschimbat”, deci nu se re-randează",
       "Reparație: o copie, `setL([...l, \"nou\"])`",
-      "De ce pare intermitent: elementul din array există în memorie și apare la un alt render",
       "Cum verific: Components din React DevTools arată state-ul, iar un log arată că funcția rulează"],
-      model: "Handlerul rulează, dar ecranul nu se schimbă. `push` modifică array-ul existent, iar `setL(l)` îi dă lui React aceeași referință. React compară cu `Object.is`, vede același array și nu re-randează. Repar cu o copie: `setL([...l, \"nou\"])`. Bug-ul pare ciudat, fiindcă elementul chiar e în array și apare la un alt render. Pentru verificare mă uit în Components la state sau pun un log, care arată că funcția rulează." },
+      model: "Handlerul rulează, dar ecranul nu se schimbă. `push` modifică array-ul existent, iar `setL(l)` îi dă lui React aceeași referință. React compară cu `Object.is`, vede același array și nu re-randează. Repar cu o copie: `setL([...l, \"nou\"])`. Pentru verificare mă uit în Components la state sau pun un log, care arată că funcția rulează." },
     { id: "o-fd-5", q: "După ce ștergi primul rând, textul tastat apare pe alt rând. Ce nu merge, de ce și cum repari?", code: R`function Rows({ rows }: Props) {
   return rows.map((r, i) => (
     <li key={i}>
@@ -365,9 +365,9 @@ async function guard(id) {
       "Simptom: toți utilizatorii trec de verificare, inclusiv cei fără drepturi",
       "Cauză: lipsește `await`; `isAdmin(id)` întoarce o promisiune, iar o promisiune e mereu truthy",
       "Reparație: `if (await isAdmin(id))`",
-      "TypeScript prinde cazul: eroarea TS2801, „This condition will always return true since this 'Promise<boolean>' is always defined”",
+      "În TypeScript cu `strict`, cazul e prins: TS2801, „This condition will always return true since this 'Promise<boolean>' is always defined”; în JavaScript simplu nu",
       "Cum verific: `console.log(isAdmin(id))` arată `Promise { <pending> }`"],
-      model: "`isAdmin` e `async`, deci întoarce o promisiune, iar în `guard` o folosesc fără `await`. O promisiune e un obiect, deci mereu truthy, iar condiția trece pentru oricine. E și o problemă de securitate. Repar cu `if (await isAdmin(id))`. În TypeScript, compilatorul avertizează cu TS2801 că o condiție pe o promisiune e mereu adevărată. Dacă nu am TypeScript, un `console.log(isAdmin(id))` arată `Promise { <pending> }`." },
+      model: "`isAdmin` e `async`, deci întoarce o promisiune, iar în `guard` o folosesc fără `await`. O promisiune e un obiect, deci mereu truthy, iar condiția trece pentru oricine. E și o problemă de securitate. Repar cu `if (await isAdmin(id))`. În TypeScript cu `strict`, compilatorul îl prinde cu TS2801 (o condiție pe o promisiune e mereu adevărată). În JavaScript simplu, un `console.log(isAdmin(id))` arată `Promise { <pending> }`." },
     { id: "o-fd-8", q: "Aplicația aruncă o eroare la `addAll`. Ce nu merge, de ce și cum repari?", code: R`class Cart {
   items = [];
   add(x) {

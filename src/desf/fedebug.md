@@ -66,14 +66,15 @@ Legătură: FD-01 și FE-10: un `user.profile` care lipsește vine adesea dintr-
 
 ### 3
 
+Greu: da
 Problema: Un bug apare doar la al 4872-lea element dintr-o listă. Pui `console.log` în buclă și primești cinci mii de rânduri.
-Ideea: `debugger;` oprește execuția la acea linie cât timp DevTools e deschis. Un breakpoint condițional, setat din Sources, se oprește doar când condiția e adevărată. „Pause on exceptions” oprește chiar la linia care aruncă. Un logpoint scrie în consolă fără să modifici codul. `console.table` afișează un array de obiecte ca tabel. Un log bun are etichetă și arată valoarea împreună cu tipul. În CoderPad documentația pentru React nu pomenește DevTools, deci pregătește-te cu `console.log`.
+Ideea: `debugger;` oprește execuția la acea linie cât timp DevTools e deschis. Un breakpoint condițional, setat din Sources, se oprește doar când condiția e adevărată. „Pause on exceptions” oprește chiar la linia care aruncă. Un logpoint scrie în consolă fără să modifici codul. `console.table` afișează un array de obiecte ca tabel. Un log bun are etichetă și arată valoarea împreună cu tipul. Nu e sigur că ai DevTools în CoderPad (documentația pentru React nu le pomenește), deci pregătește-te și cu `console.log`.
 Exemplu:
 ```js
 const log = console.log;
 const xs = [3, 0, 7];
 for (const [i, x] of xs.entries()) {
-  if (x === 0) {  // ✓ cazul rău
+  if (x === 0) {  // ✓ doar cazul 0
     log("i =", i, "x =", x);
     // → i = 1 x = 0
     debugger;
@@ -89,7 +90,7 @@ Problema: O cerere merge în Postman, dar în browser pică cu o eroare de CORS.
 Ideea: Tab-ul Network arată pentru fiecare cerere statusul (200, 4xx, 5xx sau `CORS error`), payload-ul trimis și răspunsul primit. CORS e o regulă a browserului: o cerere către alt origin e simplă doar cu `GET`, `HEAD` sau `POST` și cu `Content-Type` de tip `text/plain`, `multipart/form-data` sau `application/x-www-form-urlencoded`. `application/json` iese din listă, deci browserul trimite întâi un preflight, o cerere `OPTIONS`. Serverul răspunde cu `Access-Control-Allow-Origin`, `Allow-Methods` și `Allow-Headers`. Postman și curl nu aplică CORS. Cu `credentials`, `Access-Control-Allow-Origin` nu poate fi `*`.
 Exemplu:
 ```ts
-// ✗ trimite OPTIONS înainte de POST
+// cerere cu preflight (OPTIONS)
 void fetch("https://api.x.ro/a", {
   method: "POST",
   headers: {
@@ -107,7 +108,7 @@ Legătură: FE-13 (`Access-Control-Allow-Origin: *` și `credentials`). În Fast
 ### 5
 
 Greu: da
-Problema: Pagina îngheață, iar consola scrie `Too many re-renders`. Alt component face sute de cereri pe secundă, deși codul pare corect.
+Problema: Pagina îngheață, iar consola scrie `Too many re-renders`. Codul pare corect, iar butonul nici nu a fost apăsat.
 Ideea: React DevTools are două tab-uri: Components arată props și state pe fiecare componentă, iar Profiler înregistrează randările și cât durează. `Too many re-renders` apare când un `setState` rulează necondiționat în timpul randării: render, setState, render nou. Cea mai frecventă cauză e `onClick={inc()}` în loc de `onClick={inc}`, care apelează funcția la randare. Un effect fără array de dependențe, care face `setState` cu un obiect nou, intră tot într-o buclă: render, effect, setState, render. React avertizează cu `Maximum update depth exceeded`. Repari dând dependențele corecte.
 Exemplu:
 ```tsx
@@ -138,14 +139,17 @@ Problema: O componentă aruncă o eroare la randare și toată pagina devine alb
 Ideea: Un error boundary e o componentă-clasă cu `getDerivedStateFromError`, sau pachetul `react-error-boundary`. Când un copil aruncă la randare, boundary-ul arată un fallback în loc de pagina albă. Nu prinde erorile din event handlers, din cod asincron (`setTimeout`, promisiuni), din SSR și nici pe cele aruncate chiar de boundary. Acolo folosești `try` / `catch` în handler și `.catch` la promisiuni. Ca plasă de siguranță, evenimentul `unhandledrejection` pe `window` prinde promisiunile respinse fără handler.
 Exemplu:
 ```tsx
-// ✓ eroare de randare: prinsă
-<Boundary><Bomb /></Boundary>
 // ✗ eroare din handler: neprinsă
-<Boundary>
-  <button onClick={() => {
-    throw new Error("x");
-  }}>go</button>
-</Boundary>
+<button onClick={() => {
+  throw new Error("x");
+}}>go</button>
 // ✓ try / catch în handler
+const go = () => {
+  try {
+    save();
+  } catch (e) {
+    show(e);
+  }
+};
 ```
 Legătură: FD-03. JS-07: o promisiune respinsă fără `.catch` ajunge la `unhandledrejection`. În Django, un middleware de erori joacă un rol asemănător pentru 500.

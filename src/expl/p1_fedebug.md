@@ -22,7 +22,7 @@ La interviu: „Mesajul numește proprietatea citită, nu pe cea lipsă. `readin
 Verificare: Ce ar fi spus mesajul dacă `user` era `undefined`?
 Răspuns verificare: `Cannot read properties of undefined (reading 'profile')`. Citirea eșuează la primul punct, iar numele din paranteze e proprietatea citită atunci.
 Varianta greșită B: Mesajul numește proprietatea citită, nu pe cea lipsă. `name` e doar proprietatea căutată.
-Varianta greșită C: Dacă `user` era `undefined`, citirea lui `profile` ar fi eșuat prima, iar mesajul ar fi spus `reading 'profile'`.
+Varianta greșită C: Dacă `user` ar fi fost `undefined`, citirea lui `profile` ar fi eșuat prima, deci mesajul ar fi numit `profile`, nu `name`.
 Varianta greșită D: Mesajul conține destul ca să ajungi la cauză fără rulare: proprietatea din paranteze și locul din stack trace.
 
 ### fd-02
@@ -32,7 +32,7 @@ Mecanism: Browserul trimite direct doar cereri simple: `GET`, `HEAD` sau `POST`,
 Pas cu pas:
 ```text
 OPTIONS /items
-Origin: https://app.ro
+Origin: https://a.ro
 Access-Control-Request-Method: POST
 Access-Control-Request-Headers:
   content-type
@@ -53,7 +53,7 @@ Limită: Preflight-ul e păstrat în cache cât spune `Access-Control-Max-Age`. 
 La interviu: „Un POST cu `application/json` către alt origin declanșează preflight. Browserul trimite `OPTIONS`, iar serverul trebuie să răspundă cu `Access-Control-Allow-Origin`, `Methods` și `Headers`. Postman nu aplică CORS.”
 Verificare: De ce merge aceeași cerere în Postman?
 Răspuns verificare: CORS e o regulă aplicată de browser, nu de rețea. Postman și curl trimit cererea fără să ceară permisiunea serverului.
-Varianta greșită B: Un `POST` e simplă doar cu un `Content-Type` din lista scurtă. `application/json` nu e în ea.
+Varianta greșită B: O cerere `POST` e simplă doar cu un `Content-Type` din lista scurtă. `application/json` nu e în ea.
 Varianta greșită C: Browserul nu trimite un `GET` de verificare: verificarea se face cu `OPTIONS`.
 Varianta greșită D: `credentials: "include"` schimbă ce trebuie să răspundă serverul, dar nu e condiția pentru preflight.
 
@@ -81,7 +81,7 @@ const save = () => {
 };
 ```
 Legătură: JS-07: promisiunile respinse nu sunt prinse de boundary; le tratezi cu `.catch` sau `try` / `catch` în jurul lui `await`.
-Limită: Un boundary tot e clasă; nu există un echivalent în componente-funcții. Folosești o clasă scrisă o dată sau `react-error-boundary`.
+Limită: Un boundary rămâne o clasă; nu există un echivalent în componente-funcții. Scrii o clasă o singură dată sau folosești `react-error-boundary`.
 La interviu: „Error boundary prinde erorile de randare ale copiilor. Nu prinde event handlers, cod asincron, SSR sau erori din el însuși. În handler folosesc `try` / `catch`.”
 Verificare: Cum raportezi totuși o eroare dintr-un handler?
 Răspuns verificare: Ai `try` / `catch` în handler și o trimiți la un serviciu de raportare sau o pui în state. Ca plasă de siguranță poți asculta evenimentul `error` pe `window`.
@@ -108,7 +108,7 @@ export default {
   build: { sourcemap: true },
 };
 ```
-Legătură: Un serviciu de monitorizare (Sentry) cere source maps încărcate la deploy, ca să afișeze rânduri din sursă.
+Legătură: FD-01: un stack trace se citește la fel, dar aici pe sursă, nu pe bundle. Un traceback de Celery sau de Django arată direct fișierul și rândul sursă; în frontend build-ul le ascunde, iar un serviciu de monitorizare (Sentry) cere source maps încărcate la deploy.
 Limită: Un source map expune codul sursă oricui îl poate descărca. De aceea unele echipe îl publică doar către serviciul de monitorizare.
 La interviu: „Din producție primesc un stack trace pe cod minificat. Cu source maps, generate la build și servite împreună cu fișierele, DevTools îl arată pe sursa originală.”
 Verificare: Cum afli dacă DevTools a găsit source map-ul?
