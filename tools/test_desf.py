@@ -203,7 +203,7 @@ async def main():
             await pg.screenshot(path=str(SHOTS / f"desf_pytest_{scheme}.png"), full_page=True)
             check(tag + "pytest: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
-            # ---- frontend (tichetul 08): harta și 13 desfășurări; C++ doar la 1 (captură lambda) și 10 (std::variant); toate exemplele sunt TS / TSX / JS, deci fără colorare Python ----
+            # ---- frontend (tichetul 08, rescris în tichetul 05 din frontend extins): harta și 13 desfășurări în formatul de frontend; C++ doar la 1 (captură lambda) și 10 (std::variant); Pas cu pas la 1, 2, 3, 4, 6, 7, 8 și 13; exemple ✗ / ✓; toate exemplele sunt TS / TSX / JS, deci fără colorare Python ----
             await pg.evaluate(f"document.querySelector('{T_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa pytest, ca să se deschidă frontend
             dfe = await pg.evaluate("window.PREP.desf.frontend")
             n_fe = await pg.evaluate("window.PREP.sheets.frontend.points.length")
@@ -215,6 +215,10 @@ async def main():
             cpp = await pg.evaluate(f"[...document.querySelectorAll('{E_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
             check(tag + "frontend: the C++ block shows only at 1 and 10, and always with 'Unde nu ține'", cpp == [True, False, False, False, False, False, False, False, False, True, False, False, False] and cpp == [bool(x.get("cpp")) for x in dfe["items"]] and await pg.locator(E_ + ".dz-cpp").count() == await pg.locator(E_ + ".dz-cpp .dz-nu").count(), cpp)
             check(tag + "frontend: the TS / TSX / JS examples are shown without Python coloring", await pg.locator(E_ + "pre.code").count() >= n_fe and await pg.evaluate(f"[...document.querySelectorAll('{E_}pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            pasf = await pg.evaluate(f"[...document.querySelectorAll('{E_}[data-dz]')].map(e => !!e.querySelector('.dz-pas'))")
+            check(tag + "frontend: Pas cu pas at 1, 2, 3, 4, 6, 7, 8 and 13, labelled, as a block with at most 8 rows", pasf == [True, True, True, True, False, True, True, True, False, False, False, False, True] and pasf == [bool(x.get("pas")) for x in dfe["items"]] and await pg.evaluate(f"[...document.querySelectorAll('{E_}.dz-pas')].every(e => /Pas cu pas/.test(e.querySelector('.dz-l').textContent) && e.querySelectorAll('pre.code').length === 1 && e.querySelector('pre.code').textContent.trim().split('\\n').length <= 8)"), pasf)
+            check(tag + "frontend: the examples that show a mistake mark it with ✗ and the fix with ✓ (points 1-3, 4-8, 9-12)", await pg.evaluate(f"[...document.querySelectorAll('{E_}.dz-ex')].filter(e => /✗/.test(e.textContent) && /✓/.test(e.textContent)).length >= 11"))
+            check(tag + "frontend: the glossary terms that were not already linked in the points are tappable in the explanations (closure, race condition, reconcilierea…)", await pg.locator(E_ + "[data-dz] .term").count() >= 4, await pg.evaluate(f"[...document.querySelectorAll('{E_}[data-dz] .term')].map(e => e.textContent)"))
             check(tag + "frontend: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
             check(tag + "frontend: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{E_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{E_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
             await pg.screenshot(path=str(SHOTS / f"desf_frontend_{scheme}.png"), full_page=True)

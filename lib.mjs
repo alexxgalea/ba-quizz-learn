@@ -199,7 +199,7 @@ export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandM
 export const DESF_FE_MODULES = ["js", "ts", "react", "frontend", "fedebug"];
 export const desfLimits = id => (DESF_FE_MODULES.includes(id) ? DESF_LIMITS_FE : DESF_LIMITS);
 // „Întreabă” taie materialul la ASK_DZ_MAX (src/app.js); sub acest prag (cu loc pentru etichete) nu se pierde nimic din coadă.
-export const DESF_ASK_BUDGET = 15000;
+export const DESF_ASK_BUDGET = 18500;
 export const DESF_LANGS = ["python", "py", "cpp", "ts", "tsx", "js", "jsx", "text"];
 const DESF_TEXT = ["p", "i", "ex", "an", "cpp", "nu", "leg"];
 export const DESF_LABEL = { p: "Problema", i: "Ideea", ex: "Exemplu", an: "Analogie", pas: "Pas cu pas", cpp: "În C++", nu: "Unde nu ține", leg: "Legătură" };

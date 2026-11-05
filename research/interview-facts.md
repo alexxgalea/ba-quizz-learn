@@ -1231,6 +1231,24 @@ Surse: MDN, react.dev, documentația Chrome DevTools, documentația CoderPad; me
 - ⚠️ **React DevTools**: react.dev (pagina „React Developer Tools”) spune că extensia „lets you inspect React components, edit props and state, and identify performance problems” și că apar panourile Components și Profiler; pagina nu descrie „de ce s-a re-randat” sau evidențierea actualizărilor, iar README-ul pachetului nu le pomenește. Fișa nu le afirmă, ca să nu atribuie documentației ce nu spune.
 - ⚠️ **CoderPad**: spec-ul presupunea „în CoderPad doar consola”. Pagina CoderPad pentru React spune că pad-ul e servit de Vite, că modificările se văd fără refresh după un debounce de 2 secunde și că erorile apar în ieșirea aplicației; DevTools nu e pomenit și nici o consolă dedicată. Fișa spune doar că documentația nu pomenește DevTools, deci te pregătești cu `console.log`. Sursă: https://coderpad.io/languages/react/
 
+## 46. Rescrierea desfășurărilor `frontend` (frontend extins, tichetul 05; verificat 5 noiembrie 2026)
+
+Surse: react.dev, documentația TanStack Query v5, documentația TypeScript; exemplele rulate în vitest 5 cu react 19.3.1, jsdom și Testing Library (test temporar în `katas/`, șters la închidere), în `tsc` 7.0.2 (`--strict`, prin `tools/desf_examples.mjs`) și cu `@tanstack/query-core` 5.106.1 (într-un director separat, în afara depozitului).
+
+- ✅ **State ca snapshot** (punctul 1): rulat, `setN(n + 1)` de trei ori într-un handler dă `n = 1`, iar `setN(x => x + 1)` de trei ori dă `n = 3` (de la 0). Punctul rămâne neschimbat față de tichetul 08.
+- ✅ **Regulile hooks** (punctul 2): `return null` înaintea celui de-al doilea `useState`, apoi re-randare cu `user` prezent, aruncă „Rendered more hooks than during the previous render” (rulat); varianta cu ambele hook-uri înaintea `return`-ului nu aruncă.
+- ✅ **Effect cu cleanup** (punctul 3): fără array și fără cleanup, zece randări lasă zece intervale active; cu `[ms]` și cleanup rămâne unul singur, iar la unmount zero (rulat, cu `setInterval` numărat).
+- ✅ **Strict Mode** (punctul 4): un effect `connect()` fără cleanup lasă două conexiuni active în dev (`connect, connect`); cu `return () => disconnect()` secvența e `connect, disconnect, connect` și rămâne una activă (rulat).
+- ✅ **Stare derivată** (punctul 5): `useState` + `useEffect` dă două randări la montare, calculul direct în render doar una (rulat).
+- ✅ **Cursa din fetch** (punctul 6): cu cererile rezolvate în ordine inversă, fără `ignore` lista ajunge la `ab`, cu `ignore` rămâne `abc` (rulat). Citatul din docs („using an explicit flag like `ignore` is the most reliable way”) e din secțiunea 18.
+- ✅ **TanStack Query, cronologia** (punctul 7, `@tanstack/query-core` 5.106.1, ceas simulat, cu `window` definit): cu `staleTime: 60_000`, un al doilea observer la 30 s ia datele din cache fără cerere nouă; la 61 s observerul vede datele ca stale; la 62 s un observer nou primește imediat datele din cache și pornește un refetch (`isFetching`); după ce nu mai e niciun observer, query-ul iese din cache la 5 minute (`gcTime`). Atenție: într-un mediu fără `window` (Node, SSR) `gcTime` implicit e `Infinity`; cele 5 minute sunt implicitul din browser.
+- ✅ **`key`** (punctul 8): cu `key={index}`, după inversare textul tastat în rândul `A` apare la `B` (`B:x`, `A:`); cu `key={id}` rămâne la `A` (`B:`, `A:x`) (rulat).
+- ✅ **Memoizare** (punctul 9): exemplele `useMemo` randează corect; faptele despre React Compiler 1.0 (7 oct. 2025) și Profiler sunt din secțiunile 7 și 22.
+- ✅ **`unknown` și `never`** (punctul 10): `tsc --strict` dă TS18046 pe `b.name` cu `b: unknown`, iar `a.name.toUpperCase()` cu `a: any` compilează; `return e satisfies never` compilează după două `if` care acoperă uniunea (exemplul rulează prin `tools/desf_examples.mjs`).
+- ✅ **Testing Library** (punctul 11): `container.querySelector(".btn-save")` găsește butonul, dar depinde de CSS; `getByRole("button", { name: "Salvează" })`, `findByText` și `queryByText(...)` → `null` merg ca în exemplu (rulat).
+- ✅ **XSS** (punctul 12): `{comment}` afișează `<img src=x onerror=…>` ca text, fără element `img`; `dangerouslySetInnerHTML` creează elementul `img` (rulat în jsdom). Restul faptelor (CORS cu `credentials`, PKCE, RFC 10017) sunt din secțiunile 7, 22 și 25.
+- ✅ **Event loop** (punctul 13): exemplul `sync, promise, timer` rulează în Node (`tools/desf_examples.mjs`).
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.
@@ -1247,3 +1265,4 @@ Surse: MDN, react.dev, documentația Chrome DevTools, documentația CoderPad; me
 12. TypeScript / React: `satisfies` nu e în pagina despre tipuri de bază și nici nu are exemplu cu `as const` în notele de lansare 4.9 (combinația e verificată prin compilare); documentația React nu pomenește `AbortError`, dar recomandă un flag `ignore` pe lângă abort (secțiunea 18).
 13. React (secțiunea 44): `useReducer` / `useState` care primesc aceeași referință nu schimbă ecranul, dar React poate apela componenta încă o dată și arunca rezultatul; documentația nu folosește „one-way data flow” și nici „batching” pe pagina snapshot; provider-ul în React 19 e `<Ctx value>`.
 14. Depanare frontend (secțiunea 45): spec-ul spunea „în CoderPad doar consola”, dar documentația CoderPad nu confirmă asta (nici DevTools, nici o consolă dedicată nu sunt pomenite pe pagina React); un effect fără dependențe care face `setState` doar avertizează (`Maximum update depth exceeded`), nu aruncă; `onClick={f()}` e prins și de TypeScript (TS2322), iar `if (promisiune)` de TS2801.
+15. TanStack Query (secțiunea 46): `gcTime` implicit de 5 minute e valabil în browser; într-un mediu fără `window` (Node, SSR) implicitul e `Infinity`, deci un test în Node nu vede query-ul ieșind din cache.
