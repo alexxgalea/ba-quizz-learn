@@ -225,7 +225,7 @@ async def main():
             djs = await pg.evaluate("window.PREP.desf.js")
             n_js = await pg.evaluate("window.PREP.sheets.js.points.length")
             order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|frontend):/.test(x))")
-            check(tag + "js: a P1 module that sits right before frontend", order == ["js:1", "frontend:1"] and await pg.evaluate("window.PREP.modules.map(m => m.id).indexOf('frontend') - window.PREP.modules.map(m => m.id).indexOf('js')") == 1, order)
+            check(tag + "js: a P1 module that comes first, two places before frontend (react sits between)", order == ["js:1", "frontend:1"] and await pg.evaluate("window.PREP.modules.map(m => m.id).indexOf('frontend') - window.PREP.modules.map(m => m.id).indexOf('js')") == 2, order)
             await open_sheet(pg, "js")
             J_ = "#sheet-js "
             check(tag + "js: the map and one explanation per point, numbered like the points", djs and len(djs["items"]) == n_js == 8 and await pg.locator(J_ + "ul.pts > li .pn").count() == n_js and await pg.locator(J_ + '[data-a="dz-map"]').count() == 1)
@@ -243,8 +243,30 @@ async def main():
             await pg.screenshot(path=str(SHOTS / f"desf_js_{scheme}.png"), full_page=True)
             check(tag + "js: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
+            # ---- react (frontend extins, tichetul 03): harta și 8 desfășurări; fără C++ (nu există echivalent real); Pas cu pas la 2, 3, 4, 6 și 8; exemple TSX fără colorare Python ----
+            await pg.evaluate(f"document.querySelector('{J_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa js, ca să se deschidă react
+            drc = await pg.evaluate("window.PREP.desf.react")
+            n_rc = await pg.evaluate("window.PREP.sheets.react.points.length")
+            order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|react|frontend):/.test(x))")
+            check(tag + "react: a P1 module between js and frontend", order == ["js:1", "react:1", "frontend:1"], order)
+            await open_sheet(pg, "react")
+            R_ = "#sheet-react "
+            check(tag + "react: the map and one explanation per point, numbered like the points", drc and len(drc["items"]) == n_rc == 8 and await pg.locator(R_ + "ul.pts > li .pn").count() == n_rc and await pg.locator(R_ + '[data-a="dz-map"]').count() == 1)
+            await pg.click(R_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "react: 'Deschide tot' opens the map and every explanation", await pg.locator(R_ + "[data-dz]").count() == n_rc and await pg.locator(R_ + "[data-dz-map]").count() == 1)
+            check(tag + "react: no C++ block (there is no real equivalent)", await pg.locator(R_ + ".dz-cpp").count() == 0 and not any(x.get("cpp") for x in drc["items"]))
+            pas = await pg.evaluate(f"[...document.querySelectorAll('{R_}[data-dz]')].map(e => !!e.querySelector('.dz-pas'))")
+            check(tag + "react: Pas cu pas at 2, 3, 4, 6 and 8, labelled, as a block with at most 8 rows", pas == [False, True, True, True, False, True, False, True] and pas == [bool(x.get("pas")) for x in drc["items"]] and await pg.evaluate(f"[...document.querySelectorAll('{R_}.dz-pas')].every(e => /Pas cu pas/.test(e.querySelector('.dz-l').textContent) && e.querySelectorAll('pre.code').length === 1 && e.querySelector('pre.code').textContent.trim().split('\\n').length <= 8)"), pas)
+            check(tag + "react: the TSX examples and the steps are shown without Python coloring", await pg.locator(R_ + "pre.code").count() >= 13 and await pg.evaluate(f"[...document.querySelectorAll('{R_}pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            check(tag + "react: the examples that show a mistake mark it with ✗ and the fix with ✓", await pg.evaluate(f"[...document.querySelectorAll('{R_}.dz-ex')].filter(e => /✗/.test(e.textContent)).length >= 5 && [...document.querySelectorAll('{R_}.dz-ex')].filter(e => /✓/.test(e.textContent)).length >= 5"))
+            check(tag + "react: the glossary terms are tappable in the explanations (DOM, Context…) and in the map (render, reducer, reconcilierea…)", await pg.locator(R_ + "[data-dz] .term").count() >= 3 and await pg.locator(R_ + "[data-dz-map] .term").count() >= 3)
+            check(tag + "react: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "react: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{R_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{R_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_react_{scheme}.png"), full_page=True)
+            check(tag + "react: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
             # ---- design (tichetul 09): harta și 9 desfășurări; fără C++ (nu există echivalent real), exemple Python colorate și blocuri `text` (SQL) necolorate ----
-            await pg.evaluate(f"document.querySelector('{J_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa js, ca să se deschidă design
+            await pg.evaluate(f"document.querySelector('{R_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa react, ca să se deschidă design
             dfd = await pg.evaluate("window.PREP.desf.design")
             n_ds = await pg.evaluate("window.PREP.sheets.design.points.length")
             await open_sheet(pg, "design")
