@@ -30,7 +30,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
     { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 4, src: "Onapsis" },
     { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 3, src: "Anunț" },
     { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 4, src: "Experiența ta" },
-    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 1, src: "Anunț + panel FE" }
+    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 1, src: "Anunț + panel FE", fe: true }
   ];
 
 

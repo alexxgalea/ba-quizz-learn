@@ -1,5 +1,6 @@
 /* Frontend extins (5 nov. 2026, .scratch/frontend-extins): modulele surori ale lui `frontend`.
-   Ordinea de citire: js → ts → react → frontend → fedebug; fiecare modul nou se inserează lângă `frontend` (ADR 0002).
+   Ordinea de citire: js → ts → react → frontend → fedebug; fiecare modul nou se inserează lângă `frontend` (ADR 0002) și poartă `fe: true`
+   (aplicația îl citește în isFE; lib.mjs ține aceeași listă în DESF_FE_MODULES, iar validate.mjs verifică egalitatea).
    Varianta corectă e mereu la indexul 0 (a: 0). Explicațiile grilelor: src/expl/p1_<modul>.md; desfășurările: src/desf/<modul>.md. */
 (function (P) {
   const R = String.raw;
@@ -8,7 +9,7 @@
   const before = (mod) => P.modules.splice(P.modules.findIndex(m => m.id === "frontend"), 0, mod);
 
   // ---------- js ----------
-  before({ id: "js", code: "JS", name: "JavaScript esențial", short: "JavaScript", p: 1, src: "Anunț + panel FE" });
+  before({ id: "js", code: "JS", name: "JavaScript esențial", short: "JavaScript", p: 1, src: "Anunț + panel FE", fe: true });
   P.sheets.js = {
     lead: "La un interviu de frontend, JavaScript e baza: ce valoare ajunge unde, ce vede o funcție din jurul ei și ce înseamnă `this`. React și TypeScript se sprijină pe asta.",
     points: [

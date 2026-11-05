@@ -20,7 +20,7 @@ const res = {
 const grab = (...a) => { for (const l of util.format(...a).split("\n")) res.output.push(l); };
 console.log = console.info = console.debug = grab;
 
-function note(e) {
+function recordFailure(e) {
   if (res.exc || res.syntax) return;
   const stack = String((e && e.stack) || "");
   const frames = [...stack.matchAll(/ex\.mjs:(\d+):\d+/g)].map(m => +m[1]);
@@ -32,10 +32,10 @@ function note(e) {
   res.exc = { type: e && e.constructor ? e.constructor.name : typeof e, line: frames.length ? frames[0] : null };
   res.frames = frames;
 }
-process.on("unhandledRejection", note);
-process.on("uncaughtException", note);
+process.on("unhandledRejection", recordFailure);
+process.on("uncaughtException", recordFailure);
 process.on("exit", () => { fs.writeSync(1, JSON.stringify(res)); });
 
 const file = path.join(process.cwd(), "ex.mjs");
 fs.writeFileSync(file, code);
-import(pathToFileURL(file).href).catch(note);
+import(pathToFileURL(file).href).catch(recordFailure);

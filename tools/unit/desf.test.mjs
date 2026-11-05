@@ -1,7 +1,7 @@
 // Desfășurările punctelor: parsarea (src/desf/<modul>.md) și regulile de validare. Fiecare regulă are un caz care pică; la final, datele reale trec.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseDesf, checkDesf, buildDesf, readDesfFiles, parseExpl, loadData, DESF_LIMITS, DESF_LIMITS_FE, desfLimits } from "../../lib.mjs";
+import { parseDesf, checkDesf, buildDesf, readDesfFiles, parseExpl, loadData, DESF_LIMITS, DESF_LIMITS_FE, DESF_FE_MODULES, desfLimits } from "../../lib.mjs";
 
 const w = n => Array.from({ length: n }, (_, i) => "cuvânt" + i).join(" ");   // n cuvinte
 const fence = (lang, ...lines) => "```" + lang + "\n" + lines.join("\n") + "\n```";
@@ -186,6 +186,20 @@ test("frontend: the example may have 14 lines of code, not 15; elsewhere still 8
   assert.deepEqual(feErrs(doc(MAP, item(1, { ex: ex(14) }), item(2), item(3))), []);
   has(feErrs(doc(MAP, item(1, { ex: ex(15) }), item(2), item(3))), /punctul 1.*Exemplu.*14 rânduri/);
   has(errs(doc(MAP, item(1, { ex: ex(9) }), item(2), item(3))), /punctul 1.*Exemplu.*8 rânduri/);
+});
+
+test("frontend limits are picked from the file name even when it comes with a path", () => {
+  const long = { an: "Analogie: " + w(60) };   // 120 de cuvinte: bun la frontend, prea lung la restul
+  assert.deepEqual(feErrs(doc(MAP, item(1, long), item(2), item(3)), "src/desf/js.md"), []);
+  has(feErrs(doc(MAP, item(1, long), item(2), item(3)), "src/desf/oop.md"), /punctul 1.*prea lung/);
+});
+
+test("the modules flagged `fe` in the data are exactly the frontend modules of the limits", () => {
+  const P = loadData(new URL("../../", import.meta.url));
+  const flagged = Array.from(P.modules).filter(m => m.fe).map(m => m.id).sort();   // Array.from: P vine dintr-un context vm, cu alt Array
+  const expected = DESF_FE_MODULES.filter(id => P.modules.some(m => m.id === id)).sort();
+  assert.deepEqual(flagged, expected);
+  assert.ok(flagged.includes("js") && flagged.includes("frontend"), flagged.join());
 });
 
 test("languages: js and jsx are accepted (frontend examples run in Node)", () => {

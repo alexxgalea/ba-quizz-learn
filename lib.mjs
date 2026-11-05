@@ -195,6 +195,7 @@ export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "An
 export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, stepLines: 8, cols: 36 };
 // Modulele frontend sunt teritoriu nou pentru Alex: desfășurări mai lungi, exemplu cu ✗ / ✓ alături. Pragul de jos rămâne 50, ca fișele scrise înainte să rămână valide.
 export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandMax: 140, exLines: 14, stepLines: 8, cols: 36 };
+// Aceeași listă ca modulele cu `fe: true` din date (validate.mjs și un test unit verifică egalitatea); aplicația citește câmpul `fe`, nu lista.
 export const DESF_FE_MODULES = ["js", "ts", "react", "frontend", "fedebug"];
 export const desfLimits = id => (DESF_FE_MODULES.includes(id) ? DESF_LIMITS_FE : DESF_LIMITS);
 // „Întreabă” taie materialul la ASK_DZ_MAX (src/app.js); sub acest prag (cu loc pentru etichete) nu se pierde nimic din coadă.
@@ -231,7 +232,7 @@ const wordCount = text => String(text || "").replace(FENCE_RE, " ").split(/\s+/)
 
 // Regulile de conținut. Întoarce { errors, warnings }, fiecare mesaj cu numele fișierului.
 export function checkDesf(parsed, sheet, file) {
-  const errors = [], warnings = [], L = desfLimits(String(file).replace(/\.md$/, ""));
+  const errors = [], warnings = [], L = desfLimits(String(file).split(/[\\/]/).pop().replace(/\.md$/, ""));
   const E = m => errors.push(file + ": " + m), W = m => warnings.push(file + ": " + m);
   const N = sheet.points.length, items = parsed.items;
   if (items.length !== N) E(items.length + " desfășurări pentru " + N + " puncte (câte una pentru fiecare punct)");

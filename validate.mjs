@@ -1,5 +1,5 @@
 // Loads the data files the way the page does and checks the schema.
-import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles } from "./lib.mjs";
+import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles, DESF_FE_MODULES } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);
@@ -49,6 +49,8 @@ for (const c of P.oral) {
   }
 }
 for (const m of P.modules) if (!P.sheets[m.id]) errors.push("no sheet for " + m.id);
+// modulele de frontend: câmpul `fe` din date (citit de aplicație) și DESF_FE_MODULES din lib.mjs (limitele desfășurărilor) trebuie să coincidă
+for (const m of P.modules) if (!!m.fe !== DESF_FE_MODULES.includes(m.id)) errors.push("module " + m.id + ": fe: " + !!m.fe + ", dar DESF_FE_MODULES (lib.mjs) spune " + DESF_FE_MODULES.includes(m.id));
 for (const [k, s] of Object.entries(P.sheets)) if (s.diagram && !P.diagrams[s.diagram]) errors.push("missing diagram " + s.diagram);
 const kataIds = new Set(P.katas.map(k => k.id));
 const taskIds = new Set();

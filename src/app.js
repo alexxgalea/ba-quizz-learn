@@ -32,10 +32,9 @@
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const TERM_RE = TERM_FORM.size ? new RegExp("(^|[^\\p{L}\\p{N}_])(" + [...TERM_FORM.keys()].sort((a, b) => b.length - a.length).map(reEsc).join("|") + ")(?![\\p{L}\\p{N}_])", "gu") : null;
   // Modulele de frontend (JavaScript, TypeScript, React, depanare): snippet-urile lor se afișează fără colorare Python și intră în prompt ca js / ts / tsx.
-  const FE_MODS = ["js", "ts", "react", "frontend", "fedebug"];
-  const isFE = id => FE_MODS.indexOf(id) >= 0;
+  const isFE = id => !!(MOD[id] && MOD[id].fe);
   // termeni care, într-un anumit loc, au alt sens decât cel din glosar („coada” la frontend e coada de actualizări sau de microtask-uri, nu o coadă de mesaje)
-  const TERM_SKIP = Object.assign({ "obs-01": ["coada"], domain: ["tranzactie"] }, Object.fromEntries(FE_MODS.map(m => [m, ["coada"]])));
+  const TERM_SKIP = Object.assign({ "obs-01": ["coada"], domain: ["tranzactie"] }, Object.fromEntries(MODS.filter(m => m.fe).map(m => [m.id, ["coada"]])));
   function termsIn(text) {
     const s = new Set(); if (!TERM_RE || !text) return s;
     for (const m of String(text).matchAll(TERM_RE)) s.add(TERM_FORM.get(m[2]));
@@ -1049,7 +1048,7 @@
     h += '<div class="modes">' +
       '<button class="mode' + (due ? " hot" : "") + '" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">' + (due ? "Cardurile scadente acum, cele mai slabe primele (maximum 8)." : "Nimic scadent. Cardurile revin după 20 min, 4 h, o zi sau două, după cutie.") + '</span><span class="mm">' + (due ? due + " carduri" : "–") + "</span></button>" +
       '<button class="mode' + (due ? "" : " hot") + '" data-a="oral" data-f="smart"><span class="mt">Recomandate</span><span class="md">6 carduri, mai multe din cutiile mici și din P1.</span><span class="mm">~12 min</span></button>' +
-      (IV.ready() ? '<button class="mode wide" data-a="iv-mock"><span class="mt">Interviu tehnic simulat</span><span class="md">7 carduri, ca la proba tehnică cu backend și frontend: threading sau asyncio, OOP, testing sau generatori, FastAPI, React/TS, un snippet de cod și un scenariu de design. Fără modelul de răspuns între carduri.</span><span class="mm">7 carduri · ~35 min</span></button>' : "") +
+      (IV.ready() ? '<button class="mode wide" data-a="iv-mock"><span class="mt">Interviu tehnic simulat</span><span class="md">7 carduri, ca la proba tehnică cu backend și frontend: threading sau asyncio, OOP, testing sau generatori, FastAPI, frontend (JavaScript, TypeScript sau React), un snippet de cod și un scenariu de design. Fără modelul de răspuns între carduri.</span><span class="mm">7 carduri · ~35 min</span></button>' : "") +
       '<button class="mode wide' + (dX ? " hot" : "") + '" data-a="open" data-f="smart"><span class="mt">Întrebări deschise</span><span class="md">' + OPEN.length + ' întrebări scurte, fără variante: răspunzi cu voce tare, dezvălui răspunsul, te notezi. Cel mai aproape de interviu.</span><span class="mm">8 întrebări · ~10 min' + (dX ? " · " + dX + " scadente" : xSeen ? " · " + xSeen + " văzute" : "") + "</span></button>" +
       "</div>";
     h += '<div class="sec-h"><h2>Pe module</h2><span class="xs muted">văzute · stăpânire</span></div>' + modList("oral");
