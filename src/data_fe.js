@@ -104,6 +104,115 @@ console.log(a.hi());`, o: ["`B`", "`A`", "`TypeError`", "`undefined`"],
       model: "Pentru cereri independente nu fac `await` în buclă, fiindcă rulează pe rând și durează de 20 de ori mai mult. Folosesc `await Promise.all(ids.map(fetchUser))`, care le pornește pe toate odată. Evit `forEach(async …)`: nu e așteptat, deci funcția se termină înainte de cereri, iar erorile rămân netratate. `Promise.all` respinge la primul eșec, dar nu oprește celelalte cereri, așa că, dacă vreau toate rezultatele, folosesc `allSettled`. La 20 de id-uri e în regulă, dar la 20.000 aș limita concurența, în loturi sau cu o bibliotecă. Erorile le prind cu `try` / `catch` în jurul lui `await`." }
   ]);
 
+  // ---------- ts (sistemul de tipuri; tichetul 06) ----------
+  P.modules.splice(P.modules.findIndex(m => m.id === "js") + 1, 0, { id: "ts", code: "TS", name: "TypeScript", short: "TypeScript", p: 1, src: "Anunț + panel FE", fe: true });
+  P.sheets.ts = {
+    lead: "TypeScript verifică tipurile la compilare și le șterge la runtime. La interviu contează cum gândești tipurile: structurale, restrânse prin verificări, generice. `react` și `frontend` se sprijină pe asta.",
+    points: [
+      "Tiparea e structurală: un tip e compatibil dacă are forma cerută, indiferent de nume, deci două clase cu aceleași câmpuri sunt interschimbabile (în C++ tiparea e nominală). Excepția: un literal de obiect cu o proprietate în plus dă eroare (excess property check, TS2353), o variabilă cu aceleași proprietăți nu.",
+      "`type` și `interface` descriu amândouă obiecte. `interface` se poate redeschide (declaration merging) și extinde cu `extends`; `type` nu se poate redeclara (TS2300), dar poate numi uniuni, primitive și tupluri. La câmpuri conflictuale, `extends` dă eroare (TS2430), iar `&` dă `never`.",
+      "Narrowing: după `typeof`, `in`, `instanceof`, o egalitate, o verificare de truthiness sau tag-ul unei uniuni discriminate, tipul se restrânge în ramură. Un type guard `x is T` îl restrânge după regula ta: compilatorul te crede și nu verifică predicatul.",
+      "Generics: `function first<T extends { id: number }>(xs: T[]): T`. `T` se deduce din argumente, iar constrângerea `extends` spune ce poți face cu el; fără ea, `x.length` pe un `T` pică (TS2339). Ca template-urile din C++, dar la runtime nu rămâne nimic: nu se instanțiază câte o copie pe tip.",
+      "Utility types derivă tipuri din altele, în loc să le copiezi: `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `ReturnType`, `Awaited`. `keyof T` dă cheile, `T[\"k\"]` tipul unui câmp. Se pot combina: `Partial<Pick<User, \"name\">>`.",
+      "`as` nu convertește și nu verifică nimic la runtime: dispare la compilare, deci o afirmație greșită nu aruncă. `!` promite că valoarea nu e `null` sau `undefined`, la fel de nesigur. `as const` face literalul readonly și îi păstrează valorile exacte. `satisfies` (4.9) verifică forma fără să lărgească tipul valorii.",
+      "Tiparea în React: props ca tip (`Props`), `children?: ReactNode`, `ChangeEvent<HTMLInputElement>` la `onChange`, `useState<User | null>(null)`. Fără generic, `useState(null)` are tipul `null`, iar setter-ul nu mai acceptă un utilizator.",
+      "`strict` pornește familia de verificări (`strictNullChecks`, `noImplicitAny`, `strictPropertyInitialization`…) și e implicit activ în TypeScript 6 și 7. `noUncheckedIndexedAccess` nu face parte din el: abia cu el `arr[0]` are tipul `T | undefined`. `strict` nu prinde `as`, `any` din biblioteci și datele externe: validezi la graniță (FE-10)."
+    ],
+    avoid: ["„TypeScript validează răspunsul de la API.”", "„`as User` convertește obiectul în `User`.”", "„Tipurile TypeScript sunt nominale ca în C++.”"]
+  };
+
+  Q("ts", [
+    { id: "ts-01", lvl: 1, q: "Compilează apelul `loadUser(new OrderId(7))`?", code: R`class UserId {
+  constructor(public v: number) {}
+}
+class OrderId {
+  constructor(public v: number) {}
+}
+function loadUser(id: UserId) {}
+loadUser(new OrderId(7));`, o: ["Da: tiparea e structurală, iar `OrderId` are aceeași formă ca `UserId`", "Nu: sunt clase diferite, deci tipuri diferite, ca în C++", "Nu: `loadUser` cere exact `UserId`, iar `strict` verifică numele claselor", "Da, dar doar dacă pui `as UserId` la apel"],
+      ctx: "TypeScript compară tipurile după formă, nu după nume. Un tip e compatibil dacă are câmpurile cerute.",
+      e: "Amândouă clasele au un singur câmp public, `v: number`, deci formele coincid și apelul compilează. În C++ ar fi două tipuri fără legătură. Ca să le separi, adaugi un câmp-etichetă sau un membru `private`." },
+    { id: "ts-02", lvl: 1, q: "Care dintre atribuirile `a` și `b` dă eroare?", code: R`type P = { x: number };
+const o = { x: 1, y: 2 };
+const a: P = o;
+const b: P = { x: 1, y: 2 };`, o: ["Doar `b`: un literal de obiect cu proprietate în plus pică (TS2353)", "Amândouă: `y` nu există în `P`", "Doar `a`: `o` are tipul `{ x: number; y: number }`", "Niciuna: tiparea structurală acceptă proprietăți în plus"],
+      ctx: "Verificarea proprietăților în plus (excess property check) se aplică doar unui literal de obiect scris direct în locul atribuirii.",
+      e: "`a` trece: `o` e o variabilă cu o formă care conține `x: number`, deci e compatibilă cu `P`. `b` e un literal proaspăt, iar `y` apare doar acolo, deci compilatorul presupune o greșeală de scriere și dă TS2353." },
+    { id: "ts-03", lvl: 1, q: "Ce face compilatorul cu aceste declarații?", code: R`interface I { a: number }
+interface I { b: string }
+type T = { a: number };
+type T = { b: string };`, o: ["`I` primește ambele câmpuri; `T` dă eroare: Duplicate identifier (TS2300)", "Ambele se îmbină, fiindcă tipurile se pot redeschide", "Ambele dau eroare: nu poți declara același nume de două ori", "`T` se îmbină, iar `I` dă eroare, fiindcă `interface` e închis"],
+      ctx: "Una dintre diferențele dintre `type` și `interface`: cine poate fi redeschis.",
+      e: "Interfețele cu același nume se îmbină (declaration merging): `I` are `a` și `b`. Un alias `type` nu se poate redeclara, deci al doilea `T` dă TS2300. Tot de aceea bibliotecile îți lasă să le extinzi tipurile prin `interface`." },
+    { id: "ts-04", lvl: 3, q: "Ce se întâmplă cu acest cod?", code: R`const isStr = (x: unknown): x is string =>
+  typeof x === "number";
+const v: unknown = 5;
+if (isStr(v)) v.toUpperCase();`, o: ["Compilează, dar la runtime aruncă `TypeError: v.toUpperCase is not a function`", "Nu compilează: predicatul `x is string` nu se potrivește cu corpul funcției", "Compilează și rulează: `toUpperCase` există pe orice valoare", "Nu compilează: `v` e `unknown`, deci nu poate fi restrâns"],
+      ctx: "Un type guard definit de tine (`x is T`) îi spune compilatorului ce să creadă. Corpul lui nu e verificat față de predicat.",
+      e: "TypeScript nu analizează corpul funcției. Ia predicatul `x is string` drept adevărat și în ramura `if` tratează `v` ca string, deci apelul compilează. La runtime `v` e 5, iar `toUpperCase` nu există pe un număr. Guard-ul tău poate minți." },
+    { id: "ts-05", lvl: 2, q: "De ce pică funcția `len`, și cum o repari?", code: R`function len<T>(x: T) {
+  return x.length;
+}`, o: ["`T` n-are constrângeri, deci nu se știe că are `length` (TS2339); repari cu `T extends { length: number }`", "`length` nu există în JavaScript pe valori generice; folosești `any`", "Lipsește tipul de întoarcere; cu `: number` compilează", "Generics nu pot accesa proprietăți; folosești o supraîncărcare"],
+      ctx: "Într-o funcție generică, `T` e orice tip până îl restrângi. Poți face doar ce merge pe orice tip.",
+      e: "Fără constrângere, `T` poate fi `number`, `null` sau orice altceva, iar compilatorul nu dă voie la `x.length`. `T extends { length: number }` cere un `T` cu acel câmp, deci `len(\"abc\")` și `len([1, 2])` merg, iar `len(5)` pică la apel." },
+    { id: "ts-06", lvl: 2, q: "Care dintre `a`, `b` și `c` dă eroare?", code: R`type User = {
+  id: number; name: string; email: string;
+};
+type Patch = Partial<
+  Pick<User, "name" | "email">>;
+const a: Patch = {};
+const b: Patch = { name: "Ana" };
+const c: Patch = { id: 1 };`, o: ["Doar `c`: `Pick` păstrează `name` și `email`, deci `id` e în plus (TS2353)", "Toate trei: `Partial` nu acceptă un obiect gol", "`a` și `c`: `Pick` face câmpurile obligatorii", "Niciuna: `Partial` face toate câmpurile din `User` opționale"],
+      ctx: "Utility types se aplică de la interior spre exterior: `Pick` alege câmpurile, apoi `Partial` le face opționale.",
+      e: "`Pick<User, \"name\" | \"email\">` are doar `name` și `email`. `Partial` le face opționale, deci `{}` și `{ name: \"Ana\" }` merg. `id` nu mai e în tip, iar un literal cu el pică la excess property check." },
+    { id: "ts-07", lvl: 3, q: "Care rând dă eroare, și de ce?", code: R`type Colors = "red" | "blue";
+const a = {
+  red: [1], blue: "#00f",
+} satisfies Record<Colors, unknown>;
+const b: Record<Colors, unknown> =
+  { red: [1], blue: "#00f" };
+a.red.map((x) => x);
+b.red.map((x) => x);`, o: ["Doar ultimul: `b.red` e `unknown` (TS18046), fiindcă anotarea lărgește tipul", "Penultimul: `satisfies` pierde tipul lui `a.red`", "Amândouă: `unknown` nu are `map`", "Niciunul: ambele forme dau același tip"],
+      ctx: "`satisfies` verifică forma valorii, dar îi lasă tipul exact. O anotare îl înlocuiește cu tipul declarat.",
+      e: "La `a`, `satisfies` doar verifică forma, iar tipul rămâne `{ red: number[]; blue: string }`, deci `a.red.map` merge. La `b`, anotarea `Record<Colors, unknown>` face `b.red` de tip `unknown`, iar `unknown` nu are `map`." },
+    { id: "ts-08", lvl: 2, q: "Ce tip are `u`, și ce se întâmplă la `setU({ id: 1 })`?", code: R`type User = { id: number };
+function F() {
+  const [u, setU] = useState(null);
+  setU({ id: 1 });
+}`, o: ["`null`: setter-ul nu acceptă un obiect, deci pică la compilare (TS2353)", "`User | null`: TypeScript deduce din apelul `setU`", "`any`: `null` nu spune nimic despre tip", "`null`, dar `setU({ id: 1 })` compilează, fiindcă obiectele sunt compatibile cu `null`"],
+      ctx: "`useState(valoare)` deduce tipul din valoarea inițială. Dacă tipul real e mai larg, îl dai ca generic.",
+      e: "Inițial `null`, deci `u` are tipul `null`, iar `setU` primește `null` sau o funcție de la `null` la `null`. Un obiect pică. Corect: `useState<User | null>(null)`." },
+    { id: "ts-09", lvl: 3, q: "Cu `strict` pornit, `first.toUpperCase()` compilează. Ce schimbă `noUncheckedIndexedAccess`?", code: R`const names: string[] = ["a"];
+const first = names[0];
+first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar al treilea rând pică (TS18048)", "Nimic: `strict` include deja flag-ul", "`names[0]` devine `string`, iar `names[5]` pică la compilare", "Nu mai poți indexa array-uri cu un număr"],
+      ctx: "Un array nu garantează că indexul există. Implicit, TypeScript presupune că da.",
+      e: "Fără flag, indexarea unui `string[]` dă `string`, chiar dacă la runtime `names[5]` e `undefined`. Cu `noUncheckedIndexedAccess` (în afara lui `strict`) tipul devine `string | undefined`, deci trebuie să verifici înainte de `toUpperCase()`." }
+  ]);
+
+  O("ts", [
+    { id: "o-ts-1", q: "Ce diferență e între `type` și `interface` și când alegi fiecare?", k: [
+      "Ambele descriu forma unui obiect; `interface` se poate redeschide (declaration merging) și extinde cu `extends`",
+      "`type` poate numi uniuni, primitive, tupluri și tipuri calculate (mapped, condiționale); nu se poate redeclara (TS2300)",
+      "Câmpuri conflictuale: `extends` dă eroare, `&` dă `never`",
+      "Regulă practică: uniuni și tipuri derivate cu `type`, forme de obiect pe care le extinzi sau le publici cu `interface`",
+      "Important e să fii consecvent în proiect"],
+      model: "Ambele descriu forma unui obiect, iar în codul de zi cu zi sunt aproape interschimbabile. Diferențele: `interface` se poate redeschide, deci două declarații cu același nume se îmbină, și se extinde cu `extends`. `type` nu se poate redeclara, dar poate numi lucruri pe care `interface` nu le poate: uniuni, primitive, tupluri. La câmpuri conflictuale, `extends` dă eroare, iar intersecția cu `&` dă `never`. Folosesc `type` pentru uniuni și tipuri derivate și `interface` pentru forme de obiect extensibile, dar mai important decât alegerea e să fiu consecvent." },
+    { id: "o-ts-2", q: "Primești un răspuns de la API și îl tipezi cu `as User`. Ce garantează TypeScript și ce nu?", k: [
+      "`as` dispare la compilare: nu convertește și nu verifică nimic la runtime, deci o afirmație greșită nu aruncă",
+      "`res.json()` întoarce `any`; o valoare `any` trece prin orice tip",
+      "Mai sigur: `unknown` plus verificări, sau validare la graniță (zod); sau tipuri generate din OpenAPI",
+      "Narrowing cu un type guard, știind că guard-ul scris de mine nu e verificat",
+      "`strict` nu prinde asta: `as` e promisiunea mea, nu a compilatorului"],
+      model: "`as User` e o promisiune a mea către compilator, nu o verificare. Se șterge la compilare, deci dacă API-ul trimite `{ name: null }`, nimic nu aruncă până când `user.name.toUpperCase()` crapă. În plus, `res.json()` e `any`, deci trece prin orice tip. Corect: primesc datele ca `unknown` și le validez la graniță, cu zod, sau generez tipurile din OpenAPI-ul FastAPI. Un type guard scris de mine restrânge tipul, dar compilatorul nu verifică corpul lui. `strict` nu ajută aici: `as` e alegerea mea." },
+    { id: "o-ts-3", q: "Explică generics cu un exemplu: ce e `T`, ce face `extends` și cum se compară cu template-urile din C++?", k: [
+      "`T` e un parametru de tip, dedus din argumente: `first<T>(xs: T[]): T` păstrează legătura dintre intrare și ieșire",
+      "Constrângerea `T extends { id: number }` spune ce poți face cu `T`; fără ea, `T` e orice și `x.id` pică (TS2339)",
+      "Valori implicite și mai mulți parametri: `<T, K extends keyof T>`",
+      "C++: template-uri; ambele sunt polimorfism la compilare, cu constrângeri (concepts)",
+      "Diferența: TypeScript șterge tipurile, nu instanțiază o copie pe tip; nu poți apela `T()` sau face `typeof T` la runtime"],
+      model: "Un generic e o funcție sau un tip parametrizat cu un tip, `T`, pe care compilatorul îl deduce din argumente. `first<T>(xs: T[]): T` păstrează legătura: dacă dau `User[]`, primesc `User`. Fără constrângere, `T` e orice tip, deci nu pot citi `x.id`. Cu `T extends { id: number }` cer ca `T` să aibă `id`, iar compilatorul mă lasă să-l citesc. E apropiat de template-urile din C++, dar TypeScript nu instanțiază câte o copie pe tip: tipurile se șterg la compilare, deci la runtime nu pot face `new T()` și nici nu pot afla ce e `T`." }
+  ]);
+
   // ---------- react (bazele; tichetul 03) ----------
   before({ id: "react", code: "RE", name: "React: bazele", short: "React bazele", p: 1, src: "Anunț + panel FE", fe: true });
   P.sheets.react = {

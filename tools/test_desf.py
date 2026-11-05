@@ -229,7 +229,7 @@ async def main():
             djs = await pg.evaluate("window.PREP.desf.js")
             n_js = await pg.evaluate("window.PREP.sheets.js.points.length")
             order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|frontend):/.test(x))")
-            check(tag + "js: a P1 module that comes first, two places before frontend (react sits between)", order == ["js:1", "frontend:1"] and await pg.evaluate("window.PREP.modules.map(m => m.id).indexOf('frontend') - window.PREP.modules.map(m => m.id).indexOf('js')") == 2, order)
+            check(tag + "js: a P1 module that comes first, three places before frontend (ts and react sit between)", order == ["js:1", "frontend:1"] and await pg.evaluate("window.PREP.modules.map(m => m.id).indexOf('frontend') - window.PREP.modules.map(m => m.id).indexOf('js')") == 3, order)
             await open_sheet(pg, "js")
             J_ = "#sheet-js "
             check(tag + "js: the map and one explanation per point, numbered like the points", djs and len(djs["items"]) == n_js == 8 and await pg.locator(J_ + "ul.pts > li .pn").count() == n_js and await pg.locator(J_ + '[data-a="dz-map"]').count() == 1)
@@ -247,8 +247,31 @@ async def main():
             await pg.screenshot(path=str(SHOTS / f"desf_js_{scheme}.png"), full_page=True)
             check(tag + "js: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
 
+            # ---- ts (frontend extins, tichetul 06): harta și 8 desfășurări; C++ la 1 (nominal) și 4 (template-uri), cu Unde nu ține; Pas cu pas la 3 și 5; exemple TS / TSX fără colorare Python ----
+            await pg.evaluate(f"document.querySelector('{J_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa js, ca să se deschidă ts
+            dts = await pg.evaluate("window.PREP.desf.ts")
+            n_ts = await pg.evaluate("window.PREP.sheets.ts.points.length")
+            order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|ts|react|frontend):/.test(x))")
+            check(tag + "ts: a P1 module between js and react", order == ["js:1", "ts:1", "react:1", "frontend:1"], order)
+            await open_sheet(pg, "ts")
+            TS_ = "#sheet-ts "
+            check(tag + "ts: the map and one explanation per point, numbered like the points", dts and len(dts["items"]) == n_ts == 8 and await pg.locator(TS_ + "ul.pts > li .pn").count() == n_ts and await pg.locator(TS_ + '[data-a="dz-map"]').count() == 1)
+            await pg.click(TS_ + '[data-a="dz-all"]'); await pg.wait_for_timeout(150)
+            check(tag + "ts: 'Deschide tot' opens the map and every explanation", await pg.locator(TS_ + "[data-dz]").count() == n_ts and await pg.locator(TS_ + "[data-dz-map]").count() == 1)
+            cpp = await pg.evaluate(f"[...document.querySelectorAll('{TS_}[data-dz]')].map(e => !!e.querySelector('.dz-cpp'))")
+            check(tag + "ts: the C++ block shows only at 1 and 4, and always with 'Unde nu ține'", cpp == [True, False, False, True, False, False, False, False] and cpp == [bool(x.get("cpp")) for x in dts["items"]] and await pg.locator(TS_ + ".dz-cpp").count() == await pg.locator(TS_ + ".dz-cpp .dz-nu").count(), cpp)
+            pas = await pg.evaluate(f"[...document.querySelectorAll('{TS_}[data-dz]')].map(e => !!e.querySelector('.dz-pas'))")
+            check(tag + "ts: Pas cu pas at 3 and 5, labelled, as a block with at most 8 rows", pas == [False, False, True, False, True, False, False, False] and pas == [bool(x.get("pas")) for x in dts["items"]] and await pg.evaluate(f"[...document.querySelectorAll('{TS_}.dz-pas')].every(e => /Pas cu pas/.test(e.querySelector('.dz-l').textContent) && e.querySelectorAll('pre.code').length === 1 && e.querySelector('pre.code').textContent.trim().split('\\n').length <= 8)"), pas)
+            check(tag + "ts: the examples are shown without Python coloring", await pg.locator(TS_ + "pre.code").count() >= 10 and await pg.evaluate(f"[...document.querySelectorAll('{TS_}pre.code')].every(e => e.querySelectorAll('[class^=tk-]').length === 0)"))
+            check(tag + "ts: the examples that show a mistake mark it with ✗ and the fix with ✓", await pg.evaluate(f"[...document.querySelectorAll('{TS_}.dz-ex')].filter(e => /✗/.test(e.textContent)).length >= 5 && [...document.querySelectorAll('{TS_}.dz-ex')].filter(e => /✓/.test(e.textContent)).length >= 5"))
+            check(tag + "ts: the glossary terms are tappable in the explanations and in the map", await pg.locator(TS_ + "[data-dz] .term").count() >= 1 and await pg.locator(TS_ + "[data-dz-map] .term").count() >= 0)
+            check(tag + "ts: no horizontal overflow with everything open at 360 px", await pg.evaluate("document.documentElement.scrollWidth <= 360"), await pg.evaluate("document.documentElement.scrollWidth"))
+            check(tag + "ts: no code block sticks out of the sheet", await pg.evaluate(f"""() => {{ const r = document.querySelector('{TS_}.sheet-b').getBoundingClientRect(); return [...document.querySelectorAll('{TS_}pre.code')].every(e => e.getBoundingClientRect().right <= r.right + 1); }}"""))
+            await pg.screenshot(path=str(SHOTS / f"desf_ts_{scheme}.png"), full_page=True)
+            check(tag + "ts: opening everything leaves the saved progress alone, no console errors", await pg.evaluate("JSON.stringify(window.__prep.state())") == state0 and not pg.errs, pg.errs)
+
             # ---- react (frontend extins, tichetul 03): harta și 8 desfășurări; fără C++ (nu există echivalent real); Pas cu pas la 2, 3, 4, 6 și 8; exemple TSX fără colorare Python ----
-            await pg.evaluate(f"document.querySelector('{J_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa js, ca să se deschidă react
+            await pg.evaluate(f"document.querySelector('{TS_}summary').click()"); await pg.wait_for_timeout(150)   # închide fișa ts, ca să se deschidă react
             drc = await pg.evaluate("window.PREP.desf.react")
             n_rc = await pg.evaluate("window.PREP.sheets.react.points.length")
             order = await pg.evaluate("window.PREP.modules.map(m => m.id + ':' + m.p).filter(x => /^(js|react|frontend):/.test(x))")
