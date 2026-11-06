@@ -31,7 +31,7 @@ const Jarvis = (() => {
     repeat: "Repetă bucata curentă de la început: apelează repeat_chunk.",
     skip: "Alex a cerut să sari peste bucata asta: apelează next_chunk pentru bucata următoare.",
     again: "Alex a cerut să repeți: apelează repeat_chunk și explică bucata de la început.",
-    restart: "Alex a cerut să reiei lecția de la început: apelează next_chunk pentru prima bucată și începe din nou cu ideea principală.",
+    restart: "Alex a cerut să reiei lecția de la început: apelează next_chunk pentru prima bucată și începe din nou cu introducerea din „intro”.",
     back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi "
   };
 
@@ -83,7 +83,7 @@ const Jarvis = (() => {
   // Funcțiile lecției (spec Lecție): bucata următoare, repetă, pauză, încheiere. „Mai simplu” și „exemplu” se tratează fără funcție.
   function makeLessonTools(ctx) {
     return [
-      { name: "next_chunk", description: "Dă bucata următoare a lecției: textul punctului din fișă, numărul ei și totalul (la prima bucată și ideea principală, la final capcanele). Apeleaz-o doar când aplicația sau Alex cer bucata următoare.", parameters: NO_ARGS, run: async () => ctx.nextChunk() },
+      { name: "next_chunk", description: "Dă bucata următoare a lecției: textul punctului din fișă, numărul ei și totalul (la prima bucată și introducerea: harta modulului sau ideea principală; la punctele cu desfășurare, și materialul ei, în „desf”; la final capcanele). Apeleaz-o doar când aplicația sau Alex cer bucata următoare.", parameters: NO_ARGS, run: async () => ctx.nextChunk() },
       { name: "repeat_chunk", description: "Dă din nou bucata curentă, ca s-o explici de la început, când aplicația sau Alex cer să repeți.", parameters: NO_ARGS, run: async () => ctx.repeatChunk() },
       { name: "pause_session", description: "Pune lecția pe pauză, la cererea lui Alex.", parameters: NO_ARGS, run: async () => ctx.pause() },
       { name: "end_session", description: "Încheie lecția, când Alex cere să oprești. După ce o apelezi, ia-ți rămas-bun în două propoziții.", parameters: NO_ARGS, run: async () => ctx.endSession() }
@@ -101,7 +101,8 @@ const Jarvis = (() => {
       "Cum conduci lecția:",
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
       "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale și cu un exemplu legat de experiența lui Alex (Django/DRF, Celery, Keycloak, Docker Swarm, Elasticsearch, computer vision). Rămâi la ce ai primit: fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
-      "3. Dacă răspunsul are „intro”, începe cu ideea principală și numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”, apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită.",
+      "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare ține locul exemplului din experiența lui Alex: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
+      "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
       "5. Când next_chunk dă „closing”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",
@@ -253,21 +254,40 @@ const Jarvis = (() => {
       else sess.call.say(prefix + MSG.next);
       sync();
     }
-    // Bucata dată modelului. Prima dată vine cu ideea principală și numărul de bucăți (sau cu recapitularea, dacă lecția continuă dintr-o poziție).
+    // Desfășurarea unui punct, cu chei pe înțelesul modelului (aceleași câmpuri ca DESF_FIELDS din lib.mjs; jarvis.js se testează în Node, deci nu le importă); câmpurile care lipsesc nu apar. Indexul ei e indexul punctului.
+    const DZ_KEYS = [["p", "problema"], ["i", "ideea"], ["ex", "exemplu"], ["an", "analogie"], ["pas", "pas_cu_pas"], ["cpp", "in_cpp"], ["nu", "unde_nu_tine"], ["leg", "legatura"]];
+    function dzMaterial(sh, n) {
+      const x = sh.desf && sh.desf[n - 1];
+      if (!x) return null;
+      const out = {};
+      DZ_KEYS.forEach(([k, name]) => { if (x[k]) out[name] = x[k]; });
+      return out;
+    }
+    // Bucata dată modelului. Prima dată vine cu introducerea (harta modulului sau ideea principală) și numărul de bucăți (sau cu recapitularea, dacă lecția continuă dintr-o poziție).
     function deliver(n, again) {
       const sh = lz.sheet, total = lz.total, first = !lz.started;
       // Cerută dincolo de final (de ex. Sari pe capcane): lecția se încheie după rămas-bun, altfel fereastra și MSG.next ar cere bucăți la nesfârșit.
       if (n > total + 1) { quiet(); lz.endRequested = true; return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun în două propoziții; aplicația încheie sesiunea, deci nu mai apela nicio funcție." }; }
       lz.started = true; lz.idx = n; lz.cur = { n, delivering: true }; lz.redo = false;
       let r;
-      if (n <= total) r = { kind: "chunk", n, total, module: lz.name, text: sh.points[n - 1], instruction: "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi." };
-      else {
+      if (n <= total) {
+        r = { kind: "chunk", n, total, module: lz.name, text: sh.points[n - 1], instruction: "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi." };
+        const dz = dzMaterial(sh, n);
+        if (dz) {
+          r.desf = dz;
+          r.instruction = "Explică bucata pornind de la desfășurare: problema, ideea, apoi exemplul din desfășurare sau analogia, pașii din „pas_cu_pas” (dacă există), în ordine, și, dacă există, comparația cu C++ cu „unde nu ține”. Folosește exemplul din desfășurare, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Cu vorbele tale, în 1–1,5 minute. Fără fapte noi, nici față de punct, nici față de desfășurare.";
+        }
+      } else {
         r = { kind: "closing", module: lz.name, lead: sh.lead, recap_from: [sh.lead].concat(sh.points), instruction: "Spune capcanele la interviu (dacă există), apoi o recapitulare în trei propoziții și un rămas-bun." };
         if (sh.avoid.length) r.traps = sh.avoid.slice();
       }
       if (first) {
-        if (lz.pos0 === 0 && n === 1) r.intro = { module: lz.name, lead: sh.lead, total, say: lz.name + ", în " + total + " idei. Prima: …" };
-        else if (lz.pos0 > 0) r.recap = { n: lz.pos0, text: sh.points[lz.pos0 - 1] };
+        if (lz.pos0 === 0 && n === 1) {
+          const say = lz.name + ", în " + total + " idei. Prima: …";
+          // Cu harta modulului lecția se deschide cu problema mare și cu grupurile de puncte; fără ea, cu ideea principală.
+          r.intro = sh.map ? { module: lz.name, total, say, harta: { problema: sh.map.p, grupuri: sh.map.g.map(g => ({ puncte: g.a === g.b ? String(g.a) : g.a + "–" + g.b, text: g.t })) } }
+            : { module: lz.name, lead: sh.lead, total, say };
+        } else if (lz.pos0 > 0) r.recap = { n: lz.pos0, text: sh.points[lz.pos0 - 1] };
       }
       if (again) r.repeat = true;
       sync();
@@ -404,7 +424,7 @@ const Jarvis = (() => {
       pause() { if (sess && sess.call) { if (lz) lessonPause(); else sess.call.pause(); } },
       resume() { if (sess && sess.call) return lz ? lessonResume() : sess.call.resume(); },
       // Lecția: Sari, Repetă, Mut și Vorbește (ținut apăsat). Butoanele fac același lucru ca vocea.
-      // Reset în lecție: poziția salvată revine la zero, iar modelul reia de la ideea principală (nu mai e „ascultat” nimic din ce a fost).
+      // Reset în lecție: poziția salvată revine la zero, iar modelul reia de la introducere (harta sau ideea principală; nu mai e „ascultat” nimic din ce a fost).
       restart() {
         if (!lz || !sess.call || lz.paused || lz.lost) return;
         quiet();

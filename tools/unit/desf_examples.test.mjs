@@ -2,7 +2,7 @@
 // o excepție așteptată se marchează `# ! Tip` și blocul trebuie să se oprească exact cu acel tip, pe acea instrucțiune.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkExample, extractExamples } from "../desf_examples.mjs";
+import { checkExample, extractExamples, checkTsExamples } from "../desf_examples.mjs";
 
 const run = (code, opts) => checkExample(code.replace(/^\n/, ""), opts);
 const fails = (r, re) => { assert.equal(r.ok, false, "trebuia să pice"); assert.ok(r.errors.some(e => re.test(e)), "așteptat " + re + " în:\n" + r.errors.join("\n")); };
@@ -103,4 +103,157 @@ test("extractExamples reads every python block of every field, with its place", 
   const ex = extractExamples({ items });
   assert.deepEqual(ex.map(e => [e.n, e.field, e.index]), [[1, "Exemplu", 1], [2, "În C++", 1]]);
   assert.equal(ex[0].code, "print(1)  # → 1");
+});
+
+// ---- JavaScript: același contract, cu `// → …` și `// ! Tip`; blocul rulează ca modul ESM, deci `await` la nivel de modul merge ----
+const js = (code, opts) => checkExample(code.replace(/^\n/, ""), { lang: "js", ...opts });
+
+test("js: console.log output is compared with the // → comments, in order", () => {
+  assert.deepEqual(js(`
+const x = [1, 2];
+console.log(x.length);  // → 2
+console.log(x);         // → [ 1, 2 ]
+console.log("a", 3);    // → a 3
+`), { ok: true, errors: [] });
+});
+
+test("js: a wrong result fails and shows both values", () => fails(js(`
+console.log(1 + 1);  // → 3
+`), /așteptat.*3.*afișat.*2/is));
+
+test("js: output without an expected comment fails, and so does an expected comment without output", () => {
+  fails(js(`
+console.log("a");  // → a
+console.log("b");
+`), /afișează 2 rânduri/i);
+  fails(js(`
+const x = 1;  // → 1
+`), /afișează 0 rânduri/i);
+});
+
+test("js: an arrow inside a string or a template literal is not an expectation", () => assert.equal(js(`
+const s = "// → nu e comentariu";
+const t = \`și // → nici asta\`;
+console.log(s.length, t.length);  // → 20 17
+`).ok, true));
+
+test("js: an expected exception stops the block with exactly that type", () => {
+  assert.equal(js(`
+console.log("înainte");  // → înainte
+null.x;  // ! TypeError
+`).ok, true);
+  fails(js(`
+JSON.parse("{");  // ! TypeError
+`), /SyntaxError.*TypeError|TypeError.*SyntaxError/s);
+});
+
+test("js: the exception type is the constructor name, so custom errors can be expected", () => assert.equal(js(`
+class AppError extends Error {}
+throw new AppError("x");  // ! AppError
+`).ok, true));
+
+test("js: the marked line must be one the exception passes through (the throw or the call)", () => {
+  assert.equal(js(`
+function f(u) { return u.name; }
+f(undefined);  // ! TypeError
+`).ok, true);
+  fails(js(`
+const a = 1;
+null.x;
+const b = 2;  // ! TypeError
+`), /nu trece prin rândul 3|rândul 3/i);
+});
+
+test("js: a marked exception that never happens fails, and an unmarked one fails", () => {
+  fails(js(`
+const x = 1;  // ! TypeError
+`), /nicio excepție/i);
+  fails(js(`
+console.log("a");  // → a
+null.x;
+`), /excepție neașteptată: TypeError/i);
+});
+
+test("js: top-level await and timers work, and output stays in order", () => assert.equal(js(`
+const wait = ms => new Promise(r => setTimeout(r, ms));
+setTimeout(() => console.log("timer"), 5);
+console.log("sync");
+await wait(20);
+console.log("după await");
+// → sync
+// → timer
+// → după await
+`).ok, true));
+
+test("js: the order of the arrows is the order of the output (microtask before timer)", () => assert.equal(js(`
+setTimeout(() => console.log("timer"));
+Promise.resolve().then(() => console.log("micro"));
+console.log("sync");
+// → sync
+// → micro
+// → timer
+`).ok, true));
+
+test("js: code that does not parse fails; an endless loop is stopped by the timeout", () => {
+  fails(js(`
+const = ;
+`), /sintax/i);
+  fails(js(`
+while (true) {}
+`, { timeout: 800 }), /timp|timeout/i);
+});
+
+// ---- TypeScript: tsc --strict --noEmit; `// ! TS2322` pe linia care trebuie să dea eroarea ----
+const ts = (...blocks) => checkTsExamples(blocks.map(b => b.replace(/^\n/, "")));
+
+test("ts: a block that compiles under strict passes", () => assert.deepEqual(ts(`
+type R = { kind: "ok" } | { kind: "err"; msg: string };
+const f = (r: R) => (r.kind === "ok" ? 1 : r.msg.length);
+`), [{ ok: true, errors: [] }]));
+
+test("ts: a type error that is not marked fails and shows the code and the line", () => {
+  const [r] = ts(`
+const n: number = "a";
+`);
+  fails(r, /TS2322.*rândul 1|rândul 1.*TS2322/s);
+});
+
+test("ts: a marked error must be exactly that code on that line", () => {
+  assert.equal(ts(`
+const n: number = "a";  // ! TS2322
+`)[0].ok, true);
+  fails(ts(`
+const n: number = "a";  // ! TS2345
+`)[0], /TS2322.*TS2345|TS2345.*TS2322/s);
+  fails(ts(`
+const n: number = 1;  // ! TS2322
+`)[0], /nicio eroare|nu a dat eroare/i);
+});
+
+test("ts: strict is on, so an implicit any or a possibly-null access fails", () => {
+  fails(ts(`
+function f(x) { return x; }
+`)[0], /TS7006/);
+  fails(ts(`
+const el = document.querySelector("a");
+el.href;
+`)[0], /TS18047|TS2531/);
+});
+
+test("ts: blocks do not see each other's declarations, and each result keeps its block", () => {
+  const r = ts(`
+type A = { a: 1 };
+`, `
+type A = { b: 2 };
+const x: A = { b: 2 };
+`, `
+const y: number = "z";
+`);
+  assert.deepEqual(r.map(x => x.ok), [true, true, false]);
+});
+
+test("extractExamples can also return js and ts blocks, with their language", () => {
+  const items = [{ n: 1, ex: "```ts\nconst a = 1;\n```\n```js\nconsole.log(1);  // → 1\n```\n```tsx\n<div />\n```" }];
+  const ex = extractExamples({ items }, ["js", "ts"]);
+  assert.deepEqual(ex.map(e => [e.lang, e.index]), [["ts", 1], ["js", 2]]);
 });

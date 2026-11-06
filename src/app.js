@@ -31,8 +31,10 @@
   GLOSS.forEach(g => g.forms.forEach(f => { TERM_FORM.set(f, g.id); if (/^\p{Ll}/u.test(f)) TERM_FORM.set(f.charAt(0).toUpperCase() + f.slice(1), g.id); }));
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const TERM_RE = TERM_FORM.size ? new RegExp("(^|[^\\p{L}\\p{N}_])(" + [...TERM_FORM.keys()].sort((a, b) => b.length - a.length).map(reEsc).join("|") + ")(?![\\p{L}\\p{N}_])", "gu") : null;
-  // termeni care, într-un anumit loc, au alt sens decât cel din glosar
-  const TERM_SKIP = { "obs-01": ["coada"], domain: ["tranzactie"] };
+  // Modulele de frontend (JavaScript, TypeScript, React, depanare): snippet-urile lor se afișează fără colorare Python și intră în prompt ca js / ts / tsx.
+  const isFE = id => !!(MOD[id] && MOD[id].fe);
+  // termeni care, într-un anumit loc, au alt sens decât cel din glosar („coada” la frontend e coada de actualizări sau de microtask-uri, nu o coadă de mesaje)
+  const TERM_SKIP = Object.assign({ "obs-01": ["coada"], domain: ["tranzactie"] }, Object.fromEntries(MODS.filter(m => m.fe).map(m => [m.id, ["coada"]])));
   function termsIn(text) {
     const s = new Set(); if (!TERM_RE || !text) return s;
     for (const m of String(text).matchAll(TERM_RE)) s.add(TERM_FORM.get(m[2]));
@@ -768,7 +770,7 @@
       else h += '<button class="btn sm ctx-btn" data-a="ctx-open">Arată contextul</button>';
     }
     h += '<p class="qtext">' + fmt(q.q) + "</p>";
-    if (q.code) h += codeBlock(q.code, q.m === "frontend", true);
+    if (q.code) h += codeBlock(q.code, isFE(q.m), true);
     h += '<div class="opts" role="group" aria-label="Variante">' + it.ord.map((oi, pos) => {
       let cls = "opt", mk = "";
       if (done) { if (pos === correctPos) { cls += " right"; mk = "✓"; } else if (pos === pick) { cls += " wrong"; mk = "✗"; } }
@@ -889,7 +891,7 @@
           : '<div class="muted">' + (w.dunno ? "Ai ales „Nu știu încă”." : "Fără răspuns.") + "</div>";
         return '<details class="rev"><summary><span class="chip bad">' + esc(q.id.toUpperCase()) + "</span><span>" + fmt(q.q) + '</span></summary><div class="rv">' +
           (q.ctx ? '<div class="ctx"><div class="ctx-h"><span class="eyebrow">Context</span></div>' + rich(q.ctx, tc) + "</div>" : "") +
-          (q.code ? codeBlock(q.code, q.m === "frontend", true) : "") + picked +
+          (q.code ? codeBlock(q.code, isFE(q.m), true) : "") + picked +
           '<div><b class="xs mono" style="color:var(--ok)">CORECT</b><br>' + fmt(q.o[q.a]) + "</div>" +
           vExpl(q, { ok: !!w.guessed, pickOi: w.guessed ? null : w.pick, review: true }, tc) + "</div></details>";
       }).join("");
@@ -1046,7 +1048,7 @@
     h += '<div class="modes">' +
       '<button class="mode' + (due ? " hot" : "") + '" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">' + (due ? "Cardurile scadente acum, cele mai slabe primele (maximum 8)." : "Nimic scadent. Cardurile revin după 20 min, 4 h, o zi sau două, după cutie.") + '</span><span class="mm">' + (due ? due + " carduri" : "–") + "</span></button>" +
       '<button class="mode' + (due ? "" : " hot") + '" data-a="oral" data-f="smart"><span class="mt">Recomandate</span><span class="md">6 carduri, mai multe din cutiile mici și din P1.</span><span class="mm">~12 min</span></button>' +
-      (IV.ready() ? '<button class="mode wide" data-a="iv-mock"><span class="mt">Interviu tehnic simulat</span><span class="md">7 carduri, ca la proba tehnică cu backend și frontend: threading sau asyncio, OOP, testing sau generatori, FastAPI, React/TS, un snippet de cod și un scenariu de design. Fără modelul de răspuns între carduri.</span><span class="mm">7 carduri · ~35 min</span></button>' : "") +
+      (IV.ready() ? '<button class="mode wide" data-a="iv-mock"><span class="mt">Interviu tehnic simulat</span><span class="md">7 carduri, ca la proba tehnică cu backend și frontend: threading sau asyncio, OOP, testing sau generatori, FastAPI, frontend (JavaScript, TypeScript sau React), un snippet de cod și un scenariu de design. Fără modelul de răspuns între carduri.</span><span class="mm">7 carduri · ~35 min</span></button>' : "") +
       '<button class="mode wide' + (dX ? " hot" : "") + '" data-a="open" data-f="smart"><span class="mt">Întrebări deschise</span><span class="md">' + OPEN.length + ' întrebări scurte, fără variante: răspunzi cu voce tare, dezvălui răspunsul, te notezi. Cel mai aproape de interviu.</span><span class="mm">8 întrebări · ~10 min' + (dX ? " · " + dX + " scadente" : xSeen ? " · " + xSeen + " văzute" : "") + "</span></button>" +
       "</div>";
     h += '<div class="sec-h"><h2>Pe module</h2><span class="xs muted">văzute · stăpânire</span></div>' + modList("oral");
@@ -1069,7 +1071,7 @@
     const run = ui.run, c = OBY[run.items[run.i]], m = MOD[c.m], total = run.items.length;
     let h = '<div class="spread"><div class="eyebrow">' + esc(run.title) + " · " + (run.i + 1) + "/" + total + '</div><button class="btn sm ghost" data-a="quit">' + (run.confirmQuit ? "Sigur ieși?" : "Ieși") + "</button></div>";
     h += '<div class="runbar">' + bar(run.i / total) + "</div>";
-    h += '<article class="icard"><div class="icard-h"><span class="row" style="gap:6px">' + prioChip(m.p) + '<span class="chip">' + esc(m.short) + "</span></span>" + leit(boxOf(c.id)) + '</div><div class="icard-b"><div class="icard-q">' + fmt(c.q) + "</div>" + (c.code ? codeBlock(c.code, c.m === "frontend", true) : "");
+    h += '<article class="icard"><div class="icard-h"><span class="row" style="gap:6px">' + prioChip(m.p) + '<span class="chip">' + esc(m.short) + "</span></span>" + leit(boxOf(c.id)) + '</div><div class="icard-b"><div class="icard-q">' + fmt(c.q) + "</div>" + (c.code ? codeBlock(c.code, isFE(c.m), true) : "");
     if (run.phase === "ask" && !run.mock) {
       h += '<p class="muted small">' + (c.m === "design" ? "Gândește cu voce tare: clarifici cerințele, apoi componentele, trade-off-urile, ce se întâmplă când pică ceva și cum scalezi." :
         c.code ? "Spune ce e greșit, ce se întâmplă sub încărcare sau în producție, cum ai repara și cum ai testa. Contează ideea, nu codul complet." :
@@ -1170,7 +1172,7 @@
     return { covered: j.covered.slice(), missing: aiList(j.missing), wrong: aiList(j.wrong), feedback: typeof j.feedback === "string" ? j.feedback.trim().slice(0, 600) : "" };
   }
   const ivScore = cov => (cov.length ? cov.reduce((s, x) => s + (x === "spontan" ? 1 : x === "dupa" ? 0.5 : 0), 0) / cov.length : 0);
-  const codeOf = c => (c.code ? "\n\nCod (snippet-ul de pe card):\n```" + (c.m === "frontend" ? "tsx" : "python") + "\n" + c.code + "\n```" : "");
+  const codeOf = c => (c.code ? "\n\nCod (snippet-ul de pe card):\n```" + (isFE(c.m) ? (c.m === "js" || c.m === "ts" ? c.m : "tsx") : "python") + "\n" + c.code + "\n```" : "");
   const ivCard = c => "Întrebare: " + c.q + codeOf(c) + "\n\nPuncte cheie (doar pentru tine):\n" + c.k.map((p, i) => (i + 1) + ". " + p).join("\n") + "\n\nRăspuns model: " + c.model;
   const ivLines = turns => turns.map((t, i) => (t.who === "int" ? "Intervievator (întrebare de continuare)" : i === 0 ? "Candidat (răspuns inițial)" : "Candidat (răspuns la întrebare)") + ": " + t.text).join("\n");
   const ivDialog = turns => "Dialog (între <<< și >>>):\n<<<\n" + ivLines(turns) + "\n>>>";
@@ -1280,7 +1282,7 @@
   // Interviul simulat: persoana (salut, tranziții, încheiere) e text fix, fără apeluri în plus.
   const mockSay = run => {
     const c = OBY[run.items[run.i]], last = run.i === run.items.length - 1;
-    const what = c.m === "design" ? " Hai să facem un pic de design: gândește cu voce tare." : c.code ? " Uită-te la codul ăsta și spune-mi ce vezi." : c.m === "frontend" ? " Acum o întrebare de frontend." : "";
+    const what = c.m === "design" ? " Hai să facem un pic de design: gândește cu voce tare." : c.code ? " Uită-te la codul ăsta și spune-mi ce vezi." : isFE(c.m) ? " Acum o întrebare de frontend." : "";
     return ivBubble((run.i === 0 ? "Bună! Mulțumesc că ai venit. Începem cu câteva întrebări tehnice, pe rând." : last ? "Bine. Ultima parte." : "Bine, trecem mai departe.") + what);
   };
   // n carduri din cel puțin 3 module (sau câte sunt), cu aceleași ponderi ca „Recomandate”: slăbiciune, scadență, P1 înaintea lui P3.
@@ -1295,7 +1297,7 @@
     return pick;
   }
   // Interviul tehnic simulat: câte un card pe slot, în ordinea probei, ales cu ponderile `wO` (slăbiciune, scadență, goluri).
-  const TECH_SLOTS = [["gil", "asyncio"], ["oop"], ["pytest", "python"], ["asgi"], ["frontend"], "code", ["design"]];
+  const TECH_SLOTS = [["gil", "asyncio"], ["oop"], ["pytest", "python"], ["asgi"], ["frontend", "react", "js", "ts"], "code", ["design"]];
   function pickTechMock() {
     const out = [];
     for (const slot of TECH_SLOTS) {
@@ -1682,7 +1684,7 @@
   function vDz(m, i, tc) {
     const x = desfOf(m).items[i];
     const f = (cls, label, text) => '<div class="dz-f ' + cls + '"><span class="dz-l">' + label + "</span>" + rich(text, tc) + "</div>";
-    return '<div class="dz" data-dz="' + i + '">' + f("dz-p", "Problema", x.p) + f("dz-i", "Ideea", x.i) + (x.ex ? f("dz-ex", "Exemplu", x.ex) : "") + (x.an ? f("dz-an", "Analogie", x.an) : "") +
+    return '<div class="dz" data-dz="' + i + '">' + f("dz-p", "Problema", x.p) + f("dz-i", "Ideea", x.i) + (x.ex ? f("dz-ex", "Exemplu", x.ex) : "") + (x.an ? f("dz-an", "Analogie", x.an) : "") + (x.pas ? f("dz-pas", "Pas cu pas", x.pas) : "") +
       (x.cpp ? '<div class="dz-f dz-cpp"><span class="dz-l">În C++</span>' + rich(x.cpp, tc) + '<div class="dz-nu"><span class="dz-l">Unde nu ține</span>' + rich(x.nu, tc) + "</div></div>" : "") + (x.leg ? f("dz-leg", "Legătură", x.leg) : "") + "</div>";
   }
   function dzAct(a, b) {
@@ -2229,12 +2231,14 @@
     log(e) { S.h.push(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); S.h = S.h.slice(-HMAX); commit(); },
 
     // ----- Lecție: fișa unui modul, poziția lecției, recomandarea -----
-    // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat. Diagramele nu intră.
+    // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat; la modulele cu desfășurări și harta, plus desfășurările. Diagramele nu intră.
     sheet(id) {
       const m = MOD[id], sh = P.sheets[id];
       if (!m || !sh || !sh.points || !sh.points.length) return null;
-      const l = S.l[id];
-      return { module: id, name: m.short, lead: sh.lead, points: sh.points.slice(), avoid: (sh.avoid || []).slice(), total: sh.points.length, pos: l ? Math.min(l.n || 0, sh.points.length) : 0 };
+      const l = S.l[id], d = desfOf(id), r = { module: id, name: m.short, lead: sh.lead, points: sh.points.slice(), avoid: (sh.avoid || []).slice(), total: sh.points.length, pos: l ? Math.min(l.n || 0, sh.points.length) : 0 };
+      // Un modul cu desfășurări le dă pe toate plus harta (desfășurarea i e a punctului i); fără ele, fișa arată ca înainte. Copii, ca lecția să nu poată schimba conținutul.
+      if (d) { r.map = { p: d.map.p, g: d.map.g.map(g => Object.assign({}, g)) }; r.desf = d.items.map(x => Object.assign({}, x)); }
+      return r;
     },
     // Poziția avansează doar când o bucată s-a redat toată și nu coboară niciodată în aceeași lecție.
     lessonHeard(id, n) {
@@ -2295,8 +2299,8 @@
     gap: ["Explică mai simplu", "Dă-mi un exemplu", "Cum o spun la interviu?"]
   };
   const XFIELDS = [["scurt", "Pe scurt"], ["scop", "Scop"], ["mec", "Mecanism"], ["pas", "Pas cu pas"], ["apl", "Aplicare"], ["leg", "Legătură"], ["lim", "Limită"], ["intv", "La interviu"]];
-  const DZ_ASK = [["p", "Problema"], ["i", "Ideea"], ["ex", "Exemplu"], ["an", "Analogie"], ["cpp", "În C++"], ["nu", "Unde nu ține"], ["leg", "Legătură"]];
-  const ASK_DZ_MAX = 16000;                          // o fișă cu desfășurări are ~4× mai mult material decât una fără
+  const DZ_ASK = [["p", "Problema"], ["i", "Ideea"], ["ex", "Exemplu"], ["an", "Analogie"], ["pas", "Pas cu pas"], ["cpp", "În C++"], ["nu", "Unde nu ține"], ["leg", "Legătură"]];
+  const ASK_DZ_MAX = 20000;                          // o fișă cu desfășurări are ~4× mai mult material decât una fără
   const askClip = (t, n) => { t = String(t == null ? "" : t); return t.length > n ? t.slice(0, n) + "…" : t; };
   // Contextul unui loc: { topic, material }. Cheia: mcq:<id>, sheet:<modul> sau gap:<card>:<punct>.
   function askCtx(key) {

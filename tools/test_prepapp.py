@@ -75,7 +75,7 @@ async def main():
         check("topic stays in its module; an unknown module gives no card", tp == [True, None], tp)
 
         slots = await pg.evaluate("""() => { const done = [], out = []; for (let i = 0; i < 8; i++) { const c = window.PrepApp.next({ mode: 'mock', done: done.slice() }); out.push(c ? [c.module, !!c.code] : null); if (c) done.push(c.id); } return out; }""")
-        okslots = slots[0][0] in ("gil", "asyncio") and slots[1][0] == "oop" and slots[2][0] in ("pytest", "python") and slots[3][0] == "asgi" and slots[4][0] == "frontend" and slots[5][1] and slots[6][0] == "design" and slots[7] is None
+        okslots = slots[0][0] in ("gil", "asyncio") and slots[1][0] == "oop" and slots[2][0] in ("pytest", "python") and slots[3][0] == "asgi" and slots[4][0] in ("frontend", "react", "js", "ts") and slots[5][1] and slots[6][0] == "design" and slots[7] is None
         check("mock walks the seven slots of the technical interview (BE + FE), then stops", okslots, slots)
 
         d = await pg.evaluate("""() => { const c = window.PREP.oral.find(c => c.m === 'design'); const s = window.__prep.state(); s.o[c.id] = { b: 1, n: 1, s: 0, t: 1, m: [0], mc: { 0: 1 }, a: 'Varianta mea bună.' }; window.__prep.setState(s);

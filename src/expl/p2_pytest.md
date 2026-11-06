@@ -202,22 +202,23 @@ Varianta greșită C: Numărul de apeluri îl ai oricum, în `call_count` și `c
 Varianta greșită D: Pentru funcții async folosești `AsyncMock`, iar `patch` îl alege singur când ținta e async. `side_effect` merge și acolo, dar nu el face mock-ul asincron.
 
 ### pt-08
-Pe scurt: `task_always_eager=True` rulează task-ul direct în procesul testului, ca pe o funcție, deci ocolește brokerul, serializarea, workerul și ack-urile.
-Scop: Un test de integrare trebuie să prindă exact problemele de pe drumul real: argumente neserializabile, rutare greșită pe cozi, comportamentul la retry.
-Mecanism: În modul eager, `.delay()` nu publică nimic: apelează imediat funcția task-ului, în același proces, și întoarce un rezultat deja calculat. Argumentele nu trec prin JSON, nu există coadă, worker sau ack. Un obiect ORM trimis ca argument „merge” în test, dar ar crăpa în producție, la serializare.
+Pe scurt: `task_always_eager=True` rulează task-ul direct în procesul testului, ca pe o funcție, deci ocolește brokerul, workerul și ack-urile.
+Scop: Un test de integrare trebuie să prindă exact problemele de pe drumul real: rutare greșită pe cozi, ack-uri, redelivery după căderea unui worker, comportamentul la retry.
+Mecanism: În modul eager, `.delay()` nu publică nimic: apelează imediat funcția task-ului, în același proces, și întoarce un rezultat deja calculat. Argumentele trec totuși printr-o rundă de serializare (`dumps` și `loads`, verificat pe Celery 5.6), deci un obiect ORM crapă și în modul eager. Nu există însă coadă, worker sau ack.
 Pas cu pas:
 ```text
 producție: delay -> JSON -> broker
   -> worker -> execută -> ack
-eager: delay -> execută pe loc
-  (fără JSON, broker, worker, ack)
+eager: delay -> JSON dumps/loads
+  -> execută pe loc
+  (fără broker, worker, ack)
 ```
 Aplicare: Pentru logică apelezi direct funcția task-ului (`generate_report(42)`) sau folosești eager. Pentru integrare pornești un worker real în test, cu `celery.contrib.testing.worker.start_worker(app)` sau cu fixture-urile din `celery.contrib.pytest`, și un broker în Docker.
-Legătură: Ai văzut la CEL-06 de ce contează: un obiect ORM ca argument trece testul eager și crapă la serializare în producție.
+Legătură: Ai văzut la CEL-06 de ce contează serializarea argumentelor: un obiect ORM crapă la `.delay()`, chiar și în modul eager.
 Limită: Eager rămâne util pentru unit teste rapide pe logica task-ului. Doar că nu dovedește nimic despre integrare: pentru asta îți trebuie un worker real.
-La interviu: „`task_always_eager` rulează task-ul sincron, în proces, deci ocolește brokerul, serializarea și ack-urile. Îl folosesc pentru logică; pentru integrare pornesc un worker real în test, cu brokerul în Docker.”
-Verificare: Trimiți ca argument un obiect ORM `User`, cu serializer JSON, iar testul eager trece. Ce se întâmplă în producție?
-Răspuns verificare: Serializarea JSON eșuează la `.delay()` (`EncodeError`), deci task-ul nici nu ajunge în coadă. Testul eager n-a trecut niciodată prin serializare.
+La interviu: „`task_always_eager` rulează task-ul sincron, în proces, deci ocolește brokerul, workerul și ack-urile. Îl folosesc pentru logică; pentru integrare pornesc un worker real în test, cu brokerul în Docker.”
+Verificare: Un task Celery e testat doar cu `task_always_eager=True` și testul trece. Ce a rămas neverificat?
+Răspuns verificare: Drumul prin broker și worker: rutarea pe cozi, ack-urile, redelivery-ul după căderea unui worker, retry-urile reale. De aceea, pentru integrare, pornești un worker real.
 Varianta greșită B: Eager e mai rapid, nu mai lent: rulează direct, fără rețea. Problema e că testează mai puțin.
 Varianta greșită C: Eager nu folosește deloc brokerul, deci nu are nevoie de RabbitMQ pornit.
 Varianta greșită D: Eager execută task-ul, imediat și sincron. Problema e că sare peste tot drumul real.

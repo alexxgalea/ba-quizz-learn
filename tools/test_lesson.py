@@ -42,6 +42,14 @@ async def app_logic(b):
     check("sheet gives the module's lead, points and things to avoid, with the total and the position", sh["module"] == "asyncio" and sh["lead"] == pts["lead"] and sh["points"] == pts["points"] and sh["avoid"] == pts["avoid"] and sh["total"] == total["asyncio"] and sh["pos"] == 0, sh)
     check("an unknown module has no sheet", await ev(pg, "window.PrepApp.sheet('nu-exista')") is None)
 
+    # --- desfășurările (tichet 10): harta și câte o desfășurare pe punct, aceleași ca în Studiu
+    d = await ev(pg, "window.PREP.desf && window.PREP.desf.oop")
+    so = await ev(pg, "window.PrepApp.sheet('oop')")
+    check("a module with unfoldings has a sheet with the map and one unfolding per point", d is not None and so["map"] == d["map"] and so["desf"] == d["items"] and len(so["desf"]) == so["total"], so and list(so))
+    check("the unfoldings are copies: changing what the sheet gave does not change the content", await ev(pg, "(() => { const s = window.PrepApp.sheet('oop'); s.desf[0].p = 'x'; s.map.p = 'x'; const t = window.PrepApp.sheet('oop'); return t.desf[0].p !== 'x' && t.map.p !== 'x'; })()"))
+    sc = await ev(pg, "window.PrepApp.sheet('aws')")   # modul de control, fără desfășurări (Bonus; când primește, controlul se mută pe altul)
+    check("a module without unfoldings has no map and no unfoldings, and the sheet is as before", not (await ev(pg, "!!window.PREP.desf.aws")) and "map" not in sc and "desf" not in sc and sorted(sc) == ["avoid", "lead", "module", "name", "points", "pos", "total"], sorted(sc))
+
     # --- poziția
     before = await ev(pg, "JSON.stringify([window.__prep.state().q, window.__prep.state().o, window.__prep.state().x, window.__prep.readiness().ready])")
     await ev(pg, "window.PrepApp.lessonHeard('asyncio', 3)")
@@ -265,6 +273,41 @@ async def screens(b, scheme):
     await ctx.close()
 
 
+async def unfoldings(b):
+    """Tichet 10: lecția pe un modul cu desfășurări (oop) dă modelului harta și desfășurarea punctului; pe unul fără (aws) merge ca înainte."""
+    ctx = await b.new_context(viewport={"width": 360, "height": 740})
+    await ctx.add_init_script(path=FAKES)
+    pg = await ctx.new_page(); errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    await pg.route("**/fonts.*", lambda r: r.abort())
+    await fresh(pg)
+    await ev(pg, "localStorage.setItem('onapsis-gemini-v1', 'TESTKEY1234')"); await pg.reload(); await pg.wait_for_timeout(400)
+    d = await ev(pg, "window.PREP.desf.oop")
+    pts = await ev(pg, "window.PREP.sheets.oop.points")
+    await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-oop summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-oop [data-a="listen"]'); await pg.wait_for_timeout(250)
+    r1 = await tool(pg, "next_chunk")
+    check("the lesson on a module with unfoldings opens with its map, not with the main idea", "harta" in r1["intro"] and "lead" not in r1["intro"] and r1["intro"]["harta"]["problema"] == d["map"]["p"] and len(r1["intro"]["harta"]["grupuri"]) == len(d["map"]["g"]), r1.get("intro"))
+    check("the first chunk brings the unfolding of the first point, with the same text as in Studiu", r1["text"] == pts[0] and r1["desf"]["problema"] == d["items"][0]["p"] and r1["desf"]["ideea"] == d["items"][0]["i"], r1.get("desf"))
+    check("the chunk instruction asks for the unfolding's example and for the code to be told", "exemplul din desfășurare" in r1["instruction"] and "caracter cu caracter" in r1["instruction"], r1["instruction"])
+    r2 = await tool(pg, "next_chunk")
+    check("the next chunk has no map and brings its own unfolding", "intro" not in r2 and r2["n"] == 2 and r2["desf"]["problema"] == d["items"][1]["p"], r2.get("desf"))
+    check("the lesson has as many chunks as the sheet has points", r1["total"] == len(pts) == len(d["items"]), r1["total"])
+    sys_ = await ev(pg, f"{CTL}.live.cfg.system")
+    check("the model's instructions do not carry the map or the unfoldings", d["map"]["p"] not in sys_ and all(x["p"] not in sys_ for x in d["items"]))
+    await pg.click('[data-a="jv-stop"]'); await pg.wait_for_timeout(200)
+
+    await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-aws summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-aws [data-a="listen"]'); await pg.wait_for_timeout(250)
+    a1 = await tool(pg, "next_chunk")
+    lead = await ev(pg, "window.PREP.sheets.aws.lead")
+    check("the lesson on a module without unfoldings is as before: main idea in the intro, no map, no unfolding", a1["intro"]["lead"] == lead and "harta" not in a1["intro"] and "desf" not in a1 and a1["instruction"].startswith("Explică bucata cu vorbele tale"), a1)
+    check("no page errors (unfoldings)", not errs, errs)
+    await ctx.close()
+
+
 async def artifact(b):
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
     await ctx.add_init_script("window.claude = { use: async () => null };")
@@ -287,6 +330,7 @@ async def main():
         await app_logic(b)
         for scheme in ["light", "dark"]:
             await screens(b, scheme)
+        await unfoldings(b)
         await artifact(b)
         await b.close()
     print("\nALL OK" if not fails else "\nFAILED: " + str(fails))

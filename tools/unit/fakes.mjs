@@ -131,6 +131,19 @@ export const CARD_B = { id: "o-asy-2", module: "asyncio", q: "Ce se întâmplă 
 // Fișa unui modul, ca o dă PrepApp.sheet (spec Lecție): ideea principală, 4 puncte, 2 formulări de evitat.
 export const SHEET = { lead: "Event loop-ul rulează corutine pe un singur thread.", points: ["Corutina cedează la await.", "create_task programează o corutină.", "gather colectează rezultate.", "TaskGroup anulează grupul la prima eroare."], avoid: ["„asyncio e multithreading.”", "„await blochează thread-ul.”"] };
 
+// Fișa unui modul cu desfășurări, ca o dă PrepApp.sheet: aceleași câmpuri ca P.desf (map: { p, g: [{ a, b, t }] }, desf: câte o desfășurare pe punct, indexată ca punctele).
+export const SHEET_DZ = {
+  lead: "O clasă leagă datele de comportamentul lor.",
+  points: ["`__eq__` fără `__hash__` scoate obiectul din `set`.", "`__new__` creează obiectul, `__init__` îl completează.", "Ce scrii în corpul clasei e comun tuturor instanțelor."],
+  avoid: ["„`__init__` e constructorul.”"],
+  map: { p: "Fără structură, logica se împrăștie prin funcții și lanțuri de `if`.", g: [{ a: 1, b: 2, t: "cum se naște un obiect" }, { a: 3, b: 3, t: "unde stă starea" }] },
+  desf: [
+    { p: "Două `Rule` cu aceleași date apar de două ori într-un `set`.", i: "`__eq__` fără `__hash__` pune `__hash__ = None`.", ex: "```python\nclass R:\n    def __eq__(self, o):\n        return True\n{R()}  # ! TypeError\n```", cpp: "Pentru `std::unordered_set<R>` scrii `std::hash<R>`.", nu: "Python te lasă să scrii `__eq__` fără `__hash__`.", leg: "OOP-04 întreabă exact asta." },
+    { p: "Vrei un `Config()` care întoarce mereu aceeași instanță.", i: "`__new__` creează obiectul; `__init__` îl completează.", an: "`__new__` e atelierul, `__init__` e vopseaua." },
+    { p: "Două `Scanner` văd amândouă aceeași listă de reguli.", i: "Corpul clasei rulează o singură dată.", ex: "```python\nclass S:\n    rules = []\n```", pas: "```text\nclasa S se definește: rules = []\ns1.rules -> nu e pe s1 -> S.rules\n```" }
+  ]
+};
+
 // PrepApp în memorie: păstrează în `recorded` și `logged` ce primește.
 export function stubApp(cards = [CARD_A, CARD_B]) {
   const app = { recorded: [], logged: [], nextCalls: [] };
@@ -147,7 +160,7 @@ export function stubApp(cards = [CARD_A, CARD_B]) {
   app.log = entry => { app.logged.push(entry); };
   // Lecția: poziția pe modul (`pos`) și modulele terminate (`doneLessons`).
   app.pos = {}; app.doneLessons = [];
-  app.sheet = id => id === "asyncio" ? { module: "asyncio", name: "asyncio", lead: SHEET.lead, points: SHEET.points.slice(), avoid: SHEET.avoid.slice(), total: SHEET.points.length, pos: app.pos.asyncio || 0 } : id === "gil" ? { module: "gil", name: "GIL & threads", lead: "GIL-ul limitează paralelismul.", points: ["Un singur thread rulează bytecode.", "Procesele ocolesc GIL."], avoid: [], total: 2, pos: app.pos.gil || 0 } : null;
+  app.sheet = id => id === "oop" ? { module: "oop", name: "OOP", lead: SHEET_DZ.lead, points: SHEET_DZ.points.slice(), avoid: SHEET_DZ.avoid.slice(), total: SHEET_DZ.points.length, pos: app.pos.oop || 0, map: SHEET_DZ.map, desf: SHEET_DZ.desf } : id === "asyncio" ? { module: "asyncio", name: "asyncio", lead: SHEET.lead, points: SHEET.points.slice(), avoid: SHEET.avoid.slice(), total: SHEET.points.length, pos: app.pos.asyncio || 0 } : id === "gil" ? { module: "gil", name: "GIL & threads", lead: "GIL-ul limitează paralelismul.", points: ["Un singur thread rulează bytecode.", "Procesele ocolesc GIL."], avoid: [], total: 2, pos: app.pos.gil || 0 } : null;
   app.lessonHeard = (id, n) => { app.pos[id] = Math.max(app.pos[id] || 0, n); };
   app.lessonDone = id => { app.pos[id] = 0; app.doneLessons.push(id); };
   app.lessonReset = id => { app.pos[id] = 0; app.resets = (app.resets || 0) + 1; };

@@ -178,7 +178,7 @@
 
     // ---- Docker ----
     "dk-01": [1, "`docker build` produce ceva din Dockerfile; `docker run` pornește ceva din acel rezultat. Din același rezultat al build-ului poți porni oricâte instanțe."],
-    "dk-02": [2, "Fiecare instrucțiune din Dockerfile produce un layer, iar Docker refolosește layerele din cache cât timp nimic nu s-a schimbat. Când o instrucțiune se schimbă (de exemplu fișierele copiate), toate cele de după se refac."],
+    "dk-02": [2, "Instrucțiunile care schimbă fișiere (`RUN`, `COPY`, `ADD`) produc layere, iar `ENV` și `CMD` adaugă doar metadate. Docker refolosește layerele din cache cât timp nimic nu s-a schimbat. Când o instrucțiune se schimbă (de exemplu fișierele copiate), toate cele de după se refac."],
     "dk-03": [2, "Un Dockerfile poate avea mai multe etape (`FROM ... AS builder`, apoi alt `FROM`). Compilatoarele, header-ele și uneltele de build sunt necesare la build, dar nu și la rulare."],
     "dk-04": [3, "Shell form (`CMD gunicorn app:app`) pornește comanda prin `/bin/sh -c`. Exec form (`CMD [\"gunicorn\", \"app:app\"]`) pornește direct programul. `docker stop` trimite SIGTERM procesului cu PID 1 din container."],
     "dk-05": [1, "O imagine Docker e făcută din layere, iar fiecare instrucțiune din Dockerfile lasă urme în istoricul imaginii (`docker history`). Oricine are acces la imagine poate citi acest istoric."],

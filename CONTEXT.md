@@ -20,6 +20,18 @@ _Avoid_: card (cardul e oral), bullet, idee
 Explicația pe larg a unui punct, în stilul refactoring.guru: problema concretă pe care o rezolvă, ideea, un exemplu sau o analogie și, unde există un echivalent real, comparația cu C++ și locul unde ea nu mai ține. Punctul rămâne recapitularea; desfășurarea e prima întâlnire cu ideea.
 _Avoid_: explicație (e a grilelor), lecție, detaliu
 
+**Pas cu pas**:
+Partea unei desfășurări care urmărește mecanismul în timp, stare cu stare (render 1 → click → render 2), acolo unde ideea e o secvență, nu o regulă. Completează exemplul, nu îl înlocuiește.
+_Avoid_: trace, diagramă, timeline
+
+**Termen**:
+Un cuvânt tehnic cu definiția lui scurtă, în glosar, care apare subliniat oriunde e folosit (fișe, desfășurări, grile). Un text poate folosi un termen fără să-l explice; un cuvânt greu care nu e termen se explică în fraza în care apare.
+_Avoid_: cuvânt cheie, jargon, definiție
+
+**Snippet**:
+Codul de pe un card oral, pe care Alex îl analizează cu voce tare. Un snippet stricat ascunde un bug: Alex spune ce nu merge, de ce și cum repară.
+_Avoid_: schelet (scheletul îl scrie Alex), exemplu (exemplul e al desfășurării)
+
 **Harta modulului**:
 Desfășurarea ideii principale a unei fișe: problema mare pe care o rezolvă modulul și cum se grupează punctele lui. Se citește prima, ca punctele să se lege între ele.
 _Avoid_: rezumat, introducere, cuprins

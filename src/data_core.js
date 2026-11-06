@@ -30,7 +30,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
     { id: "aws", code: "AWS", name: "AWS esențial", short: "AWS", p: 4, src: "Onapsis" },
     { id: "graphql", code: "GQL", name: "GraphQL", short: "GraphQL", p: 3, src: "Anunț" },
     { id: "django", code: "DJ", name: "Django ORM → SQLAlchemy", short: "Django ORM", p: 4, src: "Experiența ta" },
-    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 1, src: "Anunț + panel FE" }
+    { id: "frontend", code: "FE", name: "React & TypeScript", short: "React/TS", p: 1, src: "Anunț + panel FE", fe: true }
   ];
 
 
@@ -259,7 +259,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
     docker: {
       lead: "Imaginea e template-ul, containerul e procesul care rulează.",
       points: [
-        "Imagine = layere read-only (câte unul per instrucțiune); container = instanță a imaginii + layer de scriere + proces izolat (namespaces, cgroups).",
+        "Imagine = layere read-only (câte unul per instrucțiune care schimbă fișiere, de pildă `RUN`, `COPY`, `ADD`; `ENV` și `CMD` adaugă doar metadate); container = instanță a imaginii + layer de scriere + proces izolat (namespaces, cgroups).",
         "Cache de layere: copiezi întâi `requirements.txt`/`pyproject.toml` și instalezi, apoi `COPY . .`.",
         "Multi-stage build: stage de build (compilatoare, wheels) + stage final minimal → imagine mică, suprafață de atac redusă.",
         "`.dockerignore` (venv, .git, secrete). User non-root. Fără secrete în ENV/ARG (rămân în istoric).",
@@ -394,7 +394,7 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
   // ---------- interviu & plan ----------
   // Planul pe zile se generează în aplicație (app.js: genPlan) din data interviului, orele pe seară și progres.
   // Data și orele se pot schimba din Progres › Interviul; valorile de aici sunt cele implicite.
-  P.cfg = { interview: "2026-11-03", hours: 2.5, company: "Onapsis", role: "SDET III – Python & JavaScript · Onapsis" };
+  P.cfg = { interview: "2026-11-10", hours: 2.5, company: "Onapsis", role: "SDET III – Python & JavaScript · Onapsis" };
   // go: { t: "diag" | "smart" | "mock" | "mistakes" | "due" | "open" | "mcq" (m | ms) | "sheet" (m) | "oral" (ms | due) | "ivmock" (n carduri; fără `sample` cade pe oral due) | "kata" (id) | "study" (tab) }
   P.planTpl = {
     // dimineața interviului: încălzire, nimic nou
