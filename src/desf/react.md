@@ -1,14 +1,17 @@
-<!-- Desfășurările fișei `react` (8 puncte; exemple TSX, verificate de mână în vitest cu react 19.3, jsdom și Testing Library: tichetul 03). Format frontend: 90–140 de cuvinte, ~250 la `Greu: da`, exemplu ≤ 14 rânduri, Pas cu pas ≤ 8 rânduri. Format și reguli: lib.mjs (checkDesf, DESF_LIMITS_FE), .scratch/frontend-extins/spec.md. Faptele: research/interview-facts.md, secțiunea 44. -->
+<!-- Desfășurările fișei `react` (14 puncte: 1–8 din tichetul 03, 9–14 harta hook-urilor, 9 nov. 2026; exemple TSX, verificate de mână în vitest cu react 19.3, jsdom și Testing Library). Format frontend: 90–140 de cuvinte, ~250 la `Greu: da`, exemplu ≤ 14 rânduri, Pas cu pas ≤ 8 rânduri. Format și reguli: lib.mjs (checkDesf, DESF_LIMITS_FE), .scratch/frontend-extins/spec.md. Faptele: research/interview-facts.md, secțiunile 44 și 48. -->
 
 ### harta
 
-Problema: React pare simplu până apar bug-urile care nu au o eroare în consolă: un contor care nu se mișcă, o listă care nu se actualizează, un câmp în care nu poți scrie, un formular care ține textul utilizatorului precedent. Toate pornesc din câteva reguli pe care React le aplică la fiecare render și pe care nu le vezi în cod. Modulul le ia pe rând: ce e o componentă, ce declanșează un re-render, cum se schimbă state-ul, unde stă state-ul și cum își dă seama React ce păstrează. Mecanismul efectelor și al memoizării vine după el, în `frontend`; limbajul de dedesubt, în `js` și `ts`.
+Problema: React pare simplu până apar bug-urile care nu au o eroare în consolă: un contor care nu se mișcă, o listă care nu se actualizează, un câmp în care nu poți scrie, un formular care ține textul utilizatorului precedent. Toate pornesc din câteva reguli pe care React le aplică la fiecare render și pe care nu le vezi în cod. Modulul le ia pe rând: ce e o componentă, ce declanșează un re-render, cum se schimbă state-ul, unde stă state-ul și cum își dă seama React ce păstrează. Ultimele șase puncte sunt harta hook-urilor: pentru fiecare, ce face, când îl alegi și ce capcană are. Mecanismul efectelor pe larg e în `frontend`; limbajul de dedesubt, în `js` și `ts`.
 
 Grupuri:
 - 1–2: componenta și re-render-ul (funcție pură, ce declanșează randarea)
 - 3–4: state-ul și câmpurile (copie, nu modificare; input controlat)
 - 5–7: unde stă state-ul (ridicare, reducer și Context, custom hooks)
 - 8: cum alege React ce păstrează (reconcilierea și `key`)
+- 9–10: hook-urile de bază (unde ții o valoare; unde pui un efect lateral)
+- 11–12: hook-urile de performanță (memoizare; prioritate cu tranziții)
+- 13–14: hook-uri pentru cazuri precise (id-uri, store extern, ref; acțiunile din React 19)
 
 ### 1
 
@@ -220,3 +223,187 @@ cu key={mode}: cheie nouă
 → text ''
 ```
 Legătură: RE-08. FE-03 aplică regula la liste (`key={index}` mută state-ul pe alt rând). Strict Mode (FE-07) montează de două ori ca să verifice cleanup-ul.
+
+### 9
+
+Greu: da
+Problema: Un timer pornit la click ține ID-ul într-o variabilă `let id`, iar „stop” nu mai oprește nimic după primul tick. În altă componentă, lista filtrată e ținută ca state separat și rămâne în urmă față de listă.
+Ideea: Alegerea pornește de la întrebarea „apare pe ecran?”. Ce se poate calcula din props sau state e o variabilă calculată în render, nu state. O valoare care apare pe ecran și se schimbă stă în `useState`: setter-ul cere un re-render, iar valoarea nouă o vezi abia la randarea următoare. O valoare păstrată între randări, dar invizibilă (ID-ul unui timer, un nod DOM, valoarea precedentă) stă în `useRef`: o cutie `{ current }` pe care o schimbi fără re-render, în handler sau în effect, nu în render. O variabilă `let` se pierde la fiecare render. Când mai multe câmpuri se schimbă împreună, treci la `useReducer` (punctul 6). O inițializare scumpă primește funcția, `useState(calc)`, nu rezultatul, `useState(calc())`, care rulează la fiecare render.
+Exemplu:
+```tsx
+// ✗ let id: recreat la render
+// ✗ useState: re-render degeaba
+// ✓ ref: păstrat, fără re-render
+const id = useRef(0);
+const start = () => {
+  id.current =
+    window.setInterval(tick, 1000);
+};
+const stop = () =>
+  clearInterval(id.current);
+// ✓ derivat: calculat în render
+const shown = all.filter(ok);
+// ✓ calc rulează o singură dată
+const [db] = useState(loadDb);
+```
+Pas cu pas:
+```text
+se calculează din props? → render
+apare pe ecran? → useState
+câmpuri legate → useReducer
+invizibil, dar păstrat → useRef
+departe în arbore → + Context
+```
+Legătură: RE-09. RE-02: o ref nu declanșează re-render; RE-05: ce se calculează nu devine state. Seamănă cu diferența dintre un câmp de model Django, salvat și afișat, și o variabilă locală din view.
+
+### 10
+
+Greu: da
+Problema: Un tooltip apare o clipă sub buton, apoi sare deasupra, fiindcă poziția se calculează într-un `useEffect`. Într-un formular, salvarea stă într-un `useEffect` care urmărește un flag `sent`.
+Ideea: Un efect lateral are trei locuri posibile. Ce pornește de la o acțiune a userului (click, submit) stă în handler: știi exact de ce rulează. `useEffect` sincronizează componenta cu ceva din afară (socket, timer, abonare) și rulează după ce browserul a desenat ecranul, deci nu îl blochează. `useLayoutEffect` rulează după ce React a scris în DOM, dar înainte de desenare, iar un `setState` din el se aplică tot înainte de desenare. Îl folosești ca să măsori DOM-ul (`getBoundingClientRect`) fără pâlpâire. Blochează desenarea și nu rulează pe server, deci rămâne excepția. `useEffectEvent` (React 19.2) scoate dintr-un effect o bucată care citește valorile cele mai noi, cum e tema la o notificare, fără să intre în dependențe și să reconecteze effect-ul.
+Exemplu:
+```tsx
+// ✗ salvarea ca effect pe un flag
+useEffect(() => {
+  if (sent) save(form);
+}, [sent]);
+// ✓ în handler
+const onSubmit = () => save(form);
+// ✓ măsurare înainte de desenare
+useLayoutEffect(() => {
+  const r = ref.current!
+    .getBoundingClientRect();
+  setUp(r.height > 40);
+}, []);
+```
+Pas cu pas:
+```text
+render → React scrie în DOM
+useLayoutEffect (blochează)
+  setUp → render, tot înainte
+browserul desenează ecranul
+useEffect rulează după desenare
+```
+Legătură: RE-10. FE-06 detaliază dependențele, iar FE-08 cursa din fetch. În Django, salvarea stă în view-ul de POST, nu într-un semnal care ghicește intenția.
+
+### 11
+
+Greu: da
+Problema: Un coleg pune `useCallback` pe fiecare handler, ca să „optimizeze”. Copilul care primește handler-ul nu e în `memo`, deci se re-randează la fel de des, iar codul e mai greu de citit.
+Ideea: Trei unelte, trei ținte. `useMemo(() => calc(a), [a])` ține minte rezultatul unui calcul și îl refolosește cât `a` e același. `useCallback(fn, [a])` ține minte funcția însăși, fără s-o apeleze, ca `useMemo(() => fn, [a])`. `memo(Comp)` ține minte componenta: React sare peste re-render-ul ei când toate props sunt egale după `Object.is`. Lucrează împreună: un obiect sau o funcție creată în părinte e nouă la fiecare render, deci strică `memo` dacă nu e stabilizată. `useCallback` ajută doar dacă funcția ajunge la un copil în `memo` sau în dependențele unui hook. React Compiler 1.0 memoizează automat; manual le adaugi după ce măsori cu Profiler.
+Exemplu:
+```tsx
+const Row = memo(RowView); // ✓
+function List({ items, rm }: P) {
+  // ✓ aceeași cât rm nu se schimbă
+  const del = useCallback(
+    (id: string) => rm(id), [rm]);
+  // ✓ calcul scump, refolosit
+  const rows = useMemo(
+    () => sortBy(items), [items]);
+  return rows.map((x) => (
+    <Row key={x.id} x={x}
+      onDel={del} />
+  ));
+}
+// ✗ useCallback cu Row fără memo
+```
+Pas cu pas:
+```text
+List render 2, items la fel
+useMemo: [items] la fel → rows
+useCallback: [rm] la fel → del
+Row (memo): props egale
+→ React sare peste Row
+fără memo: Row se apelează oricum
+```
+Legătură: RE-11. RE-02: copiii se re-randează cu părintele; RE-06: același tipar stabilizează `value` la Context. Ca `functools.lru_cache` din Python, dar cu o singură intrare: React ține minte doar ultimul rezultat.
+
+### 12
+
+Greu: da
+Problema: La fiecare tastă în căutare, o listă de 5.000 de rânduri se re-randează, iar literele apar în câmp cu întârziere. Un coleg pune `startTransition` în jurul lui `setQ`, iar câmpul nu se mai comportă normal.
+Ideea: React împarte actualizările în urgente (tasta, click-ul, care trebuie să apară imediat) și neurgente (lista filtrată, tab-ul nou). `useTransition` dă `[isPending, startTransition]`: actualizările din `startTransition(() => setTab(t))` devin neurgente, se randează în fundal și pot fi întrerupte de o tastă, iar `isPending` arată că se lucrează. State-ul unui input controlat nu poate sta într-o tranziție. `useDeferredValue(q)` întoarce o copie a lui `q` care rămâne în urmă: React randează întâi cu valoarea veche, apoi încearcă în fundal cu cea nouă. Alegi `startTransition` când ai setter-ul și `useDeferredValue` când primești doar valoarea (un prop, rezultatul unui hook). Nu e debounce: nu are întârziere fixă și se adaptează la viteza dispozitivului. Lista grea stă în `memo`, altfel se re-randează și cu valoarea veche.
+Exemplu:
+```tsx
+const [q, setQ] = useState("");
+// ✗ inputul controlat în tranziție:
+// start(() => setQ(v))
+// ✓ câmpul urgent, lista amânată
+const dq = useDeferredValue(q);
+return (
+  <>
+    <input value={q}
+      onChange={(e) =>
+        setQ(e.target.value)} />
+    <Slow q={dq} />
+  </>
+);
+// Slow = memo(SlowView)
+```
+Pas cu pas:
+```text
+tastezi „a”: q = 'a', dq = ''
+render urgent: câmpul arată 'a'
+Slow (memo): dq la fel → sărit
+fundal: render cu dq = 'a'
+tastezi „b” între timp
+→ render-ul din fundal se oprește
+→ reia cu dq = 'ab'
+```
+Legătură: RE-12. Punctul 11 explică de ce `Slow` are nevoie de `memo`. Seamănă cu o corutină asyncio care cedează controlul la `await`: React randează în bucăți și lasă browserul să proceseze tastele între ele.
+
+### 13
+
+Greu: da
+Problema: Un `<label htmlFor="mail">` stă într-o componentă folosită de două ori pe pagină, iar click pe a doua etichetă mută focusul în primul câmp. Altă componentă copiază un store propriu în state cu un `useEffect` și un `useState`, iar codul se repetă în cinci locuri.
+Ideea: Trei hook-uri pentru cazuri precise. `useId()` dă un id unic și stabil pentru fiecare instanță, pentru `htmlFor` și `aria-*`. E identic pe server și în client, unde un contor global sau `Math.random()` ar strica hidratarea. Nu e pentru `key`: cheile vin din date. `useSyncExternalStore(subscribe, getSnapshot)` abonează componenta la un store din afara React. `subscribe` primește un callback și întoarce dezabonarea; `getSnapshot` dă aceeași valoare cât store-ul nu se schimbă, altfel React intră într-o buclă de re-randări. Pentru state obișnuit rămân `useState` și `useReducer`. `useImperativeHandle(ref, () => ({ focus }))` expune printr-un ref doar câteva metode alese, nu tot nodul DOM. În React 19 `ref` vine ca prop obișnuit, fără `forwardRef`. Un ref e pentru comenzi (focus, scroll): `<Modal isOpen>`, nu `ref.open()`.
+Exemplu:
+```tsx
+// ✗ id fix, dublat pe pagină:
+// <input id="mail" />
+const id = useId(); // ✓
+<label htmlFor={id}>Email</label>
+<input id={id} />
+// ✓ subscribe în afara componentei
+function sub(cb: () => void) {
+  store.on(cb);
+  return () => store.off(cb);
+}
+const n = useSyncExternalStore(
+  sub, store.count);
+```
+Legătură: RE-13, RE-14. FE-03: cheile vin din date, nu din `useId`. Un SDK care își ține starea în afara React, cum e clientul Keycloak, e cazul tipic pentru `useSyncExternalStore`; TanStack Query și Zustand îl folosesc intern.
+
+### 14
+
+Greu: da
+Problema: Un formular de salvare are trei `useState` (eroare, încărcare, rezultat), un `onSubmit` cu `preventDefault`, un `try` / `finally` și un buton care trebuie dezactivat cât durează cererea.
+Ideea: React 19 numește acțiune (Action) o funcție, de obicei asincronă, care rulează într-o tranziție, și îi dă hook-uri. `useActionState(fn, initial)` întoarce `[state, formAction, isPending]`; `fn(prev, formData)` primește starea precedentă și datele formularului și întoarce starea nouă, de exemplu o eroare. Pui `<form action={formAction}>`, iar React rulează trimiterea într-o tranziție, fără `preventDefault`. `useFormStatus()` (din `react-dom`) dă `pending` pentru formularul părinte, deci îl apelezi într-un copil, cum e butonul; în componenta care randează `<form>` rămâne `false`. `useOptimistic(value)` arată valoarea așteptată cât rulează acțiunea; la final se vede din nou `value`, deci un eșec readuce ecranul la ce era. `use(promise)` suspendă componenta până se rezolvă promisiunea, iar `Suspense` arată fallback-ul; promisiunea vine din cache sau din părinte, nu e creată în render. `use(Ctx)` citește un Context, ca `useContext`, dar poate sta într-un `if`.
+Exemplu:
+```tsx
+async function save(
+  prev: string, fd: FormData,
+) {
+  const r = await post(fd);
+  return r.ok ? "" : "Eroare";
+}
+const [err, act, busy] =
+  useActionState(save, "");
+<form action={act}>
+  <input name="title" />
+  <Submit /> {/* ✓ pending */}
+  <p>{busy ? "Se trimite" : err}</p>
+</form>
+// ✗ use(fetch(url)) în render
+```
+Pas cu pas:
+```text
+submit → act(formData)
+tranziție: busy = true
+Submit: pending = true
+save(prev, fd) → await post
+return "Eroare" → err
+busy = false, pending = false
+```
+Legătură: RE-15, RE-16. Ca un view Django care primește `request.POST` și întoarce formularul cu erori, aici `fn(prev, formData)`. `useActionState` urmează tiparul `reducer(state, action)` din punctul 6.

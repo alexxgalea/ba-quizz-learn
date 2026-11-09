@@ -2300,7 +2300,7 @@
   };
   const XFIELDS = [["scurt", "Pe scurt"], ["scop", "Scop"], ["mec", "Mecanism"], ["pas", "Pas cu pas"], ["apl", "Aplicare"], ["leg", "Legătură"], ["lim", "Limită"], ["intv", "La interviu"]];
   const DZ_ASK = [["p", "Problema"], ["i", "Ideea"], ["ex", "Exemplu"], ["an", "Analogie"], ["pas", "Pas cu pas"], ["cpp", "În C++"], ["nu", "Unde nu ține"], ["leg", "Legătură"]];
-  const ASK_DZ_MAX = 20000;                          // o fișă cu desfășurări are ~4× mai mult material decât una fără
+  const ASK_DZ_MAX = 30000;                          // o fișă cu desfășurări are ~4× mai mult material decât una fără (react, cu harta hook-urilor: ~27.000)
   const askClip = (t, n) => { t = String(t == null ? "" : t); return t.length > n ? t.slice(0, n) + "…" : t; };
   // Contextul unui loc: { topic, material }. Cheia: mcq:<id>, sheet:<modul> sau gap:<card>:<punct>.
   function askCtx(key) {
