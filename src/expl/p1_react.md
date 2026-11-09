@@ -227,3 +227,246 @@ Răspuns verificare: Effect-ul rulează după randare, deci utilizatorul vede un
 Varianta greșită B: Pentru React contează tipul și poziția, nu ramura de cod din care vine elementul.
 Varianta greșită C: Props noi nu resetează state-ul. Resetarea cere alt tip sau altă cheie.
 Varianta greșită D: Un `useEffect` ar merge, dar nu e singura soluție; `key` e cea recomandată.
+
+### re-09
+Pe scurt: `let id` se recreează cu `0` la fiecare render, deci `stop` șterge alt id. ID-ul stă într-un `useRef`.
+Scop: Știi unde ții o valoare care trebuie păstrată între randări, dar nu apare pe ecran. Întrebarea apare ca „când folosești `useRef` în loc de `useState`?”.
+Mecanism: O componentă e o funcție, iar React o apelează din nou la fiecare render. `let id = 0` e o variabilă locală a apelului. După primul tick, `setN` re-randează `Timer`: apare un `id` nou, egal cu `0`, iar `stop` din randarea curentă îl vede pe acesta. Intervalul real are alt id și rămâne pornit. `useRef` dă un obiect `{ current }` care e același la fiecare render, iar schimbarea lui nu cere re-render.
+Pas cu pas:
+```text
+render 1: id = 0
+start: id = 7 (în render 1)
+tick: setN(1) → render 2
+render 2: id = 0 (variabilă nouă)
+stop (din render 2): clear(0)
+intervalul 7 rulează mai departe
+```
+Aplicare:
+```tsx
+const id = useRef(0);
+const start = () => {
+  id.current =
+    window.setInterval(tick, 1000);
+};
+const stop = () =>
+  clearInterval(id.current);
+```
+Legătură: RE-02: o ref nu declanșează re-render. În Python ar fi diferența dintre o variabilă locală a unei funcții și un atribut al unui obiect care trăiește între apeluri.
+Limită: `useState` ar merge și el, fiindcă `stop` din randarea următoare ar vedea id-ul nou, dar fiecare pornire ar cere un re-render inutil. ID-ul nu apare pe ecran, deci locul lui e în ref.
+La interviu: „Ce apare pe ecran ține de `useState`. Ce trebuie doar păstrat între randări, cum e ID-ul unui timer, stă în `useRef`: e același obiect la fiecare render și nu cere re-render.”
+Verificare: Poți citi `id.current` în JSX, ca să afișezi id-ul?
+Răspuns verificare: Nu e o idee bună. Ref-ul nu cere re-render când se schimbă, deci ecranul ar arăta o valoare veche. Documentația cere să nu citești și să nu scrii `ref.current` în timpul randării; ce apare pe ecran ține de state.
+Varianta greșită B: `clearInterval` merge oriunde, inclusiv într-un handler. Problema e id-ul pe care îl primește.
+Varianta greșită C: `setN` doar schimbă numărul; nimic din render nu pornește alt interval.
+Varianta greșită D: `window.setInterval` întoarce un număr, id-ul intervalului, nu o promisiune.
+
+### re-10
+Pe scurt: `useLayoutEffect` în loc de `useEffect`: măsurarea și `setUp` se aplică înainte ca browserul să deseneze ecranul.
+Scop: Știi diferența dintre cele două efecte și singurul caz în care alegi `useLayoutEffect`. Întrebarea apare ca „ce diferență e între `useEffect` și `useLayoutEffect`?”.
+Mecanism: După render, React scrie modificările în DOM. `useEffect` rulează după ce browserul a desenat ecranul, deci utilizatorul vede întâi tooltip-ul sub buton, apoi `setUp(true)` îl mută. `useLayoutEffect` rulează după scrierea în DOM, dar înainte de desenare, iar re-render-ul cerut din el se termină tot înainte de desenare. Utilizatorul vede doar poziția finală.
+Pas cu pas:
+```text
+useEffect:
+render → DOM → desenare (jos)
+effect: h = 60 → setUp(true)
+render → DOM → desenare (sus)
+useLayoutEffect:
+render → DOM → effect → setUp
+render → DOM → desenare (sus)
+```
+Aplicare:
+```tsx
+useLayoutEffect(() => {
+  const h = ref.current!.offsetHeight;
+  setUp(h > 40);
+}, []);
+```
+Legătură: FE-06: dependențele funcționează la fel la ambele efecte. E aceeași idee ca la double buffering în grafică: pregătești cadrul complet înainte să-l afișezi.
+Limită: `useLayoutEffect` blochează desenarea, deci un calcul lent în el face pagina să pară înghețată. Nu rulează pe server: acolo nu există layout.
+La interviu: „`useEffect` rulează după ce browserul desenează, deci nu blochează nimic. `useLayoutEffect` rulează înainte de desenare și îl folosesc doar ca să măsor DOM-ul, de exemplu poziția unui tooltip, fără pâlpâire.”
+Verificare: De ce nu muți pur și simplu măsurarea în corpul componentei?
+Răspuns verificare: În timpul randării DOM-ul nou nu există încă: la primul render `ref.current` e `null`. Iar documentația cere să nu citești refs în timpul randării.
+Varianta greșită B: În corpul componentei DOM-ul nu e încă scris, iar `ref.current` e `null` la primul render.
+Varianta greșită C: `up` în dependențe doar ar rula effect-ul din nou, tot după desenare. Pâlpâirea rămâne.
+Varianta greșită D: `useMemo` rulează în timpul randării, înainte să existe DOM-ul de măsurat.
+
+### re-11
+Pe scurt: `memo(Row)`. `del` e deja stabilă, dar fără `memo` copilul se re-randează odată cu părintele oricum.
+Scop: Înțelegi că `useCallback`, `useMemo` și `memo` lucrează împreună. Întrebarea apare ca „când folosești `useCallback`?”.
+Mecanism: La fiecare tastă `setQ` re-randează `List`, iar React apelează din nou toți copiii. `useCallback` face ca `del` să fie aceeași funcție între randări, dar asta contează doar pentru cine compară props. Un copil obișnuit nu compară nimic. `memo(Row)` compară props cu `Object.is`: `x` și `onDel` sunt aceleași, deci React sare peste `Row`.
+Pas cu pas:
+```text
+tastă: setQ('a') → List render 2
+del: aceeași funcție (useCallback)
+Row fără memo → se apelează
+Row cu memo:
+  x la fel, onDel la fel → sărit
+```
+Aplicare:
+```tsx
+const Row = memo(function Row(
+  { x, onDel }: RowProps,
+) {
+  return <li onClick={() =>
+    onDel(x.id)}>{x.t}</li>;
+});
+```
+Legătură: RE-02: copiii se re-randează cu părintele. RE-06 aplică același tipar la `value` din Context.
+Limită: Cu React Compiler 1.0, memoizarea se face automat la build, iar `useCallback` manual devine rar. Fără compilator, memoizezi după ce măsori cu Profiler.
+La interviu: „`useCallback` ține minte funcția, dar ajută doar dacă o primește un copil în `memo` sau un hook în dependențe. Fără `memo` pe copil, nu schimbă nimic.”
+Verificare: Ce ține minte `useMemo` și ce ține minte `useCallback`?
+Răspuns verificare: `useMemo` ține minte rezultatul unei funcții, pe care o apelează. `useCallback` ține minte funcția însăși, fără s-o apeleze. `useCallback(fn, deps)` e ca `useMemo(() => fn, deps)`.
+Varianta greșită B: Cu `q` în dependențe, `del` ar deveni o funcție nouă la fiecare tastă, deci și mai rău.
+Varianta greșită C: `useMemo(() => fn, [])` dă exact același lucru ca `useCallback(fn, [])`. Lipsește tot `memo`.
+Varianta greșită D: `useCallback` nu oprește niciun re-render; doar păstrează identitatea funcției.
+
+### re-12
+Pe scurt: State-ul unui input controlat nu poate sta într-o tranziție. Câmpul rămâne urgent, iar `Slow` primește `useDeferredValue(q)` și stă în `memo`.
+Scop: Știi diferența dintre actualizările urgente și cele amânate. Întrebarea apare ca „cum faci ca o listă grea să nu blocheze tastarea?”.
+Mecanism: O tranziție marchează o actualizare ca neurgentă: React o poate amâna sau întrerupe. Un câmp de text are nevoie să arate tasta imediat, iar documentația spune explicit că o tranziție nu poate controla un input. Soluția separă valorile: `q` rămâne urgent pentru `value`, iar `dq = useDeferredValue(q)` rămâne în urmă. La tastă, React randează întâi cu `dq` vechi și sare peste `Slow` (în `memo`), apoi randează în fundal cu `dq` nou.
+Pas cu pas:
+```text
+tastă „a”: q = 'a', dq = ''
+render urgent: câmpul → 'a'
+Slow (memo): dq la fel → sărit
+fundal: dq = 'a' → Slow lucrează
+tastă „b” → fundalul se oprește
+```
+Aplicare:
+```tsx
+const dq = useDeferredValue(q);
+<input value={q} onChange={(e) =>
+  setQ(e.target.value)} />
+<Slow q={dq} />
+```
+Legătură: RE-11: fără `memo`, `Slow` se re-randează și cu valoarea veche. Seamănă cu asyncio: o corutină lungă trebuie să cedeze controlul ca restul să meargă.
+Limită: `useDeferredValue` nu face randarea mai rapidă; o face întreruptibilă. Dacă lista e prea mare, ajută și virtualizarea (doar rândurile vizibile).
+La interviu: „O tranziție marchează o actualizare ca neurgentă, dar nu o pot folosi pentru state-ul unui input. Las câmpul urgent și dau listei `useDeferredValue(q)`, cu lista în `memo`. Spre deosebire de debounce, nu am o întârziere fixă.”
+Verificare: Când alegi `startTransition` în loc de `useDeferredValue`?
+Răspuns verificare: Când ai acces la setter și actualizarea nu controlează un input, de exemplu schimbarea unui tab: `startTransition(() => setTab(t))`, cu `isPending` pentru un indicator. `useDeferredValue` e pentru o valoare primită: un prop sau rezultatul unui hook.
+Varianta greșită B: `isPending` doar raportează o tranziție; poți ignora valoarea, ca în cod, și tranziția pornește oricum.
+Varianta greșită C: `startTransition` primește și funcții sincrone, și asincrone.
+Varianta greșită D: Documentația spune exact opusul: tranzițiile nu pot controla un input de text.
+
+### re-13
+Pe scurt: Focusul merge în primul câmp, fiindcă id-ul se repetă. `const id = useId()` dă un id per instanță.
+Scop: Știi pentru ce e `useId`. Întrebarea apare la componente reutilizabile de formular și la accesibilitate.
+Mecanism: `htmlFor="mail"` caută în document elementul cu id-ul `mail`, iar browserul îl alege pe primul. Cu două instanțe, ambele etichete arată spre primul câmp. `useId()` dă fiecărei instanțe un id diferit, care rămâne același între randări și e identic pe server și în client.
+Pas cu pas:
+```text
+Field 1: label → #mail (câmp 1)
+Field 2: label → #mail (câmp 1)
+cu useId:
+Field 1: _r_0_ → câmp 1
+Field 2: _r_1_ → câmp 2
+```
+Aplicare:
+```tsx
+function Field() {
+  const id = useId();
+  return (<>
+    <label htmlFor={id}>Email</label>
+    <input id={id} />
+  </>);
+}
+```
+Legătură: FE-03: cheile din liste vin din date, nu din `useId`. În Django, un formset dă un prefix fiecărui formular din același motiv.
+Limită: `useId` nu e pentru `key` și nici pentru selectori CSS. Pentru un grup de câmpuri, iei un singur id și adaugi sufixe: `id + "-mail"`.
+La interviu: „Un id fix într-o componentă reutilizabilă se dublează pe pagină. `useId` dă un id unic per instanță, stabil și identic între server și client, deci nu strică hidratarea.”
+Verificare: De ce nu folosești un contor global, `let next = 0; id = next++`?
+Răspuns verificare: Pe server și în client componentele pot fi randate în altă ordine, deci id-urile ar diferi și hidratarea ar eșua. Un contor crește și la fiecare render, nu doar o dată pe instanță.
+Varianta greșită B: React nu modifică valoarea unui atribut `id`; o pune în DOM exact cum o scrii.
+Varianta greșită C: `htmlFor` nu caută câmpul vecin: caută după id în tot documentul.
+Varianta greșită D: `Math.random()` dă alt id la fiecare render și altul pe server decât în client.
+
+### re-14
+Pe scurt: O buclă de re-randări: `getSnapshot` dă un obiect nou la fiecare apel. React avertizează, apoi aruncă `Maximum update depth exceeded`.
+Scop: Știi cum se conectează o componentă la un store din afara React și capcana principală. Întrebarea apare la integrarea unei biblioteci sau a unui SDK.
+Mecanism: React apelează `getSnapshot` de mai multe ori și compară rezultatele cu `Object.is`. Dacă diferă, consideră că store-ul s-a schimbat și randează din nou. Funcția din cod construiește `{ n: 1 }` nou la fiecare apel, deci rezultatul diferă mereu. React scrie în consolă „The result of getSnapshot should be cached to avoid an infinite loop”, apoi oprește bucla cu eroarea.
+Pas cu pas:
+```text
+getSnapshot() → obiect A
+getSnapshot() → obiect B
+Object.is(A, B) → false
+→ „s-a schimbat” → render
+→ iar A ≠ B → render …
+→ Maximum update depth
+```
+Aplicare:
+```tsx
+const n = useSyncExternalStore(
+  store.subscribe,
+  () => store.n,
+);
+```
+Legătură: RE-03: aceeași comparație prin `Object.is` decide și la `useState`. TanStack Query și Zustand folosesc `useSyncExternalStore` intern.
+Limită: Pentru state obișnuit, documentația recomandă `useState` și `useReducer`. `useSyncExternalStore` e pentru cod din afara React.
+La interviu: „`useSyncExternalStore` primește `subscribe` și `getSnapshot`. `getSnapshot` trebuie să dea aceeași valoare cât store-ul nu s-a schimbat; un obiect nou la fiecare apel produce o buclă de re-randări.”
+Verificare: De ce declari `subscribe` în afara componentei?
+Răspuns verificare: Dacă primește altă funcție `subscribe` la un re-render, React se dezabonează și se abonează din nou. O funcție declarată în afara componentei rămâne aceeași.
+Varianta greșită B: React compară doar referințe, prin `Object.is`, nu conținutul obiectelor.
+Varianta greșită C: Componenta nu ajunge să afișeze nimic stabil: obiectul nou declanșează randări repetate.
+Varianta greșită D: `subscribe` poate fi declarat oriunde; în afara componentei e chiar varianta recomandată.
+
+### re-15
+Pe scurt: `useFormStatus` vede doar un `<form>` părinte. Într-o componentă `Submit`, randată în formular, merge.
+Scop: Știi cum afișezi starea unei trimiteri în React 19. Întrebarea apare la formulare cu acțiuni.
+Mecanism: `useFormStatus` citește starea formularului în care e randată componenta care îl apelează. `Form` randează `<form>`, deci formularul e copilul lui, nu părintele: `pending` rămâne `false`. Când butonul stă într-o componentă `Submit` pusă în `<form>`, `useFormStatus` din `Submit` vede formularul, iar `pending` e `true` cât rulează `save`.
+Pas cu pas:
+```text
+Form: useFormStatus → fără părinte
+click → save rulează
+Form: pending = false (mereu)
+Submit în <form>:
+click → pending = true
+save gata → pending = false
+```
+Aplicare:
+```tsx
+function Submit() {
+  const { pending } = useFormStatus();
+  return (
+    <button disabled={pending}>
+      Salvează
+    </button>
+  );
+}
+```
+Legătură: RE-16 și punctul 14: acțiunile din React 19. În Django, ai dezactiva butonul cu JavaScript la `submit`; aici starea vine din React.
+Limită: `useFormStatus` se importă din `react-dom`, nu din `react`. Pentru starea întoarsă de acțiune (eroarea), folosești `useActionState`.
+La interviu: „`useFormStatus` dă `pending` pentru formularul părinte, deci îl apelez într-o componentă din interiorul formularului, de obicei butonul.”
+Verificare: Ce dă `useActionState` și ce nu dă `useFormStatus`?
+Răspuns verificare: `useActionState(fn, initial)` dă `[state, formAction, isPending]`: starea întoarsă de acțiune, de exemplu o eroare, și propriul `isPending`. `useFormStatus` dă doar starea trimiterii (`pending`, `data`, `method`, `action`), fără rezultat.
+Varianta greșită B: O acțiune poate fi asincronă; tocmai atunci are rost `pending`.
+Varianta greșită C: `pending` e `true` cât rulează acțiunea și redevine `false` la final.
+Varianta greșită D: Cu `action={save}`, React trimite formularul și apelează `save` cu `FormData`, fără `onSubmit`.
+
+### re-16
+Pe scurt: Fallback-ul la nesfârșit: fiecare render creează altă promisiune, deci componenta se suspendă din nou.
+Scop: Știi ce face `use(promise)` și condiția pe care o cere. Întrebarea apare la React 19 și Suspense.
+Mecanism: `use(promise)` suspendă componenta cât promisiunea e în așteptare, iar `Suspense` arată fallback-ul. Când promisiunea se rezolvă, React apelează din nou `Albums`. Apelul face alt `fetch`, deci primește altă promisiune, încă în așteptare, și se suspendă iar. Lista nu apare niciodată. Promisiunea trebuie să fie aceeași între randări: vine din cache sau din părinte.
+Pas cu pas:
+```text
+render 1: fetch → P1 → suspendat
+P1 gata → React reia Albums
+render 2: fetch → P2 → suspendat
+P2 gata → render 3: P3 …
+ecran: fallback mereu
+```
+Aplicare:
+```tsx
+function Albums(
+  { p }: { p: Promise<Album[]> },
+) {
+  const list = use(p);
+  return <List items={list} />;
+}
+```
+Legătură: RE-15 și punctul 14: hook-urile din React 19. FE-08: în client, datele de la API le aduce de obicei TanStack Query, cu cache.
+Limită: `use` nu poate sta într-un `try` / `catch`; o promisiune respinsă ajunge la cel mai apropiat error boundary. Spre deosebire de hook-uri, `use` poate fi apelat într-un `if`.
+La interviu: „`use(promise)` suspendă componenta până se rezolvă promisiunea, cu `Suspense` deasupra. Promisiunea trebuie să fie aceeași între randări, deci vine din cache sau din părinte, nu e creată în render.”
+Verificare: Ce diferență e între `use(Ctx)` și `useContext(Ctx)`?
+Răspuns verificare: Citesc același Context, dar `use` poate fi apelat într-un `if` sau într-o buclă, iar `useContext` doar la nivelul de sus al componentei.
+Varianta greșită B: Lista nu apare, fiindcă fiecare reluare a randării creează o promisiune nouă.
+Varianta greșită C: `use` primește promisiuni și Context; asta e chiar rolul lui.
+Varianta greșită D: Cât promisiunea e în așteptare, componenta e suspendată, deci se vede fallback-ul, nu o listă goală.

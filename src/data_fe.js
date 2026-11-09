@@ -216,7 +216,7 @@ first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar al treil
   // ---------- react (bazele; tichetul 03) ----------
   before({ id: "react", code: "RE", name: "React: bazele", short: "React bazele", p: 1, src: "Anunț + panel FE", fe: true });
   P.sheets.react = {
-    lead: "Înainte de efecte și de memoizare, React se reduce la câteva reguli: o componentă e o funcție pură, state-ul se înlocuiește, nu se modifică, iar React decide ce re-randează după reguli simple. `frontend` pornește de la ele.",
+    lead: "Înainte de efecte și de memoizare, React se reduce la câteva reguli: o componentă e o funcție pură, state-ul se înlocuiește, nu se modifică, iar React decide ce re-randează după reguli simple. Punctele 9–14 sunt harta hook-urilor: ce face fiecare, când îl alegi și ce capcană are. `frontend` pornește de la ele.",
     points: [
       "O componentă e o funcție pură de props și state: aceleași intrări dau același JSX, iar în timpul randării nu modifică nimic din ce exista înainte (variabile din afară, props, state). Props sunt read-only; `children` e un prop obișnuit. Poți modifica ce ai creat chiar în funcție. În dev, Strict Mode o apelează de două ori, ca să arate impuritățile.",
       "Un re-render vine din trei motive: state-ul componentei s-a schimbat, părintele a făcut re-render (copiii se re-randează cu el, chiar dacă props sunt la fel) sau s-a schimbat un Context pe care îl citește. O variabilă locală și `useRef` nu declanșează nimic. `useRef` ține valori care nu apar pe ecran și noduri DOM (`ref.current.focus()`).",
@@ -225,9 +225,15 @@ first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar al treil
       "Când două componente au nevoie de aceeași informație, state-ul urcă în cel mai apropiat părinte comun și coboară prin props, iar schimbarea urcă printr-un callback. Datele curg într-o singură direcție, în jos. Fiecare bucată de state are un singur proprietar; ce se poate calcula din state nu devine state separat.",
       "`useReducer` mută logica de actualizare într-o funcție pură `reducer(state, action)`; handler-ele doar fac `dispatch({ type })`. Reducer-ul întoarce o stare nouă, nu o modifică. Context duce o valoare prin arbore fără props intermediare; când `value` se schimbă (`Object.is`), toți consumatorii re-randează. Context transportă, nu ține state: acesta stă în `useState` sau `useReducer`.",
       "Un custom hook e o funcție al cărei nume începe cu `use` și care apelează alte hook-uri. Partajează logică, nu state: fiecare apel are state-ul lui. Două componente care folosesc `useCounter()` au două contoare. State-ul comun urcă în părinte sau trece prin Context. Regulile hook-urilor rămân valabile în interiorul lui.",
-      "La fiecare render React compară arborele nou cu cel vechi, poziție cu poziție (reconcilierea). Același tip de componentă pe aceeași poziție păstrează state-ul; alt tip îl distruge (unmount) și îl creează de la zero. `key` face parte din identitate: `key={id}` resetează un formular, iar în liste urmărește elementul, nu poziția. O componentă definită în interiorul alteia e alt tip la fiecare render, deci își pierde state-ul."
+      "La fiecare render React compară arborele nou cu cel vechi, poziție cu poziție (reconcilierea). Același tip de componentă pe aceeași poziție păstrează state-ul; alt tip îl distruge (unmount) și îl creează de la zero. `key` face parte din identitate: `key={id}` resetează un formular, iar în liste urmărește elementul, nu poziția. O componentă definită în interiorul alteia e alt tip la fiecare render, deci își pierde state-ul.",
+      "Unde ții o valoare: ce se poate calcula din props sau state calculezi în render, ca variabilă. Ce apare pe ecran și se schimbă stă în `useState`: setter-ul cere un re-render, iar valoarea nouă o vezi abia la randarea următoare. Ce trebuie păstrat între randări fără să apară pe ecran (ID-ul unui timer, un nod DOM) stă în `useRef`. Câmpurile care se schimbă împreună merg în `useReducer`. O inițializare scumpă: `useState(calc)`, nu `useState(calc())`.",
+      "Unde pui un efect lateral: ce pornește de la o acțiune a userului (click, submit) stă în handler. `useEffect` sincronizează cu ceva din afară (socket, timer, abonare) după ce browserul a desenat ecranul. `useLayoutEffect` rulează după ce React a scris în DOM, dar înainte de desenare, și o blochează: îl folosești doar ca să măsori DOM-ul fără pâlpâire. `useEffectEvent` (React 19.2) citește dintr-un effect valorile cele mai noi fără să intre în dependențe.",
+      "Memoizarea: `useMemo(() => calc(a), [a])` ține minte rezultatul unui calcul; `useCallback(fn, [a])` ține minte funcția însăși, ca `useMemo(() => fn, [a])`; `memo(Comp)` sare peste re-render-ul componentei când props sunt egale după `Object.is`. `useCallback` ajută doar dacă funcția ajunge la un copil în `memo` sau în dependențele unui hook. Cu React Compiler le scrii rar de mână, după ce măsori.",
+      "Prioritatea: `useTransition` dă `[isPending, startTransition]`; actualizările din `startTransition(() => setTab(t))` devin neurgente și pot fi întrerupte de o tastă. State-ul unui input controlat nu poate sta într-o tranziție. `useDeferredValue(q)` dă o copie a valorii care rămâne în urmă și se recalculează în fundal. `startTransition` când ai setter-ul, `useDeferredValue` când primești doar valoarea. Nu e debounce: nu are întârziere fixă, iar lista grea stă în `memo`.",
+      "Hook-uri pentru cazuri precise: `useId` dă un id unic și stabil pentru `htmlFor` și `aria-*`, același pe server și în client; nu e pentru `key`. `useSyncExternalStore(subscribe, getSnapshot)` abonează componenta la un store din afara React; `getSnapshot` dă aceeași valoare cât store-ul nu se schimbă. `useImperativeHandle` expune printr-un ref doar câteva metode (`focus`); în React 19 `ref` e prop, fără `forwardRef`. Ce se poate spune printr-un prop nu trece printr-un ref.",
+      "Acțiunile din React 19: `useActionState(fn, initial)` dă `[state, formAction, isPending]`, iar `fn(prev, formData)` întoarce starea nouă; o legi cu `<form action={formAction}>`. `useFormStatus` (din `react-dom`) dă `pending` pentru formularul părinte, deci îl apelezi într-un copil, cum e butonul. `useOptimistic` arată valoarea așteptată cât rulează acțiunea. `use(promise)` citește o promisiune sub `Suspense`, dacă vine din cache, nu creată în render; `use(Ctx)` poate sta într-un `if`."
     ],
-    avoid: ["„Schimb variabila și React redesenează.”", "„`push` pe array-ul din state și apoi `setItems`.”", "„Custom hook-ul partajează state-ul între componente.”", "„Context e un state manager.”"]
+    avoid: ["„Schimb variabila și React redesenează.”", "„`push` pe array-ul din state și apoi `setItems`.”", "„Custom hook-ul partajează state-ul între componente.”", "„Context e un state manager.”", "„Pun `useCallback` pe fiecare handler, ca să meargă mai repede.”", "„Țin ID-ul timer-ului în `useState`.”"]
   };
 
   Q("react", [
@@ -304,7 +310,85 @@ function B() {
     : <Form />;
 }`, o: ["„ana” rămâne: același tip pe aceeași poziție păstrează state-ul; `<Form key={mode} />` îl golește", "Câmpul se golește, fiindcă ramura a doua e alt element", "Câmpul se golește, fiindcă `mode` s-a schimbat și `Form` primește props noi", "„ana” rămâne; singura soluție e un `useEffect` care golește câmpul"],
       ctx: "React compară arborele nou cu cel vechi, poziție cu poziție. State-ul aparține unui tip de componentă aflat la o poziție.",
-      e: "Ambele ramuri sunt `<Form />` pe aceeași poziție, deci React păstrează componenta și state-ul ei. O cheie diferită face din ea o componentă nouă: `key={mode}` distruge `Form` și montează altul, cu state-ul gol." }
+      e: "Ambele ramuri sunt `<Form />` pe aceeași poziție, deci React păstrează componenta și state-ul ei. O cheie diferită face din ea o componentă nouă: `key={mode}` distruge `Form` și montează altul, cu state-ul gol." },
+    { id: "re-09", lvl: 1, q: "Apeși „start”, aștepți trei secunde, apoi „stop”. De ce numărul crește în continuare?", code: R`function Timer() {
+  let id = 0;
+  const [n, setN] = useState(0);
+  const start = () => {
+    id = window.setInterval(
+      () => setN((x) => x + 1), 1000);
+  };
+  const stop = () => clearInterval(id);
+  return <b onClick={stop}>{n}</b>;
+}`, o: ["`id` e o variabilă locală: fiecare render o recreează cu `0`, deci `stop` șterge alt id; ID-ul stă într-un `useRef`", "`clearInterval` nu merge într-o componentă; intervalul se oprește doar dintr-un `useEffect`", "Intervalul se oprește, dar `setN` îl pornește din nou la fiecare render", "`setInterval` întoarce o promisiune, nu un număr, deci `clearInterval` o ignoră"],
+      ctx: "Variabilele locale ale unei componente se creează din nou la fiecare apel al funcției. `setN` cere un re-render la fiecare secundă.",
+      e: "După primul tick, `setN` re-randează `Timer`, iar `let id = 0` se execută din nou. `stop` din randarea curentă vede noul `id`, adică `0`, deci intervalul real rămâne pornit. O valoare care trebuie păstrată între randări, dar nu apare pe ecran, stă în `useRef`: `id.current = window.setInterval(…)`." },
+    { id: "re-10", lvl: 2, q: "Tooltip-ul apare o clipă sub buton, apoi sare deasupra. Ce schimbi?", code: R`const ref = useRef<HTMLDivElement>(null);
+const [up, setUp] = useState(false);
+useEffect(() => {
+  const h = ref.current!.offsetHeight;
+  setUp(h > 40);
+}, []);`, o: ["`useLayoutEffect` în loc de `useEffect`: măsurarea și `setUp` se aplică înainte ca browserul să deseneze ecranul", "Muți măsurarea în corpul componentei, ca să ruleze în timpul randării", "Adaugi `up` în array-ul de dependențe", "Pui măsurarea într-un `useMemo`, ca să se calculeze o singură dată"],
+      ctx: "`useEffect` rulează după ce browserul a desenat ecranul. Măsurarea are nevoie de DOM, iar rezultatul schimbă poziția.",
+      e: "Cu `useEffect`, browserul desenează întâi tooltip-ul sub buton, apoi effect-ul măsoară și `setUp(true)` îl mută: utilizatorul vede saltul. `useLayoutEffect` rulează după ce React a scris în DOM, dar înainte de desenare, iar re-render-ul din el se termină tot înainte de desenare. Blochează desenarea, deci îl folosești doar pentru măsurători." },
+    { id: "re-11", lvl: 2, q: "`Row` se re-randează la fiecare tastă, deși `del` e în `useCallback`. Ce lipsește?", code: R`function List({ items }: P) {
+  const [q, setQ] = useState("");
+  const del = useCallback(
+    (id: string) => rm(id), []);
+  return (<>
+    <input value={q} onChange={(e) =>
+      setQ(e.target.value)} />
+    {items.map((x) => <Row key={x.id}
+      x={x} onDel={del} />)}
+  </>);
+}`, o: ["`memo(Row)`: `del` e deja stabilă, dar fără `memo` copilul se re-randează odată cu părintele oricum", "`q` în dependențele lui `useCallback`", "`useMemo` în loc de `useCallback` pentru `del`", "Nimic: `useCallback` oprește deja re-render-ul lui `Row`"],
+      ctx: "`useCallback` ține minte funcția între randări. Un copil se re-randează odată cu părintele, chiar dacă props sunt aceleași.",
+      e: "`del` e aceeași funcție la fiecare render, dar asta contează doar pentru cine compară props. Un copil obișnuit se re-randează cu părintele. `memo(Row)` compară props cu `Object.is` și sare peste `Row` când `x` și `onDel` sunt aceleași. Fără `memo`, `useCallback` de aici nu ajută la nimic." },
+    { id: "re-12", lvl: 3, q: "Un coleg vrea ca tastarea să nu mai fie blocată de lista grea `Slow`. Ce e greșit în soluția lui?", code: R`const [q, setQ] = useState("");
+const [, start] = useTransition();
+<input value={q} onChange={(e) =>
+  start(() => setQ(e.target.value))} />
+<Slow q={q} />`, o: ["State-ul unui input controlat nu poate sta într-o tranziție: câmpul rămâne urgent, iar `Slow` primește `useDeferredValue(q)` și stă în `memo`", "Lipsește `isPending`: fără el tranziția nu pornește", "`startTransition` primește doar funcții asincrone", "Nimic: e soluția recomandată de documentație"],
+      ctx: "O tranziție marchează o actualizare ca neurgentă: React o poate amâna și întrerupe. Un câmp de text trebuie să arate tasta imediat.",
+      e: "Documentația spune explicit că o tranziție nu poate controla un input de text. Câmpul are nevoie de actualizare urgentă. Separi: `q` rămâne urgent pentru `value`, iar lista primește `const dq = useDeferredValue(q)`. `Slow` stă în `memo`, ca re-render-ul urgent să sară peste ea cât `dq` e vechi." },
+    { id: "re-13", lvl: 1, q: "`Field` apare de două ori pe pagină. Ce se întâmplă la click pe a doua etichetă?", code: R`function Field() {
+  return (<>
+    <label htmlFor="mail">Email</label>
+    <input id="mail" />
+  </>);
+}`, o: ["Focusul merge în primul câmp, fiindcă id-ul se repetă; `const id = useId()` dă un id per instanță", "React adaugă automat un sufix unic la fiecare `id`", "Focusul merge corect: fiecare etichetă își caută câmpul vecin", "Repari cu `id={Math.random()}`, recalculat la fiecare render"],
+      ctx: "`htmlFor` caută în document elementul cu acel `id`. Un `id` trebuie să fie unic în pagină.",
+      e: "Ambele câmpuri au `id=\"mail\"`, iar browserul leagă eticheta de primul element cu acel id. `useId()` dă un id unic și stabil pentru fiecare instanță, identic pe server și în client. `Math.random()` se schimbă la fiecare render și diferă între server și client, deci strică hidratarea." },
+    { id: "re-14", lvl: 3, q: "Ce se întâmplă la randarea lui `C`?", code: R`const store = { n: 1, subscribe };
+function C() {
+  const s = useSyncExternalStore(
+    store.subscribe,
+    () => ({ n: store.n }),
+  );
+  return <b>{s.n}</b>;
+}`, o: ["O buclă de re-randări: `getSnapshot` dă un obiect nou la fiecare apel; React avertizează, apoi aruncă `Maximum update depth exceeded`", "Afișează `1`: React compară obiectele după conținut", "Afișează `1`, dar nu se mai actualizează niciodată", "Aruncă imediat, fiindcă `subscribe` trebuie declarat în componentă"],
+      ctx: "React apelează `getSnapshot` de mai multe ori și compară rezultatele cu `Object.is`. Cât store-ul nu s-a schimbat, trebuie să primească aceeași valoare.",
+      e: "Fiecare apel întoarce `{ n: 1 }` nou, deci `Object.is` vede mereu o schimbare și React randează din nou. Consola arată „The result of getSnapshot should be cached to avoid an infinite loop”, apoi React aruncă `Maximum update depth exceeded`. Repari întorcând o valoare primitivă (`() => store.n`) sau un obiect păstrat în cache cât store-ul nu se schimbă." },
+    { id: "re-15", lvl: 3, q: "Butonul nu se dezactivează niciodată cât durează `save`. De ce?", code: R`function Form() {
+  const { pending } = useFormStatus();
+  return (
+    <form action={save}>
+      <button disabled={pending}>
+        Salvează
+      </button>
+    </form>
+  );
+}`, o: ["`useFormStatus` vede doar un `<form>` părinte; într-o componentă `Submit` randată în formular, merge", "`save` trebuie să fie sincronă", "`pending` devine `true` abia după ce `save` se termină", "Un `<form>` cu `action` funcție nu trimite nimic fără `onSubmit`"],
+      ctx: "`useFormStatus` (din `react-dom`) citește starea formularului în care e randată componenta care îl apelează.",
+      e: "`Form` randează formularul, deci nu e în interiorul lui: `pending` rămâne `false`. Muți butonul într-o componentă `Submit` cu `useFormStatus` și o pui în `<form>`; acolo `pending` e `true` cât rulează `save`. O acțiune poate fi asincronă, iar `action={save}` trimite formularul fără `onSubmit`." },
+    { id: "re-16", lvl: 2, q: "`Albums` stă în `<Suspense fallback={<Spin />}>`. Ce vede userul?", code: R`function Albums() {
+  const list = use(
+    fetch("/albums").then((r) =>
+      r.json()));
+  return <List items={list} />;
+}`, o: ["Fallback-ul la nesfârșit: fiecare render creează altă promisiune, deci componenta se suspendă din nou", "Lista, după ce răspunde serverul", "O eroare: `use` nu primește promisiuni", "Lista goală, apoi lista plină, fără fallback"],
+      ctx: "`use(promise)` suspendă componenta până se rezolvă promisiunea, apoi React o randează din nou. Documentația cere ca promisiunea să fie aceeași între randări.",
+      e: "La reluare, React apelează din nou `Albums`, care face alt `fetch` și primește altă promisiune, încă nerezolvată, deci se suspendă iar. Promisiunea vine din cache sau din părinte (de exemplu dintr-un loader sau dintr-un Server Component), nu se creează în render. Pentru date de la API, în client, TanStack Query rămâne alegerea obișnuită." }
   ]);
 
   O("react", [
@@ -328,7 +412,14 @@ function B() {
       "Alternativa: state-ul ridicat în părinte și controlat prin props, dacă datele trebuie păstrate",
       "O componentă definită în interiorul alteia e alt tip la fiecare render, deci își pierde state-ul",
       "Un `useEffect` care resetează state-ul la schimbarea prop-ului e varianta mai slabă: un render în plus cu valoarea veche"],
-      model: "React compară arborele nou cu cel vechi, poziție cu poziție. Dacă pe aceeași poziție e același tip de componentă, o păstrează, iar state-ul ei rămâne, de aceea formularul arată textul vechi. Repar cu o cheie: `<EditForm key={user.id} />`. O cheie nouă înseamnă o componentă nouă, deci React distruge formularul vechi și îl montează pe cel nou, cu state-ul gol. Un `useEffect` care resetează state-ul ar merge, dar adaugă un render cu valorile vechi. Atenție și la componentele definite în interiorul altora: sunt alt tip la fiecare render, deci își pierd state-ul mereu." }
+      model: "React compară arborele nou cu cel vechi, poziție cu poziție. Dacă pe aceeași poziție e același tip de componentă, o păstrează, iar state-ul ei rămâne, de aceea formularul arată textul vechi. Repar cu o cheie: `<EditForm key={user.id} />`. O cheie nouă înseamnă o componentă nouă, deci React distruge formularul vechi și îl montează pe cel nou, cu state-ul gol. Un `useEffect` care resetează state-ul ar merge, dar adaugă un render cu valorile vechi. Atenție și la componentele definite în interiorul altora: sunt alt tip la fiecare render, deci își pierd state-ul mereu." },
+    { id: "o-re-4", q: "Treci prin hook-urile pe care le folosești des: ce face fiecare și cum alegi între ele?", k: [
+      "`useState` pentru ce apare pe ecran și se schimbă; `useRef` pentru ce se păstrează fără re-render (timer, nod DOM); ce se calculează rămâne variabilă în render",
+      "`useReducer` când mai multe câmpuri se schimbă împreună; Context (`useContext`) duce valoarea în arbore, nu ține state",
+      "Handler pentru acțiunile userului; `useEffect` pentru sincronizare cu exteriorul, după desenare; `useLayoutEffect` doar pentru măsurători înainte de desenare",
+      "`useMemo` ține minte un rezultat, `useCallback` o funcție, `memo` o componentă; ajută doar împreună și după ce măsori (React Compiler le face automat)",
+      "`useTransition` / `useDeferredValue` pentru actualizări neurgente; `useId` pentru id-uri de accesibilitate; în React 19 `useActionState`, `useFormStatus`, `useOptimistic` și `use` pentru formulare și date"],
+      model: "Pornesc de la întrebarea „apare pe ecran?”. Dacă da și se schimbă, e `useState`; dacă se poate calcula din props sau state, o calculez în render. Ce trebuie păstrat fără re-render, cum e ID-ul unui timer sau un nod DOM, stă în `useRef`. Când mai multe câmpuri se schimbă împreună, trec la `useReducer`, iar ca să duc o valoare departe în arbore folosesc Context. Efectele laterale care vin de la user stau în handler; `useEffect` e doar pentru sincronizare cu ceva din afară și rulează după desenare. `useLayoutEffect` îl iau doar când trebuie să măsor DOM-ul înainte de desenare, ca să nu pâlpâie. `useMemo`, `useCallback` și `memo` merg împreună și le pun după ce măsor; cu React Compiler sunt rareori necesare. Pentru o listă grea folosesc `useDeferredValue`, iar în React 19 formularele merg cu `useActionState` și `useFormStatus`." }
   ]);
 
   // ---------- fedebug (depanare frontend; tichetul 04) ----------
