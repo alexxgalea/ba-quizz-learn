@@ -246,7 +246,7 @@ Aplicare:
 const id = useRef(0);
 const start = () => {
   id.current =
-    window.setInterval(tick, 1000);
+    setInterval(tick, 1000);
 };
 const stop = () =>
   clearInterval(id.current);
@@ -365,7 +365,9 @@ Aplicare:
 function Field() {
   const id = useId();
   return (<>
-    <label htmlFor={id}>Mail</label>
+    <label htmlFor={id}>
+      Mail
+    </label>
     <input id={id} />
   </>);
 }

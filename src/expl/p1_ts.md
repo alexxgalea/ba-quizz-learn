@@ -224,15 +224,17 @@ Mecanism: `Omit<T, K>` are constrângerea `K extends keyof any`, deci acceptă o
 Pas cu pas:
 ```text
 Omit<User, "idd">
-= Pick<User, Exclude<"id" | "name",
-  "idd">>
-= Pick<User, "id" | "name"> = User
+= Pick<User,
+  Exclude<"id" | "name", "idd">>
+= Pick<User, "id" | "name">
+= User
 { name: "Ana" } → lipsește id
 ```
 Aplicare:
 ```ts
 type NewUser = Omit<User, "id">;
-const u: NewUser = { name: "Ana" };
+const u: NewUser =
+  { name: "Ana" };
 ```
 Legătură: Punctul 10 al fișei. În DRF, `read_only_fields` cu un nume greșit e la fel de tăcut.
 Limită: Dacă vrei verificarea cheilor, scrii un tip propriu: `type StrictOmit<T, K extends keyof T> = Omit<T, K>`.
@@ -270,7 +272,8 @@ Scop: Deosebești spațiul valorilor de cel al tipurilor. Apare când derivi tip
 Mecanism: TypeScript ține separat numele de valori (variabile, funcții) și numele de tipuri. Între `<>` se așteaptă un tip. `getUser` e doar o valoare, iar compilatorul sugerează chiar „Did you mean 'typeof getUser'?”. `typeof getUser` dă tipul funcției, `() => { id: number; name: string }`, iar `ReturnType` scoate rezultatul.
 Aplicare:
 ```ts
-type U = ReturnType<typeof getUser>;
+type U =
+  ReturnType<typeof getUser>;
 ```
 Legătură: TS-14: la o funcție `async` mai pui `Awaited`. Punctul 11 al fișei: tipuri derivate din cod.
 Limită: O clasă e și valoare, și tip: `User` ca tip înseamnă instanța, iar `typeof User` înseamnă constructorul.
@@ -332,7 +335,7 @@ Mecanism: Pentru un literal de array fără alt indiciu, TypeScript deduce `T[]`
 Pas cu pas:
 ```text
 [on, fn] → (boolean | Fn)[]
-destructurare: toggle: boolean | Fn
+toggle: boolean | Fn
 toggle() → TS2349
 [on, fn] as const
 → readonly [boolean, Fn]
@@ -343,7 +346,10 @@ Aplicare:
 function useToggle():
   [boolean, () => void] {
   let on = false;
-  return [on, () => { on = !on; }];
+  const flip = () => {
+    on = !on;
+  };
+  return [on, flip];
 }
 ```
 Legătură: Punctul 14 al fișei. `useState` întoarce tot un tuplu, `[S, Dispatch<SetStateAction<S>>]`.
@@ -352,7 +358,7 @@ La interviu: „Un literal de array e dedus ca array de uniuni. Pentru o pereche
 Verificare: Ce tip are `on` după destructurarea variantei cu `as const`?
 Răspuns verificare: `boolean`. Cu `as const`, poziția 0 a tuplului are tipul lui `on` din funcție, nu uniunea.
 Varianta greșită B: Un hook poate întoarce orice, inclusiv funcții; problema e tipul dedus.
-Varianta greșită C: Destructurarea cu `const` nu are legătură cu eroarea; `flip` schimbă variabila din închidere.
+Varianta greșită C: Destructurarea cu `const` nu are legătură cu eroarea; funcția schimbă variabila `on` din interiorul hook-ului, nu copia destructurată.
 Varianta greșită D: `toggle` are tipul `boolean | (() => void)`, nu `() => void`.
 
 ### ts-17
