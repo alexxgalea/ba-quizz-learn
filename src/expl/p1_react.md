@@ -277,8 +277,8 @@ render → DOM → desenare (sus)
 Aplicare:
 ```tsx
 useLayoutEffect(() => {
-  const h = ref.current!.offsetHeight;
-  setUp(h > 40);
+  const el = ref.current!;
+  setUp(el.offsetHeight > 40);
 }, []);
 ```
 Legătură: FE-06: dependențele funcționează la fel la ambele efecte. E aceeași idee ca la double buffering în grafică: pregătești cadrul complet înainte să-l afișezi.
@@ -365,7 +365,7 @@ Aplicare:
 function Field() {
   const id = useId();
   return (<>
-    <label htmlFor={id}>Email</label>
+    <label htmlFor={id}>Mail</label>
     <input id={id} />
   </>);
 }
@@ -424,9 +424,9 @@ save gata → pending = false
 Aplicare:
 ```tsx
 function Submit() {
-  const { pending } = useFormStatus();
+  const st = useFormStatus();
   return (
-    <button disabled={pending}>
+    <button disabled={st.pending}>
       Salvează
     </button>
   );

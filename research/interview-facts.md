@@ -1286,6 +1286,23 @@ Surse: paginile de referință de pe react.dev (citate mai jos); rulări în vit
 - ✅ **`use`**: primește o promisiune sau un Context; „can be called within loops and conditional statements like `if`”; promisiunea trebuie pusă în cache („If a new Promise is created directly in render, React will display the Suspense fallback on every re-render”); nu stă în `try` / `catch`, respingerea ajunge la error boundary. Rulat (re-16): `use(get())` cu promisiune nouă la fiecare render → fallback-ul rămâne, 8 promisiuni create în 500 ms; cu promisiunea creată o singură dată → lista apare. Sursă: https://react.dev/reference/react/use
 - ✅ **Tipurile**: `useActionState(save, "")` cu `save(prev: string, fd: FormData)`, `useFormStatus`, `useOptimistic`, `useEffectEvent`, `useSyncExternalStore`, `use(p)` și `<form action={act}>` trec de `tsc --strict` cu `@types/react` 19.3.0.
 
+## 49. Harta uneltelor în `ts` (punctele 9–14, grilele ts-10–ts-17, cardul o-ts-4; verificat 9 noiembrie 2026)
+
+Surse: handbook-ul TypeScript (Utility Types, Enums, Conditional Types, Mapped Types), notele de lansare 5.8; toate erorile de mai jos rulate cu `tsc` 7.0.2 (`--strict`), exemplele din desfășurări prin `tools/desf_examples.mjs`.
+
+- ✅ **`unknown`** (ts-10): `function f(x: unknown) { return x.toUpperCase(); }` → TS18046 „'x' is of type 'unknown'”. Sub `strict`, `catch (e) { e.message }` → TS18046 (`useUnknownInCatchVariables`).
+- ✅ **Utility types**: descrierile din handbook („Constructs a type with all properties of `Type` set to optional”, „Constructs a type by picking all properties from `Type` and then removing `Keys`” etc.); `Awaited` din 4.5, `NoInfer` din 5.4. Handbook-ul nu spune că `Partial` e superficial; rulat (ts-12): `Partial<User>` cu `address: { city }` fără `zip` → TS2741 „Property 'zip' is missing”.
+- ✅ **`Omit` nu verifică cheile** (ts-11): `Omit<User, "idd">` compilează, iar `{ name: "Ana" }` atribuit lui pică cu TS2741 „Property 'id' is missing”. În `lib.es5.d.ts`, `Omit<T, K extends keyof any>`, iar `Pick<T, K extends keyof T>`.
+- ✅ **`Record` exhaustiv**: `Record<"admin" | "user", string>` fără `user` → TS2741.
+- ✅ **Valoare vs tip** (ts-13): `ReturnType<getUser>` → TS2749 „'getUser' refers to a value, but is being used as a type here. Did you mean 'typeof getUser'?”.
+- ✅ **`Awaited`** (ts-14): `ReturnType<typeof getUser>` pentru o funcție `async` e `Promise<{ id: number }>` (un literal `{ id: 1 }` atribuit lui dă TS2353); `Awaited<…>` acceptă `{ id: 1 }`.
+- ✅ **`enum`** (ts-15): `enum Dir { Up, Down }` compilat și rulat → `Object.keys(Dir)` = `[ '0', '1', 'Up', 'Down' ]`; cu `--erasableSyntaxOnly` → TS1294 „This syntax is not allowed when 'erasableSyntaxOnly' is enabled.” Notele 5.8: flag-ul interzice `enum`, `namespace` cu cod, parameter properties și `import =` / `export =`, pentru `--experimental-strip-types` din Node (23.6). Sursă: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-8.html
+- ✅ **`as const` + `typeof A[number]`**: `"guest"` atribuit lui `Role` → TS2322.
+- ✅ **Tuplu în custom hook** (ts-16): `return [on, fn]` → `toggle()` dă TS2349 „This expression is not callable. Not all constituents of type 'boolean | (() => void)' are callable.”; cu `as const` compilează.
+- ✅ **Conditional type distributiv** (ts-17): `T extends any ? T[] : never` pe `string | number` respinge `[1, "a"]` (TS2322, tipul e `string[] | number[]`); `[T] extends [any]` îl acceptă.
+- ✅ **`readonly string[]`**: `xs.sort()` → TS2339 (metoda nu există pe tipul readonly).
+- ✅ **C++** (punctele 12 și 13): `enum class` (C++11) e scoped și fără conversie implicită la `int`; `std::conditional<B, T, F>` (C++11, `<type_traits>`) alege un tip după un `bool` constant. Surse: https://en.cppreference.com/w/cpp/language/enum și https://en.cppreference.com/w/cpp/types/conditional
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.
@@ -1305,3 +1322,4 @@ Surse: paginile de referință de pe react.dev (citate mai jos); rulări în vit
 15. TanStack Query (secțiunea 46): `gcTime` implicit de 5 minute e valabil în browser; într-un mediu fără `window` (Node, SSR) implicitul e `Infinity`, deci un test în Node nu vede query-ul ieșind din cache.
 16. TypeScript (secțiunea 47): documentația `tsconfig` dă `strict` implicit `true`, verificat cu `tsc` 7.0.2; data schimbării (TypeScript 6.0) e din surse secundare. Pagina „Everyday Types” nu acoperă excess property checks.
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
+18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.

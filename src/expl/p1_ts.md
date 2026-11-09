@@ -194,3 +194,190 @@ Răspuns verificare: Nu. Flag-ul privește doar accesul prin index. `as` rămân
 Varianta greșită B: `strict` nu include flag-ul. Îl pornești separat.
 Varianta greșită C: Tipul devine `string | undefined`, nu `string`. Iar `names[5]` e vizibil ca posibil `undefined`.
 Varianta greșită D: Indexarea rămâne permisă. Flag-ul doar adaugă `undefined` la rezultat.
+
+### ts-10
+Pe scurt: Eroare TS18046: `x` e `unknown`, deci trebuie restrâns înainte de folosire.
+Scop: Știi diferența dintre `unknown` și `any`. Întrebarea apare ca „ce tip dai datelor din afară?”.
+Mecanism: În `unknown` intră orice valoare, dar compilatorul nu te lasă să accesezi câmpuri, să apelezi metode sau să pasezi valoarea ca alt tip până nu o restrângi. După `typeof x === "string"`, în acea ramură `x` e `string`. `any` ar fi lăsat apelul să treacă și ar fi mutat eroarea la runtime.
+Aplicare:
+```ts
+function shout(x: unknown) {
+  if (typeof x === "string") {
+    return x.toUpperCase();
+  }
+  throw new Error("nu e text");
+}
+```
+Legătură: FE-10: `unknown` pentru răspunsul de la API, apoi validare cu zod. Sub `strict`, `e` din `catch` e tot `unknown` (`useUnknownInCatchVariables`).
+Limită: `unknown` nu validează nimic singur: te obligă doar să verifici. Pentru obiecte complexe, verificarea de mână devine lungă, deci folosești o schemă.
+La interviu: „`any` oprește verificarea, `unknown` o păstrează: accept orice, dar trebuie să restrâng tipul înainte să-l folosesc. Pentru date din afară aleg `unknown`.”
+Verificare: Ce tip are `e` în `catch (e)` cu `strict` pornit?
+Răspuns verificare: `unknown`, prin `useUnknownInCatchVariables`, care face parte din `strict`. Verifici cu `e instanceof Error` înainte de `e.message`.
+Varianta greșită B: `unknown` nu se comportă ca `any`: tocmai interzice operațiile până la restrângere.
+Varianta greșită C: Eroarea apare la compilare, nu la runtime; codul nici nu se compilează.
+Varianta greșită D: Compilatorul verifică funcția după tipul declarat, nu după apelurile ei.
+
+### ts-11
+Pe scurt: Eroare TS2741, lipsește `id`: `Omit` nu verifică dacă `"idd"` e o cheie, deci n-a scos nimic.
+Scop: Cunoști capcana lui `Omit`. Apare când derivi tipuri pentru datele de creare.
+Mecanism: `Omit<T, K>` are constrângerea `K extends keyof any`, deci acceptă orice string. `Omit<User, "idd">` scoate cheia `"idd"`, care nu există, și lasă `User` neschimbat. Literalul fără `id` pică abia la atribuire, cu TS2741. Greșeala de scriere nu are eroarea ei.
+Pas cu pas:
+```text
+Omit<User, "idd">
+= Pick<User, Exclude<"id" | "name",
+  "idd">>
+= Pick<User, "id" | "name"> = User
+{ name: "Ana" } → lipsește id
+```
+Aplicare:
+```ts
+type NewUser = Omit<User, "id">;
+const u: NewUser = { name: "Ana" };
+```
+Legătură: Punctul 10 al fișei. În DRF, `read_only_fields` cu un nume greșit e la fel de tăcut.
+Limită: Dacă vrei verificarea cheilor, scrii un tip propriu: `type StrictOmit<T, K extends keyof T> = Omit<T, K>`.
+La interviu: „`Omit` scoate câmpuri, dar nu verifică dacă ele există, iar `Pick` verifică. O cheie scrisă greșit în `Omit` nu scoate nimic.”
+Verificare: Ce dă `Pick<User, "idd">`?
+Răspuns verificare: Eroare la cheie (TS2344): `Pick` cere `K extends keyof T`, iar `"idd"` nu e cheie a lui `User`.
+Varianta greșită B: `Omit` nu dă eroare la o cheie inexistentă; constrângerea ei e `keyof any`.
+Varianta greșită C: `NewUser` păstrează `id`, fiindcă `"idd"` n-a scos nimic.
+Varianta greșită D: `Omit` scoate câmpuri; cel care le face opționale e `Partial`.
+
+### ts-12
+Pe scurt: Nu: `Partial` lucrează pe un nivel, deci `address`, dacă apare, cere și `zip` (TS2741).
+Scop: Știi limita utility types. Apare la tipul corpului unui PATCH.
+Mecanism: `Partial<T>` e scris ca `{ [K in keyof T]?: T[K] }`: adaugă `?` fiecărei proprietăți de pe primul nivel și păstrează tipul valorii. `address` devine opțional, dar valoarea lui rămâne `{ city: string; zip: string }`, cu ambele câmpuri obligatorii.
+Aplicare:
+```ts
+type Addr = User["address"];
+type Patch = Partial<Omit<User,
+  "address">> & {
+  address?: Partial<Addr>;
+};
+```
+Legătură: Punctul 13 al fișei: așa arată un mapped type. În DRF, `partial=True` se aplică și serializerelor imbricate doar dacă le scrii pentru asta.
+Limită: Biblioteca standard nu are `DeepPartial`; îl scrii recursiv sau îl iei dintr-o bibliotecă. Tot pe un nivel lucrează `Readonly` și `Required`.
+La interviu: „`Partial`, `Readonly` și `Required` lucrează pe un singur nivel. Pentru câmpuri imbricate scriu tipul explicit sau un tip recursiv.”
+Verificare: Poți modifica `cfg.db.host` dacă `cfg` are tipul `Readonly<Config>`?
+Răspuns verificare: Da, dacă `db` nu e și el `readonly`. `Readonly` blochează doar `cfg.db = …`, nu câmpurile din interiorul lui `db`.
+Varianta greșită B: `Partial` nu coboară în obiectele imbricate.
+Varianta greșită C: Cu `Partial`, `name` devine opțional; lipsa lui nu e problema.
+Varianta greșită D: Literalul nici nu compilează, deci nu ajunge la runtime.
+
+### ts-13
+Pe scurt: `getUser` e o valoare, nu un tip (TS2749). Scrii `ReturnType<typeof getUser>`.
+Scop: Deosebești spațiul valorilor de cel al tipurilor. Apare când derivi tipuri din funcții existente.
+Mecanism: TypeScript ține separat numele de valori (variabile, funcții) și numele de tipuri. Între `<>` se așteaptă un tip. `getUser` e doar o valoare, iar compilatorul sugerează chiar „Did you mean 'typeof getUser'?”. `typeof getUser` dă tipul funcției, `() => { id: number; name: string }`, iar `ReturnType` scoate rezultatul.
+Aplicare:
+```ts
+type U = ReturnType<typeof getUser>;
+```
+Legătură: TS-14: la o funcție `async` mai pui `Awaited`. Punctul 11 al fișei: tipuri derivate din cod.
+Limită: O clasă e și valoare, și tip: `User` ca tip înseamnă instanța, iar `typeof User` înseamnă constructorul.
+La interviu: „Un generic primește tipuri. Ca să iau tipul unei funcții scriu `typeof f`, apoi `ReturnType<typeof f>` sau `Parameters<typeof f>`.”
+Verificare: Ce dă `Parameters<typeof getUser>`?
+Răspuns verificare: `[]`, un tuplu gol, fiindcă `getUser` nu are parametri. Pentru `(id: number) => …` ar fi `[id: number]`.
+Varianta greșită B: `ReturnType` merge pe orice tip de funcție, sincronă sau nu.
+Varianta greșită C: Tipul de retur se deduce; nu trebuie scris.
+Varianta greșită D: Codul nu compilează: `getUser` nu e un tip.
+
+### ts-14
+Pe scurt: `Promise<{ id: number }>`. Tipul obiectului îl dă `Awaited<ReturnType<typeof getUser>>`.
+Scop: Știi ce întoarce o funcție `async` și cum desfaci promisiunea în tip. Apare la tiparea datelor din API.
+Mecanism: O funcție `async` întoarce mereu o `Promise`, deci `ReturnType` dă `Promise<{ id: number }>`. `Awaited<T>` face în tipuri ce face `await` la runtime: desface promisiunea, recursiv. Literalul `1` devine `number`, fiindcă proprietatea unui obiect se poate schimba.
+Pas cu pas:
+```text
+typeof getUser
+→ () => Promise<{ id: number }>
+ReturnType<…> → Promise<{ id }>
+Awaited<…> → { id: number }
+```
+Aplicare:
+```ts
+type User = Awaited<
+  ReturnType<typeof getUser>>;
+```
+Legătură: TS-13. În Python, `async def` întoarce o corutină, iar tipul rezultatului după `await` e cel din adnotare.
+Limită: `Awaited` desface și `Promise<Promise<T>>`, ca `await`. Pe un tip care nu e promisiune îl lasă neschimbat.
+La interviu: „O funcție `async` întoarce `Promise<T>`, deci `ReturnType` dă promisiunea. Cu `Awaited` iau tipul de după `await`.”
+Verificare: Cum ai obține `id: 1`, cu valoarea exactă?
+Răspuns verificare: Cu `return { id: 1 } as const` în funcție: obiectul devine `{ readonly id: 1 }`.
+Varianta greșită B: `ReturnType` nu așteaptă nimic; dă tipul de retur exact, promisiunea.
+Varianta greșită C: Fără `as const`, literalul `1` din obiect se lărgește la `number`.
+Varianta greșită D: Tipul se deduce complet; `async` nu îl face `any`.
+
+### ts-15
+Pe scurt: `["0", "1", "Up", "Down"]`: un `enum` numeric e un obiect la runtime, cu mapare și inversă.
+Scop: Știi ce generează un `enum` și de ce multe proiecte preferă uniunile de literale. Apare ca „enum sau union?”.
+Mecanism: Compilatorul transformă `enum Dir { Up, Down }` într-un obiect: `Dir["Up"] = 0` și `Dir[0] = "Up"`, la fel pentru `Down`. Obiectul are deci patru chei. Un `enum` cu valori string nu are mapare inversă.
+Aplicare:
+```ts
+type Dir = "up" | "down";
+const DIRS =
+  ["up", "down"] as const;
+```
+Legătură: Punctul 12 al fișei. În C++, `enum class` nu lasă la runtime decât constante întregi.
+Limită: `const enum` se înlocuiește cu valorile la compilare, dar nu merge cu unelte care compilează fișierele separat (`isolatedModules`), cum sunt esbuild și Babel.
+La interviu: „Un `enum` generează un obiect la runtime, cel numeric cu mapare inversă. Prefer o uniune de literale, iar dacă îmi trebuie și lista, `as const`. `erasableSyntaxOnly` interzice `enum`.”
+Verificare: De ce interzice `erasableSyntaxOnly` un `enum`?
+Răspuns verificare: Fiindcă `enum` are efect la runtime și nu poate fi doar șters. Node rulează TypeScript ștergând tipurile, deci un fișier cu `enum` nu ar funcționa așa.
+Varianta greșită B: Lipsesc cheile numerice ale mapării inverse.
+Varianta greșită C: Un `enum` nu e doar un tip; rămâne ca obiect după compilare.
+Varianta greșită D: `Object.keys` întoarce mereu string-uri, iar aici lipsesc și numele.
+
+### ts-16
+Pe scurt: Rezultatul e dedus ca array de uniuni, `(boolean | (() => void))[]`, deci `toggle` poate fi și `boolean` (TS2349). `as const` îl face tuplu.
+Scop: Știi când ai nevoie de un tuplu. Apare la orice custom hook care imită `useState`.
+Mecanism: Pentru un literal de array fără alt indiciu, TypeScript deduce `T[]`, cu `T` uniunea tipurilor elementelor. Fiecare poziție poate fi oricare tip, deci `toggle` are tipul `boolean | (() => void)`, iar un `boolean` nu se poate apela. `as const` păstrează poziția și tipul fiecărui element: `readonly [boolean, () => void]`.
+Pas cu pas:
+```text
+[on, fn] → (boolean | Fn)[]
+destructurare: toggle: boolean | Fn
+toggle() → TS2349
+[on, fn] as const
+→ readonly [boolean, Fn]
+toggle: Fn → apel OK
+```
+Aplicare:
+```ts
+function useToggle():
+  [boolean, () => void] {
+  let on = false;
+  return [on, () => { on = !on; }];
+}
+```
+Legătură: Punctul 14 al fișei. `useState` întoarce tot un tuplu, `[S, Dispatch<SetStateAction<S>>]`.
+Limită: Cu mai mult de două-trei valori, un obiect (`{ on, toggle }`) e mai clar decât un tuplu: numele nu depind de poziție.
+La interviu: „Un literal de array e dedus ca array de uniuni. Pentru o pereche ca la `useState` pun `as const` sau un tip de retur explicit, ca să fie tuplu.”
+Verificare: Ce tip are `on` după destructurarea variantei cu `as const`?
+Răspuns verificare: `boolean`. Cu `as const`, poziția 0 a tuplului are tipul lui `on` din funcție, nu uniunea.
+Varianta greșită B: Un hook poate întoarce orice, inclusiv funcții; problema e tipul dedus.
+Varianta greșită C: Destructurarea cu `const` nu are legătură cu eroarea; `flip` schimbă variabila din închidere.
+Varianta greșită D: `toggle` are tipul `boolean | (() => void)`, nu `() => void`.
+
+### ts-17
+Pe scurt: `string[] | number[]`: un conditional type se aplică separat pe fiecare membru al uniunii.
+Scop: Citești corect tipurile calculate. Apare în tipurile bibliotecilor și în întrebări de nivel avansat.
+Mecanism: Când tipul verificat e un parametru generic gol (`T extends …`) și primește o uniune, condiția se distribuie: `ToArr<string | number>` devine `ToArr<string> | ToArr<number>`. Rezultatul e un array numai de string-uri sau numai de numere. `[T] extends [unknown]` oprește distribuirea și dă `(string | number)[]`.
+Pas cu pas:
+```text
+ToArr<string | number>
+= ToArr<string> | ToArr<number>
+= string[] | number[]
+[T] extends [unknown]:
+= (string | number)[]
+```
+Aplicare:
+```ts
+type Whole<T> =
+  [T] extends [unknown]
+    ? T[] : never;
+```
+Legătură: Punctul 13 al fișei. `Exclude<T, U>` e scris chiar cu distribuirea asta: `T extends U ? never : T`.
+Limită: Distribuirea are loc doar pentru un parametru generic gol. `string | number extends unknown ? …`, scris cu tipuri concrete, nu se distribuie.
+La interviu: „Un conditional type pe un generic gol se distribuie peste uniune. Dacă vreau uniunea întreagă, înfășor ambele părți în paranteze pătrate.”
+Verificare: Ce dă `Exclude<"a" | "b" | "c", "a">`?
+Răspuns verificare: `"b" | "c"`. Condiția se aplică pe fiecare membru: `"a"` devine `never`, ceilalți rămân, iar `never` dispare din uniune.
+Varianta greșită B: Ar fi rezultatul fără distribuire, cu `[T] extends [unknown]`.
+Varianta greșită C: Orice tip extinde `unknown`, deci se alege ramura `T[]`, nu `never`.
+Varianta greșită D: `T` nu se pierde; se aplică fiecărui membru al uniunii.
