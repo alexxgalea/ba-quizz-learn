@@ -37,6 +37,19 @@ for (const q of P.mcq) {
 }
 for (const m of P.modules) if (m.p <= 3 && lvlTable[m.id] && lvlTable[m.id].L1 < (m.p === 1 ? 3 : 1)) errors.push("module " + m.id + " has too few level-1 questions");
 console.table(lvlTable);
+// Pattern-uri (Studiu › Pattern-uri): câmpurile fiecărui pattern și codul de cel mult 36 de caractere pe rând (încape la 360 px)
+{
+  const pt = P.extra && P.extra.patterns;
+  if (!pt || !Array.isArray(pt.items) || !pt.items.length) errors.push("extra.patterns: missing");
+  else {
+    for (const it of pt.items) {
+      for (const f of ["n", "g", "prob", "why", "when", "not", "say"]) if (!it[f] || !String(it[f]).trim()) errors.push("pattern " + (it.n || "?") + ": missing " + f);
+      if (it.code) it.code.split("\n").forEach((l, i) => { if (l.length > 36) errors.push("pattern " + it.n + ": code line " + (i + 1) + " longer than 36 (" + l.length + ")"); });
+    }
+    if (!Array.isArray(pt.pick) || !pt.pick.every(r => Array.isArray(r) && r.length === 2)) errors.push("extra.patterns: pick rows");
+    if (!Array.isArray(pt.conf) || !pt.conf.every(c => c.h && c.t)) errors.push("extra.patterns: conf");
+  }
+}
 for (const c of P.oral) {
   dup(c.id);
   if (!mods.has(c.m)) errors.push(c.id + ": unknown module " + c.m);

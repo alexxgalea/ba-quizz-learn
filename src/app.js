@@ -1796,7 +1796,7 @@
   }
 
   // ---------- views: study ----------
-  const SEGS = [["sheets", "Fișe"], ["gaps", "Pentru tine"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["skel", "Schelete"], ["design", "System design"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
+  const SEGS = [["sheets", "Fișe"], ["gaps", "Pentru tine"], ["intv", "Formulări"], ["gloss", "Glosar"], ["katas", "Live coding"], ["skel", "Schelete"], ["design", "System design"], ["patterns", "Pattern-uri"], ["behav", "Comportamental"], ["tactics", "Tactici"]];
   function vStudy() {
     const st = ui.study;
     let h = '<div class="seg" role="group" aria-label="Secțiuni de studiu">' + SEGS.map(s => '<button data-a="seg" data-seg="' + s[0] + '" aria-pressed="' + (st.seg === s[0]) + '">' + s[1] + (s[0] === "gaps" && gapList().length ? " (" + gapList().length + ")" : "") + "</button>").join("") + "</div>";
@@ -1806,6 +1806,7 @@
     else if (st.seg === "gloss") h += vGloss();
     else if (st.seg === "katas") h += st.kata ? vKata(KBY[st.kata]) : vKataList();
     else if (st.seg === "skel") h += st.skel && SBY[st.skel] ? vSkel(SBY[st.skel]) : vSkelList();
+    else if (st.seg === "patterns") h += vPatterns();
     else if (st.seg === "design") h += vDesign();
     else if (st.seg === "behav") h += vBehav();
     else h += vTactics();
@@ -1983,6 +1984,27 @@
         '<button class="btn sm" data-a="copy-code" data-k="' + k.id + '">Copiază codul</button></section>';
       h += '<button class="btn primary block" data-a="skel-save">Salvează (' + ticked + "/" + n + ")</button>";
     }
+    return h;
+  }
+  // Pattern-uri: cum alegi (problemă → pattern), fiecare pattern pe larg (problema, de ce, când, când nu, cod, React/TS, legătură, la interviu), ce se confundă.
+  // Deschis / închis: în ui.study.gapOpen, cu cheia "pat:<slug>" (același mecanism ca la goluri), ca o redesenare să nu le închidă.
+  const PAT_ORAL = ORAL.filter(c => /^o-pat-/.test(c.id)).map(c => c.id);
+  const boldify = h => h.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  function vPatterns() {
+    const d = P.extra.patterns; if (!d) return "";
+    const open = ui.study.gapOpen || (ui.study.gapOpen = {});
+    let h = '<section class="card stack-s"><h2>' + esc(d.title) + '</h2><p class="small">' + fmt(d.intro) + "</p>" +
+      (PAT_ORAL.length ? '<button class="btn primary" data-a="pat-oral">Exersează cu voce tare (' + PAT_ORAL.length + " carduri)</button>" : "") + "</section>";
+    h += '<section class="card stack-s pat-pick"><h3>Cum alegi: problema → pattern-ul</h3>' + d.pick.map(r => '<div class="pair"><span>' + fmt(r[0]) + '</span><span class="yes">→ ' + fmt(r[1]) + "</span></div>").join("") + "</section>";
+    h += '<div class="sec-h"><h2>Pe rând</h2><span class="xs muted mono">' + d.items.length + "</span></div>";
+    h += d.items.map(p => {
+      const k = "pat:" + slug(p.n);
+      return '<details class="gap pat" data-k="' + k + '"' + (open[k] ? " open" : "") + '><summary><span class="chip">' + esc(p.g) + '</span><span class="nm">' + esc(p.n) + "</span><span></span></summary><div class=\"sheet-b\">" +
+        xsec("Problema", p.prob) + xsec("De ce", p.why) + xsec("Când", p.when) + xsec("Când nu", p.not, null, "warn") + (p.code ? codeBlock(p.code, false, true) : "") +
+        (p.fe ? xsec("În React / TS", p.fe) : "") + (p.leg ? xsec("Legătură", p.leg) : "") + xsec("La interviu", p.say, null, "intv") + "</div></details>";
+    }).join("");
+    h += '<div class="sec-h"><h2>Ce se confundă</h2></div>' + d.conf.map(c => '<section class="card flat stack-s pat-conf"><h3>' + esc(c.h) + "</h3>" + boldify(rich(c.t)) + "</section>").join("");
+    if (PAT_ORAL.length) h += '<button class="btn primary block" data-a="pat-oral">Exersează cu voce tare (' + PAT_ORAL.length + " carduri)</button>";
     return h;
   }
   function vDesign() {
@@ -2200,6 +2222,7 @@
       case "oral-ai": oralAi(); break;
       case "iv-start": ivStart(); break;
       case "iv-mock": startIvMock(); break;
+      case "pat-oral": startOral({ ids: PAT_ORAL, title: "Pattern-uri" }); break;
       case "cert": if (ui.cert) openCert(); else startCert(); break;
       case "cert-open": ui.study.skel = null; ui.study.attempt = null; openCert(); break;
       case "cert-go": certGo(); break;
@@ -2612,7 +2635,7 @@
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
-  const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/app/";
+  const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
   const BUILD = "__BUILD__";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
