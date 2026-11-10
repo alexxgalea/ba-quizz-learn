@@ -52,6 +52,7 @@
   const MONTHS_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"];
   const HMAX = 80;
   const LS_KEY = "onapsis-prep-v1";
+  const CERT_KEY = "onapsis-cert-v1";            // certificarea în curs (ui.cert): pe dispozitiv, ca o reîncărcare să reia de la secțiunea la care ai rămas
   const DS_KEY = "onapsis-deepseek-v1";          // cheia API, separată de starea S: nu se sincronizează și nu se exportă
   const DS_URL = "https://api.deepseek.com/chat/completions";
   const DS_MODEL = "deepseek-flash";
@@ -558,7 +559,8 @@
     prog: { exp: false, imp: false, reset: false },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
-    dz: {}                                           // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
+    dz: {},                                          // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
+    cert: null, certQuit: false                      // certificarea în curs sau ultima terminată pe dispozitivul ăsta (vezi Cert), nu în S
   };
 
   function snapshotUi() { try { return JSON.parse(JSON.stringify(ui)); } catch (e) { return null; } }
@@ -601,6 +603,7 @@
       else if (ui.tab === "oral") h = ui.run && ui.run.kind === "oral" ? vOralRun() : ui.run && ui.run.kind === "open" ? vOpenRun() : ui.result && ui.result.kind === "oral" ? vOralResult() : ui.result && ui.result.kind === "open" ? vOpenResult() : vOralHome();
       else if (ui.tab === "jarvis") h = vJarvis();
       else if (ui.tab === "study") h = vStudy();
+      else if (ui.tab === "cert") h = vCert();
       else h = vProgress();
     } catch (err) {
       h = '<div class="card"><h2>Ceva n-a mers</h2><p class="muted small">' + esc(err && err.message) + '</p><button class="btn" data-a="tab" data-tab="plan">Înapoi la plan</button></div>';
@@ -633,6 +636,7 @@
       kpi(pc(r.cover) + "%", "acoperire (întrebări văzute)") +
       kpi(doneN + "/" + tasks.length, "sarcini din plan bifate") +
       kpi(r.ans ? pc(r.cor / r.ans) + "%" : "–", r.ans ? "corecte din " + r.ans + " răspunsuri" : "încă niciun răspuns") + "</section>";
+    h += vCertCard();
     if (d < 0) {
       h += '<section class="card stack-s"><h2>Interviul a trecut</h2><p class="small">Dacă ai altul, setează data și orele în Progres și planul se reface singur.</p><button class="btn primary" data-a="tab" data-tab="progress">Setează data</button></section>';
       return h;
@@ -709,6 +713,7 @@
     else if (mode === "mistakes") { qs = pickMistakes(); title = "Greșelile mele"; }
     else if (mode === "mock") { qs = pickMock(25); title = "Simulare de interviu"; }
     else if (mode === "ids") { qs = shuffle(opt.ids.map(id => QBY[id]).filter(Boolean)); title = opt.title || "Reluare"; }
+    else if (mode === "cert") { qs = ui.cert ? ui.cert.ids.q.map(id => QBY[id]).filter(Boolean) : []; title = "Certificare · Grile"; }
     else {
       // pe module: întâi baza, apoi practic, apoi avansat; în fiecare nivel, cele mai slabe primele
       const ms = opt.ms || [], pool = MCQ.filter(q => ms.indexOf(q.m) >= 0);
@@ -717,7 +722,9 @@
     }
     if (!qs.length) { toast(mode === "mistakes" ? "Nicio greșeală de reluat." : mode === "due" ? "Nicio grilă scadentă acum." : "Nu am găsit întrebări."); return; }
     ui.result = null;
-    ui.run = { kind: "mcq", mode, title, items: qs.map((q, k) => mkItem(q, mode, rounds ? rounds[k] : 0)), i: 0, picks: {}, done: {}, assist: {}, t0: now(), deadline: mode === "mock" ? now() + 25 * 60000 : 0, confirmQuit: false };
+    const cert = mode === "cert"; if (cert) mode = "mock";          // secțiunea de grile a certificării: o simulare de 15 minute
+    ui.run = { kind: "mcq", mode, title, items: qs.map((q, k) => mkItem(q, mode, rounds ? rounds[k] : 0)), i: 0, picks: {}, done: {}, assist: {}, t0: now(), deadline: mode === "mock" ? now() + (cert ? 15 : 25) * 60000 : 0, confirmQuit: false };
+    if (cert) ui.run.cert = true;
     ui.tab = "quiz"; render(); window.scrollTo(0, 0);
   }
 
@@ -861,6 +868,7 @@
     });
     if (n) { S.h.push({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) }); S.h = S.h.slice(-HMAX); }
     commit();
+    if (run.cert && ui.cert) { ui.cert.res.q = { n, c, per, wrong: wrong.map(w => w.id) }; ui.cert.step = "o"; Cert.save(); ui.run = null; ui.result = null; ui.tab = "cert"; render(); window.scrollTo(0, 0); return; }
     ui.result = { kind: "mcq", title: run.title, mode: run.mode, n, c, u, per, wrong };
     ui.run = null; render(); window.scrollTo(0, 0);
   }
@@ -1065,6 +1073,7 @@
     ui.result = null;
     ui.run = { kind: "oral", title, items: cards.map(c => c.id), i: 0, phase: "ask", ticks: {}, scores: {}, t0: now(), tEnd: 0, confirmQuit: false };
     if (opt.mock) ui.run.mock = true;
+    if (opt.cert) ui.run.cert = true;
     ui.tab = "oral"; render(); window.scrollTo(0, 0);
   }
   function vOralRun() {
@@ -1312,6 +1321,158 @@
     if (n) startOral({ ids: pickIvMock(n).map(c => c.id), title: "Interviu simulat", mock: true });
     else startOral({ ids: pickTechMock().map(c => c.id), title: "Interviu tehnic simulat", mock: true });
   }
+
+  // ---------- certificare (testul integral) ----------
+  // Trei secțiuni, în ordinea probei: grile (recunoaștere, cântăresc puțin), explică (carduri orale cu intervievatorul) și cod din memorie (schelete).
+  // Itemii se aleg la întâmplare în fiecare modul sau slot, ca scorul să măsoare, nu să țintească slăbiciunile; ce ai făcut în ultimele 20 de minute vine mai rar.
+  // Răspunsurile se notează ca în orice sesiune (Leitner, goluri, istoric); certificarea în curs stă în ui.cert (pe dispozitiv), iar rezultatul final intră în S.h (kind "cert").
+  const CERT_W = { q: 0.2, o: 0.5, s: 0.3 }, CERT_PASS = 0.7, CERT_SEC = 0.6, CERT_GAPS = 5;
+  // 3 sloturi de backend și 3 de frontend, ca proba cu doi oameni; ultimul e un snippet de depanat.
+  const CERT_OSLOTS = [{ ms: ["gil", "asyncio"] }, { ms: ["oop", "python", "pytest"] }, { ms: ["asgi"] }, { ms: ["react"] }, { ms: ["js", "ts", "frontend"] }, { ms: ["fedebug"], code: true }];
+  const CERT_SKEL_BE = ["gil", "asyncio", "python", "oop", "pytest", "asgi"];
+  const CERT_SECS = [
+    { s: "q", t: "Grile", d: "20 de grile: câte una din fiecare modul P1 și P2, plus două din P3. Fără context și fără explicații până la final, în 15 minute.", min: "~12 min" },
+    { s: "o", t: "Explică", d: "6 carduri orale cu intervievatorul: concurență, OOP sau testing, FastAPI, apoi React, TypeScript sau JavaScript și un snippet de depanat.", min: "~30 min" },
+    { s: "s", t: "Cod din memorie", d: "2 schelete, unul Python și unul TypeScript. Scrii, verifici cu AI, confirmi bifele.", min: "~15 min" }
+  ];
+  const certFresh = st => x => recentF(st[x.id]);
+  function pickCert() {
+    const one = (list, st) => wsample(list, certFresh(st), 1)[0];
+    const q = [];
+    MODS.filter(m => m.p <= 2).forEach(m => { const x = one(MCQ_BY_M[m.id], S.q); if (x) q.push(x); });
+    shuffle(MODS.filter(m => m.p === 3 && MCQ_BY_M[m.id].length)).slice(0, 2).forEach(m => { const x = one(MCQ_BY_M[m.id], S.q); if (x) q.push(x); });
+    const o = [];
+    CERT_OSLOTS.forEach(sl => { const x = one(ORAL.filter(c => sl.ms.indexOf(c.m) >= 0 && (!sl.code || c.code) && o.indexOf(c) < 0), S.o); if (x) o.push(x); });
+    const sk = [one(SKEL.filter(k => CERT_SKEL_BE.indexOf(k.m) >= 0 && k.lang === "py"), S.s), one(SKEL.filter(k => k.m === "frontend" && (k.lang === "ts" || k.lang === "tsx")), S.s)];
+    return { q: shuffle(q).map(x => x.id), o: o.map(c => c.id), s: sk.filter(Boolean).map(k => k.id) };
+  }
+  // Scorul: res = { q: { n, c, per, wrong }, o: [{ id, p }], s: [{ id, p }] } → secțiunile, totalul ponderat, trecut / netrecut, modulele (cel mai slab primul) și golurile.
+  function certScore(res) {
+    res = res || {};
+    const qr = res.q || { n: 0, c: 0, per: {}, wrong: [] }, os = res.o || [], ss = res.s || [];
+    const mean = a => (a.length ? a.reduce((t, x) => t + x.p, 0) / a.length : 0);
+    const q = qr.n ? qr.c / qr.n : 0, o = mean(os), s = mean(ss);
+    const tot = CERT_W.q * q + CERT_W.o * o + CERT_W.s * s;
+    const pass = tot >= CERT_PASS && q >= CERT_SEC && o >= CERT_SEC && s >= CERT_SEC;
+    const acc = {}, add = (m, p, n) => { if (!MOD[m]) return; const a = acc[m] || (acc[m] = { sum: 0, n: 0 }); a.sum += p; a.n += n; };
+    Object.keys(qr.per || {}).forEach(m => add(m, qr.per[m].c, qr.per[m].n));
+    os.forEach(x => { if (OBY[x.id]) add(OBY[x.id].m, x.p, 1); });
+    ss.forEach(x => { if (SBY[x.id]) add(SBY[x.id].m, x.p, 1); });
+    const mods = Object.keys(acc).map(m => ({ m, p: acc[m].sum / acc[m].n, n: acc[m].n })).sort((a, b) => a.p - b.p || MOD[a.m].p - MOD[b.m].p);
+    // Golurile: sub 80%. Ce ai produs (oral, cod) cântărește de trei ori cât o grilă, apoi prioritatea modulului; la egalitate, ordinea oral, cod, grile.
+    const GW = { o: 3, s: 3, q: 1 }, gaps = [];
+    os.forEach(x => { if (OBY[x.id] && x.p < 0.8) gaps.push({ t: "o", id: x.id, m: OBY[x.id].m, p: x.p }); });
+    ss.forEach(x => { if (SBY[x.id] && x.p < 0.8) gaps.push({ t: "s", id: x.id, m: SBY[x.id].m, p: x.p }); });
+    (qr.wrong || []).forEach(id => { if (QBY[id]) gaps.push({ t: "q", id, m: QBY[id].m, p: 0 }); });
+    const gw = g => (1 - g.p) * GW[g.t] * PW[MOD[g.m].p];
+    gaps.sort((a, b) => gw(b) - gw(a));
+    return { q, o, s, tot, pass, mods, gaps: gaps.slice(0, CERT_GAPS) };
+  }
+  const Cert = {
+    load() { try { const c = JSON.parse(localStorage.getItem(CERT_KEY) || "null"); return c && c.v === 1 && c.ids && ["q", "o", "s"].every(k => Array.isArray(c.ids[k])) && c.res && Array.isArray(c.res.o) && Array.isArray(c.res.s) ? c : null; } catch (e) { return null; } },
+    save() { try { if (ui.cert) localStorage.setItem(CERT_KEY, JSON.stringify(ui.cert)); else localStorage.removeItem(CERT_KEY); } catch (e) { /* fără localStorage: certificarea ține până la reîncărcare */ } }
+  };
+  const certNew = () => ({ v: 1, step: "q", t0: now(), ids: pickCert(), res: { q: null, o: [], s: [] }, done: 0 });
+  const certLeft = sec => { const c = ui.cert, by = sec === "o" ? OBY : SBY; return c ? c.ids[sec].filter(id => by[id] && !c.res[sec].some(x => x.id === id)) : []; };
+  const certStarted = c => !!(c && (c.res.q || c.res.o.length || c.res.s.length));
+  function certRecord(sec, x) {
+    const c = ui.cert; if (!c) return;
+    c.res[sec] = c.res[sec].filter(y => y.id !== x.id).concat([x]); Cert.save();
+  }
+  function openCert() { ui.tab = "cert"; ui.certQuit = false; render(); window.scrollTo(0, 0); }
+  function startCert() {
+    if (!IV.ready()) { toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); return; }
+    ui.cert = certNew(); Cert.save(); openCert();
+  }
+  function openSkelIn(id) { ui.tab = "study"; ui.study.seg = "skel"; ui.study.skelDue = false; ui.study.skel = id; ui.study.attempt = null; render(); window.scrollTo(0, 0); }
+  const certSkelOn = id => !!(ui.cert && ui.cert.step === "s" && certLeft("s").indexOf(id) >= 0);
+  // Pornește (sau reia) secțiunea curentă, cu ce a rămas din ea.
+  function certGo() {
+    const c = ui.cert; if (!c || c.step === "done") return;
+    if (c.step === "q") { startMcq("cert"); return; }
+    if (c.step === "o") {
+      if (!IV.ready()) { toast("Secțiunea orală are nevoie de Claude: deschide aplicația din artifact."); return; }
+      const left = certLeft("o");
+      if (left.length) { startOral({ ids: left, title: "Certificare · Explică", mock: true, cert: true }); return; }
+      c.step = "s"; Cert.save();
+    }
+    const id = certLeft("s")[0];
+    if (id) openSkelIn(id); else certFinish();
+  }
+  // După ultimul schelet: scorul intră în istoric (fără durată: secțiunile și-au numărat deja timpul).
+  function certFinish() {
+    const c = ui.cert; if (!c) return;
+    const sc = certScore(c.res);
+    c.step = "done"; c.done = now();
+    S.h.push({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
+      cert: { q: sc.q, o: sc.o, s: sc.s, tot: sc.tot, pass: sc.pass, mods: sc.mods.map(x => ({ m: x.m, p: Math.round(x.p * 100) / 100 })), gaps: sc.gaps.map(g => ({ t: g.t, id: g.id, p: Math.round(g.p * 100) / 100 })) } });
+    S.h = S.h.slice(-HMAX); commit(); Cert.save(); openCert();
+  }
+  const certSecStatus = (c, sc, s) => {
+    if (s === "q") return c.res.q ? pc(sc.q) + "% · " + c.res.q.c + "/" + c.res.q.n : c.step === "q" ? "urmează" : "–";
+    const tot = c.ids[s].length, n = c.res[s].length;
+    return n && n >= tot ? pc(s === "o" ? sc.o : sc.s) + "%" : n ? n + "/" + tot + " · în curs" : c.step === s ? "urmează" : "–";
+  };
+  const GAP_T = { o: "oral", s: "cod", q: "grilă" };
+  function certGapItem(g, c) {
+    if (g.t === "o") { const card = OBY[g.id], e = S.o[g.id], miss = (e && e.m) || []; return { q: card.q, what: miss.map(i => card.k[i]).filter(Boolean), btn: '<button class="btn sm primary" data-a="oral-card" data-id="' + g.id + '">Exersează cardul</button>' }; }
+    if (g.t === "s") { const k = SBY[g.id], r = c.res.s.find(x => x.id === g.id), miss = (r && r.miss) || []; return { q: k.t, what: miss.map(i => k.k[i]).filter(Boolean), btn: '<button class="btn sm primary" data-a="cert-skel" data-k="' + g.id + '">Scrie-l din nou</button>' }; }
+    const q = QBY[g.id]; return { q: q.q, what: ["Corect: " + q.o[q.a]], btn: '<button class="btn sm" data-a="open-sheet" data-m="' + q.m + '">Fișa modulului</button>' };
+  }
+  // Rezumatul în text: pentru Claude (golurile → ce mai lucrezi în orele rămase), copiat de pe telefon.
+  function certSummary(c, sc) {
+    const d = new Date(c.done || now());
+    const L = ["Certificare · " + dayLabel(d) + " " + d.getFullYear() + ", " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + " · " + pc(sc.tot) + "% · " + (sc.pass ? "Trecut" : "Netrecut"),
+      "Grile " + pc(sc.q) + "% (" + (c.res.q ? c.res.q.c + "/" + c.res.q.n : "0/0") + ") · Explică " + pc(sc.o) + "% (" + c.res.o.length + " carduri) · Cod " + pc(sc.s) + "% (" + c.res.s.length + " schelete)",
+      "Module, de la cel mai slab: " + sc.mods.map(x => MOD[x.m].short + " " + pc(x.p) + "%").join(", "), "Goluri:"];
+    sc.gaps.forEach(g => { const it = certGapItem(g, c); L.push("- [" + GAP_T[g.t] + "] " + MOD[g.m].short + " · " + it.q.replace(/`/g, "") + " · " + pc(g.p) + "%" + (it.what.length ? " · " + it.what.join("; ").replace(/`/g, "") : "")); });
+    if (!sc.gaps.length) L.push("- niciunul sub 80%");
+    return L.join("\n");
+  }
+  function vCertDone(c, sc, secs) {
+    let h = '<section class="card score"><div class="big cert-total">' + pc(sc.tot) + '%</div><div class="stack-s"><h2 class="cert-verdict">' + (sc.pass ? "Trecut" : "Netrecut") + "</h2>" +
+      '<p class="muted small">' + (sc.pass ? "Ai trecut pragul: cel puțin 70% în total și 60% la fiecare secțiune." : "Pragul: cel puțin 70% în total și 60% la fiecare secțiune. Mai jos vezi ce te-a ținut jos.") + "</p></div></section>" + secs;
+    if (sc.gaps.length) {
+      h += '<div class="sec-h"><h2>Golurile cele mai mari</h2><span class="xs muted">oral și cod primele</span></div>';
+      h += sc.gaps.map(g => { const it = certGapItem(g, c); return '<section class="card stack-s cert-gap"><div class="row"><span class="chip ' + (g.p < 0.5 ? "bad" : "warn") + '">' + GAP_T[g.t] + " · " + pc(g.p) + '%</span><span class="chip">' + esc(MOD[g.m].short) + '</span></div><p class="small">' + fmt(it.q) + "</p>" +
+        (it.what.length ? '<ul class="pts">' + it.what.map(x => "<li>" + fmt(x) + "</li>").join("") + "</ul>" : "") + it.btn + "</section>"; }).join("");
+    }
+    // modulele sub 100%, cel mai slab primul; cele complete, pe un singur rând
+    const low = sc.mods.filter(x => x.p < 1), full = sc.mods.filter(x => x.p >= 1);
+    if (sc.mods.length) h += '<section class="card stack"><h3>Pe module</h3>' + (low.length ? '<div class="brk">' + low.map(x => '<div class="brk-r"><span>' + esc(MOD[x.m].short) + '</span><span class="mono xs">' + pc(x.p) + "%</span>" + bar(x.p) + "</div>").join("") + "</div>" : "") +
+      (full.length ? '<p class="xs muted">La 100%: ' + esc(full.map(x => MOD[x.m].short).join(", ")) + ".</p>" : "") + "</section>";
+    const wq = c.res.q ? c.res.q.wrong.filter(id => QBY[id]) : [];
+    if (wq.length) h += '<button class="btn block" data-a="cert-redo-q">Reia cele ' + wq.length + " grile greșite, cu explicații</button>";
+    h += '<details class="model"><summary>Rezumatul, pentru Claude</summary><textarea class="io" id="cert-sum" readonly aria-label="Rezumatul certificării">' + esc(certSummary(c, sc)) + '</textarea><button class="btn sm" data-a="cert-copy">Copiază</button></details>';
+    h += '<button class="btn block" data-a="cert-new">Certificare nouă</button>';
+    return h;
+  }
+  function vCert() {
+    const c = ui.cert;
+    if (!c) return '<section class="card stack-s"><h2>Certificare</h2><p class="small">Nicio certificare în curs.</p><button class="btn primary" data-a="cert">Începe</button></section>';
+    const sc = certScore(c.res), done = c.step === "done";
+    let h = '<div class="stack-s cert"><div class="eyebrow">Certificare integrală</div>';
+    const secs = '<div class="stack-s">' + CERT_SECS.map((x, i) => { const st = certSecStatus(c, sc, x.s), cur = !done && c.step === x.s;
+      return '<section class="card flat stack-s cert-sec' + (cur ? " cur" : "") + '" data-s="' + x.s + '"><div class="spread"><h3>' + (i + 1) + ". " + esc(x.t) + '</h3><span class="chip' + (/%/.test(st) ? "" : " acc") + ' cert-st">' + esc(st) + "</span></div>" +
+        (done ? "" : '<p class="small muted">' + esc(x.d) + ' <span class="xs mono">' + x.min + "</span></p>") + "</section>"; }).join("") + "</div>";
+    if (done) return h + vCertDone(c, sc, secs) + "</div>";
+    // butonul principal stă sus, sub explicație: pe telefon, lista secțiunilor l-ar împinge sub ecran
+    const left = c.step === "o" ? certLeft("o").length : c.step === "s" ? certLeft("s").length : 0;
+    const lbl = c.step === "q" ? "Începe cu grilele" : c.step === "o" ? (c.res.o.length ? "Continuă: Explică (" + left + " rămase)" : "Continuă: Explică") : (c.res.s.length ? "Continuă: Cod (" + left + " rămas)" : "Continuă: Cod din memorie");
+    h += '<h1>Certificare</h1><p class="muted small">Trei secțiuni, în ordinea probei. Scorul: grile 20%, explică 50%, cod 30%. Treci cu cel puțin 70% în total și 60% la fiecare secțiune. Răspunsurile intră în progres, ca la orice sesiune. Poți face pauză între secțiuni.</p>' +
+      '<button class="btn primary block" data-a="cert-go">' + lbl + "</button>" + secs +
+      '<button class="btn ghost block" data-a="cert-quit">' + (ui.certQuit ? "Sigur? Certificarea se pierde (răspunsurile rămân în progres)" : "Renunță la certificare") + "</button>";
+    return h + "</div>";
+  }
+  // Cardul din Plan: pornește, reia sau arată ultima certificare.
+  function vCertCard() {
+    const c = ui.cert, busy = !!c && c.step !== "done", last = S.h.filter(e => e.kind === "cert" && e.cert).slice(-1)[0];
+    const sec = busy ? CERT_SECS.find(x => x.s === c.step) : null;
+    const sub = busy ? (certStarted(c) ? "În curs: secțiunea „" + sec.t + "”." : "Pregătită: începi cu grilele.")
+      : (last ? "Ultima: " + pc(last.cert.tot) + "% · " + (last.cert.pass ? "trecut" : "netrecut") + " · " + whenStr(last.ts) + ". " : "") + "20 de grile, 6 carduri orale cu intervievatorul și 2 schelete, ~60 min.";
+    return '<section class="card next cert-card"><div class="stack-s"><div class="eyebrow">Certificare integrală</div><div class="small">' + esc(sub) + '</div></div><button class="btn primary" data-a="cert">' +
+      (busy ? (certStarted(c) ? "Continuă" : "Deschide") : c ? "Vezi" : "Start") + "</button></section>";
+  }
   function vIvDialog(run) {
     const iv = run.iv, last = iv.turns[iv.turns.length - 1], max = ivRules(OBY[run.items[run.i]]).max;
     let h = '<section class="card stack-s iv"><div class="spread"><h3>Interviu</h3><span class="chip acc">' + iv.fu + "/" + max + " întrebări</span></div>" + ivTurnsHtml(iv.turns);
@@ -1542,6 +1703,7 @@
     Mic.stop(); ivAbort();
     const r = recordOral(c, { ticks: run.ticks, half: run.half, fixed: run.fixed, wrong: run.ai && run.ai.s === "ok" ? run.ai.v.wrong || [] : undefined, keep: run.keep });
     run.scores[c.id] = r.p;
+    if (run.cert) certRecord("o", { id: c.id, p: r.p });
     if (run.i < run.items.length - 1) { run.i++; run.phase = "ask"; run.ticks = {}; run.half = {}; run.iv = null; run.rw = null; run.keep = ""; run.th = false; run.fixed = {}; run.tEnd = 0; run.ans = ""; run.ai = null; render(); window.scrollTo(0, 0); }
     else finishOral();
   }
@@ -1554,6 +1716,7 @@
       S.h = S.h.slice(-HMAX); commit();
       ui.result = { kind: "oral", title: run.title, items: ids.map(id => ({ id, p: run.scores[id] })), avg, mock: !!run.mock };
     }
+    if (run.cert && ui.cert) { ui.result = null; if (!certLeft("o").length) ui.cert.step = "s"; Cert.save(); ui.tab = "cert"; }
     ui.run = null; render(); window.scrollTo(0, 0);
   }
   function vOralResult() {
@@ -1803,7 +1966,9 @@
   function skelScrollTo(id) { const el = $('[data-a="skel"][data-k="' + id + '"]'); if (el) el.scrollIntoView({ block: "center" }); }
   function vSkel(k) {
     const r = skelRun(k.id), e = S.s[k.id], m = MOD[k.m], ai = AskModel.ready(), busy = !!(r.ai && r.ai.s === "busy");
-    let h = '<button class="btn ghost" data-a="skel-back" data-k="' + k.id + '" style="align-self:flex-start">← Toate scheletele</button>';
+    const inCert = certSkelOn(k.id);
+    let h = inCert ? '<div class="spread"><div class="eyebrow">Certificare · Cod · ' + (ui.cert.res.s.length + 1) + "/" + ui.cert.ids.s.length + '</div><button class="btn sm ghost" data-a="cert-open">← Certificare</button></div>'
+      : '<button class="btn ghost" data-a="skel-back" data-k="' + k.id + '" style="align-self:flex-start">← Toate scheletele</button>';
     h += '<section class="card stack"><div class="row"><span class="chip acc">' + esc(m.code) + "</span>" + skelMarks(k) + skelChip(k.id) + (e ? leit(e.b) : "") + "</div><h2>" + esc(k.t) + "</h2><p>" + fmt(k.p) + "</p>" +
       '<textarea class="skel-code" data-skel-code rows="12" maxlength="6000" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" wrap="off" placeholder="Scrie codul aici, din memorie" aria-label="Codul tău"' + (r.phase === "write" || r.peek || r.ai ? "" : " readonly") + (busy ? " readonly" : "") + ">\n" + esc(r.code) + "</textarea>" +
       (r.phase === "write" || ai ? '<div class="row">' + (r.phase === "write" ? '<button class="btn primary" data-a="skel-done"' + (busy ? " disabled" : "") + '>Gata, mă notez</button>' : "") +
@@ -1878,7 +2043,7 @@
     const hist = S.h.slice().reverse();
     const mcqH = S.h.filter(e => e.kind === "mcq" && e.n);
     h += '<section class="card stack-s"><h3>Istoric</h3>' + (mcqH.length > 1 ? spark(mcqH.slice(-20).map(e => e.c / e.n)) : "") +
-      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : e.kind === "jarvis" ? "Jarvis" : e.kind === "skel" ? "schelete" : "grile") + '</span></span><span class="mono xs">' + (e.lesson ? e.n + " idei" : e.kind === "oral" || e.kind === "open" || e.kind === "jarvis" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + " · " + Math.max(1, Math.round(e.dur / 60)) + " min</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
+      (hist.length ? '<div class="hist">' + hist.slice(0, 15).map(e => '<div class="hist-r"><span>' + esc(e.title) + ' <span class="xs muted">' + (e.kind === "oral" ? "oral" : e.kind === "open" ? "deschise" : e.kind === "jarvis" ? "Jarvis" : e.kind === "skel" ? "schelete" : e.kind === "cert" ? "certificare" : "grile") + '</span></span><span class="mono xs">' + (e.lesson ? e.n + " idei" : e.kind === "oral" || e.kind === "open" || e.kind === "jarvis" || e.kind === "cert" ? pc(e.c / e.n) + "%" : e.c + "/" + e.n) + '</span><span class="xs muted">' + whenStr(e.ts) + (e.kind === "cert" ? "" : " · " + Math.max(1, Math.round(e.dur / 60)) + " min") + "</span></div>").join("") + "</div>" : '<p class="small muted">Nicio sesiune încă. Începe cu testul diagnostic.</p>') + "</section>";
     h += '<section class="card stack-s"><h3>Salvare</h3><p class="small" id="sync-l">' + esc(Sync.label()) + '</p><div class="row">' +
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
@@ -1953,6 +2118,7 @@
     if (run.kind === "mcq" && run.mode !== "mock" && Object.keys(run.done).length) { finishMcq(); return; }
     if (run.kind === "oral" && Object.keys(run.scores).length) { finishOral(); return; }
     if (run.kind === "open" && Object.keys(run.grades).length) { finishOpen(); return; }
+    if (run.cert) ui.tab = "cert";                                  // o secțiune a certificării lăsată la jumătate: înapoi la certificare, de unde o reiei
     ui.run = null; render(); window.scrollTo(0, 0);
   }
   function copyText(text, fallbackEl) {
@@ -2034,6 +2200,17 @@
       case "oral-ai": oralAi(); break;
       case "iv-start": ivStart(); break;
       case "iv-mock": startIvMock(); break;
+      case "cert": if (ui.cert) openCert(); else startCert(); break;
+      case "cert-open": ui.study.skel = null; ui.study.attempt = null; openCert(); break;
+      case "cert-go": certGo(); break;
+      case "cert-new": if (!IV.ready()) toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
+      case "cert-skel": openSkelIn(b.dataset.k); break;
+      case "cert-redo-q": if (ui.cert && ui.cert.res.q) startMcq("ids", { ids: ui.cert.res.q.wrong, title: "Greșelile din certificare" }); break;
+      case "cert-copy": { const t = $("#cert-sum"); if (t) copyText(t.value, t); break; }
+      case "cert-quit":
+        if (!ui.certQuit) { ui.certQuit = true; render(); setTimeout(() => { if (ui.certQuit) { ui.certQuit = false; if (ui.tab === "cert") render(); } }, 4000); }
+        else { ui.cert = null; ui.certQuit = false; Cert.save(); ui.tab = "plan"; render(); window.scrollTo(0, 0); toast("Certificarea s-a oprit. Răspunsurile date rămân în progres."); }
+        break;
       case "th-open": if (ui.run) { ui.run.th = true; render(); } break;
       case "th-explain": gapExplain(b.dataset.c, +b.dataset.i); break;
       case "th-test": chkAsk(b.dataset.c, +b.dataset.i); break;
@@ -2087,11 +2264,18 @@
       case "skel-tick": { const r = ui.study.attempt; if (r) { const i = +b.dataset.k; r.ticks[i] = !r.ticks[i]; render(); } break; }
       case "skel-save": {
         const r = ui.study.attempt, k = r && SBY[r.id]; if (!k) break;
-        const got = r.peek ? 0 : r.ticks.filter(Boolean).length;
+        const got = r.peek ? 0 : r.ticks.filter(Boolean).length, inCert = certSkelOn(k.id);
         updS(k.id, got / k.k.length);
         // timpul intră în istoric ca la celelalte exerciții (spentMin îl numără); o încercare lăsată deschisă se plafonează
         S.h.push({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) }); S.h = S.h.slice(-HMAX);
         Drafts.set(k.id, ""); delete ui.study.peeked[k.id]; commit();
+        if (inCert) {
+          certRecord("s", { id: k.id, p: got / k.k.length, miss: k.k.map((_, i) => i).filter(i => r.peek || !r.ticks[i]) });
+          ui.study.skel = null; ui.study.attempt = null;
+          const nx = certLeft("s")[0];
+          if (nx) { openSkelIn(nx); toast("Notat. Următorul schelet."); } else certFinish();
+          break;
+        }
         ui.study.skel = null; ui.study.attempt = null; render(); toast("Notat: cutia " + S.s[k.id].b);
         skelScrollTo(k.id);
         break;
@@ -2624,6 +2808,7 @@
   function start(data) {
     const local = loadLocal();
     if (local) S = local;
+    ui.cert = Cert.load();
     if (data && data.ui && typeof data.ui === "object") {
       const u = data.ui;
       if (u.run && u.run.kind === "mcq" && !(u.run.items || []).every(it => QBY[it.id])) u.run = null;
@@ -2645,5 +2830,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, state: () => S, setState: x => { S = x; planCache = null; } };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { S = x; planCache = null; } };
 })();

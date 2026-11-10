@@ -606,3 +606,9 @@ ul.pts.num > li { display: flex; gap: 10px; align-items: flex-start; }
 .dz-groups b { margin-right: 6px; color: var(--accent); font-size: 13px; }
 /* panoul se întinde pe toată lățimea fișei (sub numărul punctului), ca rândurile de cod de 36 de caractere să încapă pe 360 px; 32px = lățimea .pn (22) + golul din li (10) */
 ul.pts.num .pb > .dz { width: calc(100% + 32px); margin-left: -32px; }
+
+/* certificare */
+.cert-sec.cur { border-left: 3px solid var(--accent); }
+.cert-sec h3 { margin: 0; }
+.cert-gap .pts { margin: 0; }
+.cert-gap .btn { align-self: flex-start; }

@@ -169,6 +169,17 @@ După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` 
 - **Interviu tehnic simulat** (Oral): 7 carduri, câte unul pe slot, în ordinea probei: threading/asyncio, OOP, testing/generatori, FastAPI, frontend (React/TS), un snippet, un scenariu de design (`pickTechMock`, cu ponderile `wO`). Persoana anunță snippet-ul și designul.
 - Faptele verificate pe surse primare: `research/interview-facts.md`.
 
+## Certificare (testul integral)
+
+Un test de ~60 de minute, pornit din Plan (cardul „Certificare integrală”), în trei secțiuni, în ordinea probei. Doar cu `sample` (în artifact).
+
+- **Alegerea** (`pickCert`): 20 de grile (câte una din fiecare modul P1 și P2, două din module P3 diferite, fără Bonus), 6 carduri orale (3 sloturi de backend: `gil`/`asyncio`, `oop`/`python`/`pytest`, `asgi`; 3 de frontend: `react`, `js`/`ts`/`frontend`, un snippet `fedebug` cu `code`) și 2 schelete (Python dintr-un modul P1 de backend, TS / TSX din `frontend`). În fiecare modul sau slot alegerea e la întâmplare, ca scorul să măsoare; ce ai făcut în ultimele 20 de minute vine mai rar (`recentF`).
+- **Secțiunile** folosesc ecranele existente: grilele ca simulare (`mode: "mock"`, 15 minute, `run.cert`), cardurile orale cu intervievatorul (`mock: true`, `cert: true`), scheletele în Studiu, cu „← Certificare” în locul listei. Răspunsurile se notează ca în orice sesiune (Leitner, goluri, istoric).
+- **Starea** e în `ui.cert` (`{ v, step: q|o|s|done, ids, res, t0, done }`), salvată în `localStorage` (`onapsis-cert-v1`) după fiecare secțiune, card oral și schelet, deci o reîncărcare reia de unde ai rămas. „Ieși” dintr-o secțiune te întoarce la certificare; cardurile și scheletele deja notate rămân.
+- **Scorul** (`certScore`): grile 20%, explică 50%, cod 30% (`CERT_W`); trecut cu cel puțin 70% în total și 60% la fiecare secțiune. Modulele adună grilele, cardurile și scheletele lor. Golurile (cel mult 5, sub 80%): oral și cod cântăresc ×3 față de o grilă, apoi prioritatea modulului.
+- **Rezultatul** intră în `S.h` ca `kind: "cert"` (fără `dur`, ca `spentMin` să nu numere timpul de două ori) și apare în Plan și în istoric. Ecranul final are golurile cu acțiuni (cardul, scheletul, fișa), modulele sub 100% și un rezumat în text, de copiat pentru Claude.
+- Test: `python3 tools/test_cert.py`.
+
 ## Goluri și teorie
 
 Ce ratezi la oral se înregistrează pe fiecare card, în `S.o[id]`: `mc` (index punct → de câte ori l-ai ratat; +1 la un punct neacoperit întreg, −1 la unul acoperit întreg, maximum 9), `m` (punctele ratate ultima dată), `w` (cel mult 3 afirmații marcate greșite de verdict). Se actualizează la fiecare „Salvează”, cu sau fără intervievator; la cardurile vechi, `m` valorează 1 per punct. `mergeState` le îmbină ca pe restul itemului.
