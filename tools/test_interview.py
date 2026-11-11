@@ -232,6 +232,19 @@ async def main():
         await pg.click('[data-a="quit"]'); await pg.click('[data-a="quit"]'); await pg.wait_for_timeout(100)
         if await pg.locator('[data-a="close-result"]').count(): await pg.click('[data-a="close-result"]')
 
+        # the no-AI path after a failure: the dialog is dropped, the card goes to manual ticks and saves like any card
+        await fresh(pg)
+        card = await start_gil(pg)
+        await queue(pg, "turn", [{"err": "unavailable"}])
+        await answer_and_start(pg); await pg.wait_for_selector('.iv .ai-err', timeout=3000)
+        check("a failed call offers the no-AI path next to the retry", await pg.locator('[data-a="iv-manual"]').count() == 1 and await pg.locator('[data-a="iv-retry"]').count() == 1)
+        await pg.click('[data-a="iv-manual"]'); await pg.wait_for_selector('.kp-i', timeout=3000)
+        check("no-AI path: key points to tick, nothing pre-ticked, no verdict", await pg.locator('.ai-v').count() == 0 and await pg.locator('.kp-i[aria-pressed="true"]').count() == 0 and await pg.locator('.kp-i').count() == card["n"])
+        await pg.click('.kp-i >> nth=0'); await pg.click('[data-a="oral-save"]'); await pg.wait_for_timeout(100)
+        e = await pg.evaluate("([id]) => window.__prep.state().o[id]", [card["id"]])
+        check("no-AI path: the manual ticks are scored like any card", e and e["n"] == 1 and e["s"] == round(100 / card["n"]), e)
+        if await pg.locator('[data-a="close-result"]').count(): await pg.click('[data-a="close-result"]')
+
         await fresh(pg)
         card = await start_gil(pg)
         await queue(pg, "turn", ["gunoi, nu e json"])

@@ -190,12 +190,12 @@ async def main():
         await pg.click('[data-a="cert-new"]'); await pg.wait_for_timeout(100)
         check("a new certification starts from the grile section", await ui(pg, "ui.cert.step") == "q" and await ui(pg, "ui.cert.res.o.length") == 0)
 
-        # 8) without Claude: the button explains instead of starting
+        # 8) without a server or Claude: the button explains instead of starting (the server path is in test_iv_server.py)
         ctx2 = await b.new_context(viewport={"width": 360, "height": 740})
         pg2 = await ctx2.new_page(); await pg2.route("**/fonts.*", lambda r: r.abort())
         await pg2.goto(PAGE); await pg2.evaluate("localStorage.clear()"); await pg2.reload(); await pg2.wait_for_timeout(400)
         await pg2.click('.cert-card [data-a="cert"]'); await pg2.wait_for_timeout(100)
-        check("without sample: no certification starts, a message explains", await pg2.evaluate("window.__prep.ui().cert") is None and "Claude" in (await pg2.text_content('#toast') or ""))
+        check("without sample: no certification starts, a message explains", await pg2.evaluate("window.__prep.ui().cert") is None and "serverul" in (await pg2.text_content('#toast') or ""))
         await ctx2.close()
 
         check("no console errors", not errs, errs)

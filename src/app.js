@@ -955,6 +955,7 @@
     unavail: "Claude nu poate răspunde acum. Reîncearcă.",
     cancelled: "Ai oprit cererea. Poți continua sau încheia cu verdictul."
   };
+  const NEED_AI = what => what + " are nevoie de AI: adaugă serverul în Progres (sau deschide aplicația din artifact).";
   const aiError = code => { const e = new Error(code); e.code = code; return e; };
   // Un singur POST către DeepSeek; întoarce textul mesajului (poate fi gol) sau aruncă o eroare cu `code`.
   async function dsCall(body, key) {
@@ -1185,9 +1186,10 @@
     } else { run.ai = { s: "err", code }; toast(AI_MSG[code] || AI_MSG.network); }
     render(); window.scrollTo(0, 0);
   }
-  // ---------- intervievator (dialog scris, prin `sample`) ----------
+  // ---------- intervievator (dialog scris, prin server sau `sample`) ----------
   // Un card oral devine un mic interviu: răspunsul tău, cel mult IV_MAX întrebări de continuare, apoi verdictul pe tot dialogul.
-  // Merge doar unde există `sample` (în artifact). `sample` nu ține minte nimic, deci fiecare apel primește tot dialogul în prompt.
+  // Merge cu serverul propriu (PWA) sau cu `sample` (în artifact), în ordinea de la restul AI-ului (`gapText`: serverul întâi, apoi `sample`). Nici serverul, nici `sample` nu țin minte
+  // nimic, deci fiecare apel primește tot dialogul în prompt. Reguli, prompturi, parsere și scor sunt aceleași pe ambele surse.
   const IV_MAX = 2;
   const IV_COV = ["spontan", "dupa", "nu"];                 // spontan = 1 punct, dupa (abia după o întrebare) = 0,5, nu = 0
   const IV_HEAD = "Ești intervievator tehnic senior la un interviu pentru " + P.cfg.role + ". Vorbești în română; termenii tehnici rămân în engleză. " +
@@ -1261,24 +1263,25 @@
     catch (e) { throw aiError(e && e.code === "cancelled" ? "cancelled" : sampleCode(e)); }
     return r && r.text;
   }
-  // Golurile (lecția, întrebarea țintită, verdictul ei) merg și prin server, nu doar prin `sample`. Interviul scris și Certificarea rămân pe `sample` (IV).
+  // Golurile (lecția, întrebarea țintită, verdictul ei), intervievatorul și Certificarea merg prin server (prima sursă) sau prin `sample` (în artifact).
+  // `signal` (opțional) oprește cererea din butonul „Oprește" al intervievatorului: nu are cronometru propriu, iar cel al serverului e de 50 s (ServerAi).
   const gapReady = () => !!(AI.sample || Srv.configured());
-  function gapText(prompt, tier, json) {
-    if (!Srv.configured()) return sampleText(prompt, tier);
-    const srv = { generate: () => Srv.generate({ user: prompt, kind: tier === "quick" ? "quick" : "default", json: !!json }) };
-    return ServerAi.run(AI.sample ? [srv, { generate: () => sampleText(prompt, tier) }] : [srv], null);
+  function gapText(prompt, tier, json, signal) {
+    if (!Srv.configured()) return sampleText(prompt, tier, signal);
+    const srv = { generate: () => Srv.generate({ user: prompt, kind: tier === "quick" ? "quick" : "default", json: !!json, signal }) };
+    return ServerAi.run(AI.sample ? [srv, { generate: () => sampleText(prompt, tier, signal) }] : [srv], null);
   }
   const IV = {
-    ready: () => !!AI.sample,
+    ready: () => gapReady(),
     // Un pas al dialogului: întoarce { say } (întrebare de continuare, `quick`) sau { verdict } (`default`). Aruncă o eroare cu `code`.
     // Un „done” sau un format greșit la întrebare duc direct la verdict. `iv.final` face ca o reîncercare după eroare să sară peste întrebare.
     async step(c, iv, o) {
       if (!o.finish && !iv.final && iv.fu < ivRules(c).max) {
-        const t = parseTurn(await sampleText(ivTurnPrompt(c, iv, o.mem), "quick", o.signal));
+        const t = parseTurn(await gapText(ivTurnPrompt(c, iv, o.mem), "quick", true, o.signal));
         if (t && t.act === "followup") return { say: t.say };
       }
       iv.final = true;
-      const v = parseIvVerdict(await sampleText(ivVerdictPrompt(c, iv), "default", o.signal), c.k.length);
+      const v = parseIvVerdict(await gapText(ivVerdictPrompt(c, iv), "default", true, o.signal), c.k.length);
       if (!v) throw aiError("format");
       return { verdict: v };
     }
@@ -1296,7 +1299,7 @@
     ivCtl = null; iv.busy = false;
     if (r && r.say) { iv.turns.push({ who: "int", text: r.say }); iv.fu++; iv.draft = ""; }
     else if (r && r.verdict) {
-      run.ai = { s: "ok", v: r.verdict, p: "Claude" }; run.ticks = {}; run.half = {};
+      run.ai = { s: "ok", v: r.verdict, p: AI.name() }; run.ticks = {}; run.half = {};
       r.verdict.covered.forEach((x, i) => { if (x !== "nu") { run.ticks[i] = true; if (x === "dupa") run.half[i] = true; } });
       run.phase = "review"; run.tEnd = 0;
     } else { iv.err = code; if (code !== "cancelled") toast(AI_MSG[code] || AI_MSG.network); }
@@ -1324,6 +1327,12 @@
     }
     iv.draft = "";
     ivRun(kind === "finish");
+  }
+  // Calea fără AI după un eșec: dialogul se lasă, cardul trece la bifele proprii (scorul vine oricum din bife).
+  function ivManual() {
+    const run = ui.run; if (!run || !run.iv || run.iv.busy) return;
+    ivAbort(); run.iv = null; run.ai = null; run.ticks = {}; run.half = {}; run.phase = "review"; run.tEnd = 0;
+    render(); window.scrollTo(0, 0);
   }
   function ivStop() {
     const run = ui.run; if (!run || !run.iv || !run.iv.busy) return;
@@ -1361,7 +1370,7 @@
     return out;
   }
   function startIvMock(n) {
-    if (!IV.ready()) { toast("Interviul simulat are nevoie de Claude (în artifact)."); return; }
+    if (!IV.ready()) { toast(NEED_AI("Interviul simulat")); return; }
     if (n) startOral({ ids: pickIvMock(n).map(c => c.id), title: "Interviu simulat", mock: true });
     else startOral({ ids: pickTechMock().map(c => c.id), title: "Interviu tehnic simulat", mock: true });
   }
@@ -1425,7 +1434,7 @@
   }
   function openCert() { ui.tab = "cert"; ui.certQuit = false; render(); window.scrollTo(0, 0); }
   function startCert() {
-    if (!IV.ready()) { toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); return; }
+    if (!IV.ready()) { toast(NEED_AI("Certificarea")); return; }
     ui.cert = certNew(); Cert.save(); openCert();
   }
   function openSkelIn(id) { ui.tab = "study"; ui.study.seg = "skel"; ui.study.skelDue = false; ui.study.skel = id; ui.study.attempt = null; render(); window.scrollTo(0, 0); }
@@ -1435,7 +1444,7 @@
     const c = ui.cert; if (!c || c.step === "done") return;
     if (c.step === "q") { startMcq("cert"); return; }
     if (c.step === "o") {
-      if (!IV.ready()) { toast("Secțiunea orală are nevoie de Claude: deschide aplicația din artifact."); return; }
+      if (!IV.ready()) { toast(NEED_AI("Secțiunea orală")); return; }
       const left = certLeft("o");
       if (left.length) { startOral({ ids: left, title: "Certificare · Explică", mock: true, cert: true }); return; }
       c.step = "s"; Cert.save();
@@ -1521,7 +1530,7 @@
     const iv = run.iv, last = iv.turns[iv.turns.length - 1], max = ivRules(OBY[run.items[run.i]]).max;
     let h = '<section class="card stack-s iv"><div class="spread"><h3>Interviu</h3><span class="chip acc">' + iv.fu + "/" + max + " întrebări</span></div>" + ivTurnsHtml(iv.turns);
     if (iv.busy) return h + '<p class="iv-wait small" role="status">Se gândește…</p><button class="btn block" data-a="iv-stop">Oprește</button></section>';
-    if (last.who === "cand") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[iv.err] || "Cererea s-a întrerupt.") + '</p><button class="btn primary block" data-a="iv-retry">Continuă</button>';
+    if (last.who === "cand") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[iv.err] || "Cererea s-a întrerupt.") + '</p><button class="btn primary block" data-a="iv-retry">Continuă</button><button class="btn block" data-a="iv-manual">Fără AI: bifez eu punctele</button>';
     else h += '<textarea class="ans" id="iv-t" rows="4" maxlength="3000" placeholder="Răspunde intervievatorului" aria-label="Răspunsul tău la întrebare">' + esc(iv.draft || "") + "</textarea>" +
       '<button class="btn primary block" data-a="iv-send">Trimite</button><button class="btn block" data-a="iv-dunno">Nu știu</button>';
     return h + '<button class="btn block" data-a="iv-finish">Încheie, vreau verdictul</button></section>';
@@ -1545,7 +1554,7 @@
     if (txt.length < 15) { toast("Scrie o versiune mai lungă"); return; }
     rw.s = "busy"; render();
     let v = null, code = null;
-    try { v = await sampleGrade(c, txt); } catch (err) { code = (err && err.code) || "network"; }
+    try { v = await aiGrade(c, txt); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.run !== run || run.i !== idx || run.rw !== rw) return;
     if (v) {
       rw.n = v.covered.filter(Boolean).length; rw.miss = v.missing;
@@ -2293,7 +2302,7 @@
       case "cert": if (ui.cert) openCert(); else startCert(); break;
       case "cert-open": ui.study.skel = null; ui.study.attempt = null; openCert(); break;
       case "cert-go": certGo(); break;
-      case "cert-new": if (!IV.ready()) toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
+      case "cert-new": if (!IV.ready()) toast(NEED_AI("Certificarea")); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
       case "cert-skel": openSkelIn(b.dataset.k); break;
       case "cert-redo-q": if (ui.cert && ui.cert.res.q) startMcq("ids", { ids: ui.cert.res.q.wrong, title: "Greșelile din certificare" }); break;
       case "cert-copy": { const t = $("#cert-sum"); if (t) copyText(t.value, t); break; }
@@ -2310,6 +2319,7 @@
       case "iv-dunno": ivSend("dunno"); break;
       case "iv-finish": ivSend("finish"); break;
       case "iv-retry": ivRun(false); break;
+      case "iv-manual": ivManual(); break;
       case "iv-stop": ivStop(); break;
       case "rw-open": if (ui.run && ui.run.iv && !ui.run.rw) { ui.run.rw = { text: "", s: "idle" }; render(); const el = $("#rw-t"); if (el) el.focus(); } break;
       case "rw-check": rwCheck(); break;

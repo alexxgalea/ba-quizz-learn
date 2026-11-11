@@ -23,8 +23,9 @@ const ServerAi = (() => {
     return {
       config,
       configured: () => !!config(),
-      // req = { system, user, kind ("quick" | "default"), json (bool), maxTokens, prefer ("gemini" | "deepseek") }.
-      // Întoarce textul sau aruncă o eroare cu `code`: nokey (nu e configurat), network, timeout, srv_auth (401), srv_big (413),
+      // req = { system, user, kind ("quick" | "default"), json (bool), maxTokens, prefer ("gemini" | "deepseek"), signal (AbortSignal, opțional) }.
+      // `signal` oprește cererea la cererea utilizatorului (butonul „Oprește" al intervievatorului): codul e `cancelled`, nu `timeout`.
+      // Întoarce textul sau aruncă o eroare cu `code`: nokey (nu e configurat), network, timeout, cancelled, srv_auth (401), srv_big (413),
       // srv_cap (429, plafonul zilnic), rate (alt 429), srv_ai (502: niciun model n-a răspuns), server (5xx), http (alt 4xx), format.
       async generate(req) {
         const cfg = config();
@@ -32,21 +33,24 @@ const ServerAi = (() => {
         const body = { system: req.system || "", user: req.user, kind: req.kind === "quick" ? "quick" : "default", json_mode: !!req.json };
         if (req.maxTokens) body.max_tokens = req.maxTokens;
         if (req.prefer) body.model = req.prefer;
+        if (req.signal && req.signal.aborted) throw fail("cancelled");
         const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), timeoutMs);
+        const stop = () => ctl.abort(), aborted = () => fail(req.signal && req.signal.aborted ? "cancelled" : "timeout");
+        if (req.signal) req.signal.addEventListener("abort", stop);
         try {
           let r;
           try {
             r = await env.fetch(cfg.url + "/ai", { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.secret }, body: JSON.stringify(body) });
-          } catch (err) { throw err && err.name === "AbortError" ? fail("timeout") : fail("network", String((err && err.message) || err).slice(0, 120)); }
+          } catch (err) { throw err && err.name === "AbortError" ? aborted() : fail("network", String((err && err.message) || err).slice(0, 120)); }
           let j = null;
-          try { j = await r.json(); } catch (err) { if (err && err.name === "AbortError") throw fail("timeout"); }
+          try { j = await r.json(); } catch (err) { if (err && err.name === "AbortError") throw aborted(); }
           if (!r.ok) {
             const d = j && typeof j.detail === "string" ? j.detail : "";
             throw fail(r.status === 401 ? "srv_auth" : r.status === 413 ? "srv_big" : r.status === 429 ? (d === "daily_cap" ? "srv_cap" : "rate") : r.status === 502 ? "srv_ai" : r.status >= 500 ? "server" : "http", "HTTP " + r.status + (d ? ": " + d : ""));
           }
           if (!j || typeof j.text !== "string" || !j.text.trim()) throw fail("format");
           return j.text;
-        } finally { clearTimeout(tm); }
+        } finally { clearTimeout(tm); if (req.signal) req.signal.removeEventListener("abort", stop); }
       }
     };
   }

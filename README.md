@@ -72,6 +72,7 @@ python3 tools/test_terms.py
 python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample și DeepSeek simulate)
 python3 tools/test_gaps.py       # goluri (mc, w), teoria pe ce ai ratat, Studiu › Pentru tine
 python3 tools/test_interview.py  # intervievatorul: dialog, scor 1/0,5, memorie, rescriere, erori (sample simulat)
+python3 tools/test_iv_server.py  # intervievatorul, interviul tehnic simulat și Certificarea pe sursa de pe server (server simulat)
 python3 tools/test_plan.py   # planul generat, scadențele, întrebările deschise, formulările, setările
 node --test "tools/unit/*.test.mjs"   # Jarvis: Live, Audio (partea pură), Call, Jarvis, peste adaptoare false
 python3 tools/test_audio.py      # BrowserAudio în Chromium cu microfon fals
@@ -123,7 +124,7 @@ Glosarul (`src/expl/glosar.md`) are câte o secțiune `### Termen`, cu câmpuril
 
 ## Intervievator
 
-Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar fluxul „Verifică cu AI” rămâne ca înainte.
+Unde există o sursă pentru dialog: serverul propriu (PWA) sau `sample` (artifact), în această ordine. Fără niciuna butonul nu apare, iar fluxul „Verifică cu AI” rămâne ca înainte.
 
 1. Scrii răspunsul, apoi „Răspunde intervievatorului”. Un apel `quick` întoarce JSON `{"act":"followup","say":…}` sau `{"act":"done"}`. Intervievatorul are ton neutru, nu dă termenul răspunsului și cunoaște profilul tău (doar ca să formuleze concret). La cardurile BEH cere ce lipsește din STAR.
 2. Cel mult `IV_MAX` = 2 întrebări de continuare. „Nu știu” se trimite ca răspuns, iar „Încheie, vreau verdictul” funcționează oricând. „Done” sau un format greșit la întrebare duc direct la verdict.
@@ -131,9 +132,9 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 4. Memorie pe card, în `S.o[id]`: `m` = indexurile punctelor neacoperite întreg (data viitoare intervievatorul le vizează primele) și `a` = ultima ta versiune bună. După verdict vezi „față de data trecută”. Cheile se scriu doar pe carduri făcute cu dialog (sau care le au deja), iar `mergeState` le păstrează ca pe restul itemului.
 5. „Rescrie-l” e opțional, după verdict și model. Reverificarea folosește verificatorul simplu, nu schimbă scorul și, la cel puțin 80% din puncte, salvează textul ca `a` (maximum 800 de caractere).
 
-6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
+6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără server și fără `sample` modul nu apare, iar planul păstrează textul vechi.
 
-Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
+Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, „Continuă” reia pasul (după o eroare la verdict nu mai întreabă nimic: `iv.final`), iar „Fără AI: bifez eu punctele” lasă dialogul și trece cardul la bifele proprii. Cu serverul, un apel poate dura până la 50 s (limita clientului, `ServerAi`), iar „Oprește” îl întrerupe. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
 
 ## Desfășurări
 
@@ -174,7 +175,7 @@ După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` 
 
 ## Certificare (testul integral)
 
-Un test de ~60 de minute, pornit din Plan (cardul „Certificare integrală”), în trei secțiuni, în ordinea probei. Doar cu `sample` (în artifact).
+Un test de ~60 de minute, pornit din Plan (cardul „Certificare integrală”), în trei secțiuni, în ordinea probei. Cu serverul propriu (PWA) sau cu `sample` (artifact); fără niciuna, butonul explică ce lipsește. Rezultatul intră în istoric (`kind: "cert"`) și în PWA, prin jurnal.
 
 - **Alegerea** (`pickCert`): 20 de grile (câte una din fiecare modul P1 și P2, două din module P3 diferite, fără Bonus), 6 carduri orale (3 sloturi de backend: `gil`/`asyncio`, `oop`/`python`/`pytest`, `asgi`; 3 de frontend: `react`, `js`/`ts`/`frontend`, un snippet `fedebug` cu `code`) și 2 schelete (Python dintr-un modul P1 de backend, TS / TSX din `frontend`). În fiecare modul sau slot alegerea e la întâmplare, ca scorul să măsoare; ce ai făcut în ultimele 20 de minute vine mai rar (`recentF`).
 - **Secțiunile** folosesc ecranele existente: grilele ca simulare (`mode: "mock"`, 15 minute, `run.cert`), cardurile orale cu intervievatorul (`mock: true`, `cert: true`), scheletele în Studiu, cu „← Certificare” în locul listei. Răspunsurile se notează ca în orice sesiune (Leitner, goluri, istoric).
