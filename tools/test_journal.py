@@ -119,6 +119,13 @@ async def main():
         check("without IndexedDB answers still change the state", (await S(pg))["q"]["py-01"]["n"] == 1)
         await pg.reload(); await pg.wait_for_timeout(500)
         check("and survive a reload through the mirror", (await S(pg))["q"]["py-01"]["n"] == 1)
+        # the progress import (Progres › Importă) must work too: no store means no journal merge, so it goes through the projection and the mirror
+        imp = {"v": 1, "r": 0, "q": {"py-09": {"b": 4, "n": 7, "c": 7, "l": 1, "t": 1800000000000}}, "o": {}, "x": {}, "k": {}, "s": {}, "p": {}, "l": {}, "h": []}
+        await pg.click('.tab[data-tab="progress"]'); await pg.click('[data-a="imp"]'); await pg.fill("#imp-t", json.dumps(imp)); await pg.click('[data-a="do-imp"]'); await pg.wait_for_timeout(500)
+        toast = await pg.evaluate("(document.getElementById('toast') || {}).textContent || ''")
+        check("without IndexedDB the progress import works", (await S(pg))["q"]["py-09"]["b"] == 4 and "nu a mers" not in toast, toast)
+        await pg.reload(); await pg.wait_for_timeout(500)
+        check("and the imported progress survives a reload", (await S(pg))["q"]["py-09"]["b"] == 4 and (await S(pg))["q"]["py-01"]["n"] == 1)
         check("no console errors (no IndexedDB)", not pg.errs, pg.errs)
         await ctx.close()
 

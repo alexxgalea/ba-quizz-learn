@@ -214,10 +214,10 @@
   S = J.state();
   // Sincronizarea jurnalului cu serverul propriu (src/sync.js; doar PWA, doar cu IndexedDB). Adresa și secretul vin de la `Conn` (ServerConn, localStorage `onapsis-server-v1`; nu în S, nu în jurnal), citite la fiecare ciclu.
   // Nu blochează nimic: fără semnal sau cu secret greșit evenimentele rămân în coadă și ecranul arată starea.
-  const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => Conn.valid(), onStatus: () => paintStatus() }) : null;
+  const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => Conn.valid(), onStatus: () => paintStatus(), onMerged: () => repaintRemote() }) : null;
   const add = e => { const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
   const histAdd = row => add({ type: "hist", row });
-  function commit() { planCache = null; if (!JOURNAL) saveLocal(); Sync.push(); paintHeader(); }
+  function commit() { planCache = null; if (!JSTORE) saveLocal(); Sync.push(); paintHeader(); }      // fără depozit (artifact, sau PWA fără IndexedDB) S se salvează și sub cheia veche, pe lângă oglindă
 
   // ---------- sync (progres privat per utilizator, prin db) ----------
   const DEAD = ["invalid_argument", "not_granted", "revoked", "capability_disabled", "capability_removed", "transform_error"];
@@ -622,6 +622,13 @@
     paintTabs(); paintHeader();
   }
   function softRender() { if (!ui.run) render(); else paintHeader(); }
+  // Evenimente aduse de la server (alt dispozitiv): S s-a schimbat în jurnal. Ecranul se redesenează ca la vechea sincronizare (`softRender`: o sesiune în curs primește doar antetul),
+  // dar nu peste un câmp în care Alex scrie sau peste apelul Jarvis, pe care o redesenare l-ar goli / reseta.
+  function repaintRemote() {
+    planCache = null;
+    const ae = document.activeElement;
+    if (ui.tab === "jarvis" || (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) paintHeader(); else softRender();
+  }
 
   function toast(msg) {
     let t = $("#toast");
@@ -2461,7 +2468,7 @@
         try { data = JSON.parse(t.value); } catch (err) { toast("Textul nu e un export valid"); break; }
         if (data && data.format === Journal.EXPORT_FORMAT) { if (JSync) jImport(t.value); else toast("Jurnalul se importă doar în aplicația instalată"); break; }
         const merged = mergeState(S, prune(normalize(data))).state, done = () => { commit(); ui.prog.imp = false; render(); toast("Progres importat"); };
-        if (!JOURNAL) { J.replaceState(merged); done(); }
+        if (!JSTORE) { J.replaceState(merged); done(); }                                  // fără depozit nu există îmbinare în jurnal: starea îmbinată trece prin proiecție și oglindă
         else J.importState(merged).then(done, () => toast("Importul nu a mers"));       // intrările noi intră în jurnal ca evenimente sintetice
         break;
       }
