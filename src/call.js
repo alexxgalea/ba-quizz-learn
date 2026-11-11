@@ -49,9 +49,10 @@ const Call = (() => {
 
     const onLive = e => {
       if (ended) return;
-      if (e.type === "closed") { if (o.survive && e.reason === "network") goLost(); else finish(e.reason, false); return; }
+      if (e.type === "closed") { if (o.survive && (e.reason === "network" || e.reason === "offline")) goLost(); else finish(e.reason, false); return; }
       if (e.type === "reconnecting") { flags.reconnecting = true; refreshWarn(); return; }
       if (e.type === "live") { flags.reconnecting = false; refreshWarn(); return; }
+      if (e.type === "restarted") { emit(e); return; }          // conexiunea s-a reluat FĂRĂ istoric (jeton nou, handle refuzat): ecranul retrimite contextul
       if (e.type === "tool") { stale = false; emit(e); return; }          // un apel de funcție începe o tură nouă: restul turei tăiate nu mai contează
       if (paused && pauseMode !== "keep") return;          // pauza simplă: ce mai vine de la model se aruncă
       if (e.type === "audio") { if (stale) return; turnDone = false; talking = false; o.audio.play(e.pcm); }
