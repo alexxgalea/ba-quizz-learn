@@ -21,7 +21,7 @@ Explicația pe larg a unui punct, în stilul refactoring.guru: problema concret�
 _Avoid_: explicație (e a grilelor), lecție, detaliu
 
 **Pas cu pas**:
-Partea unei desfășurări care urmărește mecanismul în timp, stare cu stare (render 1 → click → render 2), acolo unde ideea e o secvență, nu o regulă. Completează exemplul, nu îl înlocuiește.
+Partea unei desfășurări care urmărește mecanismul în timp, stare cu stare (render 1 → click → render 2), acolo unde ideea e un proces în timp, nu o regulă. Completează exemplul, nu îl înlocuiește.
 _Avoid_: trace, diagramă, timeline
 
 **Termen**:
@@ -55,7 +55,7 @@ Sesiune Jarvis în care Alex răspunde la cardurile orale ale unui singur modul 
 _Avoid_: lecție, mod „topic” (în vorbire)
 
 **Lecție**:
-Sesiune Jarvis în care Jarvis explică fișa unui modul, bucată cu bucată, iar Alex doar ascultă și îl poate opri cu comenzi vocale. Nu e o verificare: nu schimbă scorul, Leitner-ul sau golurile.
+Sesiune Jarvis în care Jarvis explică fișa unui modul, bucată cu bucată, iar Alex ascultă și îl poate opri cu comenzi vocale. După fiecare grup de puncte din harta modulului, Jarvis pune o întrebare, iar răspunsul lui Alex se notează doar la întrebările deschise: lecția nu schimbă scorul și nici golurile.
 _Avoid_: podcast, curs, explicație
 
 **Bucată**:
