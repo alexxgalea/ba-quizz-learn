@@ -554,7 +554,7 @@
     study: { seg: "sheets", open: null, kata: null, skel: null, skelDue: false, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
-    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
+    jv: { module: "", typing: false, draft: "", keyDraft: "", srvUrl: "", srvSecret: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
     dz: {},                                          // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
     cert: null, certQuit: false                      // certificarea în curs sau ultima terminată pe dispozitivul ăsta (vezi Cert), nu în S
@@ -2171,7 +2171,7 @@
     const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
     const a = b.dataset.a;
     switch (a) {
-      case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-mics":
+      case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-server-save": case "jv-server-clear": case "jv-mics":
       case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
@@ -2342,6 +2342,8 @@
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
     else if (t && t.dataset && "skelCode" in t.dataset && ui.study.attempt) { ui.study.attempt.code = t.value; Drafts.set(ui.study.attempt.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
+    else if (t && t.id === "jv-srv-url") ui.jv.srvUrl = t.value;
+    else if (t && t.id === "jv-srv-secret") ui.jv.srvSecret = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;
     else if (t && t.dataset && t.dataset.chk && ui.chk && ui.chk[t.dataset.chk]) ui.chk[t.dataset.chk].ans = t.value;
@@ -2629,8 +2631,11 @@
     try { localStorage.getItem("x"); return localStorage; }
     catch (e) { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: k => { delete m[k]; } }; }
   }
+  // Serverul platformei (adresă + secret, `onapsis-server-v1`) dă jetoane de scurtă durată pentru Live: cheia Gemini nu mai stă în telefon.
+  const jvSrv = ServerConn.create(jvStorage());
+  const jvTokens = LiveToken.create({ server: jvSrv, fetch: (u, i) => window.fetch(u, i) });
   function jvInit() {
-    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
+    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), server: jvSrv, getToken: jvFakes.getToken || jvTokens.get, clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
     return jv;
   }
   // Schimbările structurale redesenează ecranul; nivelul vocii și transcrierea se actualizează pe loc (altfel s-ar pierde textul scris și focusul).
@@ -2660,13 +2665,24 @@
   }
 
   function vJarvisHome(st, set) {
-    const hasKey = !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
+    const viaServer = jvSrv.configured(), hasKey = viaServer || !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
     if (!ui.jv.module || !MOD[ui.jv.module]) ui.jv.module = (mods[0] || {}).id || "";
     let h = '<div class="eyebrow">Jarvis · interviu vorbit</div>';
     h += '<section class="card stack-s"><h2>Vorbește cu Jarvis</h2><p class="small muted">Îți pune întrebări ca la interviu, te întreabă mai departe și îți notează răspunsurile ca în Oral. După ce începi, nu mai atingi ecranul.</p></section>';
     if (st.error) h += '<p class="jv-err" role="alert">' + esc(st.error.message) + "</p>";
-    if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi cheia Gemini.</p>';
-    const keyCard = '<section class="card stack-s"><h3>Cheia Gemini</h3>' +
+    if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi serverul (adresa și secretul) sau, dacă nu ai server, cheia Gemini.</p>';
+    // Cu server configurat, nu mai există câmp pentru cheia Gemini: Jarvis pornește cu un jeton de la server. Fără server rămâne cheia veche, ca rezervă.
+    const srv = jvSrv.get();
+    const serverCard = viaServer
+      ? '<section class="card stack-s"><h3>Server</h3><p class="small" id="jv-srvinfo">Server configurat (' + esc(srv.url.replace(/^https?:\/\//, "").replace(/^(.{22}).+$/, "$1…")) + '). Jarvis pornește cu un jeton de la server; nu ai nevoie de cheia Gemini în telefon.</p>' +
+        (set.key ? '<p class="small muted" id="jv-oldkey">A rămas o cheie veche în acest browser (…' + esc(set.key.slice(-4)) + "). Dispare la prima sesiune pornită cu serverul.</p>" : "") +
+        '<div class="row"><button class="btn sm" data-a="jv-key-test">Testează conexiunea</button><button class="btn sm ghost" data-a="jv-server-clear">Șterge serverul</button></div>' +
+        '<p class="xs muted" id="jv-keytest" role="status">' + esc(ui.jv.keyTest) + '</p><p class="xs muted">Pe nivelul gratuit, Google poate folosi conversațiile: nu spune nimic confidențial.</p></section>'
+      : '<section class="card stack-s"><h3>Server</h3><p class="small muted" id="jv-srvinfo">Adresa funcției și secretul tău. Rămân doar în acest browser. Cu ele, Jarvis nu mai are nevoie de cheia Gemini.</p>' +
+        '<input class="keyin" type="url" id="jv-srv-url" autocomplete="off" placeholder="https://….lambda-url.….on.aws" value="' + esc(ui.jv.srvUrl || srv.url) + '" aria-label="Adresa serverului">' +
+        '<input class="keyin" type="password" id="jv-srv-secret" autocomplete="off" placeholder="Secretul" value="' + esc(ui.jv.srvSecret) + '" aria-label="Secretul serverului">' +
+        '<div class="row"><button class="btn sm primary" data-a="jv-server-save">Salvează</button></div></section>';
+    const keyCard = viaServer ? serverCard : serverCard + '<section class="card stack-s"><h3>Cheia Gemini (metodă veche)</h3><p class="xs muted">Folosită doar cât nu ai server configurat.</p>' +
       (hasKey ? '<p class="small" id="jv-keyinfo">Cheie salvată (…' + esc(set.key.slice(-4)) + ").</p>" : '<p class="small muted" id="jv-keyinfo">Nu ai încă o cheie. Creeaz-o gratuit în Google AI Studio (aistudio.google.com/apikey) și lipește-o aici.</p>') +
       '<input class="keyin" type="password" id="jv-key" autocomplete="off" placeholder="' + (hasKey ? "Cheie nouă (opțional)" : "Cheia din Google AI Studio") + '" value="' + esc(ui.jv.keyDraft) + '" aria-label="Cheia Gemini">' +
       '<div class="row"><button class="btn sm primary" data-a="jv-key-save">Salvează</button>' + (hasKey ? '<button class="btn sm" data-a="jv-key-test">Testează</button><button class="btn sm ghost" data-a="jv-key-clear">Șterge cheia</button>' : "") + "</div>" +
@@ -2783,7 +2799,22 @@
       case "jv-again": J.reset(); render(); break;
       case "jv-key-save": { const v = (ui.jv.keyDraft || "").trim(); if (!v) { toast("Lipește cheia"); break; } J.settings.set({ key: v }); ui.jv.keyDraft = ""; ui.jv.keyTest = ""; render(); break; }
       case "jv-key-clear": J.settings.set({ key: "" }); ui.jv.keyTest = ""; render(); break;
-      case "jv-key-test": ui.jv.keyTest = "Se verifică…"; render(); J.checkKey().then(r => { ui.jv.keyTest = r.ok ? "Cheia merge." : "Nu merge: " + (r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua."); render(); }); break;
+      case "jv-key-test": {
+        const viaServer = jvSrv.configured();
+        ui.jv.keyTest = "Se verifică…"; render();
+        J.checkKey().then(r => {
+          ui.jv.keyTest = r.ok ? (viaServer ? "Conexiunea merge." : "Cheia merge.") : "Nu merge: " + (viaServer ? J.errorText(r.reason) : r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua.");
+          render();
+        });
+        break;
+      }
+      case "jv-server-save": {
+        const url = (ui.jv.srvUrl || jvSrv.get().url).trim(), secret = (ui.jv.srvSecret || "").trim();
+        if (!/^https:\/\/[^\s/]+/i.test(url)) { toast("Adresa trebuie să înceapă cu https://"); break; }
+        if (!secret) { toast("Lipește secretul"); break; }
+        jvSrv.set({ url, secret }); ui.jv.srvUrl = ""; ui.jv.srvSecret = ""; ui.jv.keyTest = ""; render(); break;
+      }
+      case "jv-server-clear": jvSrv.clear(); ui.jv.keyTest = ""; render(); break;
       case "jv-mics": J.mics().then(list => { ui.jv.mics = list; render(); }, () => toast("Nu pot citi microfoanele")); break;
     }
   }

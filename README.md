@@ -26,7 +26,9 @@ package.json       scripturi (validate, build, teste)
 src/
   shell.html       scheletul paginii
   app.js, app.css  aplicația, fără dependențe externe
-  live.js          Jarvis: serverul vocal (Gemini Live), protocolul și reluarea
+  server_conn.js   adresa și secretul serverului (`onapsis-server-v1`), un singur loc de citit
+  live_token.js    cere serverului un jeton de scurtă durată pentru Gemini Live (`POST /live-token`)
+  live.js          Jarvis: serverul vocal (Gemini Live), protocolul, jetonul și reluarea
   audio.js         Jarvis: microfon și difuzor în browser
   call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, poarta microfonului, „Nu te aud”)
   jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări, modul Lecție)
@@ -226,11 +228,12 @@ Progresul stă în baza de date a artefactului, într-un document per utilizator
 
 ## Jarvis (interviu vorbit)
 
-Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/docs/app/; GitHub Pages servește rădăcina ramurii `main`): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini stă în `localStorage` (`onapsis-gemini-v1`), niciodată în starea aplicației, în export sau în brief.
+Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/docs/app/; GitHub Pages servește rădăcina ramurii `main`): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini (doar ca rezervă, cât nu e configurat un server) stă în `localStorage` (`onapsis-gemini-v1`); adresa și secretul serverului în `onapsis-server-v1`. Niciuna nu intră în starea aplicației, în export sau în brief.
 
 Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Pe scurt:
 
 - **Trei cusături**: `Live` (GeminiLive | FakeLive), `Audio` (BrowserAudio | FakeAudio), `PrepApp` (app.js | stub). `Call` și `Jarvis` stau peste ele. Fiecare fișier merge în pagină (declarații globale) și în Node (`module.exports`), fără importuri între ele.
+- **Jetonul de la server** (platforma, tichetul 08; `server/README.md` are contractul `POST /live-token`). Cu serverul configurat (adresă + secret, introduse în Jarvis › Server și păstrate în `localStorage`, cheia `onapsis-server-v1`, JSON `{url, secret}`), Jarvis nu mai are câmp pentru cheia Gemini: la pornire cere un jeton (`LiveToken`, înainte de microfon, deci fără semnal vezi „Fără conexiune la server” și nu apare nicio cerere de permisiune), iar `GeminiLive` deschide `BidiGenerateContentConstrained?access_token=` pe v1beta. `cfg.getToken()` se cheamă la pornire, la reconectare când jetonul ține mai puțin de `renewMs` (12 minute: o conexiune ține ~10 minute, deci cu un prag de 5 jetonul ar putea expira între două reconectări) și o singură dată când Gemini refuză jetonul curent. Reconectările la `goAway` merg cu același jeton și cu handle-ul de reluare. Cu un jeton NOU handle-ul vechi nu e documentat: dacă e refuzat, sesiunea repornește curat și anunță `restarted`; Jarvis retrimite contextul (lecția: următoarea bucată vine cu `recap` de la ultima bucată auzită, cu `continuare: true`; antrenamentul: modelul e trimis la `next_card`). La fel după o redeschidere (`reopened`). Proba pe API-ul real: `docs/probe-jeton-live.html`. Fără server configurat rămâne, ca rezervă veche, câmpul pentru cheia Gemini (`onapsis-gemini-v1`); după prima sesiune pornită cu serverul cheia veche se șterge din browser.
 - **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`, iar pentru Lecție `sheet`, `lessonHeard`, `lessonDone`, `lessonRec`. Rândurile din istoric au `kind: "jarvis"`; cele de lecție au și `lesson: true`.
 - **Teste**: `tools/unit` (Node, câte un fișier pe modul), `tools/test_audio.py`, `tools/test_prepapp.py`, `tools/test_jarvis.py` (înlocuitorii din `tools/jarvis_fakes.js` se injectează prin `window.__jarvisFakes`).
 - **Publicare PWA**: `npm run build && npm run pages`, apoi commit și push. GitHub Pages servește `docs/app` din ramură (Settings › Pages › Deploy from a branch › `/docs`).

@@ -14,9 +14,18 @@ const Jarvis = (() => {
     denied: "Microfonul e blocat. Permite-l din setările browserului sau scrie în loc să vorbești.",
     "no-mic": "Nu găsesc niciun microfon.",
     failed: "Nu pot porni sunetul.",
-    nosheet: "Nu găsesc fișa acestui modul."
+    nosheet: "Nu găsesc fișa acestui modul.",
+    // Jetonul de la server (tichetul 08): primul pas al unei sesiuni, înainte de microfon.
+    noserver: "Serverul nu e configurat. Adaugă adresa și secretul în setările Jarvis.",
+    offline: "Fără conexiune la server: Jarvis are nevoie de internet ca să pornească. Încearcă din nou când ai semnal.",
+    unauthorized: "Serverul a refuzat secretul. Verifică-l în setările Jarvis.",
+    nokey: "Pe server lipsește cheia Gemini (GEMINI_API_KEY). Adaug-o la lansarea serverului.",
+    gemini: "Serverul n-a putut obține un jeton de la Gemini. Încearcă mai târziu.",
+    server: "Serverul nu răspunde cum trebuie. Încearcă mai târziu."
   };
-  const errorOf = code => ({ code, message: ERRORS[code] || ERRORS.failed });
+  // Cu jeton, `auth` nu mai înseamnă „cheia ta”: Gemini a refuzat jetonul (a expirat sau era deja folosit).
+  const TOKEN_ERRORS = { auth: "Gemini a refuzat jetonul sesiunii. Pornește din nou.", network: "Conexiunea a căzut. Pornește din nou când ai semnal." };
+  const errorOf = (code, token) => ({ code, message: (token && TOKEN_ERRORS[code]) || ERRORS[code] || ERRORS.failed });
   const MAX_TRANSCRIPT = 8;
   const SETTINGS_ITEM = "onapsis-jarvis-v1";
   const SILENCE = { short: 800, normal: 1200, long: 2000 };          // „Răbdare”: cât tace Alex până consideră Jarvis că a terminat
@@ -32,7 +41,9 @@ const Jarvis = (() => {
     skip: "Alex a cerut să sari peste bucata asta: apelează next_chunk pentru bucata următoare.",
     again: "Alex a cerut să repeți: apelează repeat_chunk și explică bucata de la început.",
     restart: "Alex a cerut să reiei lecția de la început: apelează next_chunk pentru prima bucată și începe din nou cu introducerea din „intro”.",
-    back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi "
+    back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi ",
+    // Sesiunea a repornit fără istoric (jeton nou): modelul trebuie să ceară din nou cardul curent.
+    restarted: "Sesiunea s-a reînnoit și nu mai ții minte conversația de până acum. Spune într-o propoziție că reiei întrebarea, apoi apelează next_card."
   };
 
   const NO_ARGS = { type: "OBJECT", properties: {} };
@@ -102,7 +113,7 @@ const Jarvis = (() => {
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
       "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale și cu un exemplu legat de experiența lui Alex (Django/DRF, Celery, Keycloak, Docker Swarm, Elasticsearch, computer vision). Rămâi la ce ai primit: fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
       "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare ține locul exemplului din experiența lui Alex: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
-      "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită.",
+      "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
       "5. Când next_chunk dă „closing”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",
@@ -122,6 +133,8 @@ const Jarvis = (() => {
     const storage = env.storage, callApi = env.call || (typeof Call !== "undefined" ? Call : null);
     const FRESH = { error: null, card: null, results: [], transcript: [], level: 0, warn: null, endedReason: null, startedAt: 0, mode: null, module: null, lesson: null };
     let state = Object.assign({ phase: "idle", needKey: false }, FRESH);
+    // Serverul (adresă + secret, `ServerConn`) dă jetoane pentru Live. Fără server configurat rămâne cheia Gemini din setări, ca rezervă veche.
+    const useServer = () => !!(env.server && env.server.configured() && env.getToken);
     const change = patch => { state = Object.assign({}, state, patch); if (env.onChange) env.onChange(); };
 
     // Setările: cheia într-un item separat, restul într-un JSON. Nimic din ele nu intră în starea aplicației.
@@ -282,12 +295,15 @@ const Jarvis = (() => {
         if (sh.avoid.length) r.traps = sh.avoid.slice();
       }
       if (first) {
-        if (lz.pos0 === 0 && n === 1) {
+        // După o repornire de sesiune (jeton nou, handle refuzat) modelul nu mai știe ce a spus: recapitularea pornește de la ultima bucată auzită, nu de la poziția salvată.
+        const from = lz.recapN != null ? lz.recapN : lz.pos0, resumed = lz.recapN != null;
+        lz.recapN = null;
+        if (from === 0 && n === 1) {
           const say = lz.name + ", în " + total + " idei. Prima: …";
           // Cu harta modulului lecția se deschide cu problema mare și cu grupurile de puncte; fără ea, cu ideea principală.
           r.intro = sh.map ? { module: lz.name, total, say, harta: { problema: sh.map.p, grupuri: sh.map.g.map(g => ({ puncte: g.a === g.b ? String(g.a) : g.a + "–" + g.b, text: g.t })) } }
             : { module: lz.name, lead: sh.lead, total, say };
-        } else if (lz.pos0 > 0) r.recap = { n: lz.pos0, text: sh.points[lz.pos0 - 1] };
+        } else if (from > 0) { r.recap = { n: from, text: sh.points[from - 1] }; if (resumed) r.recap.continuare = true; }
       }
       if (again) r.repeat = true;
       sync();
@@ -332,9 +348,17 @@ const Jarvis = (() => {
       armAsk();
       sync();
     }
+    // Sesiunea Live a repornit fără istoric (jeton nou cu handle refuzat, sau redeschidere după pierderea conexiunii): modelul nu mai știe ce a explicat.
+    // Următoarea bucată vine cu recapitularea ultimei bucăți auzite întregi; poziția salvată a lecției (`lz.idx`) rămâne a aplicației.
+    function lessonRecontext() {
+      const c = lz.cur, cut = lz.redo || (c && c.delivering);
+      lz.started = false;
+      lz.recapN = Math.max(0, Math.min(lz.total, lz.idx - (cut ? 1 : 0)));
+    }
     // Evenimentele apelului care contează pentru lecție.
     function lessonEvent(e) {
-      if (e.type === "spoken") onSpoken();
+      if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
+      else if (e.type === "spoken") onSpoken();
       else if (e.type === "voice") {
         if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; armAsk(); sync(); }
       } else if (e.type === "state") {
@@ -363,32 +387,43 @@ const Jarvis = (() => {
         cancelTimers();
         if (lz.heard.size || lz.closingHeard) env.app.log({ title: "Jarvis · Lecție · " + lz.name, n: Math.max(1, lz.heard.size), c: 0, dur: Math.round((env.clock.now() - sess.t0 - lz.pausedMs - (lz.paused ? env.clock.now() - lz.pausedAt : 0)) / 1000), lesson: true });
       } else if (results.length) env.app.log({ title: "Jarvis · " + TITLE[sess.mode], n: results.length, c: Math.round(results.reduce((a, r) => a + r.score, 0) * 100) / 100, dur: Math.round((env.clock.now() - sess.t0) / 1000) });
-      change({ phase: "ended", endedReason: reason, error: reason === "user" ? null : errorOf(reason) });
+      change({ phase: "ended", endedReason: reason, error: reason === "user" ? null : errorOf(reason, sess.viaServer) });
       if (lz) { lz.window = false; lz.asking = false; lz.paused = false; lz.lost = false; sync(); }
     }
     async function stop() { if (sess && sess.call) await sess.call.end(); }
 
     async function start(opts) {
-      const st = settings.get();
-      if (!st.key) { change({ needKey: true, phase: "idle" }); return false; }
+      const st = settings.get(), viaServer = useServer();
+      if (!viaServer && !st.key) { change({ needKey: true, phase: "idle" }); return false; }
       const lesson = opts.mode === "lesson";
       let sheet = null;
       if (lesson) {
         sheet = env.app.sheet(opts.module);
         if (!sheet || !sheet.total) { change({ phase: "idle", needKey: false, error: errorOf("nosheet") }); return false; }
       }
-      sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false };
+      sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
         muted: !!st.muted, window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
-        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0 } : null;
+        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
+      // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
+      // deci primul `getToken` din sesiune îl întoarce pe acesta, iar următoarele (reconectări, redeschidere) cer altul.
+      let auth = { key: st.key };
+      if (viaServer) {
+        let first;
+        try { first = await env.getToken(); }
+        catch (err) { sess = null; lz = null; change({ phase: "idle", error: errorOf(err && err.reason, true) }); return false; }
+        let spare = first;
+        auth = { getToken: async () => { if (spare) { const t = spare; spare = null; return t; } return env.getToken(); } };
+      }
       const summary = env.app.summary();
-      const config = lesson
-        ? { key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
-        : { key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) };
+      const config = Object.assign(lesson
+        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
+        : { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) }, auth);
       const onEvent = e => {
         if (lz && !sess.finished) lessonEvent(e);
-        if (e.type === "state") {
+        if (e.type === "restarted" && !lz && call && !sess.finished) call.say(MSG.restarted);
+        else if (e.type === "state") {
           change({ phase: e.state });
           if (e.state === "listening" && sess.endRequested && !lz) call.end();
         } else if (e.type === "transcript") {
@@ -401,22 +436,27 @@ const Jarvis = (() => {
       };
       let call = null;
       try { call = await callApi.start({ live: env.live, audio: env.audio, config, micId: st.micId, halfDuplex: lesson ? true : st.halfDuplex, gate: lesson ? false : undefined, survive: lesson, clock: env.clock, onEvent }); }
-      catch (err) { change({ phase: "idle", error: errorOf(err && err.reason) }); return false; }
+      catch (err) { change({ phase: "idle", error: errorOf(err && err.reason, viaServer) }); return false; }
       sess.call = call;
+      // Cheia veche din browser n-a mai fost nevoie: jetonul a mers, deci cheia Gemini rămâne doar pe server (spec platforma, Jarvis).
+      if (viaServer && storage.getItem(KEY_ITEM)) storage.removeItem(KEY_ITEM);
       call.say(lesson ? "Începem lecția despre " + sheet.name + ". Apelează next_chunk pentru prima bucată." : "Începem sesiunea. Mai sunt " + summary.daysLeft + " zile până la interviu.");
       return true;
     }
-    // Verifică dacă serverul acceptă cheia: deschide o sesiune goală și o închide.
+    // Verifică dacă Live acceptă autentificarea (jeton de la server sau cheia veche): deschide o sesiune goală și o închide.
+    // E și proba cap-coadă pe API-ul real: un jeton nou (consumă unul), WebSocket-ul `Constrained`, mesajul de setup.
     async function checkKey() {
-      const st = settings.get();
+      const st = settings.get(), viaServer = useServer();
       try {
-        const session = await env.live.open({ key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE.normal, system: "test", tools: [] }, () => {});
+        const session = await env.live.open(Object.assign(viaServer ? { getToken: env.getToken } : { key: st.key }, { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE.normal, system: "test", tools: [] }), () => {});
         session.close();
         return { ok: true };
       } catch (err) { return { ok: false, reason: (err && err.reason) || "failed" }; }
     }
     return {
       start, stop, settings, checkKey,
+      // Mesajul pentru ecran al unui motiv de eroare (în modul cu server sau cu cheie).
+      errorText: code => errorOf(code, useServer()).message,
       // După sfârșit, ecranul revine la alegerea modului; în timpul unei sesiuni nu face nimic.
       reset() { if (state.phase === "ended") change(Object.assign({ phase: "idle", needKey: false }, FRESH)); },
       interrupt() { if (sess && sess.call) sess.call.interrupt(); },

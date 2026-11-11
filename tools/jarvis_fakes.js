@@ -2,8 +2,9 @@
 // `window.__jarvisFakes.ctl` e telecomanda testului: emit(e) = ce trimite serverul, level/frame = microfonul, drain() = sfârșitul redării,
 // tool(nume, args) = ce ar apela modelul, advance(ms) = ceasul fals al lui Jarvis (rulează și temporizatoarele programate cu `after`),
 // speak() = modelul își termină tura, beeps / pauses / resumes = ce a cerut Jarvis de la audio.
+// `ctl.token` = jetonul de la server: calls = câte jetoane s-au cerut, fail = motivul eșecului ("offline", "unauthorized", ...) sau null.
 (() => {
-  const ctl = { live: { cfg: null, sent: [], closed: false, failOpen: null }, audio: { started: false, stopped: false, flushes: 0, played: 0, failStart: null, beeps: [], pauses: 0, resumes: 0 }, clock: { t: Date.now() } };
+  const ctl = { live: { cfg: null, sent: [], closed: false, failOpen: null }, audio: { started: false, stopped: false, flushes: 0, played: 0, failStart: null, beeps: [], pauses: 0, resumes: 0 }, clock: { t: Date.now() }, token: { calls: 0, fail: null } };
   const timers = [];
   let onEvent = () => {}, audioOpts = null, playing = false;
   const fail = reason => { const e = new Error(reason); e.reason = reason; return e; };
@@ -19,6 +20,11 @@
         close: () => { if (ctl.live.closed) return; onEvent({ type: "closed", reason: "user", code: 1000, detail: "" }); ctl.live.closed = true; }
       };
     }
+  };
+  const getToken = async () => {
+    ctl.token.calls++;
+    if (ctl.token.fail) throw fail(ctl.token.fail);
+    return { token: "TOKEN" + ctl.token.calls, expireAt: Date.now() + 3600000 };
   };
   const audio = {
     start: async o => { if (ctl.audio.failStart) throw fail(ctl.audio.failStart); audioOpts = o; ctl.audio.started = true; return { label: "Microfon de test" }; },
@@ -48,5 +54,5 @@
   };
   ctl.speak = () => { onEvent({ type: "audio", pcm: new Int16Array([1]) }); onEvent({ type: "turnComplete" }); ctl.drain(); };
   const clock = { now: () => ctl.clock.t, after: (ms, fn) => { const tm = { at: ctl.clock.t + ms, fn }; timers.push(tm); return () => { const i = timers.indexOf(tm); if (i >= 0) timers.splice(i, 1); }; } };
-  window.__jarvisFakes = { live, audio, clock, ctl };
+  window.__jarvisFakes = { live, audio, clock, getToken, ctl };
 })();

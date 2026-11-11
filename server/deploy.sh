@@ -33,7 +33,7 @@ sam deploy \
   --resolve-s3 \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset \
-  --parameter-overrides "AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN"
+  --parameter-overrides "AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN" "GeminiApiKey=${GEMINI_API_KEY:-}"
 
 echo
 echo "Adresa serverului:"
