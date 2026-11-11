@@ -83,7 +83,7 @@ def test_iam_is_limited_to_the_table():
 
 def test_no_secrets_committed():
     for path in list(ROOT.rglob("*.py")) + [ROOT / "template.yaml", ROOT / "deploy.sh", ROOT / "README.md"]:
-        if ".build" in path.parts or path.name == "conftest.py":
+        if {".build", ".venv", "venv", "site-packages", "node_modules"} & set(path.parts) or path.name == "conftest.py":
             continue
         body = path.read_text(encoding="utf-8")
         assert not re.search(r"AKIA[0-9A-Z]{16}", body), path
