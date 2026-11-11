@@ -318,7 +318,7 @@ async def artifact(b):
     await fresh(pg)
     await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
     await pg.click('#sheet-asyncio summary'); await pg.wait_for_timeout(150)
-    check("in the artifact the sheet has no Ascultă button, but a link to the app", await pg.locator('[data-a="listen"]').count() == 0 and await pg.locator('#sheet-asyncio a[data-lesson-link]').count() == 1 and "alexxgalea.github.io/ba-quizz-learn/app" in (await pg.locator('#sheet-asyncio a[data-lesson-link]').get_attribute("href")))
+    check("in the artifact the sheet has no Ascultă button, but a link to the app", await pg.locator('[data-a="listen"]').count() == 0 and await pg.locator('#sheet-asyncio a[data-lesson-link]').count() == 1 and "alexxgalea.github.io/ba-quizz-learn/docs/app/" in (await pg.locator('#sheet-asyncio a[data-lesson-link]').get_attribute("href")))
     await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
     check("in the artifact the Jarvis tab has no lesson controls but says the lesson lives in the app", await pg.locator('[data-a="jv-lesson"], #jv-rec').count() == 0 and "lecți" in (await text(pg, "main")).lower() and not errs, errs)
     await ctx.close()
