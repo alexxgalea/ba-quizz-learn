@@ -56,6 +56,12 @@ async def new_page(b, page_url, scheme="light"):
         req = route.request
         if req.method == "OPTIONS":
             await route.fulfill(status=204, headers=CORS); return
+        path = req.url[len(SRV):].split("?")[0]
+        if path == "/events":    # the journal sync (ticket 05) shares the server: an empty, valid answer, not logged as an AI call
+            if req.method == "GET":
+                await route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps({"events": [], "cursor": 0, "more": False})); return
+            ids = [e["id"] for e in json.loads(req.post_data or "{}").get("events", [])]
+            await route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps({"accepted": ids, "duplicates": [], "cursor": len(ids)})); return
         body = json.loads(req.post_data); k = kind_of(body)
         pg.log.append({"kind": k, "body": body, "auth": req.headers.get("authorization")})
         item = pg.q[k].pop(0) if pg.q.get(k) else None
