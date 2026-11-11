@@ -142,7 +142,7 @@ async def main():
 
             # ---------- 4) oral AI grade ----------
             await start_gil(pg)
-            check(tag + "oral: the AI button is offered (server counts as a source) and is named AI", "AI" in await pg.inner_text('[data-a="oral-ai"]') and await pg.locator('[data-a="iv-start"]').count() == 0)
+            check(tag + "oral: the direct AI check is offered, named AI, next to the interviewer (the server is a source for both; test_iv_server.py covers the dialog)", "AI" in await pg.inner_text('[data-a="oral-ai"]') and await pg.locator('[data-a="iv-start"]').count() == 1)
             answer = "GIL-ul lasă un singur thread să execute bytecode, deci pentru CPU-bound folosesc procese."
             n0 = len(pg.srv)
             await pg.fill('#ans-t', answer); await pg.click('[data-a="oral-ai"]'); await pg.wait_for_selector('.ai-v', timeout=5000)

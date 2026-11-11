@@ -104,6 +104,26 @@ test("a request that takes too long ends with timeout", async () => {
   assert.equal(await code(mk(f, configured(), { timeoutMs: 20 }).generate({ user: "U" })), "timeout");
 });
 
+test("an abort signal from the caller ends the request with cancelled (not timeout) and the chain stops", async () => {
+  const hang = { calls: [], fetch: (url, init) => new Promise((_, rej) => init.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" })))) };
+  const ctl = new AbortController(), srv = mk(hang, configured(), { timeoutMs: 5000 });
+  const p = code(srv.generate({ user: "U", signal: ctl.signal }));
+  ctl.abort();
+  assert.equal(await p, "cancelled");
+  const late = new AbortController(); late.abort();
+  assert.equal(await code(srv.generate({ user: "U", signal: late.signal })), "cancelled");        // deja oprit: nu se mai trimite nimic
+  const called = [];
+  const fell = await ServerAi.run([{ generate: async () => { throw Object.assign(new Error("c"), { code: "cancelled" }); } }, { generate: async () => { called.push(1); return "x"; } }], null).then(() => null, e => e.code);
+  assert.equal(fell, "cancelled"); assert.deepEqual(called, []);
+});
+
+test("an abort signal does not stop a request that already finished, and its listener is removed", async () => {
+  const f = fakeFetch(ok("ceva"));
+  let removed = 0; const sig = { aborted: false, addEventListener() {}, removeEventListener() { removed++; } };
+  assert.equal(await mk(f).generate({ user: "U", signal: sig }), "ceva");
+  assert.equal(removed, 1);
+});
+
 test("order: with a server nothing goes straight to Gemini or DeepSeek; without one the old order holds", () => {
   assert.deepEqual(ServerAi.order({ server: true, sample: false, gemini: true, deepseek: true }), ["server"]);
   assert.deepEqual(ServerAi.order({ server: true, sample: true, gemini: true, deepseek: true }), ["server", "sample"]);
