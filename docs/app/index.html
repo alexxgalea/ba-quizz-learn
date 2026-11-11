@@ -169,6 +169,7 @@ code { font-size: .88em; background: var(--code-bg); border: 1px solid var(--lin
 .btn.sm { min-height: 36px; padding: 6px 12px; font-size: 14px; border-radius: 9px; }
 .btn.block { width: 100%; }
 .btn.danger { color: var(--bad); border-color: var(--bad); }
+p.bad { color: var(--bad); }
 .btn[disabled] { opacity: .45; cursor: default; }
 
 .chip { display: inline-flex; align-items: center; gap: 5px; font: 600 12px/1 var(--font-mono); padding: 5px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
@@ -6940,11 +6941,111 @@ window.PREP.desf = {"asgi":{"map":{"p":"Un API Python trebuie să primească mii
 
 </script>
 <script>
+// ServerConn: adresa și secretul serverului (platforma, tichetul 08), într-un singur loc.
+// Stau doar în `localStorage`, la cheia `onapsis-server-v1`, ca JSON `{ url, secret }`. Nu intră în starea `S`, în export sau în brief.
+// Mic și fără importuri: stocarea se primește prin `create`. Orice cod care vorbește cu serverul citește de aici
+// (get / set / valid / configured / endpoint / headers), nu din `localStorage` direct. În pagină e o declarație globală, în Node un modul.
+const ServerConn = (() => {
+  const ITEM = "onapsis-server-v1";
+
+  // Adresa fără spații și fără „/” la capăt; secretul fără spații. Orice altceva e lăsat cum l-a scris Alex.
+  const cleanUrl = u => String(u || "").trim().replace(/\/+$/, "");
+  const cleanSecret = s => String(s || "").trim();
+
+  // Regulile de validare, într-un singur loc (le folosesc formularul din Progres, AI-ul, Jarvis și sincronizarea).
+  // Adresa: https, sau http doar pe localhost (dezvoltare), fără „/” la capăt, fără spații; altfel "". Secretul merge într-un antet HTTP:
+  // doar caractere ASCII tipăribile, fără spații.
+  function normUrl(u) {
+    u = cleanUrl(u);
+    return /^https:\/\/[^\s/]+(\/\S*)?$/i.test(u) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/\S*)?$/i.test(u) ? u : "";
+  }
+  const validSecret = s => /^[\x21-\x7e]+$/.test(cleanSecret(s));
+
+  function create(storage) {
+    function get() {
+      let o = {};
+      try { o = JSON.parse(storage.getItem(ITEM) || "{}") || {}; } catch (e) { /* JSON stricat: ca și cum n-ar fi nimic */ }
+      return { url: cleanUrl(o.url), secret: cleanSecret(o.secret) };
+    }
+    // `set` îmbină peste ce există ({ url } schimbă doar adresa); ambele goale șterg intrarea.
+    function set(patch) {
+      const next = Object.assign(get(), patch);
+      const url = cleanUrl(next.url), secret = cleanSecret(next.secret);
+      if (!url && !secret) storage.removeItem(ITEM); else storage.setItem(ITEM, JSON.stringify({ url, secret }));
+    }
+    return {
+      get, set,
+      clear: () => storage.removeItem(ITEM),
+      // Perechea validă (adresă normalizată + secret ASCII) sau null; de aici citesc AI-ul și sincronizarea.
+      valid() { const s = get(), url = normUrl(s.url); return url && validSecret(s.secret) ? { url, secret: s.secret } : null; },
+      // Configurat = are o adresă validă și un secret valid.
+      configured() { return !!this.valid(); },
+      endpoint: path => get().url + path,
+      headers() { return { authorization: "Bearer " + get().secret }; }
+    };
+  }
+  return { create, ITEM, normUrl, validSecret };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = ServerConn;
+
+// LiveToken: cere serverului un jeton de scurtă durată pentru Gemini Live (`POST /live-token`, server/README.md).
+// Clientul nu vede niciodată cheia Gemini. Un jeton ține ~60 de minute și deschide O SINGURĂ sesiune nouă;
+// reînnoirea înseamnă un jeton nou, deci `get()` cere de fiecare dată unul proaspăt (GeminiLive decide când).
+// Fără importuri: serverul (ServerConn), `fetch` și ceasul se primesc prin `create`. În pagină e o declarație globală, în Node un modul.
+const LiveToken = (() => {
+  const TIMEOUT_MS = 12000;
+  // Eroarea are `reason`, ca cele din GeminiLive: noserver (nu e configurat), offline (nu ajunge la server), unauthorized (secret greșit),
+  // nokey (serverul n-are cheia Gemini), gemini (Gemini a refuzat sau nu răspunde), server (orice altceva).
+  const fail = (reason, detail) => Object.assign(new Error(detail || reason), { reason, code: 0, detail: detail || "" });
+
+  function create(env) {
+    const now = env.now || Date.now;
+    // Întoarce { token, expireAt } cu expireAt în milisecunde după ceasul telefonului (din `expiresIn`, nu din ora serverului: un ceas dereglat nu strică reînnoirea).
+    async function get() {
+      if (!env.server.configured()) throw fail("noserver", "serverul nu e configurat");
+      const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), env.timeoutMs || TIMEOUT_MS) : null;
+      let res;
+      try { res = await env.fetch(env.server.endpoint("/live-token"), { method: "POST", headers: env.server.headers(), signal: ctl ? ctl.signal : undefined }); }
+      catch (e) { throw fail("offline", "nu ajung la server"); }
+      finally { if (timer) clearTimeout(timer); }
+      let body = null;
+      try { body = await res.json(); } catch (e) { /* corp fără JSON: se judecă după status */ }
+      if (res.status === 401) throw fail("unauthorized", "secret refuzat");
+      if (!res.ok) {
+        const code = body && body.detail && body.detail.error;
+        throw fail(code === "gemini_key_missing" ? "nokey" : /^gemini_/.test(code || "") ? "gemini" : "server", code || "http " + res.status);
+      }
+      if (!body || typeof body.token !== "string" || !body.token) throw fail("server", "răspuns fără jeton");
+      const t = now(), expireAt = body.expiresIn > 0 ? t + body.expiresIn * 1000 : Date.parse(body.expireAt);
+      if (!(expireAt > t)) throw fail("server", "jeton fără expirare");
+      return { token: body.token, expireAt };
+    }
+    return { get };
+  }
+  return { create };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = LiveToken;
+
 // GeminiLive: protocolul WebSocket al serverului vocal, ascuns în spatele lui `open` (spec §4.1).
 // Fără importuri: socketul și ceasul se primesc prin `create`. În pagină e o declarație globală, în Node un modul.
+// Autentificarea: `cfg.getToken()` (jeton efemer de la server, tichetul 08) sau, ca rezervă veche, `cfg.key` (cheia Gemini).
+//   - Jetonul deschide `BidiGenerateContentConstrained?access_token=` (doar v1beta), cheia deschide `BidiGenerateContent?key=`.
+//   - `getToken()` întoarce `{ token, expireAt }` (expireAt în ms, după ceasul telefonului) și se cheamă: la pornire, la reconectare
+//     când jetonul ține mai puțin de `cfg.renewMs` (implicit 12 minute) și o singură dată când Gemini refuză jetonul curent.
+//   - Reconectările la `goAway` (conexiunea ține ~10 minute) merg cu ACELAȘI jeton și cu handle-ul de reluare. Cu un jeton NOU
+//     handle-ul vechi nu e documentat: dacă e refuzat, sesiunea repornește curat (fără handle) și anunță `restarted`, ca stratul de
+//     deasupra să retrimită contextul (poziția lecției). Doar o închidere `rejected` (1007/1008) sau `auth` rupe handle-ul; quota și restul nu.
+//     Dacă reînnoirea jetonului eșuează (server, unauthorized, nokey) dar cel curent mai ține, reconectarea îl folosește pe el. Vezi docs/probe-jeton-live.html pentru proba pe API-ul real.
 const GeminiLive = (() => {
-  const WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+  const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.";
+  const WS_URL = WS_BASE + "BidiGenerateContent";                         // cu ?key=
+  const WS_TOKEN_URL = WS_BASE + "BidiGenerateContentConstrained";         // cu ?access_token=
   const RETRY_MS = [500, 1000, 2000];                // pauzele dinaintea celor trei încercări de reluare
+  // Conexiunea ține ~10 minute, deci un jeton care mai ține 5 ar expira între două reconectări; pragul e peste durata unei conexiuni.
+  const RENEW_MS = 12 * 60000;
+  // Dacă reînnoirea eșuează, jetonul curent se mai folosește doar dacă ține cel puțin atât.
+  const MIN_LEFT_MS = 30000;
 
   function setupMessage(cfg, handle) {
     const setup = {
@@ -6977,7 +7078,7 @@ const GeminiLive = (() => {
   // De ce s-a închis conexiunea, după codul și textul serverului: auth (cheie), quota (limită), rejected (cerere greșită), network (restul).
   function closeInfo(code, detail) {
     detail = detail || "";
-    const reason = /api key|permission|unauthenticated|credential|forbidden/i.test(detail) ? "auth"
+    const reason = /api key|permission|unauthenticated|credential|forbidden|(access|auth).?token|token.*(expired|invalid)|expired.*token/i.test(detail) ? "auth"
       : /quota|exhaust|rate.?limit|too many|429/i.test(detail) ? "quota"
       : code === 1007 || code === 1008 ? "rejected" : "network";
     return { reason, code, detail };
@@ -6987,11 +7088,14 @@ const GeminiLive = (() => {
   function create(env) {
     const Socket = (env && env.WebSocket) || (typeof WebSocket !== "undefined" ? WebSocket : null);
     const sleep = (env && env.sleep) || (ms => new Promise(r => setTimeout(r, ms)));
+    const now = (env && env.now) || Date.now;
 
     function open(cfg, onEvent) {
-      if (!cfg.key) return Promise.reject(failure({ reason: "auth", code: 0, detail: "lipsește cheia" }));
+      if (!cfg.key && !cfg.getToken) return Promise.reject(failure({ reason: "auth", code: 0, detail: "lipsește cheia" }));
       const tools = new Map((cfg.tools || []).map(t => [t.name, t]));
       let sock = null, gen = 0, live = false, closed = false, reconnecting = false, handle = null;
+      // Jetonul curent și jetonul cu care s-a primit ultimul handle (un handle obținut cu alt jeton nu e garantat că se acceptă).
+      let tok = null, handleTok = null;
 
       const send = obj => { if (closed || !live || sock.readyState !== 1) return false; sock.send(JSON.stringify(obj)); return true; };
       // O singură închidere definitivă, anunțată cu `closed`.
@@ -7031,7 +7135,7 @@ const GeminiLive = (() => {
         if (msg.toolCall) runCalls(msg.toolCall.functionCalls || []);
         if (msg.toolCallCancellation) (msg.toolCallCancellation.ids || []).forEach(id => cancelled.add(id));
         const u = msg.sessionResumptionUpdate;
-        if (u && u.resumable && u.newHandle) handle = u.newHandle;
+        if (u && u.resumable && u.newHandle) { handle = u.newHandle; handleTok = tok && tok.token; }
         // Serverul anunță că închide curând: se trece pe o conexiune nouă acum, nu după ce cade.
         if (msg.goAway) { const old = sock; gen++; old.close(1000); lost({ reason: "network", code: 0, detail: "goAway" }); }
       };
@@ -7039,7 +7143,7 @@ const GeminiLive = (() => {
       // Deschide un socket. Se rezolvă cu null când serverul confirmă setup-ul sau cu motivul închiderii dacă pică înainte.
       // Un socket înlocuit (`gen` mai nou) nu mai are voie să schimbe nimic.
       const connect = () => new Promise(done => {
-        const id = ++gen, s = sock = new Socket(WS_URL + "?key=" + encodeURIComponent(cfg.key));
+        const id = ++gen, s = sock = new Socket(cfg.getToken ? WS_TOKEN_URL + "?access_token=" + encodeURIComponent(tok.token) : WS_URL + "?key=" + encodeURIComponent(cfg.key));
         let settled = false;
         const settle = v => { if (!settled) { settled = true; done(v); } };
         s.onopen = () => s.send(JSON.stringify(setupMessage(cfg, handle)));
@@ -7057,6 +7161,54 @@ const GeminiLive = (() => {
         };
       });
 
+      // Cere un jeton nou dacă n-avem unul sau ține mai puțin de pragul de reînnoire (sau dacă `force`). Întoarce null la succes
+      // sau motivul eșecului: ce a spus `getToken` (offline = fără semnal, retriabil ca rețeaua), altfel network.
+      const ensureToken = async force => {
+        if (!cfg.getToken) return null;
+        if (!force && tok && tok.expireAt - now() >= (cfg.renewMs == null ? RENEW_MS : cfg.renewMs)) return null;
+        try {
+          const t = await cfg.getToken();
+          if (!t || !t.token) throw new Error("jeton gol");
+          tok = { token: t.token, expireAt: t.expireAt };
+          return null;
+        } catch (err) {
+          return { reason: (err && err.reason) || "network", code: 0, detail: String((err && err.detail) || (err && err.message) || "jeton") };
+        }
+      };
+      const retriable = info => info.reason === "network" || info.reason === "offline";
+      // O conectare completă: jetonul la zi, apoi socketul. Întoarce { info, restarted }: info = null la succes, altfel motivul.
+      // Ieșiri pentru jeton: reînnoirea a eșuat, dar cel curent încă ține → se folosește el (și handle-ul), doar rețeaua se reîncearcă;
+      // jeton refuzat de Gemini → unul nou, o singură dată; handle refuzat (rejected sau auth) după un jeton nou → fără handle (repornire curată).
+      // `closed` se verifică după fiecare așteptare: apelul poate fi încheiat în timp ce se cere jetonul, iar un socket deschis
+      // după aceea ar rămâne în picioare fără stăpân.
+      const GONE = { reason: "user", code: 1000, detail: "" };
+      const establish = async () => {
+        const out = { info: null, restarted: false };
+        const before = tok;
+        let bad = await ensureToken(false);
+        if (closed) { out.info = GONE; return out; }
+        if (bad && !retriable(bad) && before && before.expireAt - now() > MIN_LEFT_MS) bad = null;
+        if (bad) { out.info = bad; return out; }
+        let fresh = tok !== before;
+        let r = await connect();
+        if (closed) { sock.close(1000); out.info = GONE; return out; }
+        if (r && r.reason === "auth" && cfg.getToken && !fresh) {
+          const bad2 = await ensureToken(true);
+          if (closed) { out.info = GONE; return out; }
+          if (bad2) { out.info = bad2; return out; }
+          fresh = true;
+          r = await connect();
+          if (closed) { sock.close(1000); out.info = GONE; return out; }
+        }
+        if (r && handle && cfg.getToken && tok.token !== handleTok && (r.reason === "rejected" || r.reason === "auth")) {
+          handle = null; handleTok = null; out.restarted = true;
+          r = await connect();
+          if (closed) { sock.close(1000); out.info = GONE; return out; }
+        }
+        out.info = r;
+        return out;
+      };
+
       // Conexiunea s-a pierdut după ce era în picioare: se reia doar cu un handle și doar dacă motivul e rețeaua.
       const lost = info => {
         if (closed || reconnecting) return;
@@ -7069,17 +7221,17 @@ const GeminiLive = (() => {
         for (const ms of (cfg.retryMs || RETRY_MS)) {
           await sleep(ms);
           if (closed) return;
-          const r = await connect();
+          const { info: r, restarted } = await establish();
           if (closed) return;
-          if (!r) { reconnecting = false; live = true; onEvent({ type: "live" }); return; }
+          if (!r) { reconnecting = false; live = true; if (restarted) onEvent({ type: "restarted" }); onEvent({ type: "live" }); return; }
           last = r;
-          if (r.reason !== "network") break;
+          if (!retriable(r)) break;
         }
         reconnecting = false;
         finish(last);
       };
 
-      return connect().then(first => {
+      return establish().then(({ info: first }) => {
         if (first) { closed = true; throw failure(first); }      // a căzut înainte de confirmare
         live = true;
         return {
@@ -7313,9 +7465,10 @@ const Call = (() => {
 
     const onLive = e => {
       if (ended) return;
-      if (e.type === "closed") { if (o.survive && e.reason === "network") goLost(); else finish(e.reason, false); return; }
+      if (e.type === "closed") { if (o.survive && (e.reason === "network" || e.reason === "offline")) goLost(); else finish(e.reason, false); return; }
       if (e.type === "reconnecting") { flags.reconnecting = true; refreshWarn(); return; }
       if (e.type === "live") { flags.reconnecting = false; refreshWarn(); return; }
+      if (e.type === "restarted") { emit(e); return; }          // conexiunea s-a reluat FĂRĂ istoric (jeton nou, handle refuzat): ecranul retrimite contextul
       if (e.type === "tool") { stale = false; emit(e); return; }          // un apel de funcție începe o tură nouă: restul turei tăiate nu mai contează
       if (paused && pauseMode !== "keep") return;          // pauza simplă: ce mai vine de la model se aruncă
       if (e.type === "audio") { if (stale) return; turnDone = false; talking = false; o.audio.play(e.pcm); }
@@ -7434,9 +7587,18 @@ const Jarvis = (() => {
     denied: "Microfonul e blocat. Permite-l din setările browserului sau scrie în loc să vorbești.",
     "no-mic": "Nu găsesc niciun microfon.",
     failed: "Nu pot porni sunetul.",
-    nosheet: "Nu găsesc fișa acestui modul."
+    nosheet: "Nu găsesc fișa acestui modul.",
+    // Jetonul de la server (tichetul 08): primul pas al unei sesiuni, înainte de microfon.
+    noserver: "Serverul nu e configurat. Adaugă adresa și secretul în setările Jarvis.",
+    offline: "Fără conexiune la server: Jarvis are nevoie de internet ca să pornească. Încearcă din nou când ai semnal.",
+    unauthorized: "Serverul a refuzat secretul. Verifică-l în setările Jarvis.",
+    nokey: "Pe server lipsește cheia Gemini (GEMINI_API_KEY). Adaug-o la lansarea serverului.",
+    gemini: "Serverul n-a putut obține un jeton de la Gemini. Încearcă mai târziu.",
+    server: "Serverul nu răspunde cum trebuie. Încearcă mai târziu."
   };
-  const errorOf = code => ({ code, message: ERRORS[code] || ERRORS.failed });
+  // Cu jeton, `auth` nu mai înseamnă „cheia ta”: Gemini a refuzat jetonul (a expirat sau era deja folosit).
+  const TOKEN_ERRORS = { auth: "Gemini a refuzat jetonul sesiunii. Pornește din nou.", network: "Conexiunea a căzut. Pornește din nou când ai semnal." };
+  const errorOf = (code, token) => ({ code, message: (token && TOKEN_ERRORS[code]) || ERRORS[code] || ERRORS.failed });
   const MAX_TRANSCRIPT = 8;
   const SETTINGS_ITEM = "onapsis-jarvis-v1";
   const SILENCE = { short: 800, normal: 1200, long: 2000 };          // „Răbdare”: cât tace Alex până consideră Jarvis că a terminat
@@ -7452,7 +7614,9 @@ const Jarvis = (() => {
     skip: "Alex a cerut să sari peste bucata asta: apelează next_chunk pentru bucata următoare.",
     again: "Alex a cerut să repeți: apelează repeat_chunk și explică bucata de la început.",
     restart: "Alex a cerut să reiei lecția de la început: apelează next_chunk pentru prima bucată și începe din nou cu introducerea din „intro”.",
-    back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi "
+    back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi ",
+    // Sesiunea a repornit fără istoric (jeton nou): modelul trebuie să ceară din nou cardul curent.
+    restarted: "Sesiunea s-a reînnoit și nu mai ții minte conversația de până acum. Spune într-o propoziție că reiei întrebarea, apoi apelează next_card."
   };
 
   const NO_ARGS = { type: "OBJECT", properties: {} };
@@ -7522,7 +7686,7 @@ const Jarvis = (() => {
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
       "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale și cu un exemplu legat de experiența lui Alex (Django/DRF, Celery, Keycloak, Docker Swarm, Elasticsearch, computer vision). Rămâi la ce ai primit: fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
       "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare ține locul exemplului din experiența lui Alex: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
-      "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită.",
+      "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
       "5. Când next_chunk dă „closing”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",
@@ -7542,6 +7706,8 @@ const Jarvis = (() => {
     const storage = env.storage, callApi = env.call || (typeof Call !== "undefined" ? Call : null);
     const FRESH = { error: null, card: null, results: [], transcript: [], level: 0, warn: null, endedReason: null, startedAt: 0, mode: null, module: null, lesson: null };
     let state = Object.assign({ phase: "idle", needKey: false }, FRESH);
+    // Serverul (adresă + secret, `ServerConn`) dă jetoane pentru Live. Fără server configurat rămâne cheia Gemini din setări, ca rezervă veche.
+    const useServer = () => !!(env.server && env.server.configured() && env.getToken);
     const change = patch => { state = Object.assign({}, state, patch); if (env.onChange) env.onChange(); };
 
     // Setările: cheia într-un item separat, restul într-un JSON. Nimic din ele nu intră în starea aplicației.
@@ -7702,12 +7868,15 @@ const Jarvis = (() => {
         if (sh.avoid.length) r.traps = sh.avoid.slice();
       }
       if (first) {
-        if (lz.pos0 === 0 && n === 1) {
+        // După o repornire de sesiune (jeton nou, handle refuzat) modelul nu mai știe ce a spus: recapitularea pornește de la ultima bucată auzită, nu de la poziția salvată.
+        const from = lz.recapN != null ? lz.recapN : lz.pos0, resumed = lz.recapN != null;
+        lz.recapN = null;
+        if (from === 0 && n === 1) {
           const say = lz.name + ", în " + total + " idei. Prima: …";
           // Cu harta modulului lecția se deschide cu problema mare și cu grupurile de puncte; fără ea, cu ideea principală.
           r.intro = sh.map ? { module: lz.name, total, say, harta: { problema: sh.map.p, grupuri: sh.map.g.map(g => ({ puncte: g.a === g.b ? String(g.a) : g.a + "–" + g.b, text: g.t })) } }
             : { module: lz.name, lead: sh.lead, total, say };
-        } else if (lz.pos0 > 0) r.recap = { n: lz.pos0, text: sh.points[lz.pos0 - 1] };
+        } else if (from > 0) { r.recap = { n: from, text: sh.points[from - 1] }; if (resumed) r.recap.continuare = true; }
       }
       if (again) r.repeat = true;
       sync();
@@ -7752,9 +7921,17 @@ const Jarvis = (() => {
       armAsk();
       sync();
     }
+    // Sesiunea Live a repornit fără istoric (jeton nou cu handle refuzat, sau redeschidere după pierderea conexiunii): modelul nu mai știe ce a explicat.
+    // Următoarea bucată vine cu recapitularea ultimei bucăți auzite întregi; poziția salvată a lecției (`lz.idx`) rămâne a aplicației.
+    function lessonRecontext() {
+      const c = lz.cur, cut = lz.redo || (c && c.delivering);
+      lz.started = false;
+      lz.recapN = Math.max(0, Math.min(lz.total, lz.idx - (cut ? 1 : 0)));
+    }
     // Evenimentele apelului care contează pentru lecție.
     function lessonEvent(e) {
-      if (e.type === "spoken") onSpoken();
+      if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
+      else if (e.type === "spoken") onSpoken();
       else if (e.type === "voice") {
         if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; armAsk(); sync(); }
       } else if (e.type === "state") {
@@ -7783,32 +7960,43 @@ const Jarvis = (() => {
         cancelTimers();
         if (lz.heard.size || lz.closingHeard) env.app.log({ title: "Jarvis · Lecție · " + lz.name, n: Math.max(1, lz.heard.size), c: 0, dur: Math.round((env.clock.now() - sess.t0 - lz.pausedMs - (lz.paused ? env.clock.now() - lz.pausedAt : 0)) / 1000), lesson: true });
       } else if (results.length) env.app.log({ title: "Jarvis · " + TITLE[sess.mode], n: results.length, c: Math.round(results.reduce((a, r) => a + r.score, 0) * 100) / 100, dur: Math.round((env.clock.now() - sess.t0) / 1000) });
-      change({ phase: "ended", endedReason: reason, error: reason === "user" ? null : errorOf(reason) });
+      change({ phase: "ended", endedReason: reason, error: reason === "user" ? null : errorOf(reason, sess.viaServer) });
       if (lz) { lz.window = false; lz.asking = false; lz.paused = false; lz.lost = false; sync(); }
     }
     async function stop() { if (sess && sess.call) await sess.call.end(); }
 
     async function start(opts) {
-      const st = settings.get();
-      if (!st.key) { change({ needKey: true, phase: "idle" }); return false; }
+      const st = settings.get(), viaServer = useServer();
+      if (!viaServer && !st.key) { change({ needKey: true, phase: "idle" }); return false; }
       const lesson = opts.mode === "lesson";
       let sheet = null;
       if (lesson) {
         sheet = env.app.sheet(opts.module);
         if (!sheet || !sheet.total) { change({ phase: "idle", needKey: false, error: errorOf("nosheet") }); return false; }
       }
-      sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false };
+      sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
         muted: !!st.muted, window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
-        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0 } : null;
+        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
+      // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
+      // deci primul `getToken` din sesiune îl întoarce pe acesta, iar următoarele (reconectări, redeschidere) cer altul.
+      let auth = { key: st.key };
+      if (viaServer) {
+        let first;
+        try { first = await env.getToken(); }
+        catch (err) { sess = null; lz = null; change({ phase: "idle", error: errorOf(err && err.reason, true) }); return false; }
+        let spare = first;
+        auth = { getToken: async () => { if (spare) { const t = spare; spare = null; return t; } return env.getToken(); } };
+      }
       const summary = env.app.summary();
-      const config = lesson
-        ? { key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
-        : { key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) };
+      const config = Object.assign(lesson
+        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
+        : { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) }, auth);
       const onEvent = e => {
         if (lz && !sess.finished) lessonEvent(e);
-        if (e.type === "state") {
+        if (e.type === "restarted" && !lz && call && !sess.finished) call.say(MSG.restarted);
+        else if (e.type === "state") {
           change({ phase: e.state });
           if (e.state === "listening" && sess.endRequested && !lz) call.end();
         } else if (e.type === "transcript") {
@@ -7821,22 +8009,27 @@ const Jarvis = (() => {
       };
       let call = null;
       try { call = await callApi.start({ live: env.live, audio: env.audio, config, micId: st.micId, halfDuplex: lesson ? true : st.halfDuplex, gate: lesson ? false : undefined, survive: lesson, clock: env.clock, onEvent }); }
-      catch (err) { change({ phase: "idle", error: errorOf(err && err.reason) }); return false; }
+      catch (err) { change({ phase: "idle", error: errorOf(err && err.reason, viaServer) }); return false; }
       sess.call = call;
+      // Cheia veche din browser n-a mai fost nevoie: jetonul a mers, deci cheia Gemini rămâne doar pe server (spec platforma, Jarvis).
+      if (viaServer && storage.getItem(KEY_ITEM)) storage.removeItem(KEY_ITEM);
       call.say(lesson ? "Începem lecția despre " + sheet.name + ". Apelează next_chunk pentru prima bucată." : "Începem sesiunea. Mai sunt " + summary.daysLeft + " zile până la interviu.");
       return true;
     }
-    // Verifică dacă serverul acceptă cheia: deschide o sesiune goală și o închide.
+    // Verifică dacă Live acceptă autentificarea (jeton de la server sau cheia veche): deschide o sesiune goală și o închide.
+    // E și proba cap-coadă pe API-ul real: un jeton nou (consumă unul), WebSocket-ul `Constrained`, mesajul de setup.
     async function checkKey() {
-      const st = settings.get();
+      const st = settings.get(), viaServer = useServer();
       try {
-        const session = await env.live.open({ key: st.key, model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE.normal, system: "test", tools: [] }, () => {});
+        const session = await env.live.open(Object.assign(viaServer ? { getToken: env.getToken } : { key: st.key }, { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE.normal, system: "test", tools: [] }), () => {});
         session.close();
         return { ok: true };
       } catch (err) { return { ok: false, reason: (err && err.reason) || "failed" }; }
     }
     return {
       start, stop, settings, checkKey,
+      // Mesajul pentru ecran al unui motiv de eroare (în modul cu server sau cu cheie).
+      errorText: code => errorOf(code, useServer()).message,
       // După sfârșit, ecranul revine la alegerea modului; în timpul unei sesiuni nu face nimic.
       reset() { if (state.phase === "ended") change(Object.assign({ phase: "idle", needKey: false }, FRESH)); },
       interrupt() { if (sess && sess.call) sess.call.interrupt(); },
@@ -7970,6 +8163,762 @@ const GeminiText = (() => {
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = GeminiText;
 
+// Journal: jurnalul de încercări (ADR 0003). Fiecare răspuns al lui Alex, ca și fiecare schimbare de setări, bifă de plan, poziție de lecție sau reset, e un eveniment care nu se mai schimbă.
+// Din jurnal se calculează `S`, starea pe care o citește aplicația (cutiile Leitner, contoarele, golurile, istoricul). Funcțiile pure (apply, project, union, importState) nu știu de browser; depozitul
+// (IndexedDB, cu un adaptor în memorie pentru teste), oglinda (localStorage, pentru prima desenare) și coada evenimentelor netrimise stau în spatele unor adaptoare mici.
+// În pagină e o declarație globală, în Node un modul.
+//
+// Forma evenimentului (JSON simplu):
+//   { id, t, dev, type, ...câmpurile tipului }
+//   id   șir unic, generat de client: "<dispozitiv>.<t în base 36>.<număr de ordine>"; pe același dispozitiv ordinea ids = ordinea adăugării
+//   t    milisecunde; pe dispozitiv nu scade niciodată, iar un eveniment nou are mereu cheia (t, id) mai mare decât tot ce e deja aplicat
+//   dev  dispozitivul care l-a scris; imported: true la cele sintetice (importState)
+//   type answer  { form: "q"|"o"|"x"|"s"|"k", item, points: [], result, interval, conf?, dur?, text? }
+//          result: q { ok, assisted?, pick? } · x { g } · o { p, k?, missed?, fixed?, wrong?, keep? } · s { p } · k { s }
+//        guess   { form: "q", item }              "Am ghicit": cutia 1, fără încercare nouă
+//        gap     { op: "fix", item, point }       un gol reparat cu întrebarea țintită
+//        cfg     { d, h }                         data interviului, ore pe seară
+//        plan    { item, done }                   bifa unei sarcini din plan
+//        lesson  { item, n, done? }               poziția lecției pe modul; done: data terminării = t
+//        hist    { row }                          un rând din istoric
+//        state   { map, item, entry }             doar importat: intrarea unui item așa cum era în S
+//        reset                                    ascunde tot ce e mai vechi
+// Ordinea evenimentelor: după t, apoi după id. Îmbinarea a două liste e reuniunea după id.
+//
+// Fișierul de export (tichetul 09; `exportDoc` / `parseExport`), JSON:
+//   { format: "ba-journal", version: 1, exportedAt (ms), device (dispozitivul care exportă), devices: [toate `dev` din jurnal], count, events: [...] }
+// `events` e tot jurnalul, cu textul lui Alex; fișierul nu poartă niciodată adresa sau secretul serverului (funcția primește doar evenimente).
+const Journal = (() => {
+  const MC_MAX = 9, HMAX = 80;
+  const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
+  const emptyState = () => ({ v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] });
+  const clone = x => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
+  const cmp = (a, b) => (a.t - b.t) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const keyOf = e => ({ t: e.t, id: e.id });
+  const validEvent = e => !!e && typeof e === "object" && typeof e.id === "string" && !!e.id && Number.isFinite(e.t) && typeof e.type === "string";
+  const itemT = e => Math.max((e && e.t) || 0, (e && e.gt) || 0);
+
+  // ---------- regulile de învățare (aceleași ca în vechile updQ / updO / updX / recordOral) ----------
+  // Contorul golurilor unui card: `mc` (index punct → ratări); la cardurile dinainte de `mc`, fiecare punct din `m` valorează 1.
+  function gapCounts(e) {
+    const out = {};
+    if (!e) return out;
+    if (e.mc && typeof e.mc === "object") { for (const k of Object.keys(e.mc)) { const n = +e.mc[k]; if (n > 0) out[k] = Math.min(MC_MAX, n); } }
+    else (e.m || []).forEach(i => { out[i] = 1; });
+    return out;
+  }
+  // Un pas Leitner pe procentul de puncte acoperite: ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
+  function leitner(map, item, p, t) {
+    const e = Object.assign({ b: 0, n: 0 }, map[item]);
+    e.n++; e.s = Math.round(p * 100);
+    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
+    else if (p >= 0.5) e.b = Math.max(1, e.b);
+    else e.b = 1;
+    e.t = t;
+    map[item] = e;
+    return e;
+  }
+  // Un răspuns corect dat cu contextul deschis te duce cel mult în cutia 2.
+  function stepQ(S, item, r, t) {
+    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[item]);
+    e.n++;
+    if (r.ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = r.assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    e.l = r.ok ? 1 : 0; e.t = t;
+    S.q[item] = e;
+  }
+  // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
+  function stepX(S, item, r, t) {
+    const g = r.g, e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[item]);
+    e.n++;
+    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    e.l = g; e.t = t;
+    S.x[item] = e;
+  }
+  // Golurile unui card oral: +1 la un punct ratat, −1 la unul acoperit întreg (max 9), 0 la unul reparat; `m` = ratate acum și nereparate; `w` = ce a marcat verdictul greșit; `a` = ultima versiune bună.
+  function oralGaps(e, r) {
+    const prev = gapCounts(e), mc = {}, fx = r.fixed || [], open = r.missed.filter(i => fx.indexOf(i) < 0);
+    for (let i = 0; i < (r.k || 0); i++) {
+      const n = fx.indexOf(i) >= 0 ? 0 : r.missed.indexOf(i) >= 0 ? Math.min(MC_MAX, (prev[i] || 0) + 1) : Math.max(0, (prev[i] || 0) - 1);
+      if (n) mc[i] = n;
+    }
+    e.mc = mc;                                                   // și gol ({}): fără el, `m` ar fi citit ca date vechi
+    if (open.length) e.m = open; else delete e.m;
+    if (r.wrong !== undefined) { const w = r.wrong.slice(0, 3); if (w.length) e.w = w; else delete e.w; }
+    if (r.keep) e.a = r.keep;
+  }
+
+  // Aplică un eveniment peste S, pe loc. Evenimentele de tip necunoscut se ignoră (un client mai vechi nu se strică de unul mai nou).
+  function apply(S, ev, o) {
+    const t = ev.t, hmax = (o && o.hmax) || HMAX;
+    switch (ev.type) {
+      case "answer": {
+        const r = ev.result || {};
+        if (ev.form === "q") stepQ(S, ev.item, r, t);
+        else if (ev.form === "x") stepX(S, ev.item, r, t);
+        else if (ev.form === "o" || ev.form === "s") {
+          const e = leitner(S[ev.form], ev.item, r.p, t);
+          if (ev.form === "o" && Array.isArray(r.missed)) oralGaps(e, r);
+        } else if (ev.form === "k") S.k[ev.item] = { s: r.s, t };
+        break;
+      }
+      case "guess": { const e = S.q[ev.item]; if (e) { e.b = 1; e.l = 0; e.t = t; } break; }
+      case "gap": {
+        const e = S.o[ev.item]; if (!e || ev.op !== "fix") break;
+        const mc = gapCounts(e); delete mc[ev.point]; e.mc = mc;
+        const m = (e.m || []).filter(x => x !== ev.point); if (m.length) e.m = m; else delete e.m;
+        e.gt = t;                                                // nu mută scadența Leitner, care folosește doar `t`
+        break;
+      }
+      case "cfg": S.c = { d: ev.d, h: ev.h, t }; break;
+      case "plan": S.p[ev.item] = { d: ev.done ? 1 : 0, t }; break;
+      case "lesson": {
+        const prev = S.l[ev.item], e = { n: ev.n, t };
+        if (ev.done) e.d = t; else if (prev && prev.d) e.d = prev.d;
+        S.l[ev.item] = e;
+        break;
+      }
+      case "hist": S.h.push(clone(ev.row)); if (S.h.length > hmax) S.h = S.h.slice(-hmax); break;
+      case "state": if (MAPS.indexOf(ev.map) >= 0) S[ev.map][ev.item] = clone(ev.entry); break;
+      case "reset": { const z = emptyState(); for (const k of Object.keys(S)) delete S[k]; Object.assign(S, z, { r: t }); break; }
+    }
+    return S;
+  }
+
+  // ---------- reuniune, proiecție, import ----------
+  // Reuniunea după id (la id egal rămâne primul), în ordinea (t, id).
+  function union(...lists) {
+    const m = new Map();
+    for (const l of lists) for (const e of l || []) if (!m.has(e.id)) m.set(e.id, e);
+    return Array.from(m.values()).sort(cmp);
+  }
+  // Jurnalul întreg → S, plus cursorul. Un reset ascunde tot ce e mai vechi: proiecția începe de la ultimul reset.
+  function projectFull(events, o) {
+    const evs = union(events).filter(validEvent), S = emptyState();
+    let from = 0, reset = null;
+    for (let i = evs.length - 1; i >= 0; i--) if (evs[i].type === "reset") { from = i; reset = keyOf(evs[i]); break; }
+    for (let i = from; i < evs.length; i++) apply(S, evs[i], o);
+    return { state: S, last: evs.length ? keyOf(evs[evs.length - 1]) : null, reset, n: evs.length - from };
+  }
+  const project = (events, o) => projectFull(events, o).state;
+
+  // djb2 în base 36: face id-ul unui eveniment importat să depindă și de conținutul intrării.
+  const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // O stare S → evenimente sintetice (marcate `imported`): unul pe item, plus setările, rândurile de istoric și resetul. Cu `from`, doar ce diferă de starea curentă.
+  // Id-urile sunt deterministe: același export importat de două ori (sau de pe două dispozitive) se reunește fără dubluri.
+  function importState(S, o) {
+    const from = o && o.from, out = [];
+    const mkEv = (id, t, rest) => Object.assign({ id: "imp-" + id, t, dev: "import", imported: true }, rest);
+    if (S.r > 0 && (!from || S.r > from.r)) out.push(mkEv("r-" + S.r, S.r, { type: "reset" }));
+    if (S.c && !(from && same(from.c, S.c))) out.push(mkEv("c-" + (S.c.t || 0) + "-" + hash(JSON.stringify(S.c)), S.c.t || 0, { type: "cfg", d: S.c.d, h: S.c.h }));
+    for (const map of MAPS) for (const item of Object.keys(S[map] || {})) {
+      const entry = S[map][item];
+      if (from && same(from[map][item], entry)) continue;
+      const t = itemT(entry);
+      out.push(mkEv(map + "-" + item + "-" + t + "-" + hash(JSON.stringify(entry)), t, { type: "state", map, item, entry: clone(entry) }));
+    }
+    const have = new Set(from ? from.h.map(r => r.id) : []);
+    for (const row of S.h || []) if (!have.has(row.id)) out.push(mkEv("h-" + row.id + "-" + row.ts, row.ts, { type: "hist", row: clone(row) }));
+    return out.sort(cmp);
+  }
+
+  // ---------- exportul și importul de fișier (tichetul 09) ----------
+  const EXPORT_FORMAT = "ba-journal", EXPORT_VERSION = 1;
+  // Tot jurnalul într-un obiect JSON simplu. `o.device` = dispozitivul care exportă, `o.now` = ceasul (teste).
+  function exportDoc(events, o) {
+    o = o || {};
+    const evs = union(events).filter(validEvent);
+    const devices = Array.from(new Set(evs.map(e => e.dev).filter(d => typeof d === "string" && d))).sort();
+    if (o.device && devices.indexOf(o.device) < 0) devices.push(o.device);
+    return { format: EXPORT_FORMAT, version: EXPORT_VERSION, exportedAt: (o.now || Date.now)(), device: o.device || null, devices, count: evs.length, events: clone(evs) };
+  }
+  function exportError(code, message) { const e = new Error(message); e.code = code; return e; }
+  // Un fișier de export (text sau obiect deja citit) → { events, devices, exportedAt, version }. Aruncă o eroare cu `code` și mesaj românesc dacă fișierul nu e bun:
+  // nimic nu se importă pe jumătate (un singur eveniment stricat refuză tot fișierul).
+  function parseExport(input) {
+    let doc = input;
+    if (typeof input === "string") {
+      if (!input.trim()) throw exportError("empty", "Fișierul e gol.");
+      try { doc = JSON.parse(input); } catch (e) { throw exportError("json", "Fișierul nu e un export valid: nu se poate citi ca JSON."); }
+    }
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw exportError("format", "Fișierul nu e un export de jurnal.");
+    if (doc.format !== EXPORT_FORMAT) {
+      const old = doc.q && typeof doc.q === "object" && !doc.format;
+      throw exportError("format", old ? "Fișierul e un export de progres (starea veche), nu un jurnal. Îl poți lipi în „Importă”, în textul de mai jos." : "Fișierul nu e un export de jurnal.");
+    }
+    if (!Number.isInteger(doc.version) || doc.version < 1) throw exportError("version", "Fișierul nu are o versiune de format validă.");
+    if (doc.version > EXPORT_VERSION) throw exportError("version", "Fișierul e dintr-o versiune mai nouă a aplicației (format " + doc.version + "). Actualizează aplicația și încearcă din nou.");
+    if (!Array.isArray(doc.events)) throw exportError("events", "Fișierul nu conține lista de evenimente.");
+    const bad = doc.events.findIndex(e => !validEvent(e));
+    if (bad >= 0) {
+      const n = doc.events.filter(e => !validEvent(e)).length;
+      throw exportError("events", "Fișierul e stricat: " + (n === 1 ? "un eveniment nu are" : n + " evenimente nu au") + " id, timp sau tip (primul, la poziția " + (bad + 1) + "). Nu s-a importat nimic.");
+    }
+    return { events: doc.events.map(clone), devices: Array.isArray(doc.devices) ? doc.devices.filter(d => typeof d === "string") : [], exportedAt: Number.isFinite(doc.exportedAt) ? doc.exportedAt : null, version: doc.version };
+  }
+
+  // ---------- adaptoare ----------
+  const sortedCopy = list => list.slice().sort(cmp);
+  // Depozit în memorie: același contract ca IndexedDB, pentru teste. `stats` numără citirile, ca testele să poată afirma că pornirea nu reia tot jurnalul.
+  function memStore() {
+    const events = new Map(), outbox = new Set();
+    let snapshot = null, meta = null;
+    const aux = new Map();
+    const st = {
+      stats: { loads: 0, commits: 0, allEvents: 0, eventsAfter: 0, eventsRead: 0 }, failing: false,
+      async load() { st.stats.loads++; return { snapshot: clone(snapshot) || null, meta: clone(meta) || null }; },
+      async commit(c) {
+        if (st.failing) throw new Error("commit failed");
+        st.stats.commits++;
+        for (const e of c.events || []) events.set(e.id, clone(e));
+        for (const id of c.outbox || []) outbox.add(id);
+        if (c.snapshot) snapshot = clone(c.snapshot);
+        if (c.meta) meta = clone(c.meta);
+      },
+      // items: [{ ev, ob }]; întoarce doar evenimentele care nu erau în depozit
+      async putEvents(items) {
+        const fresh = [];
+        for (const it of items) if (!events.has(it.ev.id)) { events.set(it.ev.id, clone(it.ev)); if (it.ob) outbox.add(it.ev.id); fresh.push(clone(it.ev)); }
+        return sortedCopy(fresh);
+      },
+      async count() { return events.size; },
+      async eventsAfter(k) { st.stats.eventsAfter++; const r = sortedCopy(Array.from(events.values()).filter(e => !k || cmp(e, k) > 0)); st.stats.eventsRead += r.length; return clone(r); },
+      async allEvents() { st.stats.allEvents++; const r = sortedCopy(Array.from(events.values())); st.stats.eventsRead += r.length; return clone(r); },
+      async outbox() { return clone(sortedCopy(Array.from(outbox).map(id => events.get(id)).filter(Boolean))); },
+      async markSent(ids) { ids.forEach(id => outbox.delete(id)); },
+      async markUnsent(ids) { ids.forEach(id => { if (events.has(id)) outbox.add(id); }); },
+      // valori mici lângă jurnal (cursorul sincronizării): același depozit, altă cheie decât instantaneul
+      async getAux(key) { return clone(aux.get(key)) || null; },
+      async setAux(key, v) { if (st.failing) throw new Error("commit failed"); aux.set(key, clone(v)); },
+      async clear() { events.clear(); outbox.clear(); aux.clear(); snapshot = null; meta = null; },
+      // cârlige pentru teste
+      setSnapshot(s) { snapshot = clone(s); },
+      clearSnapshot() { snapshot = null; }
+    };
+    return st;
+  }
+
+  // IndexedDB: `events` (cheie id, index `k` pe [t, id] pentru „tot ce e după cursor”), `outbox` (id-urile netrimise), `meta` (instantaneul proiecției și contorul dispozitivului).
+  // Întoarce null când nu există IndexedDB (fereastră privată, politică): aplicația rămâne atunci pe oglindă.
+  function idbStore(name, idb) {
+    idb = idb || (typeof indexedDB !== "undefined" ? indexedDB : null);
+    if (!idb) return null;
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      let rq; try { rq = idb.open(name || "onapsis-journal", 1); } catch (e) { dbp = null; rej(e); return; }
+      rq.onupgradeneeded = () => {
+        const db = rq.result;
+        db.createObjectStore("events", { keyPath: "id" }).createIndex("k", ["t", "id"]);
+        db.createObjectStore("outbox", { keyPath: "id" });
+        db.createObjectStore("meta", { keyPath: "key" });
+      };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => { dbp = null; rej(rq.error); };
+      rq.onblocked = () => { dbp = null; rej(new Error("blocked")); };
+    }));
+    const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    const done = tx => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error("aborted")); });
+    const after = k => (k ? IDBKeyRange.lowerBound([k.t, k.id], true) : undefined);
+    return {
+      async load() {
+        const db = await open(), tx = db.transaction("meta", "readonly"), s = tx.objectStore("meta");
+        const [a, b] = await Promise.all([req(s.get("snapshot")), req(s.get("meta"))]);
+        return { snapshot: a ? a.v : null, meta: b ? b.v : null };
+      },
+      async commit(c) {
+        const db = await open(), tx = db.transaction(["events", "outbox", "meta"], "readwrite"), d = done(tx);
+        for (const e of c.events || []) tx.objectStore("events").put(e);
+        for (const id of c.outbox || []) tx.objectStore("outbox").put({ id });
+        if (c.snapshot) tx.objectStore("meta").put({ key: "snapshot", v: c.snapshot });
+        if (c.meta) tx.objectStore("meta").put({ key: "meta", v: c.meta });
+        await d;
+      },
+      async putEvents(items) {
+        const db = await open(), tx = db.transaction(["events", "outbox"], "readwrite"), d = done(tx), fresh = [];
+        await Promise.all(items.map(async it => {
+          if (await req(tx.objectStore("events").getKey(it.ev.id)) !== undefined) return;
+          tx.objectStore("events").put(it.ev);
+          if (it.ob) tx.objectStore("outbox").put({ id: it.ev.id });
+          fresh.push(it.ev);
+        }));
+        await d;
+        return sortedCopy(fresh);
+      },
+      async count() { const db = await open(); return req(db.transaction("events", "readonly").objectStore("events").count()); },
+      async eventsAfter(k) { const db = await open(); return req(db.transaction("events", "readonly").objectStore("events").index("k").getAll(after(k))); },
+      async allEvents() { const db = await open(); return req(db.transaction("events", "readonly").objectStore("events").index("k").getAll()); },
+      async outbox() {
+        const db = await open(), tx = db.transaction(["events", "outbox"], "readonly");
+        const ids = await req(tx.objectStore("outbox").getAllKeys());
+        const evs = await Promise.all(ids.map(id => req(tx.objectStore("events").get(id))));
+        return sortedCopy(evs.filter(Boolean));
+      },
+      async markSent(ids) { const db = await open(), tx = db.transaction("outbox", "readwrite"), d = done(tx); ids.forEach(id => tx.objectStore("outbox").delete(id)); await d; },
+      async markUnsent(ids) { const db = await open(), tx = db.transaction("outbox", "readwrite"), d = done(tx); ids.forEach(id => tx.objectStore("outbox").put({ id })); await d; },
+      async getAux(key) { const db = await open(), r = await req(db.transaction("meta", "readonly").objectStore("meta").get("aux:" + key)); return r ? r.v : null; },
+      async setAux(key, v) { const db = await open(), tx = db.transaction("meta", "readwrite"), d = done(tx); tx.objectStore("meta").put({ key: "aux:" + key, v }); await d; },
+      async clear() { const db = await open(), tx = db.transaction(["events", "outbox", "meta"], "readwrite"), d = done(tx); ["events", "outbox", "meta"].forEach(n => tx.objectStore(n).clear()); await d; }
+    };
+  }
+
+  // Oglinda: ultima proiecție + evenimentele încă neconfirmate de depozit, scrise sincron la fiecare eveniment. Prima desenare nu așteaptă IndexedDB, iar un proces oprit între timp nu pierde nimic.
+  function localMirror(storage, key) {
+    return {
+      read() { try { const raw = storage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } },
+      write(obj) { try { storage.setItem(key, JSON.stringify(obj)); return true; } catch (e) { return false; } }
+    };
+  }
+  function memMirror() { let raw = null; return { read: () => (raw ? JSON.parse(raw) : null), write: o => { raw = JSON.stringify(o); return true; } }; }
+
+  const randomDevice = () => "d" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
+
+  // ---------- jurnalul viu ----------
+  // opts: device, clock (ms), hmax, store, mirror, legacy (() => S vechi, citit doar când nu există nici oglindă, nici jurnal), onState (S s-a înlocuit), retryMs.
+  // Fără `store`, jurnalul doar proiectează (artifactul): evenimentele se aplică peste S, nimic nu se păstrează aici.
+  function create(opts) {
+    opts = opts || {};
+    const clock = opts.clock || Date.now, hmax = opts.hmax || HMAX, store = opts.store || null, mirror = opts.mirror || null;
+    let S = emptyState(), last = null, resetK = null, applied = 0, seq = 0, device = opts.device, legacyBoot = false;
+    const pending = [];                       // [{ ev, ob }]: scrise în oglindă, încă neconfirmate de depozit
+    let loaded = !store, chain = Promise.resolve(), scheduled = false, dirtySnap = false, mirrorOk = true, failures = 0, retryT = 0;
+
+    const m0 = mirror && mirror.read();
+    if (m0 && m0.snap && m0.snap.state) {
+      S = Object.assign(emptyState(), m0.snap.state); last = m0.snap.last || null; resetK = m0.snap.reset || null; applied = m0.snap.n || 0; seq = m0.seq || 0;
+      if (!device && m0.dev) device = m0.dev;
+      for (const p of m0.tail || []) if (p && validEvent(p.ev)) pending.push(p);
+    } else if (opts.legacy) {
+      let s = null; try { s = opts.legacy(); } catch (e) { s = null; }
+      if (s && typeof s === "object") { S = s; legacyBoot = true; }
+    }
+    if (!device) device = randomDevice();
+
+    const snap = () => ({ v: 1, state: S, last, reset: resetK, n: applied });
+    const hasData = s => s.r > 0 || s.h.length > 0 || !!s.c || MAPS.some(k => Object.keys(s[k]).length > 0);
+    function writeMirror() { if (mirror) mirrorOk = mirror.write({ v: 1, dev: device, seq, snap: snap(), tail: pending }); }
+    const enqueue = fn => { const p = chain.then(fn); chain = p.catch(() => {}); return p; };
+    function adopt(s) { S = s; if (opts.onState) opts.onState(S); }
+
+    // Cheia unui eveniment nou: după tot ce e deja aplicat, chiar dacă ceasul a mers înapoi.
+    function stamp(partial) {
+      seq++;
+      const mk = t => device + "." + t.toString(36).padStart(9, "0") + "." + seq.toString(36).padStart(5, "0");
+      let t = Math.max(clock(), last ? last.t : 0), id = mk(t);
+      if (last && cmp({ t, id }, last) <= 0) { t = last.t + 1; id = mk(t); }
+      return Object.assign({}, clone(partial), { id, t, dev: device });
+    }
+    function applyOne(e) {
+      apply(S, e, { hmax });
+      if (!last || cmp(e, last) > 0) last = keyOf(e);
+      if (e.type === "reset") resetK = keyOf(e);
+      applied++;
+    }
+    function rebuildFrom(events) { const p = projectFull(events, { hmax }); last = p.last; resetK = p.reset; applied = p.n; adopt(p.state); }
+
+    function append(partial) {
+      const e = stamp(partial);
+      if (e.type === "answer") {
+        if (!e.points) e.points = [];
+        const prev = S[e.form] && S[e.form][e.item];
+        e.interval = prev && prev.t ? e.t - prev.t : null;
+      }
+      applyOne(e);
+      if (store) { pending.push({ ev: e, ob: true }); scheduleFlush(); }
+      writeMirror();
+      return clone(e);
+    }
+    function scheduleFlush() { if (!store || scheduled) return; scheduled = true; Promise.resolve().then(() => { scheduled = false; enqueue(flushTask); }); }
+    async function flushTask() {
+      if (!store || !loaded || (!pending.length && !dirtySnap)) return true;
+      const batch = pending.slice(), snapshot = snap(), meta = { dev: device, seq };
+      dirtySnap = false;
+      try {
+        await store.commit({ events: batch.map(p => p.ev), outbox: batch.filter(p => p.ob).map(p => p.ev.id), snapshot, meta });
+        pending.splice(0, batch.length);
+        writeMirror();
+        return true;
+      } catch (e) {
+        failures++; dirtySnap = true;
+        if (opts.retryMs && !retryT) retryT = setTimeout(() => { retryT = 0; scheduleFlush(); }, opts.retryMs);
+        return false;
+      }
+    }
+
+    // Pornirea: oglinda (sau starea veche) a desenat deja prima pagină. Aici se împacă cu depozitul: instantaneul, evenimentele de după el, cele pe care doar oglinda le știa.
+    async function loadTask() {
+      const { snapshot, meta } = await store.load();
+      if (meta) { if ((meta.seq || 0) > seq) seq = meta.seq; if (!opts.device && !(m0 && m0.dev) && meta.dev) device = meta.dev; }
+      const empty = !snapshot && (await store.count()) === 0;
+      if (empty) {
+        const had = hasData(S);
+        if (had) {                                                    // starea există (oglindă sau cheia veche), jurnalul nu: o scriem ca evenimente sintetice, fără coadă (e aceeași informație)
+          const evs = importState(S);
+          for (const e of evs) if (!last || cmp(e, last) > 0) last = keyOf(e);
+          await store.commit({ events: evs, outbox: evs.map(e => e.id), snapshot: snap(), meta: { dev: device, seq } });   // în coadă: serverul nu are starea veche; ids deterministe, deci un duplicat de pe alt dispozitiv se ignoră
+        }
+        loaded = true;
+        await flushTask();
+        return { fresh: !had };
+      }
+      let rebuilt = false;
+      if (snapshot && (!last || (snapshot.last && cmp(snapshot.last, last) > 0))) {
+        // depozitul e înaintea oglinzii (oglinda s-a golit sau n-a putut scrie): luăm instantaneul lui și, ce știa doar oglinda, vine prin reconstruire
+        const freshTail = await store.putEvents(pending.map(p => ({ ev: p.ev, ob: p.ob })));
+        if (m0 && m0.snap && freshTail.length) { rebuildFrom((await store.allEvents()).concat(pending.map(p => p.ev))); rebuilt = true; }
+        else { S = Object.assign(emptyState(), snapshot.state); last = snapshot.last; resetK = snapshot.reset || null; applied = snapshot.n || 0; adopt(S); }
+      } else if (!snapshot) {
+        rebuildFrom((await store.allEvents()).concat(pending.map(p => p.ev))); rebuilt = true;        // nici un instantaneu: singura reluare completă
+      } else {
+        await store.putEvents(pending.map(p => ({ ev: p.ev, ob: p.ob })));                              // ce a rămas doar în oglindă ajunge în depozit
+      }
+      if (!rebuilt) {
+        const tail = await store.eventsAfter(last);                                                     // evenimentele de după instantaneu
+        for (const e of tail) if (!resetK || cmp(e, resetK) >= 0) applyOne(e);
+        if (tail.length) adopt(S);
+      }
+      loaded = true;
+      dirtySnap = true;
+      await flushTask();
+      return { fresh: false };
+    }
+
+    // Îmbinarea cu evenimente venite de aiurea (server, alt dispozitiv, import). { remote: true } = nu intră în coada de trimis. Întoarce { added, rebuilt }.
+    function merge(events, o) {
+      if (!store) return Promise.reject(new Error("fără depozit"));
+      o = o || {};
+      return enqueue(async () => {
+        const evs = union(events.filter(validEvent).map(clone));
+        const fresh = await store.putEvents(evs.map(ev => ({ ev, ob: !o.remote })));
+        if (!fresh.length) return { added: 0, rebuilt: false };
+        let rebuild = false;
+        for (const e of fresh) { if (resetK && cmp(e, resetK) < 0) continue; if (last && cmp(e, last) <= 0) rebuild = true; }
+        if (rebuild) rebuildFrom((await store.allEvents()).concat(pending.map(p => p.ev)));
+        else { for (const e of fresh) { if (resetK && cmp(e, resetK) < 0) continue; applyOne(e); } adopt(S); }
+        dirtySnap = true; writeMirror();
+        await flushTask();
+        return { added: fresh.length, rebuilt: rebuild };
+      });
+    }
+
+    const flush = () => (store ? enqueue(flushTask) : Promise.resolve(true));
+
+    return {
+      state: () => S,
+      append,
+      merge,
+      load() { if (!store) return Promise.resolve({ fresh: false }); return enqueue(loadTask); },
+      // Înlocuiește proiecția fără evenimente: artifactul (starea vine din localStorage și din sincronizarea veche) și cârligul de test `__prep.setState`. Obiectul primit devine starea vie.
+      replaceState(s) { adopt(s); if (store) { dirtySnap = true; scheduleFlush(); } writeMirror(); },
+      // Un export S vechi → evenimente sintetice pentru ce diferă de starea curentă, îmbinate ca orice altceva.
+      importState(s) { return merge(importState(s, { from: S })); },
+      flush,
+      async events() { if (!store) return []; await flush(); return store.allEvents(); },
+      async unsent() { if (!store) return []; await flush(); return store.outbox(); },
+      markSent: ids => (store ? enqueue(() => store.markSent(ids)) : Promise.resolve()),
+      // Pune tot jurnalul local în coada de trimis (după o ștergere pe server, la „Retrimite jurnalul local”). Serverul ignoră ce are deja (după id). Întoarce numărul de evenimente.
+      resendAll() {
+        if (!store) return Promise.resolve(0);
+        return enqueue(async () => { await flushTask(); const evs = await store.allEvents(); await store.markUnsent(evs.map(e => e.id)); return evs.length; });
+      },
+      // Valori mici păstrate lângă jurnal (cursorul sincronizării). Fără depozit: nimic se păstrează.
+      getAux: key => (store ? enqueue(() => store.getAux(key)) : Promise.resolve(null)),
+      setAux: (key, v) => (store ? enqueue(() => store.setAux(key, v)) : Promise.resolve()),
+      info: () => ({ device, last, applied, pending: pending.length, mirrorOk, failures, legacyBoot, durable: mirrorOk || (!!store && failures === 0) })
+    };
+  }
+
+  return { MC_MAX, HMAX, MAPS, EXPORT_FORMAT, EXPORT_VERSION, exportDoc, parseExport, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = Journal;
+
+// ServerAi: sursa „server" pentru funcțiile AI din PWA (tichetul 06 al platformei).
+// Serverul propriu (POST /ai) primește promptul gata făcut și întoarce textul modelului (Gemini întâi, DeepSeek la eșec, cheile stau pe server).
+// Aici stau cererea, maparea erorilor și ordinea surselor. Adresa și secretul NU se țin aici: le dă `ServerConn` (src/server_conn.js,
+// `localStorage` `onapsis-server-v1`, niciodată în S, în export sau în brief), primit prin `create({ conn, fetch })`.
+// Prompturile și parserele rămân în aplicație. În pagină e o declarație globală, în Node un modul.
+const ServerAi = (() => {
+  const TIMEOUT_MS = 50000;                              // serverul poate încerca două modele a câte 20 s
+  const fail = (code, detail) => Object.assign(new Error(code), { code, detail: detail || "" });
+
+  // Ordinea surselor, ca listă de nume. Cu serverul configurat, nicio cerere nu pleacă direct către Gemini sau DeepSeek
+  // (`sample` rămâne, fiindcă nu iese din Claude); fără server, ordinea de dinainte: sample, Gemini, DeepSeek.
+  function order(av) {
+    if (av.server) return av.sample ? ["server", "sample"] : ["server"];
+    return ["sample", "gemini", "deepseek"].filter(n => av[n]);
+  }
+
+  function create(env) {
+    const timeoutMs = env.timeoutMs || TIMEOUT_MS;
+    // Adresa și secretul vin de la ServerConn (`env.conn`, același accesor ca la Jarvis și la sincronizare); validarea (https, secret ASCII) e tot acolo (`valid()`).
+    function config() {
+      return env.conn.valid();
+    }
+    return {
+      config,
+      configured: () => !!config(),
+      // req = { system, user, kind ("quick" | "default"), json (bool), maxTokens, prefer ("gemini" | "deepseek"), signal (AbortSignal, opțional) }.
+      // `signal` oprește cererea la cererea utilizatorului (butonul „Oprește" al intervievatorului): codul e `cancelled`, nu `timeout`.
+      // Întoarce textul sau aruncă o eroare cu `code`: nokey (nu e configurat), network, timeout, cancelled, srv_auth (401), srv_big (413),
+      // srv_cap (429, plafonul zilnic), rate (alt 429), srv_ai (502: niciun model n-a răspuns), server (5xx), http (alt 4xx), format.
+      async generate(req) {
+        const cfg = config();
+        if (!cfg) throw fail("nokey");
+        const body = { system: req.system || "", user: req.user, kind: req.kind === "quick" ? "quick" : "default", json_mode: !!req.json };
+        if (req.maxTokens) body.max_tokens = req.maxTokens;
+        if (req.prefer) body.model = req.prefer;
+        if (req.signal && req.signal.aborted) throw fail("cancelled");
+        const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), timeoutMs);
+        const stop = () => ctl.abort(), aborted = () => fail(req.signal && req.signal.aborted ? "cancelled" : "timeout");
+        if (req.signal) req.signal.addEventListener("abort", stop);
+        try {
+          let r;
+          try {
+            r = await env.fetch(cfg.url + "/ai", { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.secret }, body: JSON.stringify(body) });
+          } catch (err) { throw err && err.name === "AbortError" ? aborted() : fail("network", String((err && err.message) || err).slice(0, 120)); }
+          let j = null;
+          try { j = await r.json(); } catch (err) { if (err && err.name === "AbortError") throw aborted(); }
+          if (!r.ok) {
+            const d = j && typeof j.detail === "string" ? j.detail : "";
+            throw fail(r.status === 401 ? "srv_auth" : r.status === 413 ? "srv_big" : r.status === 429 ? (d === "daily_cap" ? "srv_cap" : "rate") : r.status === 502 ? "srv_ai" : r.status >= 500 ? "server" : "http", "HTTP " + r.status + (d ? ": " + d : ""));
+          }
+          if (!j || typeof j.text !== "string" || !j.text.trim()) throw fail("format");
+          return j.text;
+        } finally { clearTimeout(tm); if (req.signal) req.signal.removeEventListener("abort", stop); }
+      }
+    };
+  }
+
+  // Încearcă pe rând sursele (liste de { name, generate(req) }) și întoarce primul text. La eșecul tuturor aruncă prima eroare
+  // (a sursei principale). O anulare ("cancelled") oprește lanțul: nu are sens să încerci altă sursă.
+  async function run(sources, req) {
+    let first = null;
+    for (const s of sources) {
+      try { return await s.generate(req); }
+      catch (err) {
+        if (err && err.code === "cancelled") throw err;
+        if (!first) first = err;
+      }
+    }
+    throw first || fail("nokey");
+  }
+
+  return { create, order, run };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = ServerAi;
+
+// JournalSync: sincronizarea jurnalului de încercări cu serverul (ADR 0003, tichetul 05). Cod pur, fără DOM și fără rețea proprie: `fetch`, cronometrele și legătura cu serverul se dau de la apelant,
+// deci se testează în Node cu un server fals în memorie. În pagină e o declarație globală, în Node un modul.
+//
+// Un ciclu: (1) trimite evenimentele netrimise ale jurnalului în loturi de cel mult 500 (POST /events) și le marchează trimise doar după ce serverul le-a primit (`accepted` sau `duplicates`);
+// (2) cere de la cursorul păstrat tot ce e nou (GET /events?after=&limit=), îmbină cu `merge(events, { remote: true })` și abia apoi mută cursorul, până când `more` e fals.
+// Un eșec nu pierde nimic: ce nu e confirmat rămâne în coadă, iar cursorul nu trece peste ce nu s-a îmbinat. Nu blochează aplicația: totul e asincron, cu timeout pe cerere și reîncercări cu pauze tot mai mari.
+//
+// Contractul serverului (server/README.md): antet `Authorization: Bearer <secret>`; POST /events { events } → { accepted, duplicates, cursor, epoch }; GET /events → { events, cursor, more, epoch };
+// POST /events/purge { confirm } → { deleted, epoch }.
+//
+// Epoca (tichetul 09): serverul are un șir care se schimbă când jurnalul lui e șters. După o ștergere numerele de secvență pornesc din nou de la 1, deci cursorul păstrat de un dispozitiv n-ar mai însemna nimic.
+// Regula, cea mai simplă și sigură: la o epocă diferită de cea păstrată (lângă cursor, `getAux`), cursorul se reia de la 0 și epoca nouă se păstrează; NIMIC altceva nu se schimbă.
+// Evenimentele locale rămân, iar cele deja trimise NU se retrimit singure (utilizatorul tocmai a șters serverul); cele netrimise (netrimise = serverul nu le-a avut) pleacă ca de obicei.
+// Primul răspuns cu epocă (nimic păstrat înainte) doar o reține. Un server fără epocă (mai vechi) nu schimbă nimic. `resend()` („Retrimite jurnalul local”) e singura cale de a trimite din nou tot.
+const JournalSync = (() => {
+  const BATCH = 500, AUX_KEY = "sync", PURGE_CONFIRM = "purge-all-events";
+  const fail = (kind, msg) => { const e = new Error(msg || kind); e.kind = kind; return e; };
+
+  // Textul de stare de pe ecran, din starea întoarsă de `status()`.
+  function label(st) {
+    const n = st.unsent, nets = n === 1 ? "1 netrimis" : n + " netrimise";
+    if (st.state === "off") return n ? "Sincronizarea nu e configurată · " + nets + "." : "Sincronizarea nu e configurată.";
+    if (st.state === "syncing") return "Se sincronizează…";
+    if (st.state === "auth") return "Secret greșit" + (n ? " · " + nets : "") + ". Verifică secretul în Sincronizare.";
+    if (st.state === "offline") return "Fără semnal" + (n ? " · " + nets : "") + ". Se reîncearcă singur.";
+    if (st.state === "error") return (st.stuck ? st.stuck + " evenimente refuzate de server" : "Serverul nu a răspuns bine") + (n ? " · " + nets : "") + ".";
+    if (n) return nets + ".";
+    return st.state === "synced" ? "La zi." : "În așteptare.";
+  }
+
+  // opts: journal (create-ul din journal.js, cu depozit), fetch, link: () => ({ url, secret }) | null, onStatus, onMerged (n => …: un pull a îmbinat n evenimente noi de la server; aplicația se redesenează), setTimeout / clearTimeout / random / now,
+  //       batch (500), debounceMs (1500), timeoutMs (20000), backoff: { base: 2000, max: 300000 }
+  function create(opts) {
+    const j = opts.journal, doFetch = opts.fetch, linkOf = opts.link || (() => null);
+    const T = opts.setTimeout || ((f, ms) => setTimeout(f, ms)), C = opts.clearTimeout || (t => clearTimeout(t));
+    const rnd = opts.random || Math.random, now = opts.now || Date.now;
+    const batch = opts.batch || BATCH, debounceMs = opts.debounceMs == null ? 1500 : opts.debounceMs, timeoutMs = opts.timeoutMs || 20000;
+    const base = (opts.backoff && opts.backoff.base) || 2000, cap = (opts.backoff && opts.backoff.max) || 300000;
+    let st = { state: "idle", unsent: 0, stuck: 0, lastOk: 0, retryAt: 0, error: "", wiped: 0 };
+    let running = null, paused = false, again = false, fails = 0, debT = 0, retryT = 0, poked = false, purging = null;
+
+    const emit = patch => { Object.assign(st, patch); if (opts.onStatus) { try { opts.onStatus(Object.assign({}, st)); } catch (e) { /* ecranul nu strică sincronizarea */ } } };
+    async function refreshCount() { try { emit({ unsent: (await j.unsent()).length }); } catch (e) { /* rămâne numărul vechi */ } }
+
+    // O cerere, cu timeout. Eșecurile se clasifică: offline (rețea), auth (401), server (5xx, 408, 429, răspuns ciudat), client (alt 4xx: lotul însuși e refuzat).
+    async function call(link, method, path, body) {
+      const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      let timer = 0;
+      const timeout = new Promise((_, rej) => { timer = T(() => { if (ctl) ctl.abort(); rej(fail("offline", "timeout")); }, timeoutMs); });
+      let res;
+      try {
+        const req = { method, headers: { Authorization: "Bearer " + link.secret }, signal: ctl ? ctl.signal : undefined };
+        if (body !== undefined) { req.headers["Content-Type"] = "application/json"; req.body = JSON.stringify(body); }
+        res = await Promise.race([Promise.resolve().then(() => doFetch(link.url + path, req)), timeout]);
+      } catch (e) {
+        throw e && e.kind ? e : fail("offline", e && e.message);
+      } finally { C(timer); }
+      if (res.status === 401) throw fail("auth", "401");
+      if (!res.ok) throw fail(res.status >= 500 || res.status === 403 || res.status === 404 || res.status === 408 || res.status === 429 ? "server" : "client", "HTTP " + res.status);
+      try { return await res.json(); } catch (e) { throw fail("server", "răspuns ilizibil"); }
+    }
+
+    // Trimite coada. Un lot refuzat de server ca invalid (4xx) se înjumătățește ca să treacă restul; un eveniment singur refuzat rămâne în coadă și se numără.
+    async function push(link) {
+      const queue = [], evs = await j.unsent();
+      for (let i = 0; i < evs.length; i += batch) queue.push(evs.slice(i, i + batch));
+      let stuck = 0;
+      while (queue.length) {
+        const b = queue.shift();
+        let r;
+        try { r = await call(link, "POST", "/events", { events: b }); }
+        catch (e) {
+          if (e.kind !== "client") throw e;
+          if (b.length > 1) { const h = b.length >> 1; queue.unshift(b.slice(0, h), b.slice(h)); } else stuck++;
+          continue;
+        }
+        await noteEpoch(link, r && r.epoch);
+        const ok = new Set([].concat(r && r.accepted || [], r && r.duplicates || []));
+        const sent = b.filter(e => ok.has(e.id)).map(e => e.id);
+        if (sent.length) await j.markSent(sent);
+        if (sent.length < b.length) throw fail("server", "lot confirmat incomplet");
+      }
+      return stuck;
+    }
+
+    // Cursorul și epoca sunt legate de adresa serverului: la alt server se pornește de la zero (îmbinarea e idempotentă, deci nu strică nimic).
+    async function readAux(link) { const c = await j.getAux(AUX_KEY); return c && c.url === link.url && c.after >= 0 ? { after: c.after, epoch: typeof c.epoch === "string" ? c.epoch : null } : { after: 0, epoch: null }; }
+    // Un răspuns a adus epoca `epoch`. Întoarce true dacă s-a schimbat față de cea păstrată (cursorul a fost reluat de la 0).
+    async function noteEpoch(link, epoch) {
+      if (typeof epoch !== "string" || !epoch) return false;
+      const a = await readAux(link);
+      if (a.epoch === epoch) return false;
+      try { await j.setAux(AUX_KEY, { url: link.url, after: a.epoch === null ? a.after : 0, epoch }); } catch (e) { throw fail("local", e && e.message); }
+      if (a.epoch === null) return false;
+      emit({ wiped: now() });
+      return true;
+    }
+    async function pull(link) {
+      let { after: cur, epoch: ep } = await readAux(link);
+      let added = 0;
+      try { await pullPages(link, cur, ep, n => { added += n; }); }
+      finally { if (added && opts.onMerged) { try { opts.onMerged(added); } catch (e) { /* ecranul nu strică sincronizarea */ } } }
+    }
+    async function pullPages(link, cur, ep, count) {
+      for (let i = 0; i < 100000; i++) {
+        const r = await call(link, "GET", "/events?after=" + cur + "&limit=" + batch);
+        if (!r || !Array.isArray(r.events) || typeof r.cursor !== "number") throw fail("server", "răspuns neașteptat");
+        if (await noteEpoch(link, r.epoch)) { cur = 0; ep = r.epoch; continue; }       // serverul a fost șters: pagina de mai sus e a unui cursor vechi, se reia de la 0
+        if (typeof r.epoch === "string" && r.epoch) ep = r.epoch;
+        try {
+          if (r.events.length) { const m = await j.merge(r.events, { remote: true }); count((m && m.added) || 0); }
+          if (r.cursor !== cur) { await j.setAux(AUX_KEY, { url: link.url, after: r.cursor, epoch: ep }); }
+        } catch (e) { throw fail("local", e && e.message); }       // cursorul nu trece peste ce nu s-a îmbinat
+        const moved = r.cursor !== cur;
+        cur = r.cursor;
+        if (!r.more || (!moved && !r.events.length)) break;
+      }
+    }
+
+    async function cycle() {
+      C(retryT); retryT = 0;
+      const link = linkOf();
+      if (!link) { emit({ state: "off", stuck: 0, retryAt: 0, error: "" }); await refreshCount(); return true; }
+      emit({ state: "syncing", retryAt: 0 });
+      let err = null, stuck = 0;
+      try { stuck = await push(link); } catch (e) { err = e; }
+      if (!err || err.kind === "server" || err.kind === "local") { try { await pull(link); } catch (e) { err = err || e; } }
+      let n = st.unsent; try { n = (await j.unsent()).length; } catch (e) { /* idem */ }
+      if (!err && !stuck) { fails = 0; emit({ state: "synced", unsent: n, stuck: 0, lastOk: now(), retryAt: 0, error: "" }); return true; }
+      const kind = err ? err.kind : "client";
+      emit({ state: kind === "auth" ? "auth" : kind === "offline" ? "offline" : "error", unsent: n, stuck, retryAt: 0, error: err ? err.message : "refuzat" });
+      if (kind === "offline" || kind === "server" || kind === "local") {
+        const wait = Math.min(cap, base * Math.pow(2, Math.min(fails, 20))) * (0.5 + rnd() * 0.5);
+        fails++;
+        emit({ retryAt: now() + wait });
+        retryT = T(() => { retryT = 0; syncNow(); }, wait);
+      }
+      return false;
+    }
+
+    // Un singur ciclu odată; o cerere venită în timpul lui (un răspuns nou) cere încă unul după el.
+    function syncNow() {
+      C(debT); debT = 0;
+      if (paused) { poked = true; return Promise.resolve(Object.assign({}, st)); }
+      if (running) { again = true; return running; }
+      running = (async () => {
+        try {
+          let ok = true;
+          do { again = false; ok = await cycle(); } while (again && ok);
+        } catch (e) { emit({ state: "error", error: e && e.message }); }
+        finally { running = null; }
+        return Object.assign({}, st);
+      })();
+      return running;
+    }
+    // După un răspuns: așteaptă puțin (alte răspunsuri pot veni), apoi un ciclu.
+    function poke() {
+      if (paused) { poked = true; return; }
+      if (running) { again = true; return; }
+      C(debT); debT = T(() => { debT = 0; syncNow(); }, debounceMs);
+    }
+    // „Șterge jurnalul de pe server”: așteaptă ciclul în curs, oprește ciclurile cât durează cererea, apoi trimite POST /events/purge cu confirmarea explicită.
+    // Reușita păstrează epoca nouă și cursorul 0; copia locală nu se atinge. Ce era netrimis rămâne în coadă și pleacă la următorul ciclu (serverul nu-l avea, deci nu s-a șters nimic din el).
+    // Aruncă erori cu `kind`: auth, offline, server, client.
+    // O singură ștergere odată: un al doilea apel se alătură primului (aceeași promisiune), ca `paused` să nu fie ridicat de alt apel decât cel care l-a pus.
+    // Când ștergerea se termină (cu bine sau nu), dacă între timp s-a cerut un ciclu (poke / syncNow ignorate, sau un cronometru oprit de ștergere), pornește unul.
+    function purgeServer() {
+      if (purging) return purging;
+      const p = purgeOnce().finally(() => {
+        purging = null; paused = false;
+        if (poked) { poked = false; poke(); }
+      });
+      purging = p;
+      return p;
+    }
+    async function purgeOnce() {
+      const link = linkOf();
+      if (!link) throw fail("none", "serverul nu e configurat");
+      paused = true; poked = false;
+      if (running) { try { await running; } catch (e) { /* ciclul își raportează singur eșecul */ } }
+      if (debT || retryT) poked = true;                              // un ciclu programat se oprește mai jos: să nu se piardă
+      C(debT); debT = 0; C(retryT); retryT = 0;
+      const r = await call(link, "POST", "/events/purge", { confirm: PURGE_CONFIRM });
+      if (!r || typeof r.epoch !== "string" || !r.epoch) throw fail("server", "răspuns neașteptat");
+      try { await j.setAux(AUX_KEY, { url: link.url, after: 0, epoch: r.epoch }); } catch (e) { throw fail("local", e && e.message); }
+      emit({ wiped: now() });
+      return { deleted: +r.deleted || 0, epoch: r.epoch };
+    }
+    // „Retrimite jurnalul local”: tot jurnalul intră în coada de trimis (serverul ignoră ce are deja, după id) și pleacă într-un ciclu. Întoarce numărul de evenimente puse în coadă.
+    async function resend() {
+      const n = await j.resendAll();
+      emit({ wiped: 0 });
+      await refreshCount();
+      syncNow();
+      return n;
+    }
+    function start() { refreshCount(); return syncNow(); }
+    // Pornire / revenirea semnalului / revenirea în prim-plan. `win` și `doc` vin de la apelant.
+    function attach(win, doc) {
+      const on = () => { fails = 0; syncNow(); };
+      const off = () => { if (linkOf()) emit({ state: "offline" }); };
+      const vis = () => { if (!doc.hidden) syncNow(); };
+      win.addEventListener("online", on); win.addEventListener("offline", off); doc.addEventListener("visibilitychange", vis);
+      return () => { win.removeEventListener("online", on); win.removeEventListener("offline", off); doc.removeEventListener("visibilitychange", vis); };
+    }
+    function stop() { C(debT); C(retryT); debT = 0; retryT = 0; }
+    return { start, syncNow, poke, attach, stop, purgeServer, resend, status: () => Object.assign({}, st), refreshCount };
+  }
+
+  return { BATCH, AUX_KEY, PURGE_CONFIRM, label, create };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = JournalSync;
+
 (function () {
   "use strict";
   const P = window.PREP;
@@ -8024,6 +8973,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   const MONTHS_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"];
   const HMAX = 80;
   const LS_KEY = "onapsis-prep-v1";
+  const JOURNAL_KEY = "onapsis-journal-v1";      // oglinda jurnalului (PWA): proiecția + evenimentele încă neconfirmate de IndexedDB; jurnalul însuși e în IndexedDB
+  const JOURNAL = "on" === "on";         // înlocuit la build (build.mjs): „on” în PWA (jurnalul în IndexedDB, fără sincronizarea veche), „off” în artifact (S în localStorage + `window.claude`, ca până acum)
+  const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal; acolo progresul rămâne în S + sincronizarea veche
   const CERT_KEY = "onapsis-cert-v1";            // certificarea în curs (ui.cert): pe dispozitiv, ca o reîncărcare să reia de la secțiunea la care ai rămas
   const DS_KEY = "onapsis-deepseek-v1";          // cheia API, separată de starea S: nu se sincronizează și nu se exportă
   const DS_URL = "https://api.deepseek.com/chat/completions";
@@ -8112,7 +9064,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   // q grile, o carduri orale, x întrebări deschise, k exerciții, s schelete (aceeași formă ca o: b, n, s, t), p sarcini bifate, l poziția lecției pe modul ({ n: bucata la care a ajuns, d: data ultimei terminări, t }),
   // h istoric, c setări (data interviului, ore pe seară)
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
-  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] }; }
+  const emptyState = Journal.emptyState;
   const validCfg = c => !!(c && typeof c === "object" && /^\d{4}-\d{2}-\d{2}$/.test(c.d || ""));
   function normalize(x) {
     const s = emptyState();
@@ -8170,7 +9122,23 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     catch (e) { lsOK = false; return null; }
   }
   function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); lsOK = true; } catch (e) { lsOK = false; } }
-  function commit() { planCache = null; saveLocal(); Sync.push(); paintHeader(); }
+  // Jurnalul de încercări (src/journal.js): fiecare schimbare a lui S e un eveniment, iar S e proiecția lui, ținută în memorie și actualizată pe loc.
+  // În PWA (JOURNAL) jurnalul stă în IndexedDB, cu oglindă în localStorage pentru prima desenare; în artifact doar proiectează, iar S se păstrează ca până acum (localStorage + sincronizarea prin `window.claude`).
+  const JSTORE = JOURNAL ? Journal.idbStore() : null;
+  const J = Journal.create({
+    clock: now, hmax: HMAX, retryMs: 4000,
+    store: JSTORE,
+    mirror: JOURNAL ? Journal.localMirror((() => { try { return window.localStorage; } catch (e) { return null; } })(), JOURNAL_KEY) : null,
+    legacy: JOURNAL ? loadLocal : null,
+    onState: s => { S = s; planCache = null; }
+  });
+  S = J.state();
+  // Sincronizarea jurnalului cu serverul propriu (src/sync.js; doar PWA, doar cu IndexedDB). Adresa și secretul vin de la `Conn` (ServerConn, localStorage `onapsis-server-v1`; nu în S, nu în jurnal), citite la fiecare ciclu.
+  // Nu blochează nimic: fără semnal sau cu secret greșit evenimentele rămân în coadă și ecranul arată starea.
+  const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => Conn.valid(), onStatus: () => paintStatus(), onMerged: () => repaintRemote() }) : null;
+  const add = e => { const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
+  const histAdd = row => add({ type: "hist", row });
+  function commit() { planCache = null; if (!JSTORE) saveLocal(); Sync.push(); paintHeader(); }      // fără depozit (artifact, sau PWA fără IndexedDB) S se salvează și sub cheia veche, pe lângă oglindă
 
   // ---------- sync (progres privat per utilizator, prin db) ----------
   const DEAD = ["invalid_argument", "not_granted", "revoked", "capability_disabled", "capability_removed", "transform_error"];
@@ -8178,7 +9146,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     ref: null, status: "local", writing: false, dirty: false, timer: 0, retries: 0, dead: false,
     async init() {
       const c = window.claude;
-      if (!c || typeof c.use !== "function") return;
+      if (JOURNAL || !c || typeof c.use !== "function") return;           // în PWA sincronizarea veche nu mai rulează: jurnalul e singura sursă
       let db = null, user = null;
       try { [db, user] = await Promise.all([c.use("db"), c.use("user")]); } catch (e) { return; }
       if (!db || !user) return;
@@ -8198,7 +9166,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       }
       const remote = prune(normalize(snap.data()));
       const res = mergeState(S, remote);
-      S = res.state;
+      J.replaceState(res.state);
       if (res.remoteNewer) { saveLocal(); softRender(); }
       if (res.localNewer) this.push(900);
       else if (!this.writing && !this.dirty) { this.status = "synced"; paintStatus(); }
@@ -8227,43 +9195,26 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       if (this.dirty && !this.dead) { clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 1500 + Math.random() * 2000); }
     },
     label() {
+      if (JOURNAL && JSync && Conn.configured()) return JournalSync.label(JSync.status());     // PWA cu server: starea jurnalului
       if (this.status === "synced") return "Sincronizat cu contul tău: vezi același progres pe telefon și pe laptop.";
       if (this.status === "syncing") return "Se sincronizează…";
       if (this.status === "full") return "Spațiul de sincronizare e plin; progresul rămâne salvat pe acest dispozitiv.";
-      return lsOK ? "Salvat doar pe acest dispozitiv (în browser)." : "Browserul nu permite salvarea: progresul se pierde la închidere. Folosește exportul.";
+      return (JOURNAL ? J.info().durable : lsOK) ? "Salvat doar pe acest dispozitiv (în browser)." : "Browserul nu permite salvarea: progresul se pierde la închidere. Folosește exportul.";
     }
   };
 
   // ---------- learning model ----------
+  // Regulile (cutiile Leitner, contoarele de goluri) stau în src/journal.js, în funcția care proiectează evenimentele. Aici doar se adaugă evenimentul potrivit; S se actualizează pe loc.
   // Un răspuns corect dat cu contextul deschis te duce cel mult în cutia 2: ca să urci mai sus,
-  // trebuie să răspunzi și fără context (contextul se ascunde singur de la cutia 2 în sus).
-  function updQ(id, ok, assisted) {
-    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[id]);
-    e.n++;
-    if (ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
-    e.l = ok ? 1 : 0; e.t = now();
-    S.q[id] = e;
+  // trebuie să răspunzi și fără context (contextul se ascunde singur de la cutia 2 în sus). `pick` = indexul variantei alese, în ordinea din date.
+  function updQ(id, ok, assisted, pick) {
+    add({ type: "answer", form: "q", item: id, result: Object.assign({ ok: !!ok }, assisted ? { assisted: true } : {}, pick != null ? { pick } : {}) });
   }
   // Un pas Leitner pe procentul de puncte acoperite (cardurile orale și scheletele): ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
-  function leitnerStep(map, id, p) {
-    const e = Object.assign({ b: 0, n: 0 }, map[id]);
-    e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
-    else if (p >= 0.5) e.b = Math.max(1, e.b);
-    else e.b = 1;
-    e.t = now();
-    map[id] = e;
-  }
-  const updO = (id, p) => leitnerStep(S.o, id, p);
-  const updS = (id, p) => leitnerStep(S.s, id, p);    // schelete: pe procentul de puncte esențiale bifate
+  const updO = (id, p) => add({ type: "answer", form: "o", item: id, result: { p } });
+  const updS = (id, p) => add({ type: "answer", form: "s", item: id, result: { p } });    // schelete: pe procentul de puncte esențiale bifate
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
-  function updX(id, g) {
-    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[id]);
-    e.n++;
-    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
-    e.l = g; e.t = now();
-    S.x[id] = e;
-  }
+  const updX = (id, g) => add({ type: "answer", form: "x", item: id, result: { g } });
   const mastery = e => (e ? MB[e.b] || 0 : 0);
   // Scadența unui item: cutiile 1–2 după un interval, 3–4 după una sau două zile calendaristice, 5 niciodată.
   function dueAt(e) {
@@ -8528,7 +9479,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     tab: "plan", run: null, result: null,
     study: { seg: "sheets", open: null, kata: null, skel: null, skelDue: false, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
-    prog: { exp: false, imp: false, reset: false },
+    prog: { exp: false, imp: false, reset: false, jmsg: "", jmsgBad: false, smsg: "", smsgBad: false, purge: false, pw: "", busy: false },
+    srv: { url: "", secret: "" },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
     dz: {},                                          // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
@@ -8559,8 +9511,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   }
   function paintStatus() {
     const d = $("#sdot");
-    if (d) { d.className = "sync-dot" + (Sync.status === "synced" ? " on" : Sync.status === "syncing" ? " busy" : ""); d.title = Sync.label(); }
+    const js = JSync ? JSync.status().state : "";
+    const st = JOURNAL && (js === "synced" || js === "syncing") ? js : Sync.status;
+    if (d) { d.className = "sync-dot" + (st === "synced" ? " on" : st === "syncing" ? " busy" : ""); d.title = Sync.label(); }
     const s = $("#sync-l"); if (s) s.textContent = Sync.label();
+    paintSync();
+  }
+  function paintSync() {
+    const el = $("#jsync-l"); if (el && JSync) el.textContent = JournalSync.label(JSync.status());
+    const w = $("#jwiped"); if (w && JSync) w.hidden = !JSync.status().wiped;
   }
   function paintTabs() { document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false")); }
 
@@ -8584,6 +9543,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     paintTabs(); paintHeader();
   }
   function softRender() { if (!ui.run) render(); else paintHeader(); }
+  // Evenimente aduse de la server (alt dispozitiv): S s-a schimbat în jurnal. Ecranul se redesenează ca la vechea sincronizare (`softRender`: o sesiune în curs primește doar antetul),
+  // dar nu peste un câmp în care Alex scrie sau peste apelul Jarvis, pe care o redesenare l-ar goli / reseta.
+  function repaintRemote() {
+    planCache = null;
+    const ae = document.activeElement;
+    if (ui.tab === "jarvis" || (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) paintHeader(); else softRender();
+  }
 
   function toast(msg) {
     let t = $("#toast");
@@ -8794,7 +9760,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const assisted = !!(q.ctx && (it.cx || it.co));
     run.picks[run.i] = pos; run.done[run.i] = true;
     run.assist = run.assist || {}; if (assisted) run.assist[run.i] = true;
-    updQ(q.id, ok, assisted); commit();
+    updQ(q.id, ok, assisted, pos >= 0 ? it.ord[pos] : null); commit();
     if (run.mode === "diag" && !ok) adaptDiag(run, run.i);
     render();
     revealFeedback();
@@ -8804,7 +9770,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const run = ui.run; if (!run || run.kind !== "mcq" || !run.done[run.i]) return;
     const q = QBY[run.items[run.i].id];
     run.guess = run.guess || {}; run.guess[run.i] = true;
-    const e = S.q[q.id]; if (e) { e.b = 1; e.l = 0; e.t = now(); }
+    add({ type: "guess", form: "q", item: q.id });
     commit(); render();
   }
   // După răspuns, aduce în ecran explicația și butonul „Următoarea”, fără să le lase sub bara de jos.
@@ -8838,7 +9804,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       per[q.m] = per[q.m] || { n: 0, c: 0 }; per[q.m].n++; if (ok) per[q.m].c++;
       if (!ok) wrong.push({ id: q.id, pick: pick === undefined || pick < 0 ? null : it.ord[pick], dunno: pick === -1, guessed });
     });
-    if (n) { S.h.push({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) }); S.h = S.h.slice(-HMAX); }
+    if (n) histAdd({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) });
     commit();
     if (run.cert && ui.cert) { ui.cert.res.q = { n, c, per, wrong: wrong.map(w => w.id) }; ui.cert.step = "o"; Cert.save(); ui.run = null; ui.result = null; ui.tab = "cert"; render(); window.scrollTo(0, 0); return; }
     ui.result = { kind: "mcq", title: run.title, mode: run.mode, n, c, u, per, wrong };
@@ -8891,27 +9857,36 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       try { this.sample = (await c.use("sample")) || null; } catch (e) { this.sample = null; }
       if (this.sample && !(ui.run && ui.run.ans)) render();
     },
-    ready() { return !!(this.sample || this.get()); },
-    name() { return this.sample ? "Claude" : "DeepSeek"; },
+    ready() { return !!(Srv.configured() || this.sample || this.get()); },
+    name() { return Srv.configured() ? "AI" : this.sample ? "Claude" : "DeepSeek"; },
     get() { try { return localStorage.getItem(DS_KEY) || ""; } catch (e) { return ""; } },
     set(k) { try { if (k) localStorage.setItem(DS_KEY, k); else localStorage.removeItem(DS_KEY); return true; } catch (e) { return false; } },
     mask: k => (k ? "…" + k.slice(-4) : "")
   };
+  // Serverul propriu: adresa și secretul au un singur accesor, `Conn` (ServerConn, src/server_conn.js, `localStorage` `onapsis-server-v1`, nu în S).
+  // Îl folosesc AI-ul (`Srv`), Jarvis (jetoanele) și, la tichetul 05, sincronizarea. Cu serverul configurat, nicio cerere AI nu pleacă direct către Gemini sau DeepSeek.
+  const Conn = ServerConn.create(jvStorage());
+  const Srv = ServerAi.create({ fetch: (u, i) => window.fetch(u, i), conn: Conn });
   const AI_MSG = {
-    nokey: "Adaugă mai întâi cheia DeepSeek, în Progres.",
+    nokey: "Adaugă mai întâi serverul (sau cheia DeepSeek), în Progres.",
+    srv_auth: "Serverul a refuzat secretul. Verific-l în Progres.",
+    srv_cap: "Ai atins plafonul zilnic de cereri AI. Revine mâine.",
+    srv_big: "Cererea e prea mare pentru server.",
+    srv_ai: "Niciun model AI nu răspunde acum. Reîncearcă mai târziu.",
     auth: "Cheia DeepSeek nu e validă. Verific-o în Progres.",
     credit: "Contul DeepSeek nu mai are credit.",
     rate: "Prea multe cereri. Așteaptă puțin și reîncearcă.",
     server: "DeepSeek nu răspunde acum. Reîncearcă.",
     http: "Cererea a fost respinsă. Reîncearcă.",
     timeout: "Verificarea a întârziat prea mult. Reîncearcă.",
-    network: "Nu pot ajunge la api.deepseek.com (rețea sau restricție a paginii).",
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).",
     format: "Răspunsul AI nu avea formatul așteptat. Reîncearcă.",
     nogrant: "Accesul la Claude a fost refuzat. Reîncarcă pagina ca să-l poți permite.",
     refused: "Claude a refuzat cererea. Încearcă cu alt text.",
     unavail: "Claude nu poate răspunde acum. Reîncearcă.",
     cancelled: "Ai oprit cererea. Poți continua sau încheia cu verdictul."
   };
+  const NEED_AI = what => what + " are nevoie de AI: adaugă serverul în Progres (sau deschide aplicația din artifact).";
   const aiError = code => { const e = new Error(code); e.code = code; return e; };
   // Un singur POST către DeepSeek; întoarce textul mesajului (poate fi gol) sau aruncă o eroare cu `code`.
   async function dsCall(body, key) {
@@ -8974,7 +9949,29 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       return v;
     } finally { clearTimeout(tm); }
   }
-  const aiGrade = (c, ans) => (AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans));
+  // Prin server: aceleași prompturi și același parser, o reîncercare pentru format. Dacă serverul pică, urmează `sample` (în artifact), nu Gemini sau DeepSeek direct.
+  async function srvGrade(c, ans) {
+    let last = null;
+    for (let a = 0; a < 2; a++) {
+      try {
+        const v = parseVerdict(await Srv.generate({ system: DS_SYS, user: aiUser(c, ans), kind: "default", json: true, maxTokens: 800 }), c.k.length);
+        if (v) return v;
+        last = aiError("format");
+      } catch (err) { if (err.code !== "format") throw err; last = err; }
+    }
+    throw last;
+  }
+  const aiGrade = (c, ans) => {
+    if (!Srv.configured()) return AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans);
+    return ServerAi.run(AI.sample ? [{ generate: () => srvGrade(c, ans) }, { generate: () => sampleGrade(c, ans) }] : [{ generate: () => srvGrade(c, ans) }], null);
+  };
+  async function srvTest() {
+    const st = $("#srv-st"); if (st) st.textContent = "Se testează…";
+    let msg;
+    try { await Srv.generate({ user: "Răspunde cu un singur cuvânt: ok", kind: "quick", maxTokens: 8 }); msg = "Conexiune reușită: serverul răspunde."; }
+    catch (err) { msg = AI_MSG[err.code] || AI_MSG.network; }
+    const s2 = $("#srv-st"); if (s2) s2.textContent = msg;
+  }
   async function aiTest() {
     const key = AI.get(); if (!key) return;
     const st = $("#ds-st"); if (st) st.textContent = "Se testează…";
@@ -9067,7 +10064,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
         (Mic.ok ? '<button class="btn sm' + (Mic.on ? " rec" : "") + '" id="mic-b" data-a="mic" aria-pressed="' + Mic.on + '">' + (Mic.on ? "Oprește" : "Dictează") + "</button>" : "") + "</div>" +
         '<textarea class="ans" id="ans-t" rows="5" maxlength="3000" placeholder="Scrie sau dictează răspunsul, în 3–4 propoziții" aria-label="Răspunsul tău"' + (busy ? " disabled" : "") + ">" + esc(run.ans || "") + "</textarea>";
       if (run.ai && run.ai.s === "err") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[run.ai.code] || AI_MSG.network) + "</p>";
-      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
+      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă serverul sau cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
       h += "</section>";
       if (has) {
         const iv = IV.ready();
@@ -9120,9 +10117,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     } else { run.ai = { s: "err", code }; toast(AI_MSG[code] || AI_MSG.network); }
     render(); window.scrollTo(0, 0);
   }
-  // ---------- intervievator (dialog scris, prin `sample`) ----------
+  // ---------- intervievator (dialog scris, prin server sau `sample`) ----------
   // Un card oral devine un mic interviu: răspunsul tău, cel mult IV_MAX întrebări de continuare, apoi verdictul pe tot dialogul.
-  // Merge doar unde există `sample` (în artifact). `sample` nu ține minte nimic, deci fiecare apel primește tot dialogul în prompt.
+  // Merge cu serverul propriu (PWA) sau cu `sample` (în artifact), în ordinea de la restul AI-ului (`gapText`: serverul întâi, apoi `sample`). Nici serverul, nici `sample` nu țin minte
+  // nimic, deci fiecare apel primește tot dialogul în prompt. Reguli, prompturi, parsere și scor sunt aceleași pe ambele surse.
   const IV_MAX = 2;
   const IV_COV = ["spontan", "dupa", "nu"];                 // spontan = 1 punct, dupa (abia după o întrebare) = 0,5, nu = 0
   const IV_HEAD = "Ești intervievator tehnic senior la un interviu pentru " + P.cfg.role + ". Vorbești în română; termenii tehnici rămân în engleză. " +
@@ -9196,17 +10194,25 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     catch (e) { throw aiError(e && e.code === "cancelled" ? "cancelled" : sampleCode(e)); }
     return r && r.text;
   }
+  // Golurile (lecția, întrebarea țintită, verdictul ei), intervievatorul și Certificarea merg prin server (prima sursă) sau prin `sample` (în artifact).
+  // `signal` (opțional) oprește cererea din butonul „Oprește" al intervievatorului: nu are cronometru propriu, iar cel al serverului e de 50 s (ServerAi).
+  const gapReady = () => !!(AI.sample || Srv.configured());
+  function gapText(prompt, tier, json, signal) {
+    if (!Srv.configured()) return sampleText(prompt, tier, signal);
+    const srv = { generate: () => Srv.generate({ user: prompt, kind: tier === "quick" ? "quick" : "default", json: !!json, signal }) };
+    return ServerAi.run(AI.sample ? [srv, { generate: () => sampleText(prompt, tier, signal) }] : [srv], null);
+  }
   const IV = {
-    ready: () => !!AI.sample,
+    ready: () => gapReady(),
     // Un pas al dialogului: întoarce { say } (întrebare de continuare, `quick`) sau { verdict } (`default`). Aruncă o eroare cu `code`.
     // Un „done” sau un format greșit la întrebare duc direct la verdict. `iv.final` face ca o reîncercare după eroare să sară peste întrebare.
     async step(c, iv, o) {
       if (!o.finish && !iv.final && iv.fu < ivRules(c).max) {
-        const t = parseTurn(await sampleText(ivTurnPrompt(c, iv, o.mem), "quick", o.signal));
+        const t = parseTurn(await gapText(ivTurnPrompt(c, iv, o.mem), "quick", true, o.signal));
         if (t && t.act === "followup") return { say: t.say };
       }
       iv.final = true;
-      const v = parseIvVerdict(await sampleText(ivVerdictPrompt(c, iv), "default", o.signal), c.k.length);
+      const v = parseIvVerdict(await gapText(ivVerdictPrompt(c, iv), "default", true, o.signal), c.k.length);
       if (!v) throw aiError("format");
       return { verdict: v };
     }
@@ -9224,7 +10230,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     ivCtl = null; iv.busy = false;
     if (r && r.say) { iv.turns.push({ who: "int", text: r.say }); iv.fu++; iv.draft = ""; }
     else if (r && r.verdict) {
-      run.ai = { s: "ok", v: r.verdict, p: "Claude" }; run.ticks = {}; run.half = {};
+      run.ai = { s: "ok", v: r.verdict, p: AI.name() }; run.ticks = {}; run.half = {};
       r.verdict.covered.forEach((x, i) => { if (x !== "nu") { run.ticks[i] = true; if (x === "dupa") run.half[i] = true; } });
       run.phase = "review"; run.tEnd = 0;
     } else { iv.err = code; if (code !== "cancelled") toast(AI_MSG[code] || AI_MSG.network); }
@@ -9252,6 +10258,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     }
     iv.draft = "";
     ivRun(kind === "finish");
+  }
+  // Calea fără AI după un eșec: dialogul se lasă, cardul trece la bifele proprii (scorul vine oricum din bife).
+  function ivManual() {
+    const run = ui.run; if (!run || !run.iv || run.iv.busy) return;
+    ivAbort(); run.iv = null; run.ai = null; run.ticks = {}; run.half = {}; run.phase = "review"; run.tEnd = 0;
+    render(); window.scrollTo(0, 0);
   }
   function ivStop() {
     const run = ui.run; if (!run || !run.iv || !run.iv.busy) return;
@@ -9289,7 +10301,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     return out;
   }
   function startIvMock(n) {
-    if (!IV.ready()) { toast("Interviul simulat are nevoie de Claude (în artifact)."); return; }
+    if (!IV.ready()) { toast(NEED_AI("Interviul simulat")); return; }
     if (n) startOral({ ids: pickIvMock(n).map(c => c.id), title: "Interviu simulat", mock: true });
     else startOral({ ids: pickTechMock().map(c => c.id), title: "Interviu tehnic simulat", mock: true });
   }
@@ -9353,7 +10365,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   }
   function openCert() { ui.tab = "cert"; ui.certQuit = false; render(); window.scrollTo(0, 0); }
   function startCert() {
-    if (!IV.ready()) { toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); return; }
+    if (!IV.ready()) { toast(NEED_AI("Certificarea")); return; }
     ui.cert = certNew(); Cert.save(); openCert();
   }
   function openSkelIn(id) { ui.tab = "study"; ui.study.seg = "skel"; ui.study.skelDue = false; ui.study.skel = id; ui.study.attempt = null; render(); window.scrollTo(0, 0); }
@@ -9363,7 +10375,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const c = ui.cert; if (!c || c.step === "done") return;
     if (c.step === "q") { startMcq("cert"); return; }
     if (c.step === "o") {
-      if (!IV.ready()) { toast("Secțiunea orală are nevoie de Claude: deschide aplicația din artifact."); return; }
+      if (!IV.ready()) { toast(NEED_AI("Secțiunea orală")); return; }
       const left = certLeft("o");
       if (left.length) { startOral({ ids: left, title: "Certificare · Explică", mock: true, cert: true }); return; }
       c.step = "s"; Cert.save();
@@ -9376,9 +10388,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const c = ui.cert; if (!c) return;
     const sc = certScore(c.res);
     c.step = "done"; c.done = now();
-    S.h.push({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
+    histAdd({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
       cert: { q: sc.q, o: sc.o, s: sc.s, tot: sc.tot, pass: sc.pass, mods: sc.mods.map(x => ({ m: x.m, p: Math.round(x.p * 100) / 100 })), gaps: sc.gaps.map(g => ({ t: g.t, id: g.id, p: Math.round(g.p * 100) / 100 })) } });
-    S.h = S.h.slice(-HMAX); commit(); Cert.save(); openCert();
+    commit(); Cert.save(); openCert();
   }
   const certSecStatus = (c, sc, s) => {
     if (s === "q") return c.res.q ? pc(sc.q) + "% · " + c.res.q.c + "/" + c.res.q.n : c.step === "q" ? "urmează" : "–";
@@ -9449,7 +10461,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const iv = run.iv, last = iv.turns[iv.turns.length - 1], max = ivRules(OBY[run.items[run.i]]).max;
     let h = '<section class="card stack-s iv"><div class="spread"><h3>Interviu</h3><span class="chip acc">' + iv.fu + "/" + max + " întrebări</span></div>" + ivTurnsHtml(iv.turns);
     if (iv.busy) return h + '<p class="iv-wait small" role="status">Se gândește…</p><button class="btn block" data-a="iv-stop">Oprește</button></section>';
-    if (last.who === "cand") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[iv.err] || "Cererea s-a întrerupt.") + '</p><button class="btn primary block" data-a="iv-retry">Continuă</button>';
+    if (last.who === "cand") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[iv.err] || "Cererea s-a întrerupt.") + '</p><button class="btn primary block" data-a="iv-retry">Continuă</button><button class="btn block" data-a="iv-manual">Fără AI: bifez eu punctele</button>';
     else h += '<textarea class="ans" id="iv-t" rows="4" maxlength="3000" placeholder="Răspunde intervievatorului" aria-label="Răspunsul tău la întrebare">' + esc(iv.draft || "") + "</textarea>" +
       '<button class="btn primary block" data-a="iv-send">Trimite</button><button class="btn block" data-a="iv-dunno">Nu știu</button>';
     return h + '<button class="btn block" data-a="iv-finish">Încheie, vreau verdictul</button></section>';
@@ -9473,7 +10485,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     if (txt.length < 15) { toast("Scrie o versiune mai lungă"); return; }
     rw.s = "busy"; render();
     let v = null, code = null;
-    try { v = await sampleGrade(c, txt); } catch (err) { code = (err && err.code) || "network"; }
+    try { v = await aiGrade(c, txt); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.run !== run || run.i !== idx || run.rw !== rw) return;
     if (v) {
       rw.n = v.covered.filter(Boolean).length; rw.miss = v.missing;
@@ -9485,7 +10497,6 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   // ---------- goluri: ce ratezi, de câte ori, ce ai spus greșit ----------
   // Pe fiecare card oral păstrăm `mc` (index punct → de câte ori l-ai ratat; o acoperire completă scade cu 1), `m` (ratate ultima dată) și `w` (afirmațiile marcate greșite).
   // Teoria pentru un gol se asamblează din ce avem: propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu punctul ratat.
-  const MC_MAX = 9;
   const GAP_STOP = new Set(("si sau dar din pentru care este sunt prin intre cand cum unde doar fara daca poate pot are iar tot cat cel cea cei cele lui sale ale mai dupa acest aceasta acesta apoi pana alt alta deci mult mica mare fie era acel acea").split(" "));
   const gapToks = t => new Set((String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9_]{3,}/g) || []).filter(w => !GAP_STOP.has(w)));
   // Elementele din `items` ordonate după cuvintele comune cu `text` (doar cele cu cel puțin unul).
@@ -9493,13 +10504,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const t = gapToks(text);
     return items.map((x, i) => { let n = 0; gapToks(x).forEach(w => { if (t.has(w)) n++; }); return { i, n }; }).filter(o => o.n > 0).sort((a, b) => b.n - a.n || a.i - b.i);
   }
-  function gapCounts(e) {
-    const out = {};
-    if (!e) return out;
-    if (e.mc && typeof e.mc === "object") { for (const k of Object.keys(e.mc)) { const n = +e.mc[k]; if (n > 0) out[k] = Math.min(MC_MAX, n); } }
-    else (e.m || []).forEach(i => { out[i] = 1; });         // carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1
-    return out;
-  }
+  const gapCounts = Journal.gapCounts;      // contorul unui card (carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1); îl actualizează și proiecția jurnalului
   // Toate golurile, cele mai grele primele: ratări × prioritatea modulului.
   function gapList() {
     const out = [];
@@ -9559,21 +10564,21 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   }
   const stOf = (name, k) => (ui[name] || (ui[name] = {}))[k];
   async function gapExplain(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("les", k) && stOf("les", k).s === "busy") return;
     const mine = ui.les[k] = { s: "busy" }; render();
     let text = null, code = null;
-    try { text = await sampleText(gapLessonPrompt(c, i, gapEvidence(c)), "default"); } catch (err) { code = (err && err.code) || "network"; }
+    try { text = await gapText(gapLessonPrompt(c, i, gapEvidence(c)), "default", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.les[k] !== mine) return;
     ui.les[k] = text && text.trim() ? { s: "ok", text: text.trim().slice(0, 1200) } : { s: "err", code: code || "format" };
     render();
   }
   async function chkAsk(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("chk", k) && /^busy/.test(stOf("chk", k).s)) return;
     const mine = ui.chk[k] = { s: "busyq" }; render();
     let q = null, code = null;
-    try { q = await sampleText(gapAskPrompt(c, i, gapEvidence(c)), "quick"); } catch (err) { code = (err && err.code) || "network"; }
+    try { q = await gapText(gapAskPrompt(c, i, gapEvidence(c)), "quick", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     ui.chk[k] = q && q.trim() ? { s: "q", q: q.trim().slice(0, 400), ans: "" } : { s: "err", code: code || "format", stage: "ask" };
     render();
@@ -9583,7 +10588,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const ans = (st.ans || "").trim(); if (ans.length < 10) { toast("Scrie un răspuns mai lung"); return; }
     const mine = ui.chk[k] = { s: "busyg", q: st.q, ans }; render();
     let v = null, code = null;
-    try { v = parseGapGrade(await sampleText(gapGradePrompt(c, i, st.q, ans), "default")); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
+    try { v = parseGapGrade(await gapText(gapGradePrompt(c, i, st.q, ans), "default", true)); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     if (!v) ui.chk[k] = { s: "err", code, stage: "grade", q: st.q, ans };
     else if (v.covered) { ui.chk[k] = { s: "ok", q: st.q, ans, fb: v.feedback }; gapFix(cid, i); }
@@ -9594,14 +10599,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   function gapFix(cid, i) {
     const run = ui.run;
     if (run && run.kind === "oral" && run.items[run.i] === cid && run.phase === "review") { (run.fixed = run.fixed || {})[i] = true; return; }
-    const e = S.o[cid]; if (!e) return;
-    const mc = gapCounts(e); delete mc[i]; e.mc = mc;
-    const m = (e.m || []).filter(x => x !== i); if (m.length) e.m = m; else delete e.m;
-    e.gt = now(); commit();
+    if (!S.o[cid]) return;
+    add({ type: "gap", op: "fix", item: cid, point: i }); commit();
   }
   const lessonHtml = text => text.split(/\n+/).filter(Boolean).map(l => '<p class="rt">' + inlineRich(l).replace(/^(Ideea:|Unde s-a rupt gândirea ta:|Spune-l la interviu:)/, "<b>$1</b>") + "</p>").join("");
   function gapAi(c, i) {
-    if (!IV.ready()) return "";
+    if (!gapReady()) return "";
     const k = gapKey(c.id, i), les = stOf("les", k), chk = stOf("chk", k), data = ' data-c="' + c.id + '" data-i="' + i + '"';
     let h = "";
     if (chk && chk.s === "ok") h += '<div class="gap-ok"><span class="chip ok">Reparat</span>' + (chk.fb ? '<p class="small">' + fmt(chk.fb) + "</p>" : "") + "</div>";
@@ -9657,16 +10660,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   // Folosit de oralSave (ecranul) și de PrepApp.record (Jarvis): același scor, aceleași goluri.
   function recordOral(c, r) {
     const run = { ticks: r.ticks || {}, half: r.half || {} };
-    const p = tickSum(run, c) / c.k.length;
-    updO(c.id, p);
-    // Golurile cardului: contorul `mc` (+1 la un punct ratat, −1 la unul acoperit întreg), `m` (ratate acum), `w` (ce a marcat verdictul greșit) și versiunea bună.
-    const e = S.o[c.id], prev = gapCounts(e), mc = {}, missed = missedOf(run, c), fx = r.fixed || {}, open = missed.filter(i => !fx[i]);
-    c.k.forEach((_, i) => { const n = fx[i] ? 0 : missed.indexOf(i) >= 0 ? Math.min(MC_MAX, (prev[i] || 0) + 1) : Math.max(0, (prev[i] || 0) - 1); if (n) mc[i] = n; });
-    e.mc = mc;                                                    // și gol ({}): fără el, `m` ar fi citit ca date vechi
-    if (open.length) e.m = open; else delete e.m;
+    const p = tickSum(run, c) / c.k.length, missed = missedOf(run, c), fx = r.fixed || {};
+    // Scorul și cutia, plus golurile cardului (contorul `mc`, `m`, `w`, versiunea bună): le calculează proiecția, din punctele ratate și din cele reparate.
+    add({ type: "answer", form: "o", item: c.id, result: Object.assign({ p, k: c.k.length, missed, fixed: Object.keys(fx).filter(i => fx[i]).map(Number) }, r.wrong ? { wrong: r.wrong.slice(0, 3) } : {}, r.keep ? { keep: r.keep } : {}) });
     ["les", "chk"].forEach(nm => Object.keys(ui[nm] || {}).forEach(k => { if (k.indexOf(c.id + ":") === 0) delete ui[nm][k]; }));      // explicațiile și întrebările țintite ale cardului nu rămân în urmă
-    if (r.wrong) { const w = r.wrong.slice(0, 3); if (w.length) e.w = w; else delete e.w; }
-    if (r.keep) e.a = r.keep;
     commit();
     return { p, missed };
   }
@@ -9684,8 +10681,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const run = ui.run, ids = Object.keys(run.scores);
     if (ids.length) {
       const avg = ids.reduce((s, id) => s + run.scores[id], 0) / ids.length;
-      S.h.push({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
-      S.h = S.h.slice(-HMAX); commit();
+      histAdd({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      commit();
       ui.result = { kind: "oral", title: run.title, items: ids.map(id => ({ id, p: run.scores[id] })), avg, mock: !!run.mock };
     }
     if (run.cert && ui.cert) { ui.result = null; if (!certLeft("o").length) ui.cert.step = "s"; Cert.save(); ui.tab = "cert"; }
@@ -9751,8 +10748,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const run = ui.run, ids = Object.keys(run.grades);
     if (ids.length) {
       const sum = ids.reduce((a, id) => a + run.grades[id], 0);
-      S.h.push({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
-      S.h = S.h.slice(-HMAX); commit();
+      histAdd({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      commit();
       ui.result = { kind: "open", title: run.title, items: ids.map(id => ({ id, g: run.grades[id] })), avg: sum / (2 * ids.length) };
     }
     ui.run = null; render(); window.scrollTo(0, 0);
@@ -10042,12 +11039,74 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
       '<button class="btn sm danger" data-a="reset">' + (ui.prog.reset ? "Confirmă: șterge tot" : "Resetează") + "</button></div>";
+    if (JSync) h += vJournalIO();
     if (ui.prog.exp) h += '<textarea class="io" id="exp-t" readonly aria-label="Progres exportat">' + esc(JSON.stringify(S)) + '</textarea><button class="btn sm" data-a="copy-exp">Copiază</button>';
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
+    if (JSync) h += vSync();
     h += vCfg();
+    h += vServerSettings();
     h += vAiSettings();
     return h;
+  }
+  // Starea sincronizării jurnalului și butonul „Sincronizează acum”. Adresa și secretul NU se introduc aici: formularul e cardul „Serverul” (`vServerCard`).
+  function vSync() {
+    const on = Conn.configured();
+    return '<section class="card stack-s" id="sync-card"><h3>Sincronizare</h3><p class="small" id="jsync-l">' + esc(JournalSync.label(JSync.status())) + "</p>" +
+      '<p class="xs muted">Progresul trece între telefon și laptop prin serverul tău. ' + (on ? "" : "Adaugă adresa și secretul în cardul „Serverul”, mai jos. ") + "Nu intră în export.</p>" +
+      '<p class="small" id="jwiped"' + (JSync.status().wiped ? "" : " hidden") + ">" + esc(WIPED_NOTE) + "</p>" +
+      (on ? '<div class="row"><button class="btn sm" data-a="srv-sync">Sincronizează acum</button><button class="btn sm" data-a="jresend">Retrimite jurnalul local</button>' +
+        '<button class="btn sm danger" data-a="jpurge">' + (ui.prog.purge ? "Renunță la ștergere" : "Șterge jurnalul de pe server") + "</button></div>" : "") +
+      (on && ui.prog.purge ? vPurgePanel() : "") +
+      (ui.prog.smsg ? '<p class="small' + (ui.prog.smsgBad ? " bad" : "") + '" id="jsv-msg" role="status">' + esc(ui.prog.smsg) + "</p>" : "") + "</section>";
+  }
+  // Exportul și importul jurnalului (tichetul 09): fișier JSON cu tot jurnalul, inclusiv textul lui Alex; nu poartă adresa sau secretul serverului.
+  const WIPED_NOTE = "Jurnalul de pe server a fost șters. Copia de pe acest dispozitiv a rămas întreagă și nu se retrimite singură; răspunsurile noi se trimit mai departe. Ca s-o trimiți din nou: „Retrimite jurnalul local”.";
+  function vJournalIO() {
+    return '<div class="row"><button class="btn sm" data-a="jexp">Exportă jurnalul</button><button class="btn sm" data-a="jimp">Importă jurnalul</button>' +
+      '<input type="file" id="jimp-f" accept=".json,application/json" hidden aria-label="Fișierul jurnalului"></div>' +
+      '<p class="xs muted">Jurnalul întreg, cu textul tău, într-un fișier .json (fără adresa și secretul serverului). Importul îl îmbină cu ce ai aici, fără dubluri, și merge fără semnal.</p>' +
+      (ui.prog.jmsg ? '<p class="small' + (ui.prog.jmsgBad ? " bad" : "") + '" id="jio-msg" role="status">' + esc(ui.prog.jmsg) + "</p>" : "");
+  }
+  // Ștergerea de pe server în doi pași: butonul deschide panoul, iar panoul cere cuvântul „sterge” (fără diacritice sau cu).
+  function vPurgePanel() {
+    return '<div class="stack-s" id="jpurge-panel"><p class="small"><b>Ștergi tot jurnalul de pe server.</b> Copia de pe acest dispozitiv (și de pe celelalte) rămâne. Nu se mai poate anula de pe server; dacă vrei înapoi, folosești „Retrimite jurnalul local” sau importul unui fișier exportat. Ce nu a ajuns încă pe server se trimite în continuare.</p>' +
+      '<input class="keyin" id="jpurge-w" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scrie „sterge” ca să confirmi" value="' + esc(ui.prog.pw) + '" aria-label="Cuvântul de confirmare">' +
+      '<div class="row"><button class="btn sm danger" data-a="jpurge-go"' + (ui.prog.busy ? " disabled" : "") + ">" + (ui.prog.busy ? "Se șterge…" : "Șterge definitiv de pe server") + '</button><button class="btn sm" data-a="jpurge-cancel">Renunță</button></div></div>';
+  }
+  function jSay(key, msg, bad) { ui.prog[key] = msg; ui.prog[key + "Bad"] = !!bad; if (ui.tab === "progress") render(); }
+  function jExport() {
+    J.events().then(evs => {
+      const doc = Journal.exportDoc(evs, { device: J.info().device }), text = JSON.stringify(doc);
+      const d = new Date(now()), pad = n => String(n).padStart(2, "0");
+      const name = "jurnal-onapsis-" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + ".json";
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" })), a = document.createElement("a");
+      a.href = url; a.download = name; a.hidden = true; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      jSay("jmsg", "Jurnal exportat: " + doc.count + (doc.count === 1 ? " eveniment" : " evenimente") + ", în " + name + ".", false);
+    }, () => jSay("jmsg", "Exportul nu a mers: jurnalul nu s-a putut citi.", true));
+  }
+  // Un text de export de jurnal (din fișier sau lipit) → îmbinare în jurnal. Nimic nu se importă dacă fișierul e stricat; ce lipsește aici intră în coada obișnuită de trimis.
+  function jImport(text) {
+    let doc;
+    try { doc = Journal.parseExport(text); } catch (e) { jSay("jmsg", e.message, true); return Promise.resolve(); }
+    return J.merge(doc.events).then(r => {
+      planCache = null; if (JSync) JSync.poke();
+      const known = doc.events.length - r.added;
+      ui.prog.imp = false;
+      jSay("jmsg", "Importat: " + r.added + (r.added === 1 ? " eveniment nou" : " evenimente noi") + ", " + known + (known === 1 ? " era deja aici." : " erau deja aici."), false);
+    }, () => jSay("jmsg", "Importul nu a mers: browserul nu a putut salva jurnalul.", true));
+  }
+  const PURGE_ERR = { auth: "Secret greșit: nu s-a șters nimic.", offline: "Fără semnal: nu s-a șters nimic. Încearcă din nou când ai semnal.", none: "Serverul nu e configurat.",
+    server: "Serverul nu a răspuns bine: poate nu s-a șters tot. Verifică starea și încearcă din nou.", client: "Serverul a refuzat cererea: nu s-a șters nimic." };
+  function jPurge() {
+    const w = String(ui.prog.pw || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (w !== "sterge") { toast("Scrie cuvântul „sterge” ca să confirmi"); return; }
+    ui.prog.busy = true; render();
+    JSync.purgeServer().then(res => {
+      ui.prog.busy = false; ui.prog.purge = false; ui.prog.pw = "";
+      jSay("smsg", "Jurnalul de pe server a fost șters (" + res.deleted + (res.deleted === 1 ? " eveniment" : " evenimente") + "). Copia de pe acest dispozitiv a rămas.", false);
+    }, e => { ui.prog.busy = false; jSay("smsg", PURGE_ERR[e && e.kind] || "Ștergerea nu a mers.", true); });
   }
   function vCfg() {
     const c = cfg(), iv = interviewDate();
@@ -10057,8 +11116,37 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       '<label class="small">Ore/seară <select class="keyin" id="cfg-h" aria-label="Ore pe seară">' + opts + "</select></label></div>" +
       '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button></div></section>';
   }
+  // Cardul „Serverul”: SINGURUL formular pentru adresa și secretul serverului (ServerConn / `Conn`). Progres îl arată direct, Jarvis îl refolosește cu `extra`
+  // (butoane proprii, în același card); sincronizarea jurnalului (tichetul 05) nu are formular propriu și e anunțată de `srvChanged`. Acțiunile `srv-save` / `srv-test` / `srv-del` sunt comune.
+  function vServerCard(extra) {
+    const c = Conn.configured() ? Conn.get() : null, d = ui.srv;
+    return '<section class="card stack-s"><h3>Serverul</h3>' +
+      '<p class="small">Verificarea AI, întrebările, Jarvis și sincronizarea trec prin serverul tău, care ține cheile Gemini și DeepSeek. Nu mai ai nevoie de chei în browser.</p>' +
+      '<p class="small" id="srv-st">' + (c ? "Configurat: " + esc(c.url.replace(/^https?:\/\//, "")) + " (secret …" + esc(c.secret.slice(-4)) + ")." : "Neconfigurat.") + "</p>" +
+      '<input class="keyin" id="srv-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Adresa serverului (https://…)" value="' + esc(d.url || (c ? c.url : "")) + '" aria-label="Adresa serverului">' +
+      '<input class="keyin" id="srv-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (c ? "Secret nou (înlocuiește)" : "Secretul serverului") + '" value="' + esc(d.secret) + '" aria-label="Secretul serverului">' +
+      '<div class="row"><button class="btn sm primary" data-a="srv-save">Salvează</button>' + (c ? '<button class="btn sm" data-a="srv-test">Testează AI</button><button class="btn sm danger" data-a="srv-del">Șterge</button>' : "") + (extra || "") + "</div>" +
+      '<p class="xs muted">Adresa și secretul rămân doar în browserul acestui dispozitiv: nu se sincronizează și nu intră în export. Serverul primește doar promptul (întrebarea, punctele cheie și răspunsul tău).</p></section>';
+  }
+  function vServerSettings() {
+    return AI.sample ? "" : vServerCard();               // în artifact, CSP blochează conexiunile către server
+  }
+  // Salvează din câmpurile cardului (`#srv-url`, `#srv-secret`); un secret gol păstrează secretul de acum. Întoarce true dacă s-a salvat.
+  function srvSave() {
+    const u = $("#srv-url"), k = $("#srv-secret"), c = Conn.get();
+    const url = ServerConn.normUrl(u ? u.value : ""), secret = ((k && k.value.trim()) || c.secret || "").trim();
+    if (!url) { toast("Adresa trebuie să înceapă cu https://"); return false; }
+    if (!secret) { toast("Lipsește secretul"); return false; }
+    if (!ServerConn.validSecret(secret)) { toast("Secretul: doar caractere ASCII, fără spații"); return false; }
+    try { Conn.set({ url, secret }); } catch (e) { toast("Browserul nu permite salvarea"); return false; }
+    ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server salvat"); srvChanged(); return true;
+  }
+  // Serverul s-a schimbat (salvat sau șters): sincronizarea jurnalului pornește din nou cu perechea nouă, sau se oprește dacă nu mai e nimic configurat.
+  function srvChanged() { if (JSync) JSync.syncNow(); }
   function vAiSettings() {
     if (AI.sample) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">La cardurile orale, Claude compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit. Nu ai nevoie de cheie: folosește contul tău Claude, iar prima dată ți se cere permisiunea.</p><p class="xs muted">Se trimit doar întrebarea, punctele cheie și răspunsul tău.</p></section>';
+    // Cu serverul configurat nu mai există câmp pentru cheia DeepSeek: nicio cerere nu pleacă direct din browser (cheia, dacă a rămas, nu se folosește).
+    if (Srv.configured()) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">Verificarea răspunsurilor și întrebările trec prin server. Cheia DeepSeek din browser nu se mai folosește.</p></section>';
     const k = AI.get();
     return '<section class="card stack-s"><h3>Verificare AI (DeepSeek)</h3>' +
       '<p class="small">La cardurile orale, DeepSeek compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit.</p>' +
@@ -10161,14 +11249,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
     const a = b.dataset.a;
     switch (a) {
-      case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-mics":
+      case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-server-save": case "jv-server-clear": case "jv-mics":
       case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "dz": case "dz-map": case "dz-all": dzAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
       case "go": goTask(b.dataset.id); break;
-      case "plan-toggle": { const id = b.dataset.id; S.p[id] = { d: isDone(id) ? 0 : 1, t: now() }; commit(); render(); break; }
+      case "plan-toggle": { const id = b.dataset.id; add({ type: "plan", item: id, done: !isDone(id) }); commit(); render(); break; }
       case "mcq": startMcq(b.dataset.mode); break;
       case "mcq-mod": startMcq("module", { ms: [b.dataset.m] }); break;
       case "ans": answer(+b.dataset.pos); break;
@@ -10198,7 +11286,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       case "cert": if (ui.cert) openCert(); else startCert(); break;
       case "cert-open": ui.study.skel = null; ui.study.attempt = null; openCert(); break;
       case "cert-go": certGo(); break;
-      case "cert-new": if (!IV.ready()) toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
+      case "cert-new": if (!IV.ready()) toast(NEED_AI("Certificarea")); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
       case "cert-skel": openSkelIn(b.dataset.k); break;
       case "cert-redo-q": if (ui.cert && ui.cert.res.q) startMcq("ids", { ids: ui.cert.res.q.wrong, title: "Greșelile din certificare" }); break;
       case "cert-copy": { const t = $("#cert-sum"); if (t) copyText(t.value, t); break; }
@@ -10215,6 +11303,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       case "iv-dunno": ivSend("dunno"); break;
       case "iv-finish": ivSend("finish"); break;
       case "iv-retry": ivRun(false); break;
+      case "iv-manual": ivManual(); break;
       case "iv-stop": ivStop(); break;
       case "rw-open": if (ui.run && ui.run.iv && !ui.run.rw) { ui.run.rw = { text: "", s: "idle" }; render(); const el = $("#rw-t"); if (el) el.focus(); } break;
       case "rw-check": rwCheck(); break;
@@ -10225,7 +11314,17 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
         if (!AI.set(k)) { toast("Browserul nu permite salvarea cheii"); break; }
         render(); toast("Cheie salvată"); break;
       }
+      case "srv-sync": if (JSync) JSync.syncNow(); break;
+      case "jexp": if (JSync) jExport(); break;
+      case "jimp": { const f = $("#jimp-f"); if (f) { f.value = ""; f.click(); } break; }
+      case "jresend": if (JSync) JSync.resend().then(n => jSay("smsg", n + (n === 1 ? " eveniment pus" : " evenimente puse") + " în coada de trimis; serverul le păstrează pe cele care îi lipsesc.", false), () => jSay("smsg", "Nu s-a putut pune jurnalul în coadă.", true)); break;
+      case "jpurge": ui.prog.purge = !ui.prog.purge; ui.prog.pw = ""; ui.prog.busy = false; ui.prog.smsg = ""; render(); break;
+      case "jpurge-cancel": ui.prog.purge = false; ui.prog.pw = ""; render(); break;
+      case "jpurge-go": if (JSync && !ui.prog.busy) jPurge(); break;
       case "ds-del": AI.set(""); render(); toast("Cheie ștearsă"); break;
+      case "srv-save": srvSave(); break;
+      case "srv-del": Conn.clear(); ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server șters"); srvChanged(); break;
+      case "srv-test": srvTest(); break;
       case "ds-test": aiTest(); break;
       case "tick": if (ui.run) { const k = +b.dataset.k; ui.run.ticks[k] = !ui.run.ticks[k]; render(); } break;
       case "oral-save": oralSave(); break;
@@ -10240,7 +11339,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
         const d = $("#cfg-d"), hs = $("#cfg-h");
         const iso = d ? d.value.trim() : "", h = hs ? +hs.value : 0;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || isNaN(parseIso(iso))) { toast("Alege o dată validă"); break; }
-        S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
+        add({ type: "cfg", d: iso, h: h > 0 ? h : P.cfg.hours }); commit(); render(); toast("Salvat: planul s-a refăcut");
         break;
       }
       case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.skelDue = false; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
@@ -10262,7 +11361,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
         const got = r.peek ? 0 : r.ticks.filter(Boolean).length, inCert = certSkelOn(k.id);
         updS(k.id, got / k.k.length);
         // timpul intră în istoric ca la celelalte exerciții (spentMin îl numără); o încercare lăsată deschisă se plafonează
-        S.h.push({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) }); S.h = S.h.slice(-HMAX);
+        histAdd({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) });
         Drafts.set(k.id, ""); delete ui.study.peeked[k.id]; commit();
         if (inCert) {
           certRecord("s", { id: k.id, p: got / k.k.length, miss: k.k.map((_, i) => i).filter(i => r.peek || !r.ticks[i]) });
@@ -10280,7 +11379,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       case "kata-back": ui.study.kata = null; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-hint": ui.study.hints++; render(); break;
       case "kata-timer": ui.study.kEnd = ui.study.kEnd ? 0 : now() + 20 * 60000; ui.study.kDone = false; render(); break;
-      case "kata-status": { const id = ui.study.kata; S.k[id] = { s: b.dataset.s, t: now() }; commit(); render(); toast("Notat"); break; }
+      case "kata-status": { const id = ui.study.kata; add({ type: "answer", form: "k", item: id, result: { s: b.dataset.s } }); commit(); render(); toast("Notat"); break; }
       case "copy-code": { const pre = b.parentElement.querySelector("pre"); copyText((P.kataCode || {})[b.dataset.k] || (P.skelCode || {})[b.dataset.k] || "", pre); break; }
       case "exp": ui.prog.exp = !ui.prog.exp; render(); break;
       case "imp": ui.prog.imp = !ui.prog.imp; render(); break;
@@ -10288,13 +11387,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       case "do-imp": {
         const t = $("#imp-t"); let data = null;
         try { data = JSON.parse(t.value); } catch (err) { toast("Textul nu e un export valid"); break; }
-        const res = mergeState(S, prune(normalize(data)));
-        S = res.state; commit(); ui.prog.imp = false; render(); toast("Progres importat");
+        if (data && data.format === Journal.EXPORT_FORMAT) { if (JSync) jImport(t.value); else toast("Jurnalul se importă doar în aplicația instalată"); break; }
+        const merged = mergeState(S, prune(normalize(data))).state, done = () => { commit(); ui.prog.imp = false; render(); toast("Progres importat"); };
+        if (!JSTORE) { J.replaceState(merged); done(); }                                  // fără depozit nu există îmbinare în jurnal: starea îmbinată trece prin proiecție și oglindă
+        else J.importState(merged).then(done, () => toast("Importul nu a mers"));       // intrările noi intră în jurnal ca evenimente sintetice
         break;
       }
       case "reset":
         if (!ui.prog.reset) { ui.prog.reset = true; render(); setTimeout(() => { if (ui.prog.reset) { ui.prog.reset = false; if (ui.tab === "progress") render(); } }, 4000); }
-        else { S = emptyState(); S.r = now(); ui.prog.reset = false; ui.result = null; commit(); render(); toast("Progres resetat"); }
+        else { add({ type: "reset" }); ui.prog.reset = false; ui.result = null; commit(); render(); toast("Progres resetat"); }
         break;
     }
   });
@@ -10319,6 +11420,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   document.addEventListener("pointercancel", talkEnd);
   document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest("#jv-talk")) e.preventDefault(); });
   document.addEventListener("change", e => {
+    const f = e.target;
+    if (f && f.id === "jimp-f" && f.files && f.files[0]) {
+      const file = f.files[0];
+      (file.text ? file.text() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsText(file); }))
+        .then(txt => jImport(txt), () => jSay("jmsg", "Fișierul nu s-a putut citi.", true));
+      return;
+    }
     const t = e.target, k = t && t.dataset && t.dataset.jv;
     if (!k) return;
     if (k === "module") { ui.jv.module = t.value; return; }
@@ -10331,6 +11439,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
     else if (t && t.dataset && "skelCode" in t.dataset && ui.study.attempt) { ui.study.attempt.code = t.value; Drafts.set(ui.study.attempt.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
+    else if (t && t.id === "jpurge-w") ui.prog.pw = t.value;
+    else if (t && t.id === "srv-url") ui.srv.url = t.value;
+    else if (t && t.id === "srv-secret") ui.srv.secret = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;
     else if (t && t.dataset && t.dataset.chk && ui.chk && ui.chk[t.dataset.chk]) ui.chk[t.dataset.chk].ans = t.value;
@@ -10407,7 +11518,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       return parts.join("\n\n").slice(0, 900);
     },
     summary() { return { readiness: readiness().ready, daysLeft: daysLeft(), gaps: gapList().slice(0, 3).map(x => MOD[x.c.m].short + ": " + x.c.k[x.i]), role: P.cfg.role, profile: IV_PROFILE }; },
-    log(e) { S.h.push(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); S.h = S.h.slice(-HMAX); commit(); },
+    log(e) { histAdd(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); commit(); },
 
     // ----- Lecție: fișa unui modul, poziția lecției, recomandarea -----
     // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat; la modulele cu desfășurări și harta, plus desfășurările. Diagramele nu intră.
@@ -10423,14 +11534,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     lessonHeard(id, n) {
       const sh = P.sheets[id]; if (!sh || !sh.points) return;
       const e = S.l[id] || {}, k = Math.min(n, sh.points.length);
-      if (k > (e.n || 0)) { S.l[id] = Object.assign({}, e, { n: k, t: now() }); commit(); }
+      if (k > (e.n || 0)) { add({ type: "lesson", item: id, n: k }); commit(); }
     },
-    lessonDone(id) { S.l[id] = { n: 0, d: now(), t: now() }; commit(); },
+    lessonDone(id) { add({ type: "lesson", item: id, n: 0, done: true }); commit(); },
     // Resetarea: lecția revine la început, dar data ultimei terminări rămâne (recomandarea o folosește). `t` mai nou face ca resetarea să câștige la îmbinare.
     lessonReset(id) {
       if (!P.sheets[id]) return;
-      const e = S.l[id] || {};
-      S.l[id] = Object.assign({ n: 0, t: now() }, e.d ? { d: e.d } : {});
+      add({ type: "lesson", item: id, n: 0 });
       commit();
     },
     // Întâi lecția începută (cea mai recentă); altfel modulul cu cea mai mare nevoie dintre cele neterminate în ultimele 2 zile, fără Bonus și fără comportamental.
@@ -10456,19 +11566,29 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   const ASK_MAX = 6;
   const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
   const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey, model: "gemini-3.5-flash-lite" });      // cel mai rapid model gratuit: răspunsurile sunt scurte
-  // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
+  // Sursa: serverul propriu (PWA, prima); fără el, ca înainte: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis, altfel DeepSeek.
+  // Cu serverul configurat urmează doar `sample` la eșec: niciodată Gemini sau DeepSeek direct din browser. Fără server, se folosește prima sursă, fără căderi.
+  const askSources = () => {
+    const o = ServerAi.order({ server: Srv.configured(), sample: !!AI.sample, gemini: !!geminiKey(), deepseek: !!AI.get() });
+    return o[0] === "server" ? o : o.slice(0, 1);
+  };
+  const ASK_WHO = { server: "AI", sample: "Claude", gemini: "Gemini", deepseek: "DeepSeek" };
   const AskModel = {
-    ready: () => !!(AI.sample || geminiKey() || AI.get()),
-    name: () => (AI.sample ? "Claude" : geminiKey() ? "Gemini" : "DeepSeek"),
-    async generate(req) {
-      if (AI.sample) return sampleText(req.system + "\n\n" + req.user, "default");      // `sample` nu are prompt de sistem
-      if (geminiKey()) return gemText.generate(req);
-      return dsCall({ model: DS_MODEL, messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get());
+    ready: () => askSources().length > 0,
+    name: () => ASK_WHO[askSources()[0]] || "AI",
+    generate(req) {
+      const by = {
+        server: r => Srv.generate({ system: r.system, user: r.user, kind: "default", json: true }),      // Ask, scheletele: toate cer JSON
+        sample: r => sampleText(r.system + "\n\n" + r.user, "default"),                                // `sample` nu are prompt de sistem
+        gemini: r => gemText.generate(r),
+        deepseek: r => dsCall({ model: DS_MODEL, messages: [{ role: "system", content: r.system }, { role: "user", content: r.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get())
+      };
+      return ServerAi.run(askSources().map(n => ({ name: n, generate: by[n] })), req);
     }
   };
   const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
   const ASK_MSG = Object.assign({}, AI_MSG, {
-    nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
+    nokey: "Adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
     network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel.",
     timeout: "Modelul n-a răspuns la timp. Reîncearcă.", format: "Răspunsul modelului n-a avut formatul așteptat. Reîncearcă."
   });
@@ -10523,7 +11643,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   function vAsk(key, extra) {
     const st = ui.ask[key] || (ui.ask[key] = { open: false, draft: "", hist: [], busy: false, err: null });
     if (extra) Object.assign(st, extra);            // același obiect la fiecare randare: askSend îl modifică în timp ce se așteaptă răspunsul
-    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
+    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
     const k = esc(key);
     if (!st.open) return '<button class="btn sm ask-open" data-a="ask-open" data-k="' + k + '">Întreabă despre asta</button>';
     const kind = key.split(":")[0], full = st.hist.length >= ASK_MAX, ctx = askCtx(key), topic = ctx ? ctx.topic : "";
@@ -10606,9 +11726,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
 
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
-  const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
-  const BUILD = "3323e6b";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
+  const BUILD = "f9e4a35";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };
@@ -10620,8 +11739,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     try { localStorage.getItem("x"); return localStorage; }
     catch (e) { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: k => { delete m[k]; } }; }
   }
+  // Serverul platformei (adresă + secret, `onapsis-server-v1`) dă jetoane de scurtă durată pentru Live: cheia Gemini nu mai stă în telefon.
+  const jvTokens = LiveToken.create({ server: Conn, fetch: (u, i) => window.fetch(u, i) });
   function jvInit() {
-    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
+    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), server: Conn, getToken: jvFakes.getToken || jvTokens.get, clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
     return jv;
   }
   // Schimbările structurale redesenează ecranul; nivelul vocii și transcrierea se actualizează pe loc (altfel s-ar pierde textul scris și focusul).
@@ -10651,13 +11772,19 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   }
 
   function vJarvisHome(st, set) {
-    const hasKey = !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
+    const viaServer = Conn.configured(), hasKey = viaServer || !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
     if (!ui.jv.module || !MOD[ui.jv.module]) ui.jv.module = (mods[0] || {}).id || "";
     let h = '<div class="eyebrow">Jarvis · interviu vorbit</div>';
     h += '<section class="card stack-s"><h2>Vorbește cu Jarvis</h2><p class="small muted">Îți pune întrebări ca la interviu, te întreabă mai departe și îți notează răspunsurile ca în Oral. După ce începi, nu mai atingi ecranul.</p></section>';
     if (st.error) h += '<p class="jv-err" role="alert">' + esc(st.error.message) + "</p>";
-    if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi cheia Gemini.</p>';
-    const keyCard = '<section class="card stack-s"><h3>Cheia Gemini</h3>' +
+    if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi serverul (adresa și secretul) sau, dacă nu ai server, cheia Gemini.</p>';
+    // Cu server configurat, nu mai există câmp pentru cheia Gemini: Jarvis pornește cu un jeton de la server. Fără server rămâne cheia veche, ca rezervă.
+    // Formularul serverului e cel din Progres (`vServerCard`), cu un buton în plus pentru conexiunea Jarvis.
+    const serverCard = vServerCard(viaServer ? '<button class="btn sm" data-a="jv-key-test">Testează Jarvis</button>' : "") +
+      (viaServer ? '<p class="xs muted" id="jv-srvinfo">Jarvis pornește cu un jeton de la server; nu ai nevoie de cheia Gemini în telefon.</p>' +
+        (set.key ? '<p class="small muted" id="jv-oldkey">A rămas o cheie veche în acest browser (…' + esc(set.key.slice(-4)) + "). Dispare la prima sesiune pornită cu serverul.</p>" : "") +
+        '<p class="xs muted" id="jv-keytest" role="status">' + esc(ui.jv.keyTest) + '</p><p class="xs muted">Pe nivelul gratuit, Google poate folosi conversațiile: nu spune nimic confidențial.</p>' : "");
+    const keyCard = viaServer ? serverCard : serverCard + '<section class="card stack-s"><h3>Cheia Gemini (metodă veche)</h3><p class="xs muted">Folosită doar cât nu ai server configurat.</p>' +
       (hasKey ? '<p class="small" id="jv-keyinfo">Cheie salvată (…' + esc(set.key.slice(-4)) + ").</p>" : '<p class="small muted" id="jv-keyinfo">Nu ai încă o cheie. Creeaz-o gratuit în Google AI Studio (aistudio.google.com/apikey) și lipește-o aici.</p>') +
       '<input class="keyin" type="password" id="jv-key" autocomplete="off" placeholder="' + (hasKey ? "Cheie nouă (opțional)" : "Cheia din Google AI Studio") + '" value="' + esc(ui.jv.keyDraft) + '" aria-label="Cheia Gemini">' +
       '<div class="row"><button class="btn sm primary" data-a="jv-key-save">Salvează</button>' + (hasKey ? '<button class="btn sm" data-a="jv-key-test">Testează</button><button class="btn sm ghost" data-a="jv-key-clear">Șterge cheia</button>' : "") + "</div>" +
@@ -10774,7 +11901,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
       case "jv-again": J.reset(); render(); break;
       case "jv-key-save": { const v = (ui.jv.keyDraft || "").trim(); if (!v) { toast("Lipește cheia"); break; } J.settings.set({ key: v }); ui.jv.keyDraft = ""; ui.jv.keyTest = ""; render(); break; }
       case "jv-key-clear": J.settings.set({ key: "" }); ui.jv.keyTest = ""; render(); break;
-      case "jv-key-test": ui.jv.keyTest = "Se verifică…"; render(); J.checkKey().then(r => { ui.jv.keyTest = r.ok ? "Cheia merge." : "Nu merge: " + (r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua."); render(); }); break;
+      case "jv-key-test": {
+        const viaServer = Conn.configured();
+        ui.jv.keyTest = "Se verifică…"; render();
+        J.checkKey().then(r => {
+          ui.jv.keyTest = r.ok ? (viaServer ? "Conexiunea merge." : "Cheia merge.") : "Nu merge: " + (viaServer ? J.errorText(r.reason) : r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua.");
+          render();
+        });
+        break;
+      }
       case "jv-mics": J.mics().then(list => { ui.jv.mics = list; render(); }, () => toast("Nu pot citi microfoanele")); break;
     }
   }
@@ -10800,9 +11935,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   }, 500);
 
   // ---------- boot ----------
+  // Când aplicația trece în fundal, evenimentele încă neconfirmate ajung în IndexedDB (oglinda le ține oricum în siguranță).
+  if (JOURNAL) { document.addEventListener("visibilitychange", () => { if (document.hidden) J.flush(); }); window.addEventListener("pagehide", () => { J.flush(); }); }
   function start(data) {
-    const local = loadLocal();
-    if (local) S = local;
+    if (!JOURNAL) { const local = loadLocal(); if (local) J.replaceState(local); }       // PWA: prima desenare vine din oglinda jurnalului, iar jurnalul se împacă cu IndexedDB mai jos
     ui.cert = Cert.load();
     if (data && data.ui && typeof data.ui === "object") {
       const u = data.ui;
@@ -10818,6 +11954,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
     render();
     Sync.init();
     AI.init();
+    if (JOURNAL) J.load().then(() => { planCache = null; S = J.state(); softRender(); if (JSync) { JSync.attach(window, document); JSync.start(); } }, () => { /* fără IndexedDB: rămâne oglinda */ });
   }
   const hot = window.claude && window.claude.hot;
   if (hot && typeof hot.snapshot === "function") { try { hot.snapshot(() => ({ ui: snapshotUi() })); } catch (e) { /* opțional */ } }
@@ -10825,7 +11962,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { S = x; planCache = null; } };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J, sync: () => JSync };
 })();
 
 </script>
