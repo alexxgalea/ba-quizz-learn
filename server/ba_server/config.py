@@ -7,7 +7,7 @@ lor, de exemplu cheile Gemini și DeepSeek.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,8 @@ class Settings:
     # Doar pentru dezvoltare locală: originea permisă de aplicația însăși.
     # În AWS, CORS e configurat o singură dată, pe adresa funcției (template.yaml).
     local_cors_origin: str = ""
+    # Cheia Gemini (tichetele 06 și 08). Gol = rutele care o cer răspund 503. Nu apare în `repr`.
+    gemini_api_key: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -29,4 +31,5 @@ class Settings:
             table_name=e.get("TABLE_NAME", cls.table_name),
             user_pk=e.get("USER_PK", cls.user_pk),
             local_cors_origin=e.get("LOCAL_CORS_ORIGIN", ""),
+            gemini_api_key=e.get("GEMINI_API_KEY", ""),
         )

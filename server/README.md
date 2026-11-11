@@ -12,6 +12,7 @@ Toate, afară de `/health`, cer antetul `Authorization: Bearer <secret>`.
 |---|---|
 | `POST /events` cu `{"events": [{"id": "...", ...}, ...]}` | Păstrează evenimentele noi (1–500 pe cerere, fiecare ≤ 100 KB). Un id deja păstrat se ignoră: primul câștigă. Răspuns: `{"accepted": [ids noi], "duplicates": [ids ignorate], "cursor": n}`. |
 | `GET /events?after=<cursor>&limit=<n>` | Întoarce evenimentele cu număr mai mare decât `after` (implicit 0), în ordinea sosirii, cel mult `limit` (implicit 100, maximum 500). Răspuns: `{"events": [...], "cursor": n, "more": bool}`. Clientul repetă cu `after=cursor` cât timp `more` e `true`. |
+| `POST /live-token` (fără corp) | Jeton de scurtă durată pentru Gemini Live (tichetul 08). Serverul cere la Gemini un jeton cu `uses: 1`, `expireTime` = acum + 60 de minute și `newSessionExpireTime` = acum + 2 minute. Răspuns: `{"token": "auth_tokens/…", "expireAt": "2026-11-12T19:00:00Z", "expiresIn": 3600}`. Erori: `503 {"detail": {"error": "gemini_key_missing"}}` (serverul n-are `GEMINI_API_KEY`), `502` cu `error` = `gemini_unreachable`, `gemini_error` (plus `upstream_status`) sau `gemini_bad_response`. Cheia Gemini și corpul erorii Google nu ajung niciodată la client. |
 | `GET /health` | `{"ok": true}`, fără secret. |
 
 Orice altceva fără secret primește `401 {"detail": "unauthorized"}`, la fel pentru secret lipsă, greșit sau neconfigurat (inclusiv cu corp stricat). Documentația automată FastAPI e oprită.
@@ -73,8 +74,10 @@ Se poate face doar după tichetul 03 (contul AWS). Pași, o singură dată:
 
    ```
    cd server
-   BA_SECRET='<secretul>' AWS_REGION=<regiunea> make deploy
+   BA_SECRET='<secretul>' GEMINI_API_KEY='<cheia Gemini>' AWS_REGION=<regiunea> make deploy
    ```
+
+   `GEMINI_API_KEY` ajunge variabilă de mediu a funcției (nu stă în repo) și e folosită doar de serviciile care vorbesc cu Gemini (`/live-token`). Fără ea, `/live-token` răspunde 503 și Jarvis arată un mesaj clar.
 
    Scriptul construiește pachetul (Linux x86_64, Python 3.14), apoi rulează `sam deploy` și la sfârșit scrie adresa funcției (`https://<id>.lambda-url.<regiune>.on.aws`). Aceeași comandă actualizează serverul; dai de fiecare dată același secret (un secret diferit îl înlocuiește pe cel vechi, iar dispozitivele vechi sunt refuzate).
 4. Notează adresa în `.scratch/platforma/issues/04-serverul-minim.md` și bifează „Lansat”.
