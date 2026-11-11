@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from .. import models
 from ..config import Settings
 from ..deps import get_settings, get_store
+from ..http_client import HttpClient, get_http
 from ..store import EventStore
 
 log = logging.getLogger("ba_server.ai")
@@ -45,10 +46,6 @@ class AiResponse(BaseModel):
     model: Literal["gemini", "deepseek"]
 
 
-def get_http(request: Request) -> models.HttpPost:
-    return request.app.state.model_http
-
-
 def get_today(request: Request):
     return request.app.state.today
 
@@ -58,7 +55,7 @@ def ai(
     body: AiRequest,
     settings: Settings = Depends(get_settings),
     store: EventStore = Depends(get_store),
-    http: models.HttpPost = Depends(get_http),
+    http: HttpClient = Depends(get_http),
     today=Depends(get_today),
 ) -> AiResponse:
     size = len(body.system) + len(body.user)

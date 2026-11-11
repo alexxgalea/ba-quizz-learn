@@ -137,6 +137,18 @@ async def main():
         check("the right secret recovers", await wait_status(A, "La zi."), await status(A))
         check("with the answer sent", any(e.get("item") == "py-05" for e in srv.events))
 
+        # ---- ce vine de la server se vede pe ecran fără să atingi nimic ----
+        await to_progress(B)
+        kpi_before = await B.inner_text(".kpis")
+        await A.evaluate("window.__prep.updQ('py-07', true); window.__prep.updQ('py-08', true)"); await A.wait_for_timeout(2500)
+        await B.click('[data-a="srv-sync"]'); await B.wait_for_timeout(900)
+        check("answers pulled from the server repaint the screen the user is on", await B.inner_text(".kpis") != kpi_before, kpi_before)
+        await B.fill("#srv-secret", "ceva-scris-de-mana")
+        await B.evaluate("window.__prep.sync().syncNow()"); await B.wait_for_timeout(300)
+        await A.evaluate("window.__prep.updQ('py-09', true)"); await A.wait_for_timeout(2500)
+        await B.focus("#srv-secret"); await B.evaluate("window.__prep.sync().syncNow()"); await B.wait_for_timeout(900)
+        check("but a field being typed in is not wiped by the repaint", await B.input_value("#srv-secret") == "ceva-scris-de-mana")
+
         # ---- repornire: cursorul se păstrează ----
         await B.reload(); await B.wait_for_timeout(1200)
         before = len(srv.calls)

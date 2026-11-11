@@ -16,10 +16,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import models, routers
+from . import routers
 from .auth import require_secret
 from .config import Settings
-from .store import EventStore
+from .store import EventStore, PurgeInProgress
 
 
 def _load_routers(app: FastAPI) -> None:
@@ -44,7 +44,6 @@ def create_app(
     settings: Settings | None = None,
     store: EventStore | None = None,
     *,
-    model_http: models.HttpPost | None = None,
     today: Callable[[], str] | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
@@ -62,8 +61,7 @@ def create_app(
     )
     app.state.settings = settings
     app.state.store = store
-    # Pentru /ai: clientul HTTP către modele și ziua (UTC) a plafonului; testele dau falsuri.
-    app.state.model_http = model_http or models.urllib_post
+    # Pentru /ai: ziua (UTC) a plafonului; testele dau una fixă. Clientul HTTP: `http_client.get_http`.
     app.state.today = today or _utc_today
 
     # CORS în AWS: doar pe adresa funcției (template.yaml). Aici, doar pentru
@@ -87,6 +85,11 @@ def create_app(
         except HTTPException as denied:
             return JSONResponse({"detail": denied.detail}, status_code=denied.status_code)
         return await request_validation_exception_handler(request, exc)
+
+    @app.exception_handler(PurgeInProgress)
+    async def _purging(request: Request, exc: PurgeInProgress):
+        # Doar după ce rutele au verificat secretul (excepția vine din interiorul unei rute protejate).
+        return JSONResponse({"detail": "purge_in_progress"}, status_code=503, headers={"Retry-After": "2"})
 
     _load_routers(app)
     return app

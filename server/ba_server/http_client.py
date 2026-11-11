@@ -6,6 +6,7 @@ biblioteca standard, ca pachetul Lambda să rămână mic (fără `httpx`).
 """
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -37,7 +38,7 @@ class UrllibClient:
                 return HttpResponse(res.status, _parse(res.read()))
         except urllib.error.HTTPError as err:
             return HttpResponse(err.code, _parse(err.read()))
-        except (urllib.error.URLError, TimeoutError, OSError) as err:
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as err:
             # Fără textul erorii în mesaj: ar putea purta adresa cererii.
             raise HttpError(type(err).__name__) from None
 

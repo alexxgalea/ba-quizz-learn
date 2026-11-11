@@ -28,7 +28,7 @@ const JournalSync = (() => {
     return st.state === "synced" ? "La zi." : "În așteptare.";
   }
 
-  // opts: journal (create-ul din journal.js, cu depozit), fetch, link: () => ({ url, secret }) | null, onStatus, setTimeout / clearTimeout / random / now,
+  // opts: journal (create-ul din journal.js, cu depozit), fetch, link: () => ({ url, secret }) | null, onStatus, onMerged (n => …: un pull a îmbinat n evenimente noi de la server; aplicația se redesenează), setTimeout / clearTimeout / random / now,
   //       batch (500), debounceMs (1500), timeoutMs (20000), backoff: { base: 2000, max: 300000 }
   function create(opts) {
     const j = opts.journal, doFetch = opts.fetch, linkOf = opts.link || (() => null);
@@ -37,7 +37,7 @@ const JournalSync = (() => {
     const batch = opts.batch || BATCH, debounceMs = opts.debounceMs == null ? 1500 : opts.debounceMs, timeoutMs = opts.timeoutMs || 20000;
     const base = (opts.backoff && opts.backoff.base) || 2000, cap = (opts.backoff && opts.backoff.max) || 300000;
     let st = { state: "idle", unsent: 0, stuck: 0, lastOk: 0, retryAt: 0, error: "", wiped: 0 };
-    let running = null, paused = false, again = false, fails = 0, debT = 0, retryT = 0;
+    let running = null, paused = false, again = false, fails = 0, debT = 0, retryT = 0, poked = false, purging = null;
 
     const emit = patch => { Object.assign(st, patch); if (opts.onStatus) { try { opts.onStatus(Object.assign({}, st)); } catch (e) { /* ecranul nu strică sincronizarea */ } } };
     async function refreshCount() { try { emit({ unsent: (await j.unsent()).length }); } catch (e) { /* rămâne numărul vechi */ } }
@@ -97,13 +97,18 @@ const JournalSync = (() => {
     }
     async function pull(link) {
       let { after: cur, epoch: ep } = await readAux(link);
+      let added = 0;
+      try { await pullPages(link, cur, ep, n => { added += n; }); }
+      finally { if (added && opts.onMerged) { try { opts.onMerged(added); } catch (e) { /* ecranul nu strică sincronizarea */ } } }
+    }
+    async function pullPages(link, cur, ep, count) {
       for (let i = 0; i < 100000; i++) {
         const r = await call(link, "GET", "/events?after=" + cur + "&limit=" + batch);
         if (!r || !Array.isArray(r.events) || typeof r.cursor !== "number") throw fail("server", "răspuns neașteptat");
         if (await noteEpoch(link, r.epoch)) { cur = 0; ep = r.epoch; continue; }       // serverul a fost șters: pagina de mai sus e a unui cursor vechi, se reia de la 0
         if (typeof r.epoch === "string" && r.epoch) ep = r.epoch;
         try {
-          if (r.events.length) await j.merge(r.events, { remote: true });
+          if (r.events.length) { const m = await j.merge(r.events, { remote: true }); count((m && m.added) || 0); }
           if (r.cursor !== cur) { await j.setAux(AUX_KEY, { url: link.url, after: r.cursor, epoch: ep }); }
         } catch (e) { throw fail("local", e && e.message); }       // cursorul nu trece peste ce nu s-a îmbinat
         const moved = r.cursor !== cur;
@@ -136,7 +141,7 @@ const JournalSync = (() => {
     // Un singur ciclu odată; o cerere venită în timpul lui (un răspuns nou) cere încă unul după el.
     function syncNow() {
       C(debT); debT = 0;
-      if (paused) return Promise.resolve(Object.assign({}, st));
+      if (paused) { poked = true; return Promise.resolve(Object.assign({}, st)); }
       if (running) { again = true; return running; }
       running = (async () => {
         try {
@@ -150,26 +155,36 @@ const JournalSync = (() => {
     }
     // După un răspuns: așteaptă puțin (alte răspunsuri pot veni), apoi un ciclu.
     function poke() {
-      if (paused) return;
+      if (paused) { poked = true; return; }
       if (running) { again = true; return; }
       C(debT); debT = T(() => { debT = 0; syncNow(); }, debounceMs);
     }
     // „Șterge jurnalul de pe server”: așteaptă ciclul în curs, oprește ciclurile cât durează cererea, apoi trimite POST /events/purge cu confirmarea explicită.
     // Reușita păstrează epoca nouă și cursorul 0; copia locală nu se atinge. Ce era netrimis rămâne în coadă și pleacă la următorul ciclu (serverul nu-l avea, deci nu s-a șters nimic din el).
     // Aruncă erori cu `kind`: auth, offline, server, client.
-    async function purgeServer() {
+    // O singură ștergere odată: un al doilea apel se alătură primului (aceeași promisiune), ca `paused` să nu fie ridicat de alt apel decât cel care l-a pus.
+    // Când ștergerea se termină (cu bine sau nu), dacă între timp s-a cerut un ciclu (poke / syncNow ignorate, sau un cronometru oprit de ștergere), pornește unul.
+    function purgeServer() {
+      if (purging) return purging;
+      const p = purgeOnce().finally(() => {
+        purging = null; paused = false;
+        if (poked) { poked = false; poke(); }
+      });
+      purging = p;
+      return p;
+    }
+    async function purgeOnce() {
       const link = linkOf();
       if (!link) throw fail("none", "serverul nu e configurat");
-      paused = true;
-      try {
-        if (running) { try { await running; } catch (e) { /* ciclul își raportează singur eșecul */ } }
-        C(debT); debT = 0; C(retryT); retryT = 0;
-        const r = await call(link, "POST", "/events/purge", { confirm: PURGE_CONFIRM });
-        if (!r || typeof r.epoch !== "string" || !r.epoch) throw fail("server", "răspuns neașteptat");
-        try { await j.setAux(AUX_KEY, { url: link.url, after: 0, epoch: r.epoch }); } catch (e) { throw fail("local", e && e.message); }
-        emit({ wiped: now() });
-        return { deleted: +r.deleted || 0, epoch: r.epoch };
-      } finally { paused = false; }
+      paused = true; poked = false;
+      if (running) { try { await running; } catch (e) { /* ciclul își raportează singur eșecul */ } }
+      if (debT || retryT) poked = true;                              // un ciclu programat se oprește mai jos: să nu se piardă
+      C(debT); debT = 0; C(retryT); retryT = 0;
+      const r = await call(link, "POST", "/events/purge", { confirm: PURGE_CONFIRM });
+      if (!r || typeof r.epoch !== "string" || !r.epoch) throw fail("server", "răspuns neașteptat");
+      try { await j.setAux(AUX_KEY, { url: link.url, after: 0, epoch: r.epoch }); } catch (e) { throw fail("local", e && e.message); }
+      emit({ wiped: now() });
+      return { deleted: +r.deleted || 0, epoch: r.epoch };
     }
     // „Retrimite jurnalul local”: tot jurnalul intră în coada de trimis (serverul ignoră ce are deja, după id) și pleacă într-un ciclu. Întoarce numărul de evenimente puse în coadă.
     async function resend() {
