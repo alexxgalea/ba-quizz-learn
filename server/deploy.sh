@@ -27,6 +27,12 @@ cp -r ba_server run.sh .build/app/
 chmod +x .build/app/run.sh
 find .build/app -name '__pycache__' -type d -prune -exec rm -rf {} +
 
+# SAM CLI refuză un parametru cu valoare goală (`Cheie=`): trimitem doar ce are valoare.
+# Un parametru omis rămâne la valoarea implicită din șablon (gol pentru chei).
+OVERRIDES=("AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN" "AiDailyCap=${AI_DAILY_CAP:-300}")
+if [ -n "${GEMINI_API_KEY:-}" ]; then OVERRIDES+=("GeminiApiKey=$GEMINI_API_KEY"); fi
+if [ -n "${DEEPSEEK_API_KEY:-}" ]; then OVERRIDES+=("DeepseekApiKey=$DEEPSEEK_API_KEY"); fi
+
 sam deploy \
   --template-file template.yaml \
   --stack-name "$STACK" \
@@ -35,8 +41,7 @@ sam deploy \
   --resolve-s3 \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset \
-  --parameter-overrides "AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN" \
-    "GeminiApiKey=${GEMINI_API_KEY:-}" "DeepseekApiKey=${DEEPSEEK_API_KEY:-}" "AiDailyCap=${AI_DAILY_CAP:-300}"
+  --parameter-overrides "${OVERRIDES[@]}"
 
 echo
 echo "Adresa serverului:"
