@@ -12,7 +12,7 @@ secret:
 
 # Lansare cu o comandă: BA_SECRET=... make deploy
 deploy:
-	./deploy.sh
+	bash ./deploy.sh
 
 # Rulare locală pe depozit în memorie: APP_SECRET=... make run
 run:
