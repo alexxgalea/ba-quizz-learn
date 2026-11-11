@@ -1,7 +1,8 @@
 """POST /events (lot, idempotent după id) și GET /events?after=&limit= (paginat).
 
 Serverul nu cunoaște forma evenimentului: cere doar un `id` și păstrează restul
-neschimbat (ADR 0003). Clientul îmbină prin reuniune după id.
+neschimbat (ADR 0003). Clientul îmbină prin reuniune după id. Fiecare răspuns poartă
+`epoch`: șirul se schimbă când jurnalul de pe server e șters (`routers/purge.py`).
 """
 from __future__ import annotations
 
@@ -53,7 +54,8 @@ class EventBatch(BaseModel):
 @router.post("/events")
 def post_events(batch: EventBatch, store: EventStore = Depends(get_store)) -> dict[str, Any]:
     res = store.append(batch.events)
-    return {"accepted": res.accepted, "duplicates": res.duplicates, "cursor": res.cursor}
+    # Epoca se citește după scriere: un client care primește o epoca nouă își reia cursorul de la 0.
+    return {"accepted": res.accepted, "duplicates": res.duplicates, "cursor": res.cursor, "epoch": store.epoch()}
 
 
 @router.get("/events")
@@ -62,5 +64,6 @@ def get_events(
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     store: EventStore = Depends(get_store),
 ) -> dict[str, Any]:
+    epoch = store.epoch()  # înaintea paginii: dacă o ștergere vine între ele, clientul vede epoca veche și o corectează data viitoare
     page = store.read(after, limit)
-    return {"events": page.events, "cursor": page.cursor, "more": page.more}
+    return {"events": page.events, "cursor": page.cursor, "more": page.more, "epoch": epoch}

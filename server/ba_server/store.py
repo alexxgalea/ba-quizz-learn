@@ -14,9 +14,18 @@ from __future__ import annotations
 
 import copy
 import json
+import secrets
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Protocol
+
+# Epoca unui server care n-a fost șters niciodată.
+INITIAL_EPOCH = "0"
+
+
+def new_epoch() -> str:
+    return secrets.token_hex(8)
+
 
 # Un răspuns Lambda sincron are cel mult 6 MB; rămânem mult sub.
 PAGE_BYTES = 3_000_000
@@ -36,10 +45,20 @@ class Page:
     more: bool
 
 
+@dataclass(frozen=True)
+class PurgeResult:
+    deleted: int  # evenimente șterse
+    epoch: str  # epoca nouă
+
+
 class EventStore(Protocol):
     def append(self, events: list[dict[str, Any]]) -> AppendResult: ...
 
     def read(self, after: int, limit: int) -> Page: ...
+
+    def epoch(self) -> str: ...
+
+    def purge(self) -> PurgeResult: ...
 
     def take_ai_slot(self, day: str, cap: int) -> bool:
         """Contor zilnic pentru /ai (tichetul 06): crește atomic numărul cererilor din ziua
@@ -91,6 +110,19 @@ class MemoryStore:
         self._rows: list[tuple[int, str]] = []  # (număr, json); număr = index + 1
         self._ids: set[str] = set()
         self._ai_days: dict[str, int] = {}
+        self._epoch = INITIAL_EPOCH
+
+    def epoch(self) -> str:
+        with self._lock:
+            return self._epoch
+
+    def purge(self) -> PurgeResult:
+        with self._lock:
+            deleted = len(self._rows)
+            self._rows = []
+            self._ids = set()
+            self._epoch = new_epoch()
+            return PurgeResult(deleted, self._epoch)
 
     def take_ai_slot(self, day: str, cap: int) -> bool:
         with self._lock:

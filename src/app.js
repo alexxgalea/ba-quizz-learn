@@ -558,7 +558,7 @@
     tab: "plan", run: null, result: null,
     study: { seg: "sheets", open: null, kata: null, skel: null, skelDue: false, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
-    prog: { exp: false, imp: false, reset: false },
+    prog: { exp: false, imp: false, reset: false, jmsg: "", jmsgBad: false, smsg: "", smsgBad: false, purge: false, pw: "", busy: false },
     srv: { url: "", secret: "" },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
@@ -596,7 +596,10 @@
     const s = $("#sync-l"); if (s) s.textContent = Sync.label();
     paintSync();
   }
-  function paintSync() { const el = $("#jsync-l"); if (el && JSync) el.textContent = JournalSync.label(JSync.status()); }
+  function paintSync() {
+    const el = $("#jsync-l"); if (el && JSync) el.textContent = JournalSync.label(JSync.status());
+    const w = $("#jwiped"); if (w && JSync) w.hidden = !JSync.status().wiped;
+  }
   function paintTabs() { document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false")); }
 
   // ---------- render ----------
@@ -2108,6 +2111,7 @@
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
       '<button class="btn sm danger" data-a="reset">' + (ui.prog.reset ? "Confirmă: șterge tot" : "Resetează") + "</button></div>";
+    if (JSync) h += vJournalIO();
     if (ui.prog.exp) h += '<textarea class="io" id="exp-t" readonly aria-label="Progres exportat">' + esc(JSON.stringify(S)) + '</textarea><button class="btn sm" data-a="copy-exp">Copiază</button>';
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
@@ -2122,7 +2126,59 @@
     const on = Conn.configured();
     return '<section class="card stack-s" id="sync-card"><h3>Sincronizare</h3><p class="small" id="jsync-l">' + esc(JournalSync.label(JSync.status())) + "</p>" +
       '<p class="xs muted">Progresul trece între telefon și laptop prin serverul tău. ' + (on ? "" : "Adaugă adresa și secretul în cardul „Serverul”, mai jos. ") + "Nu intră în export.</p>" +
-      (on ? '<div class="row"><button class="btn sm" data-a="srv-sync">Sincronizează acum</button></div>' : "") + "</section>";
+      '<p class="small" id="jwiped"' + (JSync.status().wiped ? "" : " hidden") + ">" + esc(WIPED_NOTE) + "</p>" +
+      (on ? '<div class="row"><button class="btn sm" data-a="srv-sync">Sincronizează acum</button><button class="btn sm" data-a="jresend">Retrimite jurnalul local</button>' +
+        '<button class="btn sm danger" data-a="jpurge">' + (ui.prog.purge ? "Renunță la ștergere" : "Șterge jurnalul de pe server") + "</button></div>" : "") +
+      (on && ui.prog.purge ? vPurgePanel() : "") +
+      (ui.prog.smsg ? '<p class="small' + (ui.prog.smsgBad ? " bad" : "") + '" id="jsv-msg" role="status">' + esc(ui.prog.smsg) + "</p>" : "") + "</section>";
+  }
+  // Exportul și importul jurnalului (tichetul 09): fișier JSON cu tot jurnalul, inclusiv textul lui Alex; nu poartă adresa sau secretul serverului.
+  const WIPED_NOTE = "Jurnalul de pe server a fost șters. Copia de pe acest dispozitiv a rămas întreagă și nu se retrimite singură; răspunsurile noi se trimit mai departe. Ca s-o trimiți din nou: „Retrimite jurnalul local”.";
+  function vJournalIO() {
+    return '<div class="row"><button class="btn sm" data-a="jexp">Exportă jurnalul</button><button class="btn sm" data-a="jimp">Importă jurnalul</button>' +
+      '<input type="file" id="jimp-f" accept=".json,application/json" hidden aria-label="Fișierul jurnalului"></div>' +
+      '<p class="xs muted">Jurnalul întreg, cu textul tău, într-un fișier .json (fără adresa și secretul serverului). Importul îl îmbină cu ce ai aici, fără dubluri, și merge fără semnal.</p>' +
+      (ui.prog.jmsg ? '<p class="small' + (ui.prog.jmsgBad ? " bad" : "") + '" id="jio-msg" role="status">' + esc(ui.prog.jmsg) + "</p>" : "");
+  }
+  // Ștergerea de pe server în doi pași: butonul deschide panoul, iar panoul cere cuvântul „sterge” (fără diacritice sau cu).
+  function vPurgePanel() {
+    return '<div class="stack-s" id="jpurge-panel"><p class="small"><b>Ștergi tot jurnalul de pe server.</b> Copia de pe acest dispozitiv (și de pe celelalte) rămâne. Nu se mai poate anula de pe server; dacă vrei înapoi, folosești „Retrimite jurnalul local” sau importul unui fișier exportat. Ce nu a ajuns încă pe server se trimite în continuare.</p>' +
+      '<input class="keyin" id="jpurge-w" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scrie „sterge” ca să confirmi" value="' + esc(ui.prog.pw) + '" aria-label="Cuvântul de confirmare">' +
+      '<div class="row"><button class="btn sm danger" data-a="jpurge-go"' + (ui.prog.busy ? " disabled" : "") + ">" + (ui.prog.busy ? "Se șterge…" : "Șterge definitiv de pe server") + '</button><button class="btn sm" data-a="jpurge-cancel">Renunță</button></div></div>';
+  }
+  function jSay(key, msg, bad) { ui.prog[key] = msg; ui.prog[key + "Bad"] = !!bad; if (ui.tab === "progress") render(); }
+  function jExport() {
+    J.events().then(evs => {
+      const doc = Journal.exportDoc(evs, { device: J.info().device }), text = JSON.stringify(doc);
+      const d = new Date(now()), pad = n => String(n).padStart(2, "0");
+      const name = "jurnal-onapsis-" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + ".json";
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" })), a = document.createElement("a");
+      a.href = url; a.download = name; a.hidden = true; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      jSay("jmsg", "Jurnal exportat: " + doc.count + (doc.count === 1 ? " eveniment" : " evenimente") + ", în " + name + ".", false);
+    }, () => jSay("jmsg", "Exportul nu a mers: jurnalul nu s-a putut citi.", true));
+  }
+  // Un text de export de jurnal (din fișier sau lipit) → îmbinare în jurnal. Nimic nu se importă dacă fișierul e stricat; ce lipsește aici intră în coada obișnuită de trimis.
+  function jImport(text) {
+    let doc;
+    try { doc = Journal.parseExport(text); } catch (e) { jSay("jmsg", e.message, true); return Promise.resolve(); }
+    return J.merge(doc.events).then(r => {
+      planCache = null; if (JSync) JSync.poke();
+      const known = doc.events.length - r.added;
+      ui.prog.imp = false;
+      jSay("jmsg", "Importat: " + r.added + (r.added === 1 ? " eveniment nou" : " evenimente noi") + ", " + known + (known === 1 ? " era deja aici." : " erau deja aici."), false);
+    }, () => jSay("jmsg", "Importul nu a mers: browserul nu a putut salva jurnalul.", true));
+  }
+  const PURGE_ERR = { auth: "Secret greșit: nu s-a șters nimic.", offline: "Fără semnal: nu s-a șters nimic. Încearcă din nou când ai semnal.", none: "Serverul nu e configurat.",
+    server: "Serverul nu a răspuns bine: poate nu s-a șters tot. Verifică starea și încearcă din nou.", client: "Serverul a refuzat cererea: nu s-a șters nimic." };
+  function jPurge() {
+    const w = String(ui.prog.pw || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (w !== "sterge") { toast("Scrie cuvântul „sterge” ca să confirmi"); return; }
+    ui.prog.busy = true; render();
+    JSync.purgeServer().then(res => {
+      ui.prog.busy = false; ui.prog.purge = false; ui.prog.pw = "";
+      jSay("smsg", "Jurnalul de pe server a fost șters (" + res.deleted + (res.deleted === 1 ? " eveniment" : " evenimente") + "). Copia de pe acest dispozitiv a rămas.", false);
+    }, e => { ui.prog.busy = false; jSay("smsg", PURGE_ERR[e && e.kind] || "Ștergerea nu a mers.", true); });
   }
   function vCfg() {
     const c = cfg(), iv = interviewDate();
@@ -2331,6 +2387,12 @@
         render(); toast("Cheie salvată"); break;
       }
       case "srv-sync": if (JSync) JSync.syncNow(); break;
+      case "jexp": if (JSync) jExport(); break;
+      case "jimp": { const f = $("#jimp-f"); if (f) { f.value = ""; f.click(); } break; }
+      case "jresend": if (JSync) JSync.resend().then(n => jSay("smsg", n + (n === 1 ? " eveniment pus" : " evenimente puse") + " în coada de trimis; serverul le păstrează pe cele care îi lipsesc.", false), () => jSay("smsg", "Nu s-a putut pune jurnalul în coadă.", true)); break;
+      case "jpurge": ui.prog.purge = !ui.prog.purge; ui.prog.pw = ""; ui.prog.busy = false; ui.prog.smsg = ""; render(); break;
+      case "jpurge-cancel": ui.prog.purge = false; ui.prog.pw = ""; render(); break;
+      case "jpurge-go": if (JSync && !ui.prog.busy) jPurge(); break;
       case "ds-del": AI.set(""); render(); toast("Cheie ștearsă"); break;
       case "srv-save": srvSave(); break;
       case "srv-del": Conn.clear(); ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server șters"); srvChanged(); break;
@@ -2397,6 +2459,7 @@
       case "do-imp": {
         const t = $("#imp-t"); let data = null;
         try { data = JSON.parse(t.value); } catch (err) { toast("Textul nu e un export valid"); break; }
+        if (data && data.format === Journal.EXPORT_FORMAT) { if (JSync) jImport(t.value); else toast("Jurnalul se importă doar în aplicația instalată"); break; }
         const merged = mergeState(S, prune(normalize(data))).state, done = () => { commit(); ui.prog.imp = false; render(); toast("Progres importat"); };
         if (!JOURNAL) { J.replaceState(merged); done(); }
         else J.importState(merged).then(done, () => toast("Importul nu a mers"));       // intrările noi intră în jurnal ca evenimente sintetice
@@ -2429,6 +2492,13 @@
   document.addEventListener("pointercancel", talkEnd);
   document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest("#jv-talk")) e.preventDefault(); });
   document.addEventListener("change", e => {
+    const f = e.target;
+    if (f && f.id === "jimp-f" && f.files && f.files[0]) {
+      const file = f.files[0];
+      (file.text ? file.text() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsText(file); }))
+        .then(txt => jImport(txt), () => jSay("jmsg", "Fișierul nu s-a putut citi.", true));
+      return;
+    }
     const t = e.target, k = t && t.dataset && t.dataset.jv;
     if (!k) return;
     if (k === "module") { ui.jv.module = t.value; return; }
@@ -2441,6 +2511,7 @@
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
     else if (t && t.dataset && "skelCode" in t.dataset && ui.study.attempt) { ui.study.attempt.code = t.value; Drafts.set(ui.study.attempt.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
+    else if (t && t.id === "jpurge-w") ui.prog.pw = t.value;
     else if (t && t.id === "srv-url") ui.srv.url = t.value;
     else if (t && t.id === "srv-secret") ui.srv.secret = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }

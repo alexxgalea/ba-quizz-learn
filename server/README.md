@@ -10,13 +10,16 @@ Toate, afară de `/health`, cer antetul `Authorization: Bearer <secret>`.
 
 | Cerere | Ce face |
 |---|---|
-| `POST /events` cu `{"events": [{"id": "...", ...}, ...]}` | Păstrează evenimentele noi (1–500 pe cerere, fiecare ≤ 100 KB). Un id deja păstrat se ignoră: primul câștigă. Răspuns: `{"accepted": [ids noi], "duplicates": [ids ignorate], "cursor": n}`. |
-| `GET /events?after=<cursor>&limit=<n>` | Întoarce evenimentele cu număr mai mare decât `after` (implicit 0), în ordinea sosirii, cel mult `limit` (implicit 100, maximum 500). Răspuns: `{"events": [...], "cursor": n, "more": bool}`. Clientul repetă cu `after=cursor` cât timp `more` e `true`. |
+| `POST /events` cu `{"events": [{"id": "...", ...}, ...]}` | Păstrează evenimentele noi (1–500 pe cerere, fiecare ≤ 100 KB). Un id deja păstrat se ignoră: primul câștigă. Răspuns: `{"accepted": [ids noi], "duplicates": [ids ignorate], "cursor": n, "epoch": "..."}`. |
+| `GET /events?after=<cursor>&limit=<n>` | Întoarce evenimentele cu număr mai mare decât `after` (implicit 0), în ordinea sosirii, cel mult `limit` (implicit 100, maximum 500). Răspuns: `{"events": [...], "cursor": n, "more": bool, "epoch": "..."}`. Clientul repetă cu `after=cursor` cât timp `more` e `true`. |
 | `POST /live-token` (fără corp) | Jeton de scurtă durată pentru Gemini Live (tichetul 08). Serverul cere la Gemini un jeton cu `uses: 1`, `expireTime` = acum + 60 de minute și `newSessionExpireTime` = acum + 2 minute. Răspuns: `{"token": "auth_tokens/…", "expireAt": "2026-11-12T19:00:00Z", "expiresIn": 3600}`. Erori: `503 {"detail": {"error": "gemini_key_missing"}}` (serverul n-are `GEMINI_API_KEY`), `502` cu `error` = `gemini_unreachable`, `gemini_error` (plus `upstream_status`) sau `gemini_bad_response`. Cheia Gemini și corpul erorii Google nu ajung niciodată la client. |
+| `POST /events/purge` cu `{"confirm": "purge-all-events"}` | Șterge tot jurnalul utilizatorului: evenimentele, contorul și marcajele de idempotență (contorul zilnic al `/ai` rămâne). Fără câmpul `confirm` exact, sau cu alte câmpuri, `422` și nu se șterge nimic; fără secret, `401`. Răspuns: `{"deleted": <câte evenimente>, "epoch": "<epoca nouă>"}`. Numerele de secvență pornesc apoi din nou de la 1. Ruta e POST, nu DELETE, fiindcă CORS-ul funcției permite doar GET și POST. Nu e atomică (evenimentele și marcajele, apoi contorul, apoi epoca). Tichetul 09. |
 | `GET /health` | `{"ok": true}`, fără secret. |
 | `POST /ai` | Promptul gata făcut al clientului, textul modelului înapoi. Vezi „AI prin server” mai jos. |
 
 Orice altceva fără secret primește `401 {"detail": "unauthorized"}`, la fel pentru secret lipsă, greșit sau neconfigurat (inclusiv cu corp stricat). Documentația automată FastAPI e oprită.
+
+`epoch` (tichetul 09) e un șir care se schimbă la fiecare `POST /events/purge`; `"0"` cât jurnalul n-a fost șters niciodată. Un client care vede altă epocă decât cea păstrată își reia cursorul de la 0 (altfel ar sări peste evenimentele scrise după ștergere, ale căror numere reîncep de la 1). Epoca stă într-un articol `E` din partiția utilizatorului (`v`); lipsa lui înseamnă `"0"`.
 
 Cursorul e un număr 1, 2, 3, ... fără goluri: evenimentele primesc numere în ordinea comiterii, deci un cititor care a ajuns la 6 a văzut și 5.
 
@@ -32,7 +35,7 @@ server/
     store.py       interfața EventStore + MemoryStore (falsul din teste)
     dynamo.py      DynamoStore: un tabel, contor + S#<n> + I#<id>, tranzacții de cel mult 49 de evenimente
     local.py       make_app(): rulare locală pe memorie
-    routers/       un modul pe temă: events.py, health.py
+    routers/       un modul pe temă: events.py, purge.py, health.py, ai.py, live_token.py
   tests/           pytest, fără cont AWS (moto pentru DynamoDB)
   template.yaml    SAM: funcția, adresa funcției cu CORS, tabelul, jurnalele
   deploy.sh        lansarea cu o comandă
@@ -53,11 +56,12 @@ server/
 
 Clientul mapează fiecare cod la un mesaj și lasă calea fără AI (bifele proprii). Plafonul e un articol `AI#<zi>` în același tabel, cu `ADD cnt` condiționat de plafon (atomic), în spatele aceleiași interfețe de depozit (`take_ai_slot`; `MemoryStore` în teste). Fiecare cerere admisă consumă o unitate, chiar dacă modelele pică. Apelurile HTTP trec printr-un client injectabil (`ba_server/models.py`, `create_app(..., model_http=...)`), deci testele folosesc un model fals. Jurnalele spun doar sursa, motivul (`auth`, `rate`, `server`, `empty`, `network`) și mărimea; nu intră chei, secret sau textul promptului. Variabile de mediu: `GEMINI_API_KEY`, `DEEPSEEK_API_KEY` (parametri `NoEcho` ai șablonului; o cheie lipsă înseamnă sursa sărită), `AI_DAILY_CAP` (implicit 300), `AI_MAX_PROMPT_CHARS` (60000), `AI_TIMEOUT_S` (20 pe model; funcția are 60 s), `GEMINI_MODEL`, `DEEPSEEK_MODEL`.
 
-**Datele.** Un tabel DynamoDB, partiția `u#alex` (un singur utilizator, dar cheia permite mai mulți), trei feluri de articole:
+**Datele.** Un tabel DynamoDB, partiția `u#alex` (un singur utilizator, dar cheia permite mai mulți), articole de felurile:
 
 - `N`: contorul (`n` = ultimul număr folosit);
 - `S#<n>` (12 cifre, cu zerouri): evenimentul, ca JSON într-un atribut `data` (fără probleme cu numerele zecimale);
-- `I#<id>`: marcajul de idempotență, cu numărul evenimentului.
+- `I#<id>`: marcajul de idempotență, cu numărul evenimentului;
+- `E` (doar după prima ștergere): epoca, atributul `v`. `AI#<zi>` e contorul zilnic al `/ai`.
 
 Un lot se scrie într-o singură `TransactWriteItems`: contorul trece de la `n` la `n + k` doar dacă e încă `n`, plus câte un `S#` și un `I#` (cu `attribute_not_exists`) pe eveniment. Dacă alt scriitor a câștigat cursa, tranzacția pică pe condiție și lotul se reia de la citirea contorului. Loturile mari se împart în tranzacții de cel mult 49 de evenimente (limita e 100 de acțiuni) și ~3,5 MB. Tabelul e cu capacitate provizionată, clasa Standard (singura formă din limita gratuită: 25 RCU și 25 WCU pe cont, în regiune). Scrierile tranzacționale consumă dublu, de aceea implicit 15 WCU și 10 RCU.
 

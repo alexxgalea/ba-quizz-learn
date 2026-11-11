@@ -19,6 +19,10 @@
 //        state   { map, item, entry }             doar importat: intrarea unui item așa cum era în S
 //        reset                                    ascunde tot ce e mai vechi
 // Ordinea evenimentelor: după t, apoi după id. Îmbinarea a două liste e reuniunea după id.
+//
+// Fișierul de export (tichetul 09; `exportDoc` / `parseExport`), JSON:
+//   { format: "ba-journal", version: 1, exportedAt (ms), device (dispozitivul care exportă), devices: [toate `dev` din jurnal], count, events: [...] }
+// `events` e tot jurnalul, cu textul lui Alex; fișierul nu poartă niciodată adresa sau secretul serverului (funcția primește doar evenimente).
 const Journal = (() => {
   const MC_MAX = 9, HMAX = 80;
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
@@ -153,6 +157,41 @@ const Journal = (() => {
     return out.sort(cmp);
   }
 
+  // ---------- exportul și importul de fișier (tichetul 09) ----------
+  const EXPORT_FORMAT = "ba-journal", EXPORT_VERSION = 1;
+  // Tot jurnalul într-un obiect JSON simplu. `o.device` = dispozitivul care exportă, `o.now` = ceasul (teste).
+  function exportDoc(events, o) {
+    o = o || {};
+    const evs = union(events).filter(validEvent);
+    const devices = Array.from(new Set(evs.map(e => e.dev).filter(d => typeof d === "string" && d))).sort();
+    if (o.device && devices.indexOf(o.device) < 0) devices.push(o.device);
+    return { format: EXPORT_FORMAT, version: EXPORT_VERSION, exportedAt: (o.now || Date.now)(), device: o.device || null, devices, count: evs.length, events: clone(evs) };
+  }
+  function exportError(code, message) { const e = new Error(message); e.code = code; return e; }
+  // Un fișier de export (text sau obiect deja citit) → { events, devices, exportedAt, version }. Aruncă o eroare cu `code` și mesaj românesc dacă fișierul nu e bun:
+  // nimic nu se importă pe jumătate (un singur eveniment stricat refuză tot fișierul).
+  function parseExport(input) {
+    let doc = input;
+    if (typeof input === "string") {
+      if (!input.trim()) throw exportError("empty", "Fișierul e gol.");
+      try { doc = JSON.parse(input); } catch (e) { throw exportError("json", "Fișierul nu e un export valid: nu se poate citi ca JSON."); }
+    }
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw exportError("format", "Fișierul nu e un export de jurnal.");
+    if (doc.format !== EXPORT_FORMAT) {
+      const old = doc.q && typeof doc.q === "object" && !doc.format;
+      throw exportError("format", old ? "Fișierul e un export de progres (starea veche), nu un jurnal. Îl poți lipi în „Importă”, în textul de mai jos." : "Fișierul nu e un export de jurnal.");
+    }
+    if (!Number.isInteger(doc.version) || doc.version < 1) throw exportError("version", "Fișierul nu are o versiune de format validă.");
+    if (doc.version > EXPORT_VERSION) throw exportError("version", "Fișierul e dintr-o versiune mai nouă a aplicației (format " + doc.version + "). Actualizează aplicația și încearcă din nou.");
+    if (!Array.isArray(doc.events)) throw exportError("events", "Fișierul nu conține lista de evenimente.");
+    const bad = doc.events.findIndex(e => !validEvent(e));
+    if (bad >= 0) {
+      const n = doc.events.filter(e => !validEvent(e)).length;
+      throw exportError("events", "Fișierul e stricat: " + (n === 1 ? "un eveniment nu are" : n + " evenimente nu au") + " id, timp sau tip (primul, la poziția " + (bad + 1) + "). Nu s-a importat nimic.");
+    }
+    return { events: doc.events.map(clone), devices: Array.isArray(doc.devices) ? doc.devices.filter(d => typeof d === "string") : [], exportedAt: Number.isFinite(doc.exportedAt) ? doc.exportedAt : null, version: doc.version };
+  }
+
   // ---------- adaptoare ----------
   const sortedCopy = list => list.slice().sort(cmp);
   // Depozit în memorie: același contract ca IndexedDB, pentru teste. `stats` numără citirile, ca testele să poată afirma că pornirea nu reia tot jurnalul.
@@ -182,6 +221,7 @@ const Journal = (() => {
       async allEvents() { st.stats.allEvents++; const r = sortedCopy(Array.from(events.values())); st.stats.eventsRead += r.length; return clone(r); },
       async outbox() { return clone(sortedCopy(Array.from(outbox).map(id => events.get(id)).filter(Boolean))); },
       async markSent(ids) { ids.forEach(id => outbox.delete(id)); },
+      async markUnsent(ids) { ids.forEach(id => { if (events.has(id)) outbox.add(id); }); },
       // valori mici lângă jurnal (cursorul sincronizării): același depozit, altă cheie decât instantaneul
       async getAux(key) { return clone(aux.get(key)) || null; },
       async setAux(key, v) { if (st.failing) throw new Error("commit failed"); aux.set(key, clone(v)); },
@@ -249,6 +289,7 @@ const Journal = (() => {
         return sortedCopy(evs.filter(Boolean));
       },
       async markSent(ids) { const db = await open(), tx = db.transaction("outbox", "readwrite"), d = done(tx); ids.forEach(id => tx.objectStore("outbox").delete(id)); await d; },
+      async markUnsent(ids) { const db = await open(), tx = db.transaction("outbox", "readwrite"), d = done(tx); ids.forEach(id => tx.objectStore("outbox").put({ id })); await d; },
       async getAux(key) { const db = await open(), r = await req(db.transaction("meta", "readonly").objectStore("meta").get("aux:" + key)); return r ? r.v : null; },
       async setAux(key, v) { const db = await open(), tx = db.transaction("meta", "readwrite"), d = done(tx); tx.objectStore("meta").put({ key: "aux:" + key, v }); await d; },
       async clear() { const db = await open(), tx = db.transaction(["events", "outbox", "meta"], "readwrite"), d = done(tx); ["events", "outbox", "meta"].forEach(n => tx.objectStore(n).clear()); await d; }
@@ -409,6 +450,11 @@ const Journal = (() => {
       async events() { if (!store) return []; await flush(); return store.allEvents(); },
       async unsent() { if (!store) return []; await flush(); return store.outbox(); },
       markSent: ids => (store ? enqueue(() => store.markSent(ids)) : Promise.resolve()),
+      // Pune tot jurnalul local în coada de trimis (după o ștergere pe server, la „Retrimite jurnalul local”). Serverul ignoră ce are deja (după id). Întoarce numărul de evenimente.
+      resendAll() {
+        if (!store) return Promise.resolve(0);
+        return enqueue(async () => { await flushTask(); const evs = await store.allEvents(); await store.markUnsent(evs.map(e => e.id)); return evs.length; });
+      },
       // Valori mici păstrate lângă jurnal (cursorul sincronizării). Fără depozit: nimic se păstrează.
       getAux: key => (store ? enqueue(() => store.getAux(key)) : Promise.resolve(null)),
       setAux: (key, v) => (store ? enqueue(() => store.setAux(key, v)) : Promise.resolve()),
@@ -416,6 +462,6 @@ const Journal = (() => {
     };
   }
 
-  return { MC_MAX, HMAX, MAPS, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
+  return { MC_MAX, HMAX, MAPS, EXPORT_FORMAT, EXPORT_VERSION, exportDoc, parseExport, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Journal;
