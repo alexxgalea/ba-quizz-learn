@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PROBĂ: jetonul Gemini Live</title>
+<style>
+  :root { --bg: #f4f6fa; --card: #fff; --ink: #141a27; --muted: #5b667c; --line: #d2d9e5; --acc: #2c4fd3; --on-acc: #fff; --warn: #9a5800; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e121a; --card: #161c27; --ink: #e6eaf2; --muted: #9aa5ba; --line: #2a3445; --acc: #8ea2ff; --on-acc: #0e121a; --warn: #f3b54e; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .banner { background: var(--warn); color: var(--bg); font-weight: 700; padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+  h1 { font-size: 21px; margin: 0; } h2 { font-size: 16px; margin: 0; }
+  p { margin: 0; } .muted { color: var(--muted); } .small { font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input { font: inherit; width: 100%; min-height: 44px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  button { font: inherit; font-weight: 600; min-height: 48px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; touch-action: manipulation; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+  button:disabled { opacity: .45; }
+  ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+  textarea { width: 100%; min-height: 320px; font: 12px/1.4 ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  code { font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">PROBĂ DE ARUNCAT · nu e aplicația · tichetul 08 din .scratch/platforma</div>
+  <div>
+    <h1>Jetonul Gemini Live: patru întrebări</h1>
+    <p class="muted small">Nu cere microfon. Trimite doar text, direct către Gemini, cu jetoane luate de la serverul tău. Adresa și secretul sunt cele din aplicație (<code>onapsis-server-v1</code>, aceeași origine); dacă lipsesc, le completezi mai jos. La final apeși „Copiază jurnalul” și îl lipești în chat sau în <code>## Comments</code> din tichetul 08.</p>
+  </div>
+
+  <section class="card">
+    <h2>Serverul</h2>
+    <input id="url" type="url" placeholder="https://….lambda-url.….on.aws" autocomplete="off" aria-label="Adresa serverului">
+    <input id="secret" type="password" placeholder="Secretul" autocomplete="off" aria-label="Secretul">
+    <div class="row"><button class="primary" id="go">Rulează proba</button></div>
+    <p class="small muted" id="st">oprit</p>
+  </section>
+
+  <section class="card">
+    <h2>Ce verifică</h2>
+    <ol class="small">
+      <li><b>A · Jetonul deschide o sesiune.</b> <code>POST /live-token</code>, apoi WebSocket pe <code>BidiGenerateContentConstrained?access_token=</code>, cu modelul <code>gemini-3.8-live</code>. Se așteaptă <code>setupComplete</code>.</li>
+      <li><b>B · Reluare cu ACELAȘI jeton</b> (documentat: nu consumă utilizarea). Handle-ul primit la A, într-o conexiune nouă, în primele 2 minute.</li>
+      <li><b>C · Reluare cu ALT jeton</b> (nedocumentat; de aceea proba). Un jeton nou și handle-ul vechi. Trei rezultate posibile: <code>ACCEPTATĂ, cu context</code> (aplicația nu are nimic de făcut), <code>ACCEPTATĂ, fără context</code> (modelul a uitat; aplicația retrimite poziția lecției prin <code>restarted</code>) sau <code>REFUZATĂ</code> (aplicația repornește curat fără handle, cu același efect).</li>
+      <li><b>D · Sesiune nouă, fără handle, cu un jeton nou.</b> Ce face aplicația după un refuz la C.</li>
+    </ol>
+    <p class="small muted">La A–C se spune modelului „Reține cuvântul portocală” și apoi se întreabă ce cuvânt era, ca să se vadă dacă contextul a supraviețuit.</p>
+  </section>
+
+  <section class="card">
+    <h2>Jurnal</h2>
+    <textarea id="log" readonly></textarea>
+    <div class="row"><button class="primary" id="copy">Copiază jurnalul</button><button id="clear">Șterge</button></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const WS = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
+const MODEL = "models/gemini-3.8-live";
+const t0 = Date.now();
+const log = line => { const el = $("log"); el.value += ((Date.now() - t0) / 1000).toFixed(1).padStart(6) + "s  " + line + "\n"; el.scrollTop = el.scrollHeight; };
+const status = s => { $("st").textContent = s; };
+
+try { const o = JSON.parse(localStorage.getItem("onapsis-server-v1") || "{}"); $("url").value = o.url || ""; $("secret").value = o.secret || ""; } catch (e) { /* fără valori salvate */ }
+
+async function getToken() {
+  const url = $("url").value.trim().replace(/\/+$/, ""), secret = $("secret").value.trim();
+  if (!url || !secret) throw new Error("completează adresa și secretul");
+  let res;
+  try { res = await fetch(url + "/live-token", { method: "POST", headers: { authorization: "Bearer " + secret } }); }
+  catch (e) { throw new Error("nu ajung la server (rețea sau CORS): " + e.message); }
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || !body.token) throw new Error("serverul a răspuns " + res.status + " " + JSON.stringify(body && body.detail));
+  log("jeton primit: " + body.token.slice(0, 18) + "… expiră în " + body.expiresIn + " s");
+  return body.token;
+}
+
+// O sesiune de text: deschide, trimite setup (cu handle sau fără), întoarce { ok, closed, handle, ws }.
+function session(label, token, handle) {
+  return new Promise(resolve => {
+    const ws = new WebSocket(WS + "?access_token=" + encodeURIComponent(token));
+    const s = { ws, handle: handle || null, transcript: "", turn: null };
+    let done = false;
+    const finish = r => { if (!done) { done = true; resolve(Object.assign(s, r)); } };
+    const timer = setTimeout(() => finish({ ok: false, closed: "fără răspuns în 12 s" }), 12000);
+    ws.onopen = () => {
+      log(label + ": socket deschis, trimit setup" + (handle ? " cu handle " + handle.slice(0, 10) + "…" : " fără handle"));
+      ws.send(JSON.stringify({ setup: {
+        model: MODEL,
+        generationConfig: { responseModalities: ["AUDIO"] },
+        outputAudioTranscription: {},
+        sessionResumption: handle ? { handle } : {},
+        contextWindowCompression: { slidingWindow: {} }
+      } }));
+    };
+    ws.onmessage = async m => {
+      let msg; try { msg = JSON.parse(typeof m.data === "string" ? m.data : await m.data.text()); } catch (e) { return; }
+      if (msg.setupComplete) { clearTimeout(timer); log(label + ": setupComplete"); finish({ ok: true }); }
+      const u = msg.sessionResumptionUpdate; if (u && u.resumable && u.newHandle) s.handle = u.newHandle;
+      const sc = msg.serverContent || {};
+      if (sc.outputTranscription && sc.outputTranscription.text) s.transcript += sc.outputTranscription.text;
+      if (sc.turnComplete && s.turn) { const t = s.turn; s.turn = null; t(); }
+    };
+    ws.onclose = e => { clearTimeout(timer); const info = "cod " + e.code + (e.reason ? ", motiv: " + e.reason : ""); log(label + ": închis (" + info + ")"); finish({ ok: false, closed: info }); };
+    ws.onerror = () => log(label + ": eroare de socket");
+  });
+}
+// Trimite un text și așteaptă sfârșitul turei (cel mult 20 s); întoarce transcrierea răspunsului.
+function say(s, text) {
+  return new Promise(resolve => {
+    s.transcript = "";
+    const timer = setTimeout(() => { s.turn = null; resolve(s.transcript + " [timp depășit]"); }, 20000);
+    s.turn = () => { clearTimeout(timer); resolve(s.transcript); };
+    s.ws.send(JSON.stringify({ realtimeInput: { text } }));
+  });
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function run() {
+  $("go").disabled = true;
+  try {
+    status("A…");
+    const tok1 = await getToken();
+    const a = await session("A", tok1, null);
+    if (!a.ok) { log("A: ✘ jetonul NU deschide sesiunea (" + a.closed + "). Restul n-are sens; tichetul 08 se oprește aici."); return; }
+    log("A: ✔ jetonul deschide o sesiune pe Constrained cu gemini-3.8-live");
+    log("A: răspuns la prima replică: " + JSON.stringify(await say(a, "Reține cuvântul „portocală”. Răspunde doar cu „ok”.")));
+    await sleep(1500);                                   // lasă să sosească un handle de reluare
+    const h1 = a.handle;
+    log("A: handle de reluare: " + (h1 ? h1.slice(0, 12) + "…" : "NIMIC (fără handle nu se poate testa B și C)"));
+    a.ws.close(1000);
+    await sleep(500);
+    if (!h1) return;
+
+    status("B…");
+    const b = await session("B", tok1, h1);
+    if (b.ok) {
+      const ans = await say(b, "Ce cuvânt ți-am zis să reții? Răspunde într-un cuvânt.");
+      log("B: " + (/portoc/i.test(ans) ? "✔ ACCEPTATĂ, cu context" : "✘ ACCEPTATĂ, dar fără context") + " · răspuns: " + JSON.stringify(ans));
+      b.ws.close(1000);
+    } else log("B: ✘ REFUZATĂ (" + b.closed + "). Documentația spune că ar fi trebuit să meargă.");
+    const h2 = (b.ok && b.handle) || h1;
+    await sleep(500);
+
+    status("C…");
+    const tok2 = await getToken();
+    const c = await session("C", tok2, h2);
+    if (c.ok) {
+      const ans = await say(c, "Ce cuvânt ți-am zis să reții? Răspunde într-un cuvânt.");
+      log("C: " + (/portoc/i.test(ans) ? "✔ ACCEPTATĂ, cu context (reluarea cu alt jeton merge)" : "◐ ACCEPTATĂ, fără context (modelul a uitat; aplicația retrimite poziția)") + " · răspuns: " + JSON.stringify(ans));
+      c.ws.close(1000);
+    } else log("C: ◐ REFUZATĂ (" + c.closed + "). Aplicația repornește curat fără handle (evenimentul restarted) și retrimite poziția lecției.");
+    await sleep(500);
+
+    status("D…");
+    const tok3 = await getToken();
+    const d = await session("D", tok3, null);
+    log("D: " + (d.ok ? "✔ o sesiune nouă, fără handle, cu un jeton nou, merge" : "✘ NU merge (" + d.closed + ")"));
+    if (d.ok) d.ws.close(1000);
+    log("GATA. Copiază jurnalul în tichetul 08.");
+  } catch (e) { log("EROARE: " + e.message); }
+  finally { $("go").disabled = false; status("oprit"); }
+}
+$("go").onclick = run;
+$("clear").onclick = () => { $("log").value = ""; };
+$("copy").onclick = async () => {
+  const text = $("log").value;
+  try { await navigator.clipboard.writeText(text); log("jurnal copiat"); } catch (e) { $("log").select(); log("copiere manuală: selectat"); }
+};
+</script>
+</body>
+</html>

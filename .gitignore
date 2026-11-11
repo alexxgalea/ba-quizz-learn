@@ -6,3 +6,5 @@ __pycache__/
 *.pyc
 .DS_Store
 export/brief-*.md
+server/.build/
+server/.venv/

@@ -2,10 +2,10 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_fe.js", "data_katas.js", "data_skel.js"];
+export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_fe.js", "data_katas.js", "data_skel.js", "data_patterns.js"];
 
-// Modulele Jarvis (Live, Audio, Call, Jarvis) și cele pentru „Întreabă despre asta” (Ask, GeminiText): declarații globale, încărcate înaintea lui app.js. Aceleași fișiere rulează și în Node, în tools/unit.
-export const LIB_FILES = ["live.js", "audio.js", "call.js", "jarvis.js", "ask.js", "gemini_text.js"];
+// Modulele Jarvis (Live, Audio, Call, Jarvis), cele pentru „Întreabă despre asta” (Ask, GeminiText), conexiunea la server (ServerConn, LiveToken), jurnalul de încercări (Journal) și sincronizarea lui (JournalSync): declarații globale, încărcate înaintea lui app.js. Aceleași fișiere rulează și în Node, în tools/unit.
+export const LIB_FILES = ["server_conn.js", "live_token.js", "live.js", "audio.js", "call.js", "jarvis.js", "ask.js", "gemini_text.js", "journal.js", "server_ai.js", "sync.js"];
 
 // Codul de referință din katas/: secțiunile „# === kN ===” (Python) sau „// === kN ===” (JS/TS) sunt soluțiile kata
 // (sursele întâi, apoi testele lor, lipite la cod), iar „=== s-… ===” sunt referințele de schelet (fără teste).
