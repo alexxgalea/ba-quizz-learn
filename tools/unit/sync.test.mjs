@@ -145,7 +145,7 @@ test("pulls in pages after the stored cursor until `more` is false, and keeps th
   const gets = srv.calls.filter(c => c.method === "GET" && c.url.includes("limit=2")).map(c => +/after=(\d+)/.exec(c.url)[1]);
   assert.deepEqual(gets, [0, 2, 4], "three pages of at most 2");
   assert.equal(b.j.state().q.q4.n, 1);
-  assert.deepEqual(await b.j.getAux(JournalSync.AUX_KEY), { url: URL1, after: 5 });
+  assert.deepEqual(await b.j.getAux(JournalSync.AUX_KEY), { url: URL1, after: 5, epoch: "0" });
   // a new sync object on the same journal (a restart) continues from the cursor
   const again = JournalSync.create({ journal: b.j, fetch: srv.fetch, link: () => b.link, random: () => 0, batch: 2 });
   const before = srv.calls.length;
@@ -168,7 +168,7 @@ test("the cursor does not move past events that could not be merged", async () =
   b.j.merge = async () => { throw new Error("IndexedDB full"); };
   await b.sync.syncNow();
   assert.equal(b.sync.status().state, "error");
-  assert.equal(await b.j.getAux(JournalSync.AUX_KEY), null);
+  assert.equal(((await b.j.getAux(JournalSync.AUX_KEY)) || { after: 0 }).after, 0, "the cursor stays at zero (only the epoch may have been kept)");
   b.j.merge = realMerge;
   await b.sync.syncNow();
   assert.equal(box(b, "py-01"), 2);

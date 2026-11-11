@@ -1,11 +1,12 @@
 """Depozitul DynamoDB: un tabel, o partiție pe utilizator, cursor fără goluri.
 
-Patru feluri de articole în aceeași partiție (`pk`):
+Cinci feluri de articole în aceeași partiție (`pk`):
 
 - `sk = "N"`: contorul, cu atributul numeric `n` (ultimul număr de secvență).
 - `sk = "S#<n>"`, `n` completat cu zerouri la 12 cifre: evenimentul (`data` = JSON).
 - `sk = "I#<id>"`: marcajul de idempotență al id-ului, cu `n`.
 - `sk = "AI#<zi>"`: contorul zilnic al cererilor la `/ai` (`cnt`), pe ziua UTC.
+- `sk = "E"`: epoca (`v`), scrisă doar de `purge` (tichetul 09); lipsă = `INITIAL_EPOCH`.
 
 Scrierea e o singură `TransactWriteItems` pe lot (cel mult 49 de evenimente:
 contorul + 2 articole pe eveniment încap în cele 100 de acțiuni). Tranzacția
@@ -22,7 +23,7 @@ from typing import Any, Callable
 
 from botocore.exceptions import ClientError
 
-from .store import AppendResult, EventStore, Page, dedupe, dump, take_page
+from .store import INITIAL_EPOCH, AppendResult, EventStore, Page, PurgeResult, dedupe, dump, new_epoch, take_page
 
 MAX_EVENTS_PER_TX = 49  # 1 contor + 2 * 49 = 99 <= 100 de acțiuni
 MAX_TX_BYTES = 3_500_000  # sub limita de 4 MB a unei tranzacții
@@ -97,6 +98,47 @@ class DynamoStore(EventStore):
                 return False
             raise
         return True
+
+    # ---- epoca și ștergerea (tichetul 09) -----------------------------------
+
+    def epoch(self) -> str:
+        item = self._table.get_item(Key={"pk": self._pk, "sk": "E"}, ConsistentRead=True).get("Item")
+        return str(item["v"]) if item else INITIAL_EPOCH
+
+    def purge(self) -> PurgeResult:
+        """Șterge `N`, `S#*` și `I#*` ale partiției; păstrează `AI#*`. Nu e atomică: întâi
+        evenimentele și marcajele, apoi contorul, apoi se scrie epoca nouă. Un cititor care
+        vine între timp vede un jurnal gol (sau pe jumătate gol) cu epoca veche; își
+        corectează cursorul la următoarea cerere, după epoca nouă."""
+        keys: list[str] = []
+        kwargs: dict[str, Any] = {
+            "KeyConditionExpression": "pk = :pk",
+            "ExpressionAttributeValues": {":pk": self._pk},
+            "ProjectionExpression": "sk",
+            "ConsistentRead": True,
+        }
+        while True:
+            resp = self._table.query(**kwargs)
+            keys += [it["sk"] for it in resp["Items"]]
+            if "LastEvaluatedKey" not in resp:
+                break
+            kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+        deleted = sum(1 for k in keys if k.startswith("S#"))
+        doomed = [k for k in keys if k.startswith(("S#", "I#"))] + [k for k in keys if k == "N"]
+        for i in range(0, len(doomed), 25):
+            request = {self._name: [{"DeleteRequest": {"Key": {"pk": self._pk, "sk": k}}} for k in doomed[i : i + 25]]}
+            for _ in range(MAX_ATTEMPTS):
+                if not request:
+                    break
+                resp = self._client.batch_write_item(RequestItems=request)
+                request = resp.get("UnprocessedItems") or {}
+                if request:
+                    self._sleep(0.05)
+            else:
+                raise RuntimeError("ștergerea nu s-a terminat")
+        epoch = new_epoch()
+        self._table.put_item(Item={"pk": self._pk, "sk": "E", "v": epoch})
+        return PurgeResult(deleted, epoch)
 
     # ---- citire ---------------------------------------------------------
 

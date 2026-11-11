@@ -5,9 +5,15 @@
 // (2) cere de la cursorul păstrat tot ce e nou (GET /events?after=&limit=), îmbină cu `merge(events, { remote: true })` și abia apoi mută cursorul, până când `more` e fals.
 // Un eșec nu pierde nimic: ce nu e confirmat rămâne în coadă, iar cursorul nu trece peste ce nu s-a îmbinat. Nu blochează aplicația: totul e asincron, cu timeout pe cerere și reîncercări cu pauze tot mai mari.
 //
-// Contractul serverului (server/README.md): antet `Authorization: Bearer <secret>`; POST /events { events } → { accepted, duplicates, cursor }; GET /events → { events, cursor, more }.
+// Contractul serverului (server/README.md): antet `Authorization: Bearer <secret>`; POST /events { events } → { accepted, duplicates, cursor, epoch }; GET /events → { events, cursor, more, epoch };
+// POST /events/purge { confirm } → { deleted, epoch }.
+//
+// Epoca (tichetul 09): serverul are un șir care se schimbă când jurnalul lui e șters. După o ștergere numerele de secvență pornesc din nou de la 1, deci cursorul păstrat de un dispozitiv n-ar mai însemna nimic.
+// Regula, cea mai simplă și sigură: la o epocă diferită de cea păstrată (lângă cursor, `getAux`), cursorul se reia de la 0 și epoca nouă se păstrează; NIMIC altceva nu se schimbă.
+// Evenimentele locale rămân, iar cele deja trimise NU se retrimit singure (utilizatorul tocmai a șters serverul); cele netrimise (netrimise = serverul nu le-a avut) pleacă ca de obicei.
+// Primul răspuns cu epocă (nimic păstrat înainte) doar o reține. Un server fără epocă (mai vechi) nu schimbă nimic. `resend()` („Retrimite jurnalul local”) e singura cale de a trimite din nou tot.
 const JournalSync = (() => {
-  const BATCH = 500, AUX_KEY = "sync";
+  const BATCH = 500, AUX_KEY = "sync", PURGE_CONFIRM = "purge-all-events";
   const fail = (kind, msg) => { const e = new Error(msg || kind); e.kind = kind; return e; };
 
   // Textul de stare de pe ecran, din starea întoarsă de `status()`.
@@ -30,8 +36,8 @@ const JournalSync = (() => {
     const rnd = opts.random || Math.random, now = opts.now || Date.now;
     const batch = opts.batch || BATCH, debounceMs = opts.debounceMs == null ? 1500 : opts.debounceMs, timeoutMs = opts.timeoutMs || 20000;
     const base = (opts.backoff && opts.backoff.base) || 2000, cap = (opts.backoff && opts.backoff.max) || 300000;
-    let st = { state: "idle", unsent: 0, stuck: 0, lastOk: 0, retryAt: 0, error: "" };
-    let running = null, again = false, fails = 0, debT = 0, retryT = 0;
+    let st = { state: "idle", unsent: 0, stuck: 0, lastOk: 0, retryAt: 0, error: "", wiped: 0 };
+    let running = null, paused = false, again = false, fails = 0, debT = 0, retryT = 0;
 
     const emit = patch => { Object.assign(st, patch); if (opts.onStatus) { try { opts.onStatus(Object.assign({}, st)); } catch (e) { /* ecranul nu strică sincronizarea */ } } };
     async function refreshCount() { try { emit({ unsent: (await j.unsent()).length }); } catch (e) { /* rămâne numărul vechi */ } }
@@ -68,6 +74,7 @@ const JournalSync = (() => {
           if (b.length > 1) { const h = b.length >> 1; queue.unshift(b.slice(0, h), b.slice(h)); } else stuck++;
           continue;
         }
+        await noteEpoch(link, r && r.epoch);
         const ok = new Set([].concat(r && r.accepted || [], r && r.duplicates || []));
         const sent = b.filter(e => ok.has(e.id)).map(e => e.id);
         if (sent.length) await j.markSent(sent);
@@ -76,16 +83,28 @@ const JournalSync = (() => {
       return stuck;
     }
 
-    // Cursorul e legat de adresa serverului: la alt server se pornește de la zero (îmbinarea e idempotentă, deci nu strică nimic).
-    async function readCursor(link) { const c = await j.getAux(AUX_KEY); return c && c.url === link.url && c.after >= 0 ? c.after : 0; }
+    // Cursorul și epoca sunt legate de adresa serverului: la alt server se pornește de la zero (îmbinarea e idempotentă, deci nu strică nimic).
+    async function readAux(link) { const c = await j.getAux(AUX_KEY); return c && c.url === link.url && c.after >= 0 ? { after: c.after, epoch: typeof c.epoch === "string" ? c.epoch : null } : { after: 0, epoch: null }; }
+    // Un răspuns a adus epoca `epoch`. Întoarce true dacă s-a schimbat față de cea păstrată (cursorul a fost reluat de la 0).
+    async function noteEpoch(link, epoch) {
+      if (typeof epoch !== "string" || !epoch) return false;
+      const a = await readAux(link);
+      if (a.epoch === epoch) return false;
+      try { await j.setAux(AUX_KEY, { url: link.url, after: a.epoch === null ? a.after : 0, epoch }); } catch (e) { throw fail("local", e && e.message); }
+      if (a.epoch === null) return false;
+      emit({ wiped: now() });
+      return true;
+    }
     async function pull(link) {
-      let cur = await readCursor(link);
+      let { after: cur, epoch: ep } = await readAux(link);
       for (let i = 0; i < 100000; i++) {
         const r = await call(link, "GET", "/events?after=" + cur + "&limit=" + batch);
         if (!r || !Array.isArray(r.events) || typeof r.cursor !== "number") throw fail("server", "răspuns neașteptat");
+        if (await noteEpoch(link, r.epoch)) { cur = 0; ep = r.epoch; continue; }       // serverul a fost șters: pagina de mai sus e a unui cursor vechi, se reia de la 0
+        if (typeof r.epoch === "string" && r.epoch) ep = r.epoch;
         try {
           if (r.events.length) await j.merge(r.events, { remote: true });
-          if (r.cursor !== cur) { await j.setAux(AUX_KEY, { url: link.url, after: r.cursor }); }
+          if (r.cursor !== cur) { await j.setAux(AUX_KEY, { url: link.url, after: r.cursor, epoch: ep }); }
         } catch (e) { throw fail("local", e && e.message); }       // cursorul nu trece peste ce nu s-a îmbinat
         const moved = r.cursor !== cur;
         cur = r.cursor;
@@ -117,6 +136,7 @@ const JournalSync = (() => {
     // Un singur ciclu odată; o cerere venită în timpul lui (un răspuns nou) cere încă unul după el.
     function syncNow() {
       C(debT); debT = 0;
+      if (paused) return Promise.resolve(Object.assign({}, st));
       if (running) { again = true; return running; }
       running = (async () => {
         try {
@@ -130,8 +150,34 @@ const JournalSync = (() => {
     }
     // După un răspuns: așteaptă puțin (alte răspunsuri pot veni), apoi un ciclu.
     function poke() {
+      if (paused) return;
       if (running) { again = true; return; }
       C(debT); debT = T(() => { debT = 0; syncNow(); }, debounceMs);
+    }
+    // „Șterge jurnalul de pe server”: așteaptă ciclul în curs, oprește ciclurile cât durează cererea, apoi trimite POST /events/purge cu confirmarea explicită.
+    // Reușita păstrează epoca nouă și cursorul 0; copia locală nu se atinge. Ce era netrimis rămâne în coadă și pleacă la următorul ciclu (serverul nu-l avea, deci nu s-a șters nimic din el).
+    // Aruncă erori cu `kind`: auth, offline, server, client.
+    async function purgeServer() {
+      const link = linkOf();
+      if (!link) throw fail("none", "serverul nu e configurat");
+      paused = true;
+      try {
+        if (running) { try { await running; } catch (e) { /* ciclul își raportează singur eșecul */ } }
+        C(debT); debT = 0; C(retryT); retryT = 0;
+        const r = await call(link, "POST", "/events/purge", { confirm: PURGE_CONFIRM });
+        if (!r || typeof r.epoch !== "string" || !r.epoch) throw fail("server", "răspuns neașteptat");
+        try { await j.setAux(AUX_KEY, { url: link.url, after: 0, epoch: r.epoch }); } catch (e) { throw fail("local", e && e.message); }
+        emit({ wiped: now() });
+        return { deleted: +r.deleted || 0, epoch: r.epoch };
+      } finally { paused = false; }
+    }
+    // „Retrimite jurnalul local”: tot jurnalul intră în coada de trimis (serverul ignoră ce are deja, după id) și pleacă într-un ciclu. Întoarce numărul de evenimente puse în coadă.
+    async function resend() {
+      const n = await j.resendAll();
+      emit({ wiped: 0 });
+      await refreshCount();
+      syncNow();
+      return n;
     }
     function start() { refreshCount(); return syncNow(); }
     // Pornire / revenirea semnalului / revenirea în prim-plan. `win` și `doc` vin de la apelant.
@@ -143,9 +189,9 @@ const JournalSync = (() => {
       return () => { win.removeEventListener("online", on); win.removeEventListener("offline", off); doc.removeEventListener("visibilitychange", vis); };
     }
     function stop() { C(debT); C(retryT); debT = 0; retryT = 0; }
-    return { start, syncNow, poke, attach, stop, status: () => Object.assign({}, st), refreshCount };
+    return { start, syncNow, poke, attach, stop, purgeServer, resend, status: () => Object.assign({}, st), refreshCount };
   }
 
-  return { BATCH, AUX_KEY, label, create };
+  return { BATCH, AUX_KEY, PURGE_CONFIRM, label, create };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = JournalSync;

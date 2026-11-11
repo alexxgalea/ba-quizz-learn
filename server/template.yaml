@@ -96,6 +96,8 @@ Resources:
                 - dynamodb:Query
                 - dynamodb:PutItem
                 - dynamodb:UpdateItem
+                # POST /events/purge (tichetul 09): BatchWriteItem acoperă și DeleteRequest; DeleteItem nu e acordat
+                - dynamodb:BatchWriteItem
               Resource: !GetAtt EventsTable.Arn
       # AuthType NONE: secretul se verifică în aplicație (hmac.compare_digest).
       # CORS se configurează aici și nicăieri altundeva: Lambda dublează antetele

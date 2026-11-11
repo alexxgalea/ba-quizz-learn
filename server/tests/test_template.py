@@ -101,3 +101,9 @@ def test_ai_keys_are_noecho_parameters_and_the_function_waits_for_two_models():
     assert FN["Timeout"] >= 2 * 20 + 10  # două modele a câte AI_TIMEOUT_S (20 s) și puțină rezervă
     # Contorul zilnic folosește UpdateItem pe tabel: permisiunea există deja.
     assert "dynamodb:UpdateItem" in FN["Policies"][0]["Statement"][0]["Action"]
+
+
+def test_purge_has_the_dynamodb_actions_it_needs():
+    actions = FN["Policies"][0]["Statement"][0]["Action"]
+    assert "dynamodb:BatchWriteItem" in actions and "dynamodb:DeleteItem" not in actions  # batch delete se autorizează prin BatchWriteItem
+    assert set(FN["FunctionUrlConfig"]["Cors"]["AllowMethods"]) == {"GET", "POST"}  # purge e POST: CORS nu se lărgește

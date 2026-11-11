@@ -9,9 +9,9 @@ def post(client, events):
 def test_post_then_get(client):
     r = post(client, [ev(1), ev(2)])
     assert r.status_code == 200
-    assert r.json() == {"accepted": ["e1", "e2"], "duplicates": [], "cursor": 2}
+    assert r.json() == {"accepted": ["e1", "e2"], "duplicates": [], "cursor": 2, "epoch": "0"}
     r = client.get("/events", headers=AUTH)
-    assert r.json() == {"events": [ev(1), ev(2)], "cursor": 2, "more": False}
+    assert r.json() == {"events": [ev(1), ev(2)], "cursor": 2, "more": False, "epoch": "0"}
 
 
 def test_same_event_twice_is_kept_once(client):

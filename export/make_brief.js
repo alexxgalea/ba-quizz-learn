@@ -1,5 +1,6 @@
 // Builds the Perplexity brief: hand-written template + content exported from the app data.
-// Usage: node export/make_brief.js <progress.json> <output.md>
+// Usage: node export/make_brief.js <progress.json | jurnal.json> <output.md>
+// Intrarea e fie exportul vechi al stării `S` (progress.json), fie exportul jurnalului din Progres (`format: "ba-journal"`, tichetul 09), din care starea se calculează cu aceeași proiecție ca în aplicație.
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const root = path.join(__dirname, "..");
 const [progressPath, outPath] = process.argv.slice(2);
@@ -11,7 +12,15 @@ for (const f of ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.
 const P = ctx.window.PREP;
 P.mcq.forEach(q => { const c = (P.qctx || {})[q.id]; if (c) { q.lvl = q.lvl || c[0]; q.ctx = q.ctx || c[1]; } q.lvl = q.lvl || 2; });
 
-const S = JSON.parse(fs.readFileSync(progressPath, "utf8"));
+const Journal = require(path.join(root, "src", "journal.js"));
+// Exportul jurnalului → S prin proiecție; orice altceva se citește ca export vechi de stare. Un jurnal stricat oprește scriptul cu mesajul de eroare (nimic scris pe jumătate).
+function readProgress(file) {
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!raw || raw.format !== Journal.EXPORT_FORMAT) return raw;
+  try { return Journal.project(Journal.parseExport(raw).events); }
+  catch (e) { console.error(file + ": " + e.message); process.exit(1); }
+}
+const S = readProgress(progressPath);
 const LVL = { 1: "bază", 2: "practic", 3: "avansat" };
 const MOD = Object.fromEntries(P.modules.map(m => [m.id, m]));
 const QBY = Object.fromEntries(P.mcq.map(q => [q.id, q]));
