@@ -919,21 +919,28 @@
       try { this.sample = (await c.use("sample")) || null; } catch (e) { this.sample = null; }
       if (this.sample && !(ui.run && ui.run.ans)) render();
     },
-    ready() { return !!(this.sample || this.get()); },
-    name() { return this.sample ? "Claude" : "DeepSeek"; },
+    ready() { return !!(Srv.configured() || this.sample || this.get()); },
+    name() { return Srv.configured() ? "AI" : this.sample ? "Claude" : "DeepSeek"; },
     get() { try { return localStorage.getItem(DS_KEY) || ""; } catch (e) { return ""; } },
     set(k) { try { if (k) localStorage.setItem(DS_KEY, k); else localStorage.removeItem(DS_KEY); return true; } catch (e) { return false; } },
     mask: k => (k ? "…" + k.slice(-4) : "")
   };
+  // Serverul propriu (src/server_ai.js): URL + secret în localStorage, nu în S. Cu el configurat, nicio cerere AI nu pleacă direct către Gemini sau DeepSeek.
+  const Srv = ServerAi.create({ fetch: (u, i) => window.fetch(u, i), storage: {
+    getItem: k => localStorage.getItem(k), setItem: (k, v) => localStorage.setItem(k, v), removeItem: k => localStorage.removeItem(k) } });
   const AI_MSG = {
-    nokey: "Adaugă mai întâi cheia DeepSeek, în Progres.",
+    nokey: "Adaugă mai întâi serverul (sau cheia DeepSeek), în Progres.",
+    srv_auth: "Serverul a refuzat secretul. Verific-l în Progres.",
+    srv_cap: "Ai atins plafonul zilnic de cereri AI. Revine mâine.",
+    srv_big: "Cererea e prea mare pentru server.",
+    srv_ai: "Niciun model AI nu răspunde acum. Reîncearcă mai târziu.",
     auth: "Cheia DeepSeek nu e validă. Verific-o în Progres.",
     credit: "Contul DeepSeek nu mai are credit.",
     rate: "Prea multe cereri. Așteaptă puțin și reîncearcă.",
     server: "DeepSeek nu răspunde acum. Reîncearcă.",
     http: "Cererea a fost respinsă. Reîncearcă.",
     timeout: "Verificarea a întârziat prea mult. Reîncearcă.",
-    network: "Nu pot ajunge la api.deepseek.com (rețea sau restricție a paginii).",
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).",
     format: "Răspunsul AI nu avea formatul așteptat. Reîncearcă.",
     nogrant: "Accesul la Claude a fost refuzat. Reîncarcă pagina ca să-l poți permite.",
     refused: "Claude a refuzat cererea. Încearcă cu alt text.",
@@ -1002,7 +1009,29 @@
       return v;
     } finally { clearTimeout(tm); }
   }
-  const aiGrade = (c, ans) => (AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans));
+  // Prin server: aceleași prompturi și același parser, o reîncercare pentru format. Dacă serverul pică, urmează `sample` (în artifact), nu Gemini sau DeepSeek direct.
+  async function srvGrade(c, ans) {
+    let last = null;
+    for (let a = 0; a < 2; a++) {
+      try {
+        const v = parseVerdict(await Srv.generate({ system: DS_SYS, user: aiUser(c, ans), kind: "default", json: true, maxTokens: 800 }), c.k.length);
+        if (v) return v;
+        last = aiError("format");
+      } catch (err) { if (err.code !== "format") throw err; last = err; }
+    }
+    throw last;
+  }
+  const aiGrade = (c, ans) => {
+    if (!Srv.configured()) return AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans);
+    return ServerAi.run(AI.sample ? [{ generate: () => srvGrade(c, ans) }, { generate: () => sampleGrade(c, ans) }] : [{ generate: () => srvGrade(c, ans) }], null);
+  };
+  async function srvTest() {
+    const st = $("#srv-st"); if (st) st.textContent = "Se testează…";
+    let msg;
+    try { await Srv.generate({ user: "Răspunde cu un singur cuvânt: ok", kind: "quick", maxTokens: 8 }); msg = "Conexiune reușită: serverul răspunde."; }
+    catch (err) { msg = AI_MSG[err.code] || AI_MSG.network; }
+    const s2 = $("#srv-st"); if (s2) s2.textContent = msg;
+  }
   async function aiTest() {
     const key = AI.get(); if (!key) return;
     const st = $("#ds-st"); if (st) st.textContent = "Se testează…";
@@ -1095,7 +1124,7 @@
         (Mic.ok ? '<button class="btn sm' + (Mic.on ? " rec" : "") + '" id="mic-b" data-a="mic" aria-pressed="' + Mic.on + '">' + (Mic.on ? "Oprește" : "Dictează") + "</button>" : "") + "</div>" +
         '<textarea class="ans" id="ans-t" rows="5" maxlength="3000" placeholder="Scrie sau dictează răspunsul, în 3–4 propoziții" aria-label="Răspunsul tău"' + (busy ? " disabled" : "") + ">" + esc(run.ans || "") + "</textarea>";
       if (run.ai && run.ai.s === "err") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[run.ai.code] || AI_MSG.network) + "</p>";
-      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
+      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă serverul sau cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
       h += "</section>";
       if (has) {
         const iv = IV.ready();
@@ -1223,6 +1252,13 @@
     try { r = await AI.sample(prompt, o); }
     catch (e) { throw aiError(e && e.code === "cancelled" ? "cancelled" : sampleCode(e)); }
     return r && r.text;
+  }
+  // Golurile (lecția, întrebarea țintită, verdictul ei) merg și prin server, nu doar prin `sample`. Interviul scris și Certificarea rămân pe `sample` (IV).
+  const gapReady = () => !!(AI.sample || Srv.configured());
+  function gapText(prompt, tier, json) {
+    if (!Srv.configured()) return sampleText(prompt, tier);
+    const srv = { generate: () => Srv.generate({ user: prompt, kind: tier === "quick" ? "quick" : "default", json: !!json }) };
+    return ServerAi.run(AI.sample ? [srv, { generate: () => sampleText(prompt, tier) }] : [srv], null);
   }
   const IV = {
     ready: () => !!AI.sample,
@@ -1587,21 +1623,21 @@
   }
   const stOf = (name, k) => (ui[name] || (ui[name] = {}))[k];
   async function gapExplain(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("les", k) && stOf("les", k).s === "busy") return;
     const mine = ui.les[k] = { s: "busy" }; render();
     let text = null, code = null;
-    try { text = await sampleText(gapLessonPrompt(c, i, gapEvidence(c)), "default"); } catch (err) { code = (err && err.code) || "network"; }
+    try { text = await gapText(gapLessonPrompt(c, i, gapEvidence(c)), "default", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.les[k] !== mine) return;
     ui.les[k] = text && text.trim() ? { s: "ok", text: text.trim().slice(0, 1200) } : { s: "err", code: code || "format" };
     render();
   }
   async function chkAsk(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("chk", k) && /^busy/.test(stOf("chk", k).s)) return;
     const mine = ui.chk[k] = { s: "busyq" }; render();
     let q = null, code = null;
-    try { q = await sampleText(gapAskPrompt(c, i, gapEvidence(c)), "quick"); } catch (err) { code = (err && err.code) || "network"; }
+    try { q = await gapText(gapAskPrompt(c, i, gapEvidence(c)), "quick", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     ui.chk[k] = q && q.trim() ? { s: "q", q: q.trim().slice(0, 400), ans: "" } : { s: "err", code: code || "format", stage: "ask" };
     render();
@@ -1611,7 +1647,7 @@
     const ans = (st.ans || "").trim(); if (ans.length < 10) { toast("Scrie un răspuns mai lung"); return; }
     const mine = ui.chk[k] = { s: "busyg", q: st.q, ans }; render();
     let v = null, code = null;
-    try { v = parseGapGrade(await sampleText(gapGradePrompt(c, i, st.q, ans), "default")); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
+    try { v = parseGapGrade(await gapText(gapGradePrompt(c, i, st.q, ans), "default", true)); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     if (!v) ui.chk[k] = { s: "err", code, stage: "grade", q: st.q, ans };
     else if (v.covered) { ui.chk[k] = { s: "ok", q: st.q, ans, fb: v.feedback }; gapFix(cid, i); }
@@ -1629,7 +1665,7 @@
   }
   const lessonHtml = text => text.split(/\n+/).filter(Boolean).map(l => '<p class="rt">' + inlineRich(l).replace(/^(Ideea:|Unde s-a rupt gândirea ta:|Spune-l la interviu:)/, "<b>$1</b>") + "</p>").join("");
   function gapAi(c, i) {
-    if (!IV.ready()) return "";
+    if (!gapReady()) return "";
     const k = gapKey(c.id, i), les = stOf("les", k), chk = stOf("chk", k), data = ' data-c="' + c.id + '" data-i="' + i + '"';
     let h = "";
     if (chk && chk.s === "ok") h += '<div class="gap-ok"><span class="chip ok">Reparat</span>' + (chk.fb ? '<p class="small">' + fmt(chk.fb) + "</p>" : "") + "</div>";
@@ -2074,6 +2110,7 @@
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
     h += vCfg();
+    h += vServerSettings();
     h += vAiSettings();
     return h;
   }
@@ -2085,10 +2122,22 @@
       '<label class="small">Ore/seară <select class="keyin" id="cfg-h" aria-label="Ore pe seară">' + opts + "</select></label></div>" +
       '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button></div></section>';
   }
+  // Serverul propriu (tichetul 06): adresa și secretul, o dată pe dispozitiv. Aceeași funcție poate găzdui și sincronizarea (tichetul 05).
+  function vServerSettings() {
+    if (AI.sample) return "";                          // în artifact, CSP blochează conexiunile către server
+    const c = Srv.config();
+    return '<section class="card stack-s"><h3>Serverul</h3>' +
+      '<p class="small">Verificarea AI și întrebările trec prin serverul tău, care ține cheile Gemini și DeepSeek. Nu mai ai nevoie de chei în browser.</p>' +
+      '<p class="small" id="srv-st">' + (c ? "Configurat: " + esc(c.url.replace(/^https?:\/\//, "")) + " (secret …" + esc(c.secret.slice(-4)) + ")." : "Neconfigurat.") + "</p>" +
+      '<input class="keyin" id="srv-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Adresa serverului (https://…)" value="' + esc(c ? c.url : "") + '" aria-label="Adresa serverului">' +
+      '<input class="keyin" id="srv-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (c ? "Secret nou (înlocuiește)" : "Secretul serverului") + '" aria-label="Secretul serverului">' +
+      '<div class="row"><button class="btn sm primary" data-a="srv-save">Salvează</button>' + (c ? '<button class="btn sm" data-a="srv-test">Testează</button><button class="btn sm danger" data-a="srv-del">Șterge</button>' : "") + "</div>" +
+      '<p class="xs muted">Adresa și secretul rămân doar în browserul acestui dispozitiv: nu se sincronizează și nu intră în export. Serverul primește doar promptul (întrebarea, punctele cheie și răspunsul tău).</p></section>';
+  }
   function vAiSettings() {
     if (AI.sample) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">La cardurile orale, Claude compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit. Nu ai nevoie de cheie: folosește contul tău Claude, iar prima dată ți se cere permisiunea.</p><p class="xs muted">Se trimit doar întrebarea, punctele cheie și răspunsul tău.</p></section>';
     const k = AI.get();
-    return '<section class="card stack-s"><h3>Verificare AI (DeepSeek)</h3>' +
+    return '<section class="card stack-s"><h3>Verificare AI (DeepSeek)</h3>' + (Srv.configured() ? '<p class="xs muted">Cu serverul configurat, cheia asta nu se folosește: cererile trec prin server.</p>' : "") +
       '<p class="small">La cardurile orale, DeepSeek compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit.</p>' +
       '<p class="small" id="ds-st">' + (k ? "Cheie salvată pe acest dispozitiv (" + esc(AI.mask(k)) + ")." : "Nicio cheie salvată.") + "</p>" +
       '<input class="keyin" id="ds-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (k ? "Cheie nouă (înlocuiește)" : "Cheia API DeepSeek (sk-…)") + '" aria-label="Cheia API DeepSeek">' +
@@ -2254,6 +2303,14 @@
         render(); toast("Cheie salvată"); break;
       }
       case "ds-del": AI.set(""); render(); toast("Cheie ștearsă"); break;
+      case "srv-save": {
+        const u = $("#srv-url"), k = $("#srv-secret"), c = Srv.config();
+        const r = Srv.save(u ? u.value : "", (k && k.value.trim()) || (c ? c.secret : ""));
+        if (!r.ok) { toast(r.error === "url" ? "Adresa trebuie să înceapă cu https://" : r.error === "secret" ? "Lipsește secretul" : "Browserul nu permite salvarea"); break; }
+        render(); toast("Server salvat"); break;
+      }
+      case "srv-del": Srv.clear(); render(); toast("Server șters"); break;
+      case "srv-test": srvTest(); break;
       case "ds-test": aiTest(); break;
       case "tick": if (ui.run) { const k = +b.dataset.k; ui.run.ticks[k] = !ui.run.ticks[k]; render(); } break;
       case "oral-save": oralSave(); break;
@@ -2484,19 +2541,29 @@
   const ASK_MAX = 6;
   const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
   const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey, model: "gemini-3.5-flash-lite" });      // cel mai rapid model gratuit: răspunsurile sunt scurte
-  // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
+  // Sursa: serverul propriu (PWA, prima); fără el, ca înainte: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis, altfel DeepSeek.
+  // Cu serverul configurat urmează doar `sample` la eșec: niciodată Gemini sau DeepSeek direct din browser. Fără server, se folosește prima sursă, fără căderi.
+  const askSources = () => {
+    const o = ServerAi.order({ server: Srv.configured(), sample: !!AI.sample, gemini: !!geminiKey(), deepseek: !!AI.get() });
+    return o[0] === "server" ? o : o.slice(0, 1);
+  };
+  const ASK_WHO = { server: "AI", sample: "Claude", gemini: "Gemini", deepseek: "DeepSeek" };
   const AskModel = {
-    ready: () => !!(AI.sample || geminiKey() || AI.get()),
-    name: () => (AI.sample ? "Claude" : geminiKey() ? "Gemini" : "DeepSeek"),
-    async generate(req) {
-      if (AI.sample) return sampleText(req.system + "\n\n" + req.user, "default");      // `sample` nu are prompt de sistem
-      if (geminiKey()) return gemText.generate(req);
-      return dsCall({ model: DS_MODEL, messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get());
+    ready: () => askSources().length > 0,
+    name: () => ASK_WHO[askSources()[0]] || "AI",
+    generate(req) {
+      const by = {
+        server: r => Srv.generate({ system: r.system, user: r.user, kind: "default", json: true }),      // Ask, scheletele: toate cer JSON
+        sample: r => sampleText(r.system + "\n\n" + r.user, "default"),                                // `sample` nu are prompt de sistem
+        gemini: r => gemText.generate(r),
+        deepseek: r => dsCall({ model: DS_MODEL, messages: [{ role: "system", content: r.system }, { role: "user", content: r.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get())
+      };
+      return ServerAi.run(askSources().map(n => ({ name: n, generate: by[n] })), req);
     }
   };
   const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
   const ASK_MSG = Object.assign({}, AI_MSG, {
-    nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
+    nokey: "Adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
     network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel.",
     timeout: "Modelul n-a răspuns la timp. Reîncearcă.", format: "Răspunsul modelului n-a avut formatul așteptat. Reîncearcă."
   });
@@ -2551,7 +2618,7 @@
   function vAsk(key, extra) {
     const st = ui.ask[key] || (ui.ask[key] = { open: false, draft: "", hist: [], busy: false, err: null });
     if (extra) Object.assign(st, extra);            // același obiect la fiecare randare: askSend îl modifică în timp ce se așteaptă răspunsul
-    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
+    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
     const k = esc(key);
     if (!st.open) return '<button class="btn sm ask-open" data-a="ask-open" data-k="' + k + '">Întreabă despre asta</button>';
     const kind = key.split(":")[0], full = st.hist.length >= ASK_MAX, ctx = askCtx(key), topic = ctx ? ctx.topic : "";

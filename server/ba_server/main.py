@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+from datetime import datetime, timezone
+from typing import Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -14,7 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import routers
+from . import models, routers
 from .auth import require_secret
 from .config import Settings
 from .store import EventStore
@@ -34,7 +36,17 @@ def _load_routers(app: FastAPI) -> None:
         app.include_router(router, dependencies=guard)
 
 
-def create_app(settings: Settings | None = None, store: EventStore | None = None) -> FastAPI:
+def _utc_today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def create_app(
+    settings: Settings | None = None,
+    store: EventStore | None = None,
+    *,
+    model_http: models.HttpPost | None = None,
+    today: Callable[[], str] | None = None,
+) -> FastAPI:
     settings = settings or Settings.from_env()
     if store is None:
         from .dynamo import DynamoStore
@@ -50,6 +62,9 @@ def create_app(settings: Settings | None = None, store: EventStore | None = None
     )
     app.state.settings = settings
     app.state.store = store
+    # Pentru /ai: clientul HTTP către modele și ziua (UTC) a plafonului; testele dau falsuri.
+    app.state.model_http = model_http or models.urllib_post
+    app.state.today = today or _utc_today
 
     # CORS în AWS: doar pe adresa funcției (template.yaml). Aici, doar pentru
     # rularea locală, când `LOCAL_CORS_ORIGIN` e setat; altfel aplicația nu pune

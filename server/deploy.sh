@@ -1,5 +1,7 @@
 #!/bin/bash
 # Lansează serverul cu o singură comandă:  BA_SECRET=... ./deploy.sh   (sau: make deploy)
+# Pentru /ai (tichetul 06) dai și GEMINI_API_KEY și/sau DEEPSEEK_API_KEY, la fiecare lansare:
+# o cheie lipsă înlocuiește pe cea veche cu gol (sursa respectivă se sare).
 # Cere AWS CLI configurat (aws configure) și SAM CLI. Nu scrie secretul nicăieri.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -33,7 +35,8 @@ sam deploy \
   --resolve-s3 \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset \
-  --parameter-overrides "AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN"
+  --parameter-overrides "AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN" \
+    "GeminiApiKey=${GEMINI_API_KEY:-}" "DeepseekApiKey=${DEEPSEEK_API_KEY:-}" "AiDailyCap=${AI_DAILY_CAP:-300}"
 
 echo
 echo "Adresa serverului:"

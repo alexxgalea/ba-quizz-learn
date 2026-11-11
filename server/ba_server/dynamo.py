@@ -1,10 +1,11 @@
 """Depozitul DynamoDB: un tabel, o partiție pe utilizator, cursor fără goluri.
 
-Trei feluri de articole în aceeași partiție (`pk`):
+Patru feluri de articole în aceeași partiție (`pk`):
 
 - `sk = "N"`: contorul, cu atributul numeric `n` (ultimul număr de secvență).
 - `sk = "S#<n>"`, `n` completat cu zerouri la 12 cifre: evenimentul (`data` = JSON).
 - `sk = "I#<id>"`: marcajul de idempotență al id-ului, cu `n`.
+- `sk = "AI#<zi>"`: contorul zilnic al cererilor la `/ai` (`cnt`), pe ziua UTC.
 
 Scrierea e o singură `TransactWriteItems` pe lot (cel mult 49 de evenimente:
 contorul + 2 articole pe eveniment încap în cele 100 de acțiuni). Tranzacția
@@ -76,6 +77,26 @@ class DynamoStore(EventStore):
 
         table = boto3.resource("dynamodb").Table(settings.table_name)
         return cls(table, settings.user_pk)
+
+    # ---- plafonul zilnic pentru /ai ---------------------------------------
+
+    def take_ai_slot(self, day: str, cap: int) -> bool:
+        """Un articol `AI#<zi>` cu contorul `cnt`; ADD atomic, condiționat de plafon.
+        Nu intră în intervalul `S#` pe care îl citește `read`."""
+        if cap <= 0:
+            return False
+        try:
+            self._table.update_item(
+                Key={"pk": self._pk, "sk": f"AI#{day}"},
+                UpdateExpression="ADD cnt :one",
+                ConditionExpression="attribute_not_exists(cnt) OR cnt < :cap",
+                ExpressionAttributeValues={":one": 1, ":cap": cap},
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                return False
+            raise
+        return True
 
     # ---- citire ---------------------------------------------------------
 

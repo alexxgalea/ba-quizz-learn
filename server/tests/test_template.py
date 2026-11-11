@@ -89,3 +89,15 @@ def test_no_secrets_committed():
         assert not re.search(r"AKIA[0-9A-Z]{16}", body), path
         assert not re.search(r"AIza[0-9A-Za-z_-]{35}", body), path
         assert not re.search(r"sk-[0-9a-f]{32}", body), path
+
+
+def test_ai_keys_are_noecho_parameters_and_the_function_waits_for_two_models():
+    params = T["Parameters"]
+    env = FN["Environment"]["Variables"]
+    for param, var in (("GeminiApiKey", "GEMINI_API_KEY"), ("DeepseekApiKey", "DEEPSEEK_API_KEY")):
+        assert params[param]["NoEcho"] is True and params[param]["Default"] == ""
+        assert env[var] == {"Ref": param}
+    assert env["AI_DAILY_CAP"] == {"Ref": "AiDailyCap"}
+    assert FN["Timeout"] >= 2 * 20 + 10  # două modele a câte AI_TIMEOUT_S (20 s) și puțină rezervă
+    # Contorul zilnic folosește UpdateItem pe tabel: permisiunea există deja.
+    assert "dynamodb:UpdateItem" in FN["Policies"][0]["Statement"][0]["Action"]

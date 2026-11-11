@@ -12,6 +12,21 @@ Parameters:
     NoEcho: true
     MinLength: 32
     Description: Secretul lung al lui Alex (cel puțin 32 de caractere). Nu se pune în repo.
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Cheia Gemini pentru /ai (tichetul 06). Goală = sursa se sare. Nu se pune în repo.
+  DeepseekApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Cheia DeepSeek pentru /ai, rezerva Gemini. Goală = sursa se sare. Nu se pune în repo.
+  AiDailyCap:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    Description: Plafonul zilnic de cereri la /ai (ziua UTC). 0 oprește AI-ul fără să oprească restul.
   PwaOrigin:
     Type: String
     Default: https://alexxgalea.github.io
@@ -53,7 +68,8 @@ Resources:
       Runtime: python3.14
       Architectures: [x86_64]
       MemorySize: !Ref MemorySize
-      Timeout: 30
+      # /ai poate încerca două modele la rând (20 s fiecare, vezi AI_TIMEOUT_S).
+      Timeout: 60
       ReservedConcurrentExecutions: !If [HasReservedConcurrency, !Ref ReservedConcurrency, !Ref "AWS::NoValue"]
       Layers:
         - !If
@@ -67,6 +83,9 @@ Resources:
           APP_SECRET: !Ref AppSecret
           TABLE_NAME: !Ref EventsTable
           USER_PK: u#alex
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          DEEPSEEK_API_KEY: !Ref DeepseekApiKey
+          AI_DAILY_CAP: !Ref AiDailyCap
       Policies:
         - Statement:
             - Effect: Allow
