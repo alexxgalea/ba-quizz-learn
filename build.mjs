@@ -24,20 +24,24 @@ const data = DATA_FILES.map(f => read("./src/" + f)).join("\n") +
   "window.PREP.desf = " + JSON.stringify(dz.desf) + ";\n";
 // „Versiunea” afișată în ecranul Jarvis: un hash scurt al codului, ca să se vadă pe telefon dacă rulează varianta nouă (service worker-ul poate ține una veche în cache).
 const appSrc = LIB_FILES.map(f => read("./src/" + f)).join("\n") + "\n" + read("./src/app.js");
-const app = appSrc.replace("__BUILD__", crypto.createHash("sha1").update(appSrc + data + read("./src/app.css")).digest("hex").slice(0, 7));
+const buildId = crypto.createHash("sha1").update(appSrc + data + read("./src/app.css")).digest("hex").slice(0, 7);
+// Două variante ale aceluiași cod: în PWA progresul e un jurnal de încercări în IndexedDB; artifactul păstrează S în localStorage și în sincronizarea prin `window.claude`, ca până acum (vezi `JOURNAL` în app.js).
+const appFor = journal => appSrc.replace("__BUILD__", buildId).replace("__JOURNAL__", journal ? "on" : "off");
+const app = appFor(false), appPwa = appFor(true);
 
 for (const [name, js] of [["data", data], ["app", app]]) if (/<\/script/i.test(js)) throw new Error("</script inside " + name);
 
-const html = read("./src/shell.html")
+const page = a => read("./src/shell.html")
   .replace("/*CSS*/", () => read("./src/app.css"))
   .replace("/*DATA*/", () => data)
-  .replace("/*APP*/", () => app);
+  .replace("/*APP*/", () => a);
+const html = page(app), htmlPwa = page(appPwa);
 
 // PWA (dist/app): aceeași pagină ca document întreg, cu manifest, iconițe și service worker. Artifactul rămâne fără ele.
-const split = html.indexOf("</style>") + "</style>".length;
+const split = htmlPwa.indexOf("</style>") + "</style>".length;
 const pwaHtml = '<!doctype html>\n<html lang="ro">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="theme-color" content="#2c4fd3">\n' +
-  '<link rel="manifest" href="manifest.webmanifest">\n<link rel="icon" href="icon-192.png">\n<link rel="apple-touch-icon" href="icon-192.png">\n' + html.slice(0, split) +
-  '\n</head>\n<body>\n' + html.slice(split) + '\n<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});</script>\n</body>\n</html>\n';
+  '<link rel="manifest" href="manifest.webmanifest">\n<link rel="icon" href="icon-192.png">\n<link rel="apple-touch-icon" href="icon-192.png">\n' + htmlPwa.slice(0, split) +
+  '\n</head>\n<body>\n' + htmlPwa.slice(split) + '\n<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});</script>\n</body>\n</html>\n';
 const manifest = { name: "Pregătire Onapsis", short_name: "Pregătire", description: "Grile, carduri orale, Jarvis (interviu vorbit) și plan pe zile pentru interviul tehnic Onapsis.", lang: "ro", start_url: "./", scope: "./", display: "standalone", orientation: "portrait",
   background_color: "#0e121a", theme_color: "#2c4fd3", icons: [192, 512].map(n => ({ src: "icon-" + n + ".png", sizes: n + "x" + n, type: "image/png", purpose: "any maskable" })) };
 const appDir = new URL("./dist/app/", root);

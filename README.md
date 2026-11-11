@@ -32,6 +32,7 @@ src/
   jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări, modul Lecție)
   ask.js           „Întreabă despre asta”: prompt, limite și verdict „în temă”
   gemini_text.js   un apel de text către Gemini (REST), pentru PWA
+  journal.js       jurnalul de încercări: forma evenimentului, proiecția în `S`, importul unui `S` vechi, îmbinarea (reuniune după id), depozitul IndexedDB cu coada netrimisă (vezi „Jurnal de încercări”)
   pwa/             iconița, service worker-ul
   data_*.js        module, grile, context, carduri orale, fișe, exerciții, schelete (data_skel.js), setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
@@ -206,6 +207,16 @@ La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dicteaz
 - Apelul DeepSeek pleacă direct din browser; DeepSeek răspunde la preflight CORS pentru orice origin. În artifact `fetch` e blocat de CSP, de aceea acolo se folosește `sample`. Cardurile rămân oricum utilizabile manual.
 - Răspunsul tău nu se salvează în progres; stă doar în sesiunea curentă.
 - Test: `python3 tools/test_ai.py` (DeepSeek, `sample` și microfonul simulate, nimic nu iese din mașină).
+
+## Jurnal de încercări
+
+Fiecare răspuns al lui Alex (și fiecare schimbare de setări, bifă de plan, poziție de lecție, reset) e un eveniment care nu se mai schimbă, într-un jurnal (`src/journal.js`, ADR 0003). `S` e proiecția jurnalului: o funcție pură (`Journal.project`) care dă exact ce dădeau `updQ` / `updO` / `updX` / `recordOral` peste starea veche. Aplicația citește `S` ca până acum; `updQ`, `updO`, `updX`, `updS`, kata-urile, golurile, planul, lecția, setările și resetul doar adaugă evenimente, iar proiecția se actualizează pe loc, nu din tot jurnalul.
+
+- Forma evenimentului și tipurile (`answer`, `guess`, `gap`, `cfg`, `plan`, `lesson`, `hist`, `state`, `reset`) sunt descrise în capul lui `src/journal.js`. Ordinea e după timp, apoi după id; îmbinarea a două liste e reuniunea după id; un `reset` ascunde tot ce e mai vechi.
+- În PWA (fără `window.claude`) jurnalul stă în IndexedDB (`onapsis-journal`: evenimente, coada netrimisă, instantaneul proiecției). O oglindă în `localStorage` (`onapsis-journal-v1`: proiecția + evenimentele încă neconfirmate de IndexedDB) face prima desenare sincronă; pornirea citește doar evenimentele de după instantaneu. Starea veche din `onapsis-prep-v1` se importă o dată, ca evenimente sintetice marcate `imported`. Sincronizarea veche prin `window.claude` nu rulează aici.
+- În artifact (`window.claude`) nimic nu se schimbă: aceleași reguli (proiecția), dar `S` se păstrează în `onapsis-prep-v1` și se sincronizează ca până acum; nu există IndexedDB.
+- Progres › Importă adaugă ce diferă ca evenimente sintetice (`Journal.importState`); id-urile sunt deterministe, deci același export importat de două ori nu dublează nimic.
+- Teste: `node --test tools/unit/journal.test.mjs` (proiecție, import, reset, doi dispozitive, goluri, depozit, repornire fără reluare) și `python3 tools/test_journal.py` (IndexedDB real, oglinda, migrarea, artifactul).
 
 ## Publicare
 

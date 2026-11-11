@@ -52,6 +52,9 @@
   const MONTHS_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"];
   const HMAX = 80;
   const LS_KEY = "onapsis-prep-v1";
+  const JOURNAL_KEY = "onapsis-journal-v1";      // oglinda jurnalului (PWA): proiecția + evenimentele încă neconfirmate de IndexedDB; jurnalul însuși e în IndexedDB
+  const JOURNAL = "__JOURNAL__" === "on";         // înlocuit la build (build.mjs): „on” în PWA (jurnalul în IndexedDB, fără sincronizarea veche), „off” în artifact (S în localStorage + `window.claude`, ca până acum)
+  const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal; acolo progresul rămâne în S + sincronizarea veche
   const CERT_KEY = "onapsis-cert-v1";            // certificarea în curs (ui.cert): pe dispozitiv, ca o reîncărcare să reia de la secțiunea la care ai rămas
   const DS_KEY = "onapsis-deepseek-v1";          // cheia API, separată de starea S: nu se sincronizează și nu se exportă
   const DS_URL = "https://api.deepseek.com/chat/completions";
@@ -140,7 +143,7 @@
   // q grile, o carduri orale, x întrebări deschise, k exerciții, s schelete (aceeași formă ca o: b, n, s, t), p sarcini bifate, l poziția lecției pe modul ({ n: bucata la care a ajuns, d: data ultimei terminări, t }),
   // h istoric, c setări (data interviului, ore pe seară)
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
-  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] }; }
+  const emptyState = Journal.emptyState;
   const validCfg = c => !!(c && typeof c === "object" && /^\d{4}-\d{2}-\d{2}$/.test(c.d || ""));
   function normalize(x) {
     const s = emptyState();
@@ -198,7 +201,19 @@
     catch (e) { lsOK = false; return null; }
   }
   function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); lsOK = true; } catch (e) { lsOK = false; } }
-  function commit() { planCache = null; saveLocal(); Sync.push(); paintHeader(); }
+  // Jurnalul de încercări (src/journal.js): fiecare schimbare a lui S e un eveniment, iar S e proiecția lui, ținută în memorie și actualizată pe loc.
+  // În PWA (JOURNAL) jurnalul stă în IndexedDB, cu oglindă în localStorage pentru prima desenare; în artifact doar proiectează, iar S se păstrează ca până acum (localStorage + sincronizarea prin `window.claude`).
+  const J = Journal.create({
+    clock: now, hmax: HMAX, retryMs: 4000,
+    store: JOURNAL ? Journal.idbStore() : null,
+    mirror: JOURNAL ? Journal.localMirror((() => { try { return window.localStorage; } catch (e) { return null; } })(), JOURNAL_KEY) : null,
+    legacy: JOURNAL ? loadLocal : null,
+    onState: s => { S = s; planCache = null; }
+  });
+  S = J.state();
+  const add = e => J.append(e);                         // un eveniment nou; S se actualizează pe loc
+  const histAdd = row => add({ type: "hist", row });
+  function commit() { planCache = null; if (!JOURNAL) saveLocal(); Sync.push(); paintHeader(); }
 
   // ---------- sync (progres privat per utilizator, prin db) ----------
   const DEAD = ["invalid_argument", "not_granted", "revoked", "capability_disabled", "capability_removed", "transform_error"];
@@ -206,7 +221,7 @@
     ref: null, status: "local", writing: false, dirty: false, timer: 0, retries: 0, dead: false,
     async init() {
       const c = window.claude;
-      if (!c || typeof c.use !== "function") return;
+      if (JOURNAL || !c || typeof c.use !== "function") return;           // în PWA sincronizarea veche nu mai rulează: jurnalul e singura sursă
       let db = null, user = null;
       try { [db, user] = await Promise.all([c.use("db"), c.use("user")]); } catch (e) { return; }
       if (!db || !user) return;
@@ -226,7 +241,7 @@
       }
       const remote = prune(normalize(snap.data()));
       const res = mergeState(S, remote);
-      S = res.state;
+      J.replaceState(res.state);
       if (res.remoteNewer) { saveLocal(); softRender(); }
       if (res.localNewer) this.push(900);
       else if (!this.writing && !this.dirty) { this.status = "synced"; paintStatus(); }
@@ -258,40 +273,22 @@
       if (this.status === "synced") return "Sincronizat cu contul tău: vezi același progres pe telefon și pe laptop.";
       if (this.status === "syncing") return "Se sincronizează…";
       if (this.status === "full") return "Spațiul de sincronizare e plin; progresul rămâne salvat pe acest dispozitiv.";
-      return lsOK ? "Salvat doar pe acest dispozitiv (în browser)." : "Browserul nu permite salvarea: progresul se pierde la închidere. Folosește exportul.";
+      return (JOURNAL ? J.info().durable : lsOK) ? "Salvat doar pe acest dispozitiv (în browser)." : "Browserul nu permite salvarea: progresul se pierde la închidere. Folosește exportul.";
     }
   };
 
   // ---------- learning model ----------
+  // Regulile (cutiile Leitner, contoarele de goluri) stau în src/journal.js, în funcția care proiectează evenimentele. Aici doar se adaugă evenimentul potrivit; S se actualizează pe loc.
   // Un răspuns corect dat cu contextul deschis te duce cel mult în cutia 2: ca să urci mai sus,
-  // trebuie să răspunzi și fără context (contextul se ascunde singur de la cutia 2 în sus).
-  function updQ(id, ok, assisted) {
-    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[id]);
-    e.n++;
-    if (ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
-    e.l = ok ? 1 : 0; e.t = now();
-    S.q[id] = e;
+  // trebuie să răspunzi și fără context (contextul se ascunde singur de la cutia 2 în sus). `pick` = indexul variantei alese, în ordinea din date.
+  function updQ(id, ok, assisted, pick) {
+    add({ type: "answer", form: "q", item: id, result: Object.assign({ ok: !!ok }, assisted ? { assisted: true } : {}, pick != null ? { pick } : {}) });
   }
   // Un pas Leitner pe procentul de puncte acoperite (cardurile orale și scheletele): ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
-  function leitnerStep(map, id, p) {
-    const e = Object.assign({ b: 0, n: 0 }, map[id]);
-    e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
-    else if (p >= 0.5) e.b = Math.max(1, e.b);
-    else e.b = 1;
-    e.t = now();
-    map[id] = e;
-  }
-  const updO = (id, p) => leitnerStep(S.o, id, p);
-  const updS = (id, p) => leitnerStep(S.s, id, p);    // schelete: pe procentul de puncte esențiale bifate
+  const updO = (id, p) => add({ type: "answer", form: "o", item: id, result: { p } });
+  const updS = (id, p) => add({ type: "answer", form: "s", item: id, result: { p } });    // schelete: pe procentul de puncte esențiale bifate
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
-  function updX(id, g) {
-    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[id]);
-    e.n++;
-    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
-    e.l = g; e.t = now();
-    S.x[id] = e;
-  }
+  const updX = (id, g) => add({ type: "answer", form: "x", item: id, result: { g } });
   const mastery = e => (e ? MB[e.b] || 0 : 0);
   // Scadența unui item: cutiile 1–2 după un interval, 3–4 după una sau două zile calendaristice, 5 niciodată.
   function dueAt(e) {
@@ -822,7 +819,7 @@
     const assisted = !!(q.ctx && (it.cx || it.co));
     run.picks[run.i] = pos; run.done[run.i] = true;
     run.assist = run.assist || {}; if (assisted) run.assist[run.i] = true;
-    updQ(q.id, ok, assisted); commit();
+    updQ(q.id, ok, assisted, pos >= 0 ? it.ord[pos] : null); commit();
     if (run.mode === "diag" && !ok) adaptDiag(run, run.i);
     render();
     revealFeedback();
@@ -832,7 +829,7 @@
     const run = ui.run; if (!run || run.kind !== "mcq" || !run.done[run.i]) return;
     const q = QBY[run.items[run.i].id];
     run.guess = run.guess || {}; run.guess[run.i] = true;
-    const e = S.q[q.id]; if (e) { e.b = 1; e.l = 0; e.t = now(); }
+    add({ type: "guess", form: "q", item: q.id });
     commit(); render();
   }
   // După răspuns, aduce în ecran explicația și butonul „Următoarea”, fără să le lase sub bara de jos.
@@ -866,7 +863,7 @@
       per[q.m] = per[q.m] || { n: 0, c: 0 }; per[q.m].n++; if (ok) per[q.m].c++;
       if (!ok) wrong.push({ id: q.id, pick: pick === undefined || pick < 0 ? null : it.ord[pick], dunno: pick === -1, guessed });
     });
-    if (n) { S.h.push({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) }); S.h = S.h.slice(-HMAX); }
+    if (n) histAdd({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) });
     commit();
     if (run.cert && ui.cert) { ui.cert.res.q = { n, c, per, wrong: wrong.map(w => w.id) }; ui.cert.step = "o"; Cert.save(); ui.run = null; ui.result = null; ui.tab = "cert"; render(); window.scrollTo(0, 0); return; }
     ui.result = { kind: "mcq", title: run.title, mode: run.mode, n, c, u, per, wrong };
@@ -1404,9 +1401,9 @@
     const c = ui.cert; if (!c) return;
     const sc = certScore(c.res);
     c.step = "done"; c.done = now();
-    S.h.push({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
+    histAdd({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
       cert: { q: sc.q, o: sc.o, s: sc.s, tot: sc.tot, pass: sc.pass, mods: sc.mods.map(x => ({ m: x.m, p: Math.round(x.p * 100) / 100 })), gaps: sc.gaps.map(g => ({ t: g.t, id: g.id, p: Math.round(g.p * 100) / 100 })) } });
-    S.h = S.h.slice(-HMAX); commit(); Cert.save(); openCert();
+    commit(); Cert.save(); openCert();
   }
   const certSecStatus = (c, sc, s) => {
     if (s === "q") return c.res.q ? pc(sc.q) + "% · " + c.res.q.c + "/" + c.res.q.n : c.step === "q" ? "urmează" : "–";
@@ -1513,7 +1510,6 @@
   // ---------- goluri: ce ratezi, de câte ori, ce ai spus greșit ----------
   // Pe fiecare card oral păstrăm `mc` (index punct → de câte ori l-ai ratat; o acoperire completă scade cu 1), `m` (ratate ultima dată) și `w` (afirmațiile marcate greșite).
   // Teoria pentru un gol se asamblează din ce avem: propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu punctul ratat.
-  const MC_MAX = 9;
   const GAP_STOP = new Set(("si sau dar din pentru care este sunt prin intre cand cum unde doar fara daca poate pot are iar tot cat cel cea cei cele lui sale ale mai dupa acest aceasta acesta apoi pana alt alta deci mult mica mare fie era acel acea").split(" "));
   const gapToks = t => new Set((String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9_]{3,}/g) || []).filter(w => !GAP_STOP.has(w)));
   // Elementele din `items` ordonate după cuvintele comune cu `text` (doar cele cu cel puțin unul).
@@ -1521,13 +1517,7 @@
     const t = gapToks(text);
     return items.map((x, i) => { let n = 0; gapToks(x).forEach(w => { if (t.has(w)) n++; }); return { i, n }; }).filter(o => o.n > 0).sort((a, b) => b.n - a.n || a.i - b.i);
   }
-  function gapCounts(e) {
-    const out = {};
-    if (!e) return out;
-    if (e.mc && typeof e.mc === "object") { for (const k of Object.keys(e.mc)) { const n = +e.mc[k]; if (n > 0) out[k] = Math.min(MC_MAX, n); } }
-    else (e.m || []).forEach(i => { out[i] = 1; });         // carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1
-    return out;
-  }
+  const gapCounts = Journal.gapCounts;      // contorul unui card (carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1); îl actualizează și proiecția jurnalului
   // Toate golurile, cele mai grele primele: ratări × prioritatea modulului.
   function gapList() {
     const out = [];
@@ -1622,10 +1612,8 @@
   function gapFix(cid, i) {
     const run = ui.run;
     if (run && run.kind === "oral" && run.items[run.i] === cid && run.phase === "review") { (run.fixed = run.fixed || {})[i] = true; return; }
-    const e = S.o[cid]; if (!e) return;
-    const mc = gapCounts(e); delete mc[i]; e.mc = mc;
-    const m = (e.m || []).filter(x => x !== i); if (m.length) e.m = m; else delete e.m;
-    e.gt = now(); commit();
+    if (!S.o[cid]) return;
+    add({ type: "gap", op: "fix", item: cid, point: i }); commit();
   }
   const lessonHtml = text => text.split(/\n+/).filter(Boolean).map(l => '<p class="rt">' + inlineRich(l).replace(/^(Ideea:|Unde s-a rupt gândirea ta:|Spune-l la interviu:)/, "<b>$1</b>") + "</p>").join("");
   function gapAi(c, i) {
@@ -1685,16 +1673,10 @@
   // Folosit de oralSave (ecranul) și de PrepApp.record (Jarvis): același scor, aceleași goluri.
   function recordOral(c, r) {
     const run = { ticks: r.ticks || {}, half: r.half || {} };
-    const p = tickSum(run, c) / c.k.length;
-    updO(c.id, p);
-    // Golurile cardului: contorul `mc` (+1 la un punct ratat, −1 la unul acoperit întreg), `m` (ratate acum), `w` (ce a marcat verdictul greșit) și versiunea bună.
-    const e = S.o[c.id], prev = gapCounts(e), mc = {}, missed = missedOf(run, c), fx = r.fixed || {}, open = missed.filter(i => !fx[i]);
-    c.k.forEach((_, i) => { const n = fx[i] ? 0 : missed.indexOf(i) >= 0 ? Math.min(MC_MAX, (prev[i] || 0) + 1) : Math.max(0, (prev[i] || 0) - 1); if (n) mc[i] = n; });
-    e.mc = mc;                                                    // și gol ({}): fără el, `m` ar fi citit ca date vechi
-    if (open.length) e.m = open; else delete e.m;
+    const p = tickSum(run, c) / c.k.length, missed = missedOf(run, c), fx = r.fixed || {};
+    // Scorul și cutia, plus golurile cardului (contorul `mc`, `m`, `w`, versiunea bună): le calculează proiecția, din punctele ratate și din cele reparate.
+    add({ type: "answer", form: "o", item: c.id, result: Object.assign({ p, k: c.k.length, missed, fixed: Object.keys(fx).filter(i => fx[i]).map(Number) }, r.wrong ? { wrong: r.wrong.slice(0, 3) } : {}, r.keep ? { keep: r.keep } : {}) });
     ["les", "chk"].forEach(nm => Object.keys(ui[nm] || {}).forEach(k => { if (k.indexOf(c.id + ":") === 0) delete ui[nm][k]; }));      // explicațiile și întrebările țintite ale cardului nu rămân în urmă
-    if (r.wrong) { const w = r.wrong.slice(0, 3); if (w.length) e.w = w; else delete e.w; }
-    if (r.keep) e.a = r.keep;
     commit();
     return { p, missed };
   }
@@ -1712,8 +1694,8 @@
     const run = ui.run, ids = Object.keys(run.scores);
     if (ids.length) {
       const avg = ids.reduce((s, id) => s + run.scores[id], 0) / ids.length;
-      S.h.push({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
-      S.h = S.h.slice(-HMAX); commit();
+      histAdd({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      commit();
       ui.result = { kind: "oral", title: run.title, items: ids.map(id => ({ id, p: run.scores[id] })), avg, mock: !!run.mock };
     }
     if (run.cert && ui.cert) { ui.result = null; if (!certLeft("o").length) ui.cert.step = "s"; Cert.save(); ui.tab = "cert"; }
@@ -1779,8 +1761,8 @@
     const run = ui.run, ids = Object.keys(run.grades);
     if (ids.length) {
       const sum = ids.reduce((a, id) => a + run.grades[id], 0);
-      S.h.push({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
-      S.h = S.h.slice(-HMAX); commit();
+      histAdd({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      commit();
       ui.result = { kind: "open", title: run.title, items: ids.map(id => ({ id, g: run.grades[id] })), avg: sum / (2 * ids.length) };
     }
     ui.run = null; render(); window.scrollTo(0, 0);
@@ -2196,7 +2178,7 @@
       case "dz": case "dz-map": case "dz-all": dzAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
       case "go": goTask(b.dataset.id); break;
-      case "plan-toggle": { const id = b.dataset.id; S.p[id] = { d: isDone(id) ? 0 : 1, t: now() }; commit(); render(); break; }
+      case "plan-toggle": { const id = b.dataset.id; add({ type: "plan", item: id, done: !isDone(id) }); commit(); render(); break; }
       case "mcq": startMcq(b.dataset.mode); break;
       case "mcq-mod": startMcq("module", { ms: [b.dataset.m] }); break;
       case "ans": answer(+b.dataset.pos); break;
@@ -2268,7 +2250,7 @@
         const d = $("#cfg-d"), hs = $("#cfg-h");
         const iso = d ? d.value.trim() : "", h = hs ? +hs.value : 0;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || isNaN(parseIso(iso))) { toast("Alege o dată validă"); break; }
-        S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
+        add({ type: "cfg", d: iso, h: h > 0 ? h : P.cfg.hours }); commit(); render(); toast("Salvat: planul s-a refăcut");
         break;
       }
       case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.skelDue = false; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
@@ -2290,7 +2272,7 @@
         const got = r.peek ? 0 : r.ticks.filter(Boolean).length, inCert = certSkelOn(k.id);
         updS(k.id, got / k.k.length);
         // timpul intră în istoric ca la celelalte exerciții (spentMin îl numără); o încercare lăsată deschisă se plafonează
-        S.h.push({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) }); S.h = S.h.slice(-HMAX);
+        histAdd({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) });
         Drafts.set(k.id, ""); delete ui.study.peeked[k.id]; commit();
         if (inCert) {
           certRecord("s", { id: k.id, p: got / k.k.length, miss: k.k.map((_, i) => i).filter(i => r.peek || !r.ticks[i]) });
@@ -2308,7 +2290,7 @@
       case "kata-back": ui.study.kata = null; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-hint": ui.study.hints++; render(); break;
       case "kata-timer": ui.study.kEnd = ui.study.kEnd ? 0 : now() + 20 * 60000; ui.study.kDone = false; render(); break;
-      case "kata-status": { const id = ui.study.kata; S.k[id] = { s: b.dataset.s, t: now() }; commit(); render(); toast("Notat"); break; }
+      case "kata-status": { const id = ui.study.kata; add({ type: "answer", form: "k", item: id, result: { s: b.dataset.s } }); commit(); render(); toast("Notat"); break; }
       case "copy-code": { const pre = b.parentElement.querySelector("pre"); copyText((P.kataCode || {})[b.dataset.k] || (P.skelCode || {})[b.dataset.k] || "", pre); break; }
       case "exp": ui.prog.exp = !ui.prog.exp; render(); break;
       case "imp": ui.prog.imp = !ui.prog.imp; render(); break;
@@ -2316,13 +2298,14 @@
       case "do-imp": {
         const t = $("#imp-t"); let data = null;
         try { data = JSON.parse(t.value); } catch (err) { toast("Textul nu e un export valid"); break; }
-        const res = mergeState(S, prune(normalize(data)));
-        S = res.state; commit(); ui.prog.imp = false; render(); toast("Progres importat");
+        const merged = mergeState(S, prune(normalize(data))).state, done = () => { commit(); ui.prog.imp = false; render(); toast("Progres importat"); };
+        if (!JOURNAL) { J.replaceState(merged); done(); }
+        else J.importState(merged).then(done, () => toast("Importul nu a mers"));       // intrările noi intră în jurnal ca evenimente sintetice
         break;
       }
       case "reset":
         if (!ui.prog.reset) { ui.prog.reset = true; render(); setTimeout(() => { if (ui.prog.reset) { ui.prog.reset = false; if (ui.tab === "progress") render(); } }, 4000); }
-        else { S = emptyState(); S.r = now(); ui.prog.reset = false; ui.result = null; commit(); render(); toast("Progres resetat"); }
+        else { add({ type: "reset" }); ui.prog.reset = false; ui.result = null; commit(); render(); toast("Progres resetat"); }
         break;
     }
   });
@@ -2435,7 +2418,7 @@
       return parts.join("\n\n").slice(0, 900);
     },
     summary() { return { readiness: readiness().ready, daysLeft: daysLeft(), gaps: gapList().slice(0, 3).map(x => MOD[x.c.m].short + ": " + x.c.k[x.i]), role: P.cfg.role, profile: IV_PROFILE }; },
-    log(e) { S.h.push(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); S.h = S.h.slice(-HMAX); commit(); },
+    log(e) { histAdd(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); commit(); },
 
     // ----- Lecție: fișa unui modul, poziția lecției, recomandarea -----
     // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat; la modulele cu desfășurări și harta, plus desfășurările. Diagramele nu intră.
@@ -2451,14 +2434,13 @@
     lessonHeard(id, n) {
       const sh = P.sheets[id]; if (!sh || !sh.points) return;
       const e = S.l[id] || {}, k = Math.min(n, sh.points.length);
-      if (k > (e.n || 0)) { S.l[id] = Object.assign({}, e, { n: k, t: now() }); commit(); }
+      if (k > (e.n || 0)) { add({ type: "lesson", item: id, n: k }); commit(); }
     },
-    lessonDone(id) { S.l[id] = { n: 0, d: now(), t: now() }; commit(); },
+    lessonDone(id) { add({ type: "lesson", item: id, n: 0, done: true }); commit(); },
     // Resetarea: lecția revine la început, dar data ultimei terminări rămâne (recomandarea o folosește). `t` mai nou face ca resetarea să câștige la îmbinare.
     lessonReset(id) {
       if (!P.sheets[id]) return;
-      const e = S.l[id] || {};
-      S.l[id] = Object.assign({ n: 0, t: now() }, e.d ? { d: e.d } : {});
+      add({ type: "lesson", item: id, n: 0 });
       commit();
     },
     // Întâi lecția începută (cea mai recentă); altfel modulul cu cea mai mare nevoie dintre cele neterminate în ultimele 2 zile, fără Bonus și fără comportamental.
@@ -2634,7 +2616,6 @@
 
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
-  const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
   const BUILD = "__BUILD__";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
@@ -2828,9 +2809,10 @@
   }, 500);
 
   // ---------- boot ----------
+  // Când aplicația trece în fundal, evenimentele încă neconfirmate ajung în IndexedDB (oglinda le ține oricum în siguranță).
+  if (JOURNAL) { document.addEventListener("visibilitychange", () => { if (document.hidden) J.flush(); }); window.addEventListener("pagehide", () => { J.flush(); }); }
   function start(data) {
-    const local = loadLocal();
-    if (local) S = local;
+    if (!JOURNAL) { const local = loadLocal(); if (local) J.replaceState(local); }       // PWA: prima desenare vine din oglinda jurnalului, iar jurnalul se împacă cu IndexedDB mai jos
     ui.cert = Cert.load();
     if (data && data.ui && typeof data.ui === "object") {
       const u = data.ui;
@@ -2846,6 +2828,7 @@
     render();
     Sync.init();
     AI.init();
+    if (JOURNAL) J.load().then(() => { planCache = null; S = J.state(); softRender(); }, () => { /* fără IndexedDB: rămâne oglinda */ });
   }
   const hot = window.claude && window.claude.hot;
   if (hot && typeof hot.snapshot === "function") { try { hot.snapshot(() => ({ ui: snapshotUi() })); } catch (e) { /* opțional */ } }
@@ -2853,5 +2836,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { S = x; planCache = null; } };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J };
 })();
