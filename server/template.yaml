@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Serverul minim ba-quizz-learn (FastAPI pe Lambda Web Adapter, DynamoDB). Vezi server/README.md.
+
+# Ce NU intră aici: secretul. Vine ca parametru la lansare (deploy.sh), din
+# variabila BA_SECRET a lui Alex, și ajunge variabilă de mediu a funcției
+# (gratuit; Secrets Manager costă 0,40 USD pe secret pe lună).
+
+Parameters:
+  AppSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Secretul lung al lui Alex (cel puțin 32 de caractere). Nu se pune în repo.
+  PwaOrigin:
+    Type: String
+    Default: https://alexxgalea.github.io
+    AllowedPattern: '^https://[A-Za-z0-9.-]+$'
+    Description: Originea PWA-ului, fără cale și fără "*" (GitHub Pages servește pe https://<utilizator>.github.io).
+  LayerArn:
+    Type: String
+    Default: ""
+    Description: Stratul Lambda Web Adapter. Gol = LambdaAdapterLayerX86 versiunea 30 din regiunea stivei.
+  ReadCapacity:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 25
+  WriteCapacity:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    MaxValue: 25
+    Description: Scrierile tranzacționale consumă dublu. Limita gratuită e 25 RCU și 25 WCU pe cont, în regiune.
+  MemorySize:
+    Type: Number
+    Default: 256
+  ReservedConcurrency:
+    Type: Number
+    Default: -1
+    Description: -1 = fără rezervare. Pe un cont nou rezervarea poate fi refuzată; încearcă 5. 0 oprește funcția (comutator de urgență).
+
+Conditions:
+  UseDefaultLayer: !Equals [!Ref LayerArn, ""]
+  HasReservedConcurrency: !Not [!Equals [!Ref ReservedConcurrency, -1]]
+
+Resources:
+  ServerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .build/app/
+      Handler: run.sh
+      Runtime: python3.14
+      Architectures: [x86_64]
+      MemorySize: !Ref MemorySize
+      Timeout: 30
+      ReservedConcurrentExecutions: !If [HasReservedConcurrency, !Ref ReservedConcurrency, !Ref "AWS::NoValue"]
+      Layers:
+        - !If
+          - UseDefaultLayer
+          - !Sub "arn:aws:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerX86:30"
+          - !Ref LayerArn
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_PORT: "8080"
+          APP_SECRET: !Ref AppSecret
+          TABLE_NAME: !Ref EventsTable
+          USER_PK: u#alex
+      Policies:
+        - Statement:
+            - Effect: Allow
+              # TransactWriteItems cere Put/Update pe fiecare articol atins.
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:BatchGetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt EventsTable.Arn
+      # AuthType NONE: secretul se verifică în aplicație (hmac.compare_digest).
+      # CORS se configurează aici și nicăieri altundeva: Lambda dublează antetele
+      # dacă le pune și FastAPI.
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: [!Ref PwaOrigin]
+          AllowMethods: [GET, POST]
+          AllowHeaders: [authorization, content-type]
+          MaxAge: 600
+
+  # Adresele noi cer ambele permisiuni publice (din octombrie 2025). SAM o adaugă
+  # pe prima; a doua e explicită, ca primul deploy să nu dea 403.
+  PublicInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ServerFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+  ServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ServerFunction}"
+      RetentionInDays: 14
+
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      # Capacitate provizionată + clasa Standard: singura formă din limita gratuită.
+      BillingMode: PROVISIONED
+      TableClass: STANDARD
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref ReadCapacity
+        WriteCapacityUnits: !Ref WriteCapacity
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+Outputs:
+  FunctionUrl:
+    Description: Adresa serverului (se notează în tichetul 04).
+    Value: !GetAtt ServerFunctionUrl.FunctionUrl
+  TableName:
+    Value: !Ref EventsTable

@@ -21,7 +21,7 @@ Explicația pe larg a unui punct, în stilul refactoring.guru: problema concret�
 _Avoid_: explicație (e a grilelor), lecție, detaliu
 
 **Pas cu pas**:
-Partea unei desfășurări care urmărește mecanismul în timp, stare cu stare (render 1 → click → render 2), acolo unde ideea e o secvență, nu o regulă. Completează exemplul, nu îl înlocuiește.
+Partea unei desfășurări care urmărește mecanismul în timp, stare cu stare (render 1 → click → render 2), acolo unde ideea e un proces în timp, nu o regulă. Completează exemplul, nu îl înlocuiește.
 _Avoid_: trace, diagramă, timeline
 
 **Termen**:
@@ -55,7 +55,7 @@ Sesiune Jarvis în care Alex răspunde la cardurile orale ale unui singur modul 
 _Avoid_: lecție, mod „topic” (în vorbire)
 
 **Lecție**:
-Sesiune Jarvis în care Jarvis explică fișa unui modul, bucată cu bucată, iar Alex doar ascultă și îl poate opri cu comenzi vocale. Nu e o verificare: nu schimbă scorul, Leitner-ul sau golurile.
+Sesiune Jarvis în care Jarvis explică fișa unui modul, bucată cu bucată, iar Alex ascultă și îl poate opri cu comenzi vocale. După fiecare grup de puncte din harta modulului, Jarvis pune o întrebare, iar răspunsul lui Alex se notează doar la întrebările deschise: lecția nu schimbă scorul și nici golurile.
 _Avoid_: podcast, curs, explicație
 
 **Bucată**:
@@ -81,3 +81,9 @@ _Avoid_: silențios, doar ascultare
 **Vorbește**:
 Butonul ținut apăsat (push-to-talk) prin care Alex dă o comandă sau pune o întrebare pe Mut; cât e apăsat, Jarvis tace și ascultă.
 _Avoid_: push-to-talk (în interfață), microfon
+
+## Progres
+
+**Jurnal de încercări**:
+Lista tuturor răspunsurilor lui Alex, în ordinea în care au fost date; din ea se calculează cutiile, treptele și măsurătorile. Un eveniment nu se mai schimbă și are un id unic; setările, bifele din plan, poziția lecției și resetul sunt tot evenimente. Aplicația citește proiecția jurnalului (`S`), ținută în memorie și actualizată la fiecare eveniment, nu recalculată din tot jurnalul.
+_Avoid_: istoric (`S.h` e istoricul sesiunilor, un rând pe sesiune), log, stare îmbinată
