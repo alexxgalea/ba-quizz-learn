@@ -13,7 +13,7 @@
 - [x] Fără secret sau cu secret greșit: refuz, fără detalii.
 - [x] Originea PWA-ului e permisă; altele nu.
 - [x] Teste pytest cu DynamoDB local sau fals; rulează fără cont AWS.
-- [ ] Lansat; adresa e notată aici. Nimic secret în repo.
+- [x] Lansat în `eu-central-1` (stiva `ba-server`); adresa: `https://gcpvlnmv6hp5ptipxekzsajx2i0cqhbu.lambda-url.eu-central-1.on.aws`. Nimic secret în repo.
 
 ## Comments
 
@@ -29,3 +29,8 @@ Codul, testele și infrastructura sunt în `server/` (README în română, cu pa
 Rămâne deschis: **Lansat** (cere contul din tichetul 03, deci Alex: `BA_SECRET=... make deploy` din `server/`) și adresa funcției.
 
 Adresa: _(de completat după lansare)_
+
+### 2026-11-11, lansare
+Alex a lansat de pe Mac cu `make deploy` (fără chei AI, la prima lansare). Din afara contului, fără secret: `GET /health` dă 200 `{"ok":true}`, `GET /events` dă 401, iar preflight-ul CORS din `https://alexxgalea.github.io` întoarce 200 cu `Access-Control-Allow-Origin` pe acea origine, metodele GET și POST și antetele `authorization`, `content-type`. Rămân de verificat cu secretul (`make smoke`) și din PWA: citirea și scrierea evenimentelor, sincronizarea între dispozitive.
+
+Corecturi făcute la prima lansare: `deploy.sh` fără bit de execuție, `deploy.sh` trimitea parametri cu valoare goală (SAM CLI îi refuză), testul de secrete scana `.venv`.
