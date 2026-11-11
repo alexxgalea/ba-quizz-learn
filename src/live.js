@@ -6,7 +6,8 @@
 //     când jetonul ține mai puțin de `cfg.renewMs` (implicit 12 minute) și o singură dată când Gemini refuză jetonul curent.
 //   - Reconectările la `goAway` (conexiunea ține ~10 minute) merg cu ACELAȘI jeton și cu handle-ul de reluare. Cu un jeton NOU
 //     handle-ul vechi nu e documentat: dacă e refuzat, sesiunea repornește curat (fără handle) și anunță `restarted`, ca stratul de
-//     deasupra să retrimită contextul (poziția lecției). Vezi docs/probe-jeton-live.html pentru proba pe API-ul real.
+//     deasupra să retrimită contextul (poziția lecției). Doar o închidere `rejected` (1007/1008) sau `auth` rupe handle-ul; quota și restul nu.
+//     Dacă reînnoirea jetonului eșuează (server, unauthorized, nokey) dar cel curent mai ține, reconectarea îl folosește pe el. Vezi docs/probe-jeton-live.html pentru proba pe API-ul real.
 const GeminiLive = (() => {
   const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.";
   const WS_URL = WS_BASE + "BidiGenerateContent";                         // cu ?key=
@@ -14,6 +15,8 @@ const GeminiLive = (() => {
   const RETRY_MS = [500, 1000, 2000];                // pauzele dinaintea celor trei încercări de reluare
   // Conexiunea ține ~10 minute, deci un jeton care mai ține 5 ar expira între două reconectări; pragul e peste durata unei conexiuni.
   const RENEW_MS = 12 * 60000;
+  // Dacă reînnoirea eșuează, jetonul curent se mai folosește doar dacă ține cel puțin atât.
+  const MIN_LEFT_MS = 30000;
 
   function setupMessage(cfg, handle) {
     const setup = {
@@ -143,29 +146,39 @@ const GeminiLive = (() => {
           return { reason: (err && err.reason) || "network", code: 0, detail: String((err && err.detail) || (err && err.message) || "jeton") };
         }
       };
+      const retriable = info => info.reason === "network" || info.reason === "offline";
       // O conectare completă: jetonul la zi, apoi socketul. Întoarce { info, restarted }: info = null la succes, altfel motivul.
-      // Două ieșiri pentru jeton: refuzat de Gemini → un jeton nou, o singură dată; handle refuzat după un jeton nou → fără handle (repornire curată).
+      // Ieșiri pentru jeton: reînnoirea a eșuat, dar cel curent încă ține → se folosește el (și handle-ul), doar rețeaua se reîncearcă;
+      // jeton refuzat de Gemini → unul nou, o singură dată; handle refuzat (rejected sau auth) după un jeton nou → fără handle (repornire curată).
+      // `closed` se verifică după fiecare așteptare: apelul poate fi încheiat în timp ce se cere jetonul, iar un socket deschis
+      // după aceea ar rămâne în picioare fără stăpân.
+      const GONE = { reason: "user", code: 1000, detail: "" };
       const establish = async () => {
         const out = { info: null, restarted: false };
         const before = tok;
-        const bad = await ensureToken(false);
+        let bad = await ensureToken(false);
+        if (closed) { out.info = GONE; return out; }
+        if (bad && !retriable(bad) && before && before.expireAt - now() > MIN_LEFT_MS) bad = null;
         if (bad) { out.info = bad; return out; }
         let fresh = tok !== before;
         let r = await connect();
+        if (closed) { sock.close(1000); out.info = GONE; return out; }
         if (r && r.reason === "auth" && cfg.getToken && !fresh) {
           const bad2 = await ensureToken(true);
+          if (closed) { out.info = GONE; return out; }
           if (bad2) { out.info = bad2; return out; }
           fresh = true;
           r = await connect();
+          if (closed) { sock.close(1000); out.info = GONE; return out; }
         }
-        if (r && handle && cfg.getToken && tok.token !== handleTok && r.reason !== "network") {
+        if (r && handle && cfg.getToken && tok.token !== handleTok && (r.reason === "rejected" || r.reason === "auth")) {
           handle = null; handleTok = null; out.restarted = true;
           r = await connect();
+          if (closed) { sock.close(1000); out.info = GONE; return out; }
         }
         out.info = r;
         return out;
       };
-      const retriable = info => info.reason === "network" || info.reason === "offline";
 
       // Conexiunea s-a pierdut după ce era în picioare: se reia doar cu un handle și doar dacă motivul e rețeaua.
       const lost = info => {
