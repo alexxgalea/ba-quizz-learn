@@ -25,3 +25,6 @@
 - Schimbare în jurnal (tichetul 02): starea veche din `onapsis-prep-v1` importată la pornire intră acum în coada de trimis (serverul n-o are); testul din `journal.test.mjs` și `test_journal.py` s-a schimbat în consecință.
 - Teste: `tools/unit/sync.test.mjs` (19, server fals în `tools/unit/fake_server.mjs`), `tools/test_sync.py` (două dispozitive reale, rute Playwright), în `test:ui`.
 - **Neverificat:** pe un server real (AWS) nu s-a rulat nimic; CORS din browser spre adresa funcției, antetul `Authorization` prin adresa funcției și comportamentul Lambda la loturi de 500 rămân de văzut la primul deploy (tichetul 03/10). Cursorul nu detectează un server golit (cursor mai mic decât cel păstrat): evenimentele locale marcate trimise nu se retrimit singure.
+
+### 2026-11-11, verificat pe serverul real
+Alex a legat PWA-ul de server (eu-central-1). Cele 278 de evenimente adunate local au plecat după repararea politicii IAM și starea arată „La zi”. Rămâne de verificat de Alex: același cont pe telefon (răspuns dat pe un dispozitiv, văzut pe celălalt) și un reset.
