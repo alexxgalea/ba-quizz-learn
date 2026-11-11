@@ -33,7 +33,7 @@ class Event(BaseModel):
     @field_validator("id")
     @classmethod
     def _id_ok(cls, v: str) -> str:
-        if not ID_RE.match(v):
+        if not ID_RE.fullmatch(v):  # `$` ar lăsa să treacă un newline final
             raise ValueError("id invalid")
         return v
 

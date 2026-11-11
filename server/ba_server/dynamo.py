@@ -44,7 +44,7 @@ def split_chunks(items: list[tuple[dict[str, Any], str]]) -> list[list[tuple[dic
     cur: list[tuple[dict[str, Any], str]] = []
     size = 0
     for item in items:
-        n = len(item[1])
+        n = len(item[1].encode("utf-8"))  # octeți, nu caractere: `dump` păstrează diacriticele
         if cur and (len(cur) >= MAX_EVENTS_PER_TX or size + n > MAX_TX_BYTES):
             chunks.append(cur)
             cur, size = [], 0
@@ -147,6 +147,11 @@ class DynamoStore(EventStore):
         return int(item["n"]) if item else 0
 
     def read(self, after: int, limit: int) -> Page:
+        if after + 1 >= 10**SEQ_WIDTH:
+            # Dincolo de ultimul număr posibil nu e nimic; o limită de jos mai mare decât cea de sus
+            # (BETWEEN) ar fi respinsă de DynamoDB, deci n-o mai trimitem.
+            return Page(events=[], cursor=after, more=False)
+
         def rows():
             kwargs: dict[str, Any] = {
                 "KeyConditionExpression": "pk = :pk AND sk BETWEEN :lo AND :hi",

@@ -93,12 +93,13 @@ def take_page(rows: Iterable[tuple[int, str]], after: int, limit: int) -> Page:
     size = 0
     more = False
     for seq, raw in rows:
-        if len(out) >= limit or (out and size + len(raw) > PAGE_BYTES):
+        n = len(raw.encode("utf-8"))  # octeți: răspunsul Lambda se măsoară în octeți, nu în caractere
+        if len(out) >= limit or (out and size + n > PAGE_BYTES):
             more = True
             break
         out.append(json.loads(raw))
         cursor = seq
-        size += len(raw)
+        size += n
     return Page(events=out, cursor=cursor, more=more)
 
 
