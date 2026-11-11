@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from ba_server import models
 from ba_server.config import Settings
 from ba_server.main import create_app
-from ba_server.models import TransportError
+from ba_server.http_client import HttpError, HttpResponse, UrllibClient, get_http
 from conftest import AUTH, SECRET
 
 GEM_KEY = "gem-fake-gemini-key-for-tests-0000000"
@@ -36,13 +36,13 @@ class FakeModels:
         self.script = {"gemini": gemini or [gemini_ok("de la gemini")], "deepseek": deepseek or [deepseek_ok("de la deepseek")]}
         self.calls = []
 
-    def __call__(self, url, headers, body, timeout):
+    def post_json(self, url, headers, body, timeout):
         name = "gemini" if "generativelanguage" in url else "deepseek"
         self.calls.append({"model": name, "url": url, "headers": headers, "body": body, "timeout": timeout})
         r = self.script[name][min(sum(c["model"] == name for c in self.calls) - 1, len(self.script[name]) - 1)]
         if isinstance(r, Exception):
             raise r
-        return r
+        return HttpResponse(*r)
 
     def names(self):
         return [c["model"] for c in self.calls]
@@ -52,7 +52,8 @@ def make(store, fake, **over):
     base = dict(app_secret=SECRET, gemini_api_key=GEM_KEY, deepseek_api_key=DS_KEY)
     base.update(over)
     day = {"d": "2026-11-11"}
-    app = create_app(Settings(**base), store, model_http=fake, today=lambda: day["d"])
+    app = create_app(Settings(**base), store, today=lambda: day["d"])
+    app.dependency_overrides[get_http] = lambda: fake  # același punct de injectare ca la /live-token
     c = TestClient(app)
     c.day = day
     return c
@@ -115,7 +116,7 @@ def test_model_hint_tries_that_source_first(store):
         pytest.param((200, {"candidates": []}), id="gol"),
         pytest.param((200, {"promptFeedback": {"blockReason": "SAFETY"}}), id="blocat"),
         pytest.param((200, None), id="fara-json"),
-        pytest.param(TransportError(), id="retea"),
+        pytest.param(HttpError(), id="retea"),
     ],
 )
 def test_gemini_failure_falls_back_to_deepseek(store, failure):
@@ -145,7 +146,7 @@ def test_no_gemini_key_goes_straight_to_deepseek(store):
 
 
 def test_total_failure_is_a_clear_502_code(store):
-    fake = FakeModels(gemini=[(500, None)], deepseek=[TransportError()])
+    fake = FakeModels(gemini=[(500, None)], deepseek=[HttpError()])
     r = post(make(store, fake))
     assert r.status_code == 502 and r.json() == {"detail": "ai_unavailable"}
     assert fake.names() == ["gemini", "deepseek"]
@@ -297,19 +298,19 @@ def test_transport_errors_carry_no_url_or_key(monkeypatch):
         raise urllib.error.URLError(f"cannot reach {req.full_url} with {GEM_KEY}")
 
     monkeypatch.setattr("urllib.request.urlopen", boom)
-    with pytest.raises(TransportError) as e:
-        models.urllib_post("https://generativelanguage.googleapis.com/x", {"x-goog-api-key": GEM_KEY}, {"a": 1}, 1.0)
+    with pytest.raises(HttpError) as e:
+        UrllibClient().post_json("https://generativelanguage.googleapis.com/x", {"x-goog-api-key": GEM_KEY}, {"a": 1}, 1.0)
     assert GEM_KEY not in str(e.value) and "googleapis" not in str(e.value)
 
 
-def test_urllib_post_maps_http_errors_to_status(monkeypatch):
+def test_the_http_client_maps_http_errors_to_status(monkeypatch):
     import io
 
     def err(req, timeout):
         raise urllib.error.HTTPError(req.full_url, 429, "Too Many", {}, io.BytesIO(b'{"error": 1}'))
 
     monkeypatch.setattr("urllib.request.urlopen", err)
-    assert models.urllib_post("https://x.test/", {}, {}, 1.0) == (429, {"error": 1})
+    assert UrllibClient().post_json("https://x.test/", {}, {}, 1.0) == HttpResponse(429, {"error": 1})
 
 
 def test_config_from_env():
