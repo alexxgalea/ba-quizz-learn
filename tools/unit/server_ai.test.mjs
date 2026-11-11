@@ -37,8 +37,6 @@ test("configuration: read through ServerConn; needs an https address and a secre
   conn.clear();
   assert.equal(s.configured(), false);
   assert.equal(st.getItem(ServerConn.ITEM), null);
-  assert.equal(ServerAi.normUrl("srv.example"), "");
-  assert.equal(ServerAi.normUrl("https://srv.example/"), "https://srv.example");
 });
 
 test("configuration: damaged or partial storage reads as not configured; storage failures do not throw", () => {

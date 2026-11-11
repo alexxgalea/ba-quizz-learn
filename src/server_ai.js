@@ -7,12 +7,6 @@ const ServerAi = (() => {
   const TIMEOUT_MS = 50000;                              // serverul poate încerca două modele a câte 20 s
   const fail = (code, detail) => Object.assign(new Error(code), { code, detail: detail || "" });
 
-  // Adresa: https (sau http doar pe localhost, pentru dezvoltare), fără „/" la sfârșit. Întoarce "" dacă nu arată a adresă.
-  function normUrl(u) {
-    u = String(u == null ? "" : u).trim().replace(/\/+$/, "");
-    return /^https:\/\/[^\s/]+(\/\S*)?$/i.test(u) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/\S*)?$/i.test(u) ? u : "";
-  }
-
   // Ordinea surselor, ca listă de nume. Cu serverul configurat, nicio cerere nu pleacă direct către Gemini sau DeepSeek
   // (`sample` rămâne, fiindcă nu iese din Claude); fără server, ordinea de dinainte: sample, Gemini, DeepSeek.
   function order(av) {
@@ -22,10 +16,9 @@ const ServerAi = (() => {
 
   function create(env) {
     const timeoutMs = env.timeoutMs || TIMEOUT_MS;
-    // Adresa și secretul vin de la ServerConn (`env.conn`, același accesor ca la Jarvis și la sincronizare); aici doar se verifică adresa.
+    // Adresa și secretul vin de la ServerConn (`env.conn`, același accesor ca la Jarvis și la sincronizare); validarea (https, secret ASCII) e tot acolo (`valid()`).
     function config() {
-      const c = env.conn.get(), url = normUrl(c.url);
-      return url && c.secret ? { url, secret: c.secret } : null;
+      return env.conn.valid();
     }
     return {
       config,
@@ -72,6 +65,6 @@ const ServerAi = (() => {
     throw first || fail("nokey");
   }
 
-  return { create, order, run, normUrl };
+  return { create, order, run };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = ServerAi;

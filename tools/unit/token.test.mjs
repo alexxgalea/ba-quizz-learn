@@ -42,6 +42,24 @@ test("ServerConn survives a broken JSON entry", () => {
   assert.deepEqual([conn.configured(), conn.get()], [false, { url: "", secret: "" }]);
 });
 
+test("ServerConn validation, in one place: https only (http on localhost), no trailing slash, secret printable ASCII without spaces", () => {
+  assert.equal(ServerConn.normUrl(" https://srv.example/ "), "https://srv.example");
+  assert.equal(ServerConn.normUrl("srv.example"), "");
+  assert.equal(ServerConn.normUrl("http://evil.example"), "");
+  assert.equal(ServerConn.normUrl("http://localhost:8080/"), "http://localhost:8080");
+  assert.equal(ServerConn.normUrl("https://a b.example"), "");
+  assert.equal(ServerConn.validSecret("tok-123_ABC"), true);
+  assert.equal(ServerConn.validSecret(" tok "), true, "surrounding spaces are trimmed first");
+  for (const bad of ["", "a b", "greșit", "tab\there"]) assert.equal(ServerConn.validSecret(bad), false, JSON.stringify(bad));
+  const conn = ServerConn.create(memoryStorage());
+  conn.set({ url: "http://evil.example", secret: "x" });
+  assert.deepEqual([conn.valid(), conn.configured()], [null, false], "a stored pair that does not validate is not configured");
+  conn.set({ url: "https://a.test", secret: "greșit" });
+  assert.deepEqual([conn.valid(), conn.configured()], [null, false]);
+  conn.set({ url: "https://a.test/", secret: "ok" });
+  assert.deepEqual([conn.valid(), conn.configured()], [{ url: "https://a.test", secret: "ok" }, true]);
+});
+
 // ---------- LiveToken ----------
 
 function tokenHarness(reply) {
