@@ -52,6 +52,9 @@
   const MONTHS_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"];
   const HMAX = 80;
   const LS_KEY = "onapsis-prep-v1";
+  const JOURNAL_KEY = "onapsis-journal-v1";      // oglinda jurnalului (PWA): proiecția + evenimentele încă neconfirmate de IndexedDB; jurnalul însuși e în IndexedDB
+  const JOURNAL = "__JOURNAL__" === "on";         // înlocuit la build (build.mjs): „on” în PWA (jurnalul în IndexedDB, fără sincronizarea veche), „off” în artifact (S în localStorage + `window.claude`, ca până acum)
+  const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal; acolo progresul rămâne în S + sincronizarea veche
   const CERT_KEY = "onapsis-cert-v1";            // certificarea în curs (ui.cert): pe dispozitiv, ca o reîncărcare să reia de la secțiunea la care ai rămas
   const DS_KEY = "onapsis-deepseek-v1";          // cheia API, separată de starea S: nu se sincronizează și nu se exportă
   const DS_URL = "https://api.deepseek.com/chat/completions";
@@ -140,7 +143,7 @@
   // q grile, o carduri orale, x întrebări deschise, k exerciții, s schelete (aceeași formă ca o: b, n, s, t), p sarcini bifate, l poziția lecției pe modul ({ n: bucata la care a ajuns, d: data ultimei terminări, t }),
   // h istoric, c setări (data interviului, ore pe seară)
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
-  function emptyState() { return { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] }; }
+  const emptyState = Journal.emptyState;
   const validCfg = c => !!(c && typeof c === "object" && /^\d{4}-\d{2}-\d{2}$/.test(c.d || ""));
   function normalize(x) {
     const s = emptyState();
@@ -198,7 +201,23 @@
     catch (e) { lsOK = false; return null; }
   }
   function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); lsOK = true; } catch (e) { lsOK = false; } }
-  function commit() { planCache = null; saveLocal(); Sync.push(); paintHeader(); }
+  // Jurnalul de încercări (src/journal.js): fiecare schimbare a lui S e un eveniment, iar S e proiecția lui, ținută în memorie și actualizată pe loc.
+  // În PWA (JOURNAL) jurnalul stă în IndexedDB, cu oglindă în localStorage pentru prima desenare; în artifact doar proiectează, iar S se păstrează ca până acum (localStorage + sincronizarea prin `window.claude`).
+  const JSTORE = JOURNAL ? Journal.idbStore() : null;
+  const J = Journal.create({
+    clock: now, hmax: HMAX, retryMs: 4000,
+    store: JSTORE,
+    mirror: JOURNAL ? Journal.localMirror((() => { try { return window.localStorage; } catch (e) { return null; } })(), JOURNAL_KEY) : null,
+    legacy: JOURNAL ? loadLocal : null,
+    onState: s => { S = s; planCache = null; }
+  });
+  S = J.state();
+  // Sincronizarea jurnalului cu serverul propriu (src/sync.js; doar PWA, doar cu IndexedDB). Adresa și secretul vin de la `Conn` (ServerConn, localStorage `onapsis-server-v1`; nu în S, nu în jurnal), citite la fiecare ciclu.
+  // Nu blochează nimic: fără semnal sau cu secret greșit evenimentele rămân în coadă și ecranul arată starea.
+  const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => Conn.valid(), onStatus: () => paintStatus(), onMerged: () => repaintRemote() }) : null;
+  const add = e => { const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
+  const histAdd = row => add({ type: "hist", row });
+  function commit() { planCache = null; if (!JSTORE) saveLocal(); Sync.push(); paintHeader(); }      // fără depozit (artifact, sau PWA fără IndexedDB) S se salvează și sub cheia veche, pe lângă oglindă
 
   // ---------- sync (progres privat per utilizator, prin db) ----------
   const DEAD = ["invalid_argument", "not_granted", "revoked", "capability_disabled", "capability_removed", "transform_error"];
@@ -206,7 +225,7 @@
     ref: null, status: "local", writing: false, dirty: false, timer: 0, retries: 0, dead: false,
     async init() {
       const c = window.claude;
-      if (!c || typeof c.use !== "function") return;
+      if (JOURNAL || !c || typeof c.use !== "function") return;           // în PWA sincronizarea veche nu mai rulează: jurnalul e singura sursă
       let db = null, user = null;
       try { [db, user] = await Promise.all([c.use("db"), c.use("user")]); } catch (e) { return; }
       if (!db || !user) return;
@@ -226,7 +245,7 @@
       }
       const remote = prune(normalize(snap.data()));
       const res = mergeState(S, remote);
-      S = res.state;
+      J.replaceState(res.state);
       if (res.remoteNewer) { saveLocal(); softRender(); }
       if (res.localNewer) this.push(900);
       else if (!this.writing && !this.dirty) { this.status = "synced"; paintStatus(); }
@@ -255,43 +274,26 @@
       if (this.dirty && !this.dead) { clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 1500 + Math.random() * 2000); }
     },
     label() {
+      if (JOURNAL && JSync && Conn.configured()) return JournalSync.label(JSync.status());     // PWA cu server: starea jurnalului
       if (this.status === "synced") return "Sincronizat cu contul tău: vezi același progres pe telefon și pe laptop.";
       if (this.status === "syncing") return "Se sincronizează…";
       if (this.status === "full") return "Spațiul de sincronizare e plin; progresul rămâne salvat pe acest dispozitiv.";
-      return lsOK ? "Salvat doar pe acest dispozitiv (în browser)." : "Browserul nu permite salvarea: progresul se pierde la închidere. Folosește exportul.";
+      return (JOURNAL ? J.info().durable : lsOK) ? "Salvat doar pe acest dispozitiv (în browser)." : "Browserul nu permite salvarea: progresul se pierde la închidere. Folosește exportul.";
     }
   };
 
   // ---------- learning model ----------
+  // Regulile (cutiile Leitner, contoarele de goluri) stau în src/journal.js, în funcția care proiectează evenimentele. Aici doar se adaugă evenimentul potrivit; S se actualizează pe loc.
   // Un răspuns corect dat cu contextul deschis te duce cel mult în cutia 2: ca să urci mai sus,
-  // trebuie să răspunzi și fără context (contextul se ascunde singur de la cutia 2 în sus).
-  function updQ(id, ok, assisted) {
-    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[id]);
-    e.n++;
-    if (ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
-    e.l = ok ? 1 : 0; e.t = now();
-    S.q[id] = e;
+  // trebuie să răspunzi și fără context (contextul se ascunde singur de la cutia 2 în sus). `pick` = indexul variantei alese, în ordinea din date.
+  function updQ(id, ok, assisted, pick) {
+    add({ type: "answer", form: "q", item: id, result: Object.assign({ ok: !!ok }, assisted ? { assisted: true } : {}, pick != null ? { pick } : {}) });
   }
   // Un pas Leitner pe procentul de puncte acoperite (cardurile orale și scheletele): ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
-  function leitnerStep(map, id, p) {
-    const e = Object.assign({ b: 0, n: 0 }, map[id]);
-    e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
-    else if (p >= 0.5) e.b = Math.max(1, e.b);
-    else e.b = 1;
-    e.t = now();
-    map[id] = e;
-  }
-  const updO = (id, p) => leitnerStep(S.o, id, p);
-  const updS = (id, p) => leitnerStep(S.s, id, p);    // schelete: pe procentul de puncte esențiale bifate
+  const updO = (id, p) => add({ type: "answer", form: "o", item: id, result: { p } });
+  const updS = (id, p) => add({ type: "answer", form: "s", item: id, result: { p } });    // schelete: pe procentul de puncte esențiale bifate
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
-  function updX(id, g) {
-    const e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[id]);
-    e.n++;
-    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
-    e.l = g; e.t = now();
-    S.x[id] = e;
-  }
+  const updX = (id, g) => add({ type: "answer", form: "x", item: id, result: { g } });
   const mastery = e => (e ? MB[e.b] || 0 : 0);
   // Scadența unui item: cutiile 1–2 după un interval, 3–4 după una sau două zile calendaristice, 5 niciodată.
   function dueAt(e) {
@@ -556,7 +558,8 @@
     tab: "plan", run: null, result: null,
     study: { seg: "sheets", open: null, kata: null, skel: null, skelDue: false, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
-    prog: { exp: false, imp: false, reset: false },
+    prog: { exp: false, imp: false, reset: false, jmsg: "", jmsgBad: false, smsg: "", smsgBad: false, purge: false, pw: "", busy: false },
+    srv: { url: "", secret: "" },
     jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
     dz: {},                                          // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
@@ -587,8 +590,15 @@
   }
   function paintStatus() {
     const d = $("#sdot");
-    if (d) { d.className = "sync-dot" + (Sync.status === "synced" ? " on" : Sync.status === "syncing" ? " busy" : ""); d.title = Sync.label(); }
+    const js = JSync ? JSync.status().state : "";
+    const st = JOURNAL && (js === "synced" || js === "syncing") ? js : Sync.status;
+    if (d) { d.className = "sync-dot" + (st === "synced" ? " on" : st === "syncing" ? " busy" : ""); d.title = Sync.label(); }
     const s = $("#sync-l"); if (s) s.textContent = Sync.label();
+    paintSync();
+  }
+  function paintSync() {
+    const el = $("#jsync-l"); if (el && JSync) el.textContent = JournalSync.label(JSync.status());
+    const w = $("#jwiped"); if (w && JSync) w.hidden = !JSync.status().wiped;
   }
   function paintTabs() { document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false")); }
 
@@ -612,6 +622,13 @@
     paintTabs(); paintHeader();
   }
   function softRender() { if (!ui.run) render(); else paintHeader(); }
+  // Evenimente aduse de la server (alt dispozitiv): S s-a schimbat în jurnal. Ecranul se redesenează ca la vechea sincronizare (`softRender`: o sesiune în curs primește doar antetul),
+  // dar nu peste un câmp în care Alex scrie sau peste apelul Jarvis, pe care o redesenare l-ar goli / reseta.
+  function repaintRemote() {
+    planCache = null;
+    const ae = document.activeElement;
+    if (ui.tab === "jarvis" || (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) paintHeader(); else softRender();
+  }
 
   function toast(msg) {
     let t = $("#toast");
@@ -822,7 +839,7 @@
     const assisted = !!(q.ctx && (it.cx || it.co));
     run.picks[run.i] = pos; run.done[run.i] = true;
     run.assist = run.assist || {}; if (assisted) run.assist[run.i] = true;
-    updQ(q.id, ok, assisted); commit();
+    updQ(q.id, ok, assisted, pos >= 0 ? it.ord[pos] : null); commit();
     if (run.mode === "diag" && !ok) adaptDiag(run, run.i);
     render();
     revealFeedback();
@@ -832,7 +849,7 @@
     const run = ui.run; if (!run || run.kind !== "mcq" || !run.done[run.i]) return;
     const q = QBY[run.items[run.i].id];
     run.guess = run.guess || {}; run.guess[run.i] = true;
-    const e = S.q[q.id]; if (e) { e.b = 1; e.l = 0; e.t = now(); }
+    add({ type: "guess", form: "q", item: q.id });
     commit(); render();
   }
   // După răspuns, aduce în ecran explicația și butonul „Următoarea”, fără să le lase sub bara de jos.
@@ -866,7 +883,7 @@
       per[q.m] = per[q.m] || { n: 0, c: 0 }; per[q.m].n++; if (ok) per[q.m].c++;
       if (!ok) wrong.push({ id: q.id, pick: pick === undefined || pick < 0 ? null : it.ord[pick], dunno: pick === -1, guessed });
     });
-    if (n) { S.h.push({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) }); S.h = S.h.slice(-HMAX); }
+    if (n) histAdd({ id: "h" + now(), ts: now(), kind: "mcq", mode: run.mode, title: run.title, n, c, dur: Math.round((now() - run.t0) / 1000) });
     commit();
     if (run.cert && ui.cert) { ui.cert.res.q = { n, c, per, wrong: wrong.map(w => w.id) }; ui.cert.step = "o"; Cert.save(); ui.run = null; ui.result = null; ui.tab = "cert"; render(); window.scrollTo(0, 0); return; }
     ui.result = { kind: "mcq", title: run.title, mode: run.mode, n, c, u, per, wrong };
@@ -919,27 +936,36 @@
       try { this.sample = (await c.use("sample")) || null; } catch (e) { this.sample = null; }
       if (this.sample && !(ui.run && ui.run.ans)) render();
     },
-    ready() { return !!(this.sample || this.get()); },
-    name() { return this.sample ? "Claude" : "DeepSeek"; },
+    ready() { return !!(Srv.configured() || this.sample || this.get()); },
+    name() { return Srv.configured() ? "AI" : this.sample ? "Claude" : "DeepSeek"; },
     get() { try { return localStorage.getItem(DS_KEY) || ""; } catch (e) { return ""; } },
     set(k) { try { if (k) localStorage.setItem(DS_KEY, k); else localStorage.removeItem(DS_KEY); return true; } catch (e) { return false; } },
     mask: k => (k ? "…" + k.slice(-4) : "")
   };
+  // Serverul propriu: adresa și secretul au un singur accesor, `Conn` (ServerConn, src/server_conn.js, `localStorage` `onapsis-server-v1`, nu în S).
+  // Îl folosesc AI-ul (`Srv`), Jarvis (jetoanele) și, la tichetul 05, sincronizarea. Cu serverul configurat, nicio cerere AI nu pleacă direct către Gemini sau DeepSeek.
+  const Conn = ServerConn.create(jvStorage());
+  const Srv = ServerAi.create({ fetch: (u, i) => window.fetch(u, i), conn: Conn });
   const AI_MSG = {
-    nokey: "Adaugă mai întâi cheia DeepSeek, în Progres.",
+    nokey: "Adaugă mai întâi serverul (sau cheia DeepSeek), în Progres.",
+    srv_auth: "Serverul a refuzat secretul. Verific-l în Progres.",
+    srv_cap: "Ai atins plafonul zilnic de cereri AI. Revine mâine.",
+    srv_big: "Cererea e prea mare pentru server.",
+    srv_ai: "Niciun model AI nu răspunde acum. Reîncearcă mai târziu.",
     auth: "Cheia DeepSeek nu e validă. Verific-o în Progres.",
     credit: "Contul DeepSeek nu mai are credit.",
     rate: "Prea multe cereri. Așteaptă puțin și reîncearcă.",
     server: "DeepSeek nu răspunde acum. Reîncearcă.",
     http: "Cererea a fost respinsă. Reîncearcă.",
     timeout: "Verificarea a întârziat prea mult. Reîncearcă.",
-    network: "Nu pot ajunge la api.deepseek.com (rețea sau restricție a paginii).",
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).",
     format: "Răspunsul AI nu avea formatul așteptat. Reîncearcă.",
     nogrant: "Accesul la Claude a fost refuzat. Reîncarcă pagina ca să-l poți permite.",
     refused: "Claude a refuzat cererea. Încearcă cu alt text.",
     unavail: "Claude nu poate răspunde acum. Reîncearcă.",
     cancelled: "Ai oprit cererea. Poți continua sau încheia cu verdictul."
   };
+  const NEED_AI = what => what + " are nevoie de AI: adaugă serverul în Progres (sau deschide aplicația din artifact).";
   const aiError = code => { const e = new Error(code); e.code = code; return e; };
   // Un singur POST către DeepSeek; întoarce textul mesajului (poate fi gol) sau aruncă o eroare cu `code`.
   async function dsCall(body, key) {
@@ -1002,7 +1028,29 @@
       return v;
     } finally { clearTimeout(tm); }
   }
-  const aiGrade = (c, ans) => (AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans));
+  // Prin server: aceleași prompturi și același parser, o reîncercare pentru format. Dacă serverul pică, urmează `sample` (în artifact), nu Gemini sau DeepSeek direct.
+  async function srvGrade(c, ans) {
+    let last = null;
+    for (let a = 0; a < 2; a++) {
+      try {
+        const v = parseVerdict(await Srv.generate({ system: DS_SYS, user: aiUser(c, ans), kind: "default", json: true, maxTokens: 800 }), c.k.length);
+        if (v) return v;
+        last = aiError("format");
+      } catch (err) { if (err.code !== "format") throw err; last = err; }
+    }
+    throw last;
+  }
+  const aiGrade = (c, ans) => {
+    if (!Srv.configured()) return AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans);
+    return ServerAi.run(AI.sample ? [{ generate: () => srvGrade(c, ans) }, { generate: () => sampleGrade(c, ans) }] : [{ generate: () => srvGrade(c, ans) }], null);
+  };
+  async function srvTest() {
+    const st = $("#srv-st"); if (st) st.textContent = "Se testează…";
+    let msg;
+    try { await Srv.generate({ user: "Răspunde cu un singur cuvânt: ok", kind: "quick", maxTokens: 8 }); msg = "Conexiune reușită: serverul răspunde."; }
+    catch (err) { msg = AI_MSG[err.code] || AI_MSG.network; }
+    const s2 = $("#srv-st"); if (s2) s2.textContent = msg;
+  }
   async function aiTest() {
     const key = AI.get(); if (!key) return;
     const st = $("#ds-st"); if (st) st.textContent = "Se testează…";
@@ -1095,7 +1143,7 @@
         (Mic.ok ? '<button class="btn sm' + (Mic.on ? " rec" : "") + '" id="mic-b" data-a="mic" aria-pressed="' + Mic.on + '">' + (Mic.on ? "Oprește" : "Dictează") + "</button>" : "") + "</div>" +
         '<textarea class="ans" id="ans-t" rows="5" maxlength="3000" placeholder="Scrie sau dictează răspunsul, în 3–4 propoziții" aria-label="Răspunsul tău"' + (busy ? " disabled" : "") + ">" + esc(run.ans || "") + "</textarea>";
       if (run.ai && run.ai.s === "err") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[run.ai.code] || AI_MSG.network) + "</p>";
-      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
+      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă serverul sau cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
       h += "</section>";
       if (has) {
         const iv = IV.ready();
@@ -1148,9 +1196,10 @@
     } else { run.ai = { s: "err", code }; toast(AI_MSG[code] || AI_MSG.network); }
     render(); window.scrollTo(0, 0);
   }
-  // ---------- intervievator (dialog scris, prin `sample`) ----------
+  // ---------- intervievator (dialog scris, prin server sau `sample`) ----------
   // Un card oral devine un mic interviu: răspunsul tău, cel mult IV_MAX întrebări de continuare, apoi verdictul pe tot dialogul.
-  // Merge doar unde există `sample` (în artifact). `sample` nu ține minte nimic, deci fiecare apel primește tot dialogul în prompt.
+  // Merge cu serverul propriu (PWA) sau cu `sample` (în artifact), în ordinea de la restul AI-ului (`gapText`: serverul întâi, apoi `sample`). Nici serverul, nici `sample` nu țin minte
+  // nimic, deci fiecare apel primește tot dialogul în prompt. Reguli, prompturi, parsere și scor sunt aceleași pe ambele surse.
   const IV_MAX = 2;
   const IV_COV = ["spontan", "dupa", "nu"];                 // spontan = 1 punct, dupa (abia după o întrebare) = 0,5, nu = 0
   const IV_HEAD = "Ești intervievator tehnic senior la un interviu pentru " + P.cfg.role + ". Vorbești în română; termenii tehnici rămân în engleză. " +
@@ -1224,17 +1273,25 @@
     catch (e) { throw aiError(e && e.code === "cancelled" ? "cancelled" : sampleCode(e)); }
     return r && r.text;
   }
+  // Golurile (lecția, întrebarea țintită, verdictul ei), intervievatorul și Certificarea merg prin server (prima sursă) sau prin `sample` (în artifact).
+  // `signal` (opțional) oprește cererea din butonul „Oprește" al intervievatorului: nu are cronometru propriu, iar cel al serverului e de 50 s (ServerAi).
+  const gapReady = () => !!(AI.sample || Srv.configured());
+  function gapText(prompt, tier, json, signal) {
+    if (!Srv.configured()) return sampleText(prompt, tier, signal);
+    const srv = { generate: () => Srv.generate({ user: prompt, kind: tier === "quick" ? "quick" : "default", json: !!json, signal }) };
+    return ServerAi.run(AI.sample ? [srv, { generate: () => sampleText(prompt, tier, signal) }] : [srv], null);
+  }
   const IV = {
-    ready: () => !!AI.sample,
+    ready: () => gapReady(),
     // Un pas al dialogului: întoarce { say } (întrebare de continuare, `quick`) sau { verdict } (`default`). Aruncă o eroare cu `code`.
     // Un „done” sau un format greșit la întrebare duc direct la verdict. `iv.final` face ca o reîncercare după eroare să sară peste întrebare.
     async step(c, iv, o) {
       if (!o.finish && !iv.final && iv.fu < ivRules(c).max) {
-        const t = parseTurn(await sampleText(ivTurnPrompt(c, iv, o.mem), "quick", o.signal));
+        const t = parseTurn(await gapText(ivTurnPrompt(c, iv, o.mem), "quick", true, o.signal));
         if (t && t.act === "followup") return { say: t.say };
       }
       iv.final = true;
-      const v = parseIvVerdict(await sampleText(ivVerdictPrompt(c, iv), "default", o.signal), c.k.length);
+      const v = parseIvVerdict(await gapText(ivVerdictPrompt(c, iv), "default", true, o.signal), c.k.length);
       if (!v) throw aiError("format");
       return { verdict: v };
     }
@@ -1252,7 +1309,7 @@
     ivCtl = null; iv.busy = false;
     if (r && r.say) { iv.turns.push({ who: "int", text: r.say }); iv.fu++; iv.draft = ""; }
     else if (r && r.verdict) {
-      run.ai = { s: "ok", v: r.verdict, p: "Claude" }; run.ticks = {}; run.half = {};
+      run.ai = { s: "ok", v: r.verdict, p: AI.name() }; run.ticks = {}; run.half = {};
       r.verdict.covered.forEach((x, i) => { if (x !== "nu") { run.ticks[i] = true; if (x === "dupa") run.half[i] = true; } });
       run.phase = "review"; run.tEnd = 0;
     } else { iv.err = code; if (code !== "cancelled") toast(AI_MSG[code] || AI_MSG.network); }
@@ -1280,6 +1337,12 @@
     }
     iv.draft = "";
     ivRun(kind === "finish");
+  }
+  // Calea fără AI după un eșec: dialogul se lasă, cardul trece la bifele proprii (scorul vine oricum din bife).
+  function ivManual() {
+    const run = ui.run; if (!run || !run.iv || run.iv.busy) return;
+    ivAbort(); run.iv = null; run.ai = null; run.ticks = {}; run.half = {}; run.phase = "review"; run.tEnd = 0;
+    render(); window.scrollTo(0, 0);
   }
   function ivStop() {
     const run = ui.run; if (!run || !run.iv || !run.iv.busy) return;
@@ -1317,7 +1380,7 @@
     return out;
   }
   function startIvMock(n) {
-    if (!IV.ready()) { toast("Interviul simulat are nevoie de Claude (în artifact)."); return; }
+    if (!IV.ready()) { toast(NEED_AI("Interviul simulat")); return; }
     if (n) startOral({ ids: pickIvMock(n).map(c => c.id), title: "Interviu simulat", mock: true });
     else startOral({ ids: pickTechMock().map(c => c.id), title: "Interviu tehnic simulat", mock: true });
   }
@@ -1381,7 +1444,7 @@
   }
   function openCert() { ui.tab = "cert"; ui.certQuit = false; render(); window.scrollTo(0, 0); }
   function startCert() {
-    if (!IV.ready()) { toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); return; }
+    if (!IV.ready()) { toast(NEED_AI("Certificarea")); return; }
     ui.cert = certNew(); Cert.save(); openCert();
   }
   function openSkelIn(id) { ui.tab = "study"; ui.study.seg = "skel"; ui.study.skelDue = false; ui.study.skel = id; ui.study.attempt = null; render(); window.scrollTo(0, 0); }
@@ -1391,7 +1454,7 @@
     const c = ui.cert; if (!c || c.step === "done") return;
     if (c.step === "q") { startMcq("cert"); return; }
     if (c.step === "o") {
-      if (!IV.ready()) { toast("Secțiunea orală are nevoie de Claude: deschide aplicația din artifact."); return; }
+      if (!IV.ready()) { toast(NEED_AI("Secțiunea orală")); return; }
       const left = certLeft("o");
       if (left.length) { startOral({ ids: left, title: "Certificare · Explică", mock: true, cert: true }); return; }
       c.step = "s"; Cert.save();
@@ -1404,9 +1467,9 @@
     const c = ui.cert; if (!c) return;
     const sc = certScore(c.res);
     c.step = "done"; c.done = now();
-    S.h.push({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
+    histAdd({ id: "h" + now(), ts: now(), kind: "cert", mode: "cert", title: "Certificare", n: 100, c: Math.round(sc.tot * 100),
       cert: { q: sc.q, o: sc.o, s: sc.s, tot: sc.tot, pass: sc.pass, mods: sc.mods.map(x => ({ m: x.m, p: Math.round(x.p * 100) / 100 })), gaps: sc.gaps.map(g => ({ t: g.t, id: g.id, p: Math.round(g.p * 100) / 100 })) } });
-    S.h = S.h.slice(-HMAX); commit(); Cert.save(); openCert();
+    commit(); Cert.save(); openCert();
   }
   const certSecStatus = (c, sc, s) => {
     if (s === "q") return c.res.q ? pc(sc.q) + "% · " + c.res.q.c + "/" + c.res.q.n : c.step === "q" ? "urmează" : "–";
@@ -1477,7 +1540,7 @@
     const iv = run.iv, last = iv.turns[iv.turns.length - 1], max = ivRules(OBY[run.items[run.i]]).max;
     let h = '<section class="card stack-s iv"><div class="spread"><h3>Interviu</h3><span class="chip acc">' + iv.fu + "/" + max + " întrebări</span></div>" + ivTurnsHtml(iv.turns);
     if (iv.busy) return h + '<p class="iv-wait small" role="status">Se gândește…</p><button class="btn block" data-a="iv-stop">Oprește</button></section>';
-    if (last.who === "cand") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[iv.err] || "Cererea s-a întrerupt.") + '</p><button class="btn primary block" data-a="iv-retry">Continuă</button>';
+    if (last.who === "cand") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[iv.err] || "Cererea s-a întrerupt.") + '</p><button class="btn primary block" data-a="iv-retry">Continuă</button><button class="btn block" data-a="iv-manual">Fără AI: bifez eu punctele</button>';
     else h += '<textarea class="ans" id="iv-t" rows="4" maxlength="3000" placeholder="Răspunde intervievatorului" aria-label="Răspunsul tău la întrebare">' + esc(iv.draft || "") + "</textarea>" +
       '<button class="btn primary block" data-a="iv-send">Trimite</button><button class="btn block" data-a="iv-dunno">Nu știu</button>';
     return h + '<button class="btn block" data-a="iv-finish">Încheie, vreau verdictul</button></section>';
@@ -1501,7 +1564,7 @@
     if (txt.length < 15) { toast("Scrie o versiune mai lungă"); return; }
     rw.s = "busy"; render();
     let v = null, code = null;
-    try { v = await sampleGrade(c, txt); } catch (err) { code = (err && err.code) || "network"; }
+    try { v = await aiGrade(c, txt); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.run !== run || run.i !== idx || run.rw !== rw) return;
     if (v) {
       rw.n = v.covered.filter(Boolean).length; rw.miss = v.missing;
@@ -1513,7 +1576,6 @@
   // ---------- goluri: ce ratezi, de câte ori, ce ai spus greșit ----------
   // Pe fiecare card oral păstrăm `mc` (index punct → de câte ori l-ai ratat; o acoperire completă scade cu 1), `m` (ratate ultima dată) și `w` (afirmațiile marcate greșite).
   // Teoria pentru un gol se asamblează din ce avem: propoziția din răspunsul model și punctele din fișa modulului cu cele mai multe cuvinte comune cu punctul ratat.
-  const MC_MAX = 9;
   const GAP_STOP = new Set(("si sau dar din pentru care este sunt prin intre cand cum unde doar fara daca poate pot are iar tot cat cel cea cei cele lui sale ale mai dupa acest aceasta acesta apoi pana alt alta deci mult mica mare fie era acel acea").split(" "));
   const gapToks = t => new Set((String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9_]{3,}/g) || []).filter(w => !GAP_STOP.has(w)));
   // Elementele din `items` ordonate după cuvintele comune cu `text` (doar cele cu cel puțin unul).
@@ -1521,13 +1583,7 @@
     const t = gapToks(text);
     return items.map((x, i) => { let n = 0; gapToks(x).forEach(w => { if (t.has(w)) n++; }); return { i, n }; }).filter(o => o.n > 0).sort((a, b) => b.n - a.n || a.i - b.i);
   }
-  function gapCounts(e) {
-    const out = {};
-    if (!e) return out;
-    if (e.mc && typeof e.mc === "object") { for (const k of Object.keys(e.mc)) { const n = +e.mc[k]; if (n > 0) out[k] = Math.min(MC_MAX, n); } }
-    else (e.m || []).forEach(i => { out[i] = 1; });         // carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1
-    return out;
-  }
+  const gapCounts = Journal.gapCounts;      // contorul unui card (carduri dinainte de `mc`: fiecare punct ratat ultima dată valorează 1); îl actualizează și proiecția jurnalului
   // Toate golurile, cele mai grele primele: ratări × prioritatea modulului.
   function gapList() {
     const out = [];
@@ -1587,21 +1643,21 @@
   }
   const stOf = (name, k) => (ui[name] || (ui[name] = {}))[k];
   async function gapExplain(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("les", k) && stOf("les", k).s === "busy") return;
     const mine = ui.les[k] = { s: "busy" }; render();
     let text = null, code = null;
-    try { text = await sampleText(gapLessonPrompt(c, i, gapEvidence(c)), "default"); } catch (err) { code = (err && err.code) || "network"; }
+    try { text = await gapText(gapLessonPrompt(c, i, gapEvidence(c)), "default", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.les[k] !== mine) return;
     ui.les[k] = text && text.trim() ? { s: "ok", text: text.trim().slice(0, 1200) } : { s: "err", code: code || "format" };
     render();
   }
   async function chkAsk(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("chk", k) && /^busy/.test(stOf("chk", k).s)) return;
     const mine = ui.chk[k] = { s: "busyq" }; render();
     let q = null, code = null;
-    try { q = await sampleText(gapAskPrompt(c, i, gapEvidence(c)), "quick"); } catch (err) { code = (err && err.code) || "network"; }
+    try { q = await gapText(gapAskPrompt(c, i, gapEvidence(c)), "quick", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     ui.chk[k] = q && q.trim() ? { s: "q", q: q.trim().slice(0, 400), ans: "" } : { s: "err", code: code || "format", stage: "ask" };
     render();
@@ -1611,7 +1667,7 @@
     const ans = (st.ans || "").trim(); if (ans.length < 10) { toast("Scrie un răspuns mai lung"); return; }
     const mine = ui.chk[k] = { s: "busyg", q: st.q, ans }; render();
     let v = null, code = null;
-    try { v = parseGapGrade(await sampleText(gapGradePrompt(c, i, st.q, ans), "default")); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
+    try { v = parseGapGrade(await gapText(gapGradePrompt(c, i, st.q, ans), "default", true)); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     if (!v) ui.chk[k] = { s: "err", code, stage: "grade", q: st.q, ans };
     else if (v.covered) { ui.chk[k] = { s: "ok", q: st.q, ans, fb: v.feedback }; gapFix(cid, i); }
@@ -1622,14 +1678,12 @@
   function gapFix(cid, i) {
     const run = ui.run;
     if (run && run.kind === "oral" && run.items[run.i] === cid && run.phase === "review") { (run.fixed = run.fixed || {})[i] = true; return; }
-    const e = S.o[cid]; if (!e) return;
-    const mc = gapCounts(e); delete mc[i]; e.mc = mc;
-    const m = (e.m || []).filter(x => x !== i); if (m.length) e.m = m; else delete e.m;
-    e.gt = now(); commit();
+    if (!S.o[cid]) return;
+    add({ type: "gap", op: "fix", item: cid, point: i }); commit();
   }
   const lessonHtml = text => text.split(/\n+/).filter(Boolean).map(l => '<p class="rt">' + inlineRich(l).replace(/^(Ideea:|Unde s-a rupt gândirea ta:|Spune-l la interviu:)/, "<b>$1</b>") + "</p>").join("");
   function gapAi(c, i) {
-    if (!IV.ready()) return "";
+    if (!gapReady()) return "";
     const k = gapKey(c.id, i), les = stOf("les", k), chk = stOf("chk", k), data = ' data-c="' + c.id + '" data-i="' + i + '"';
     let h = "";
     if (chk && chk.s === "ok") h += '<div class="gap-ok"><span class="chip ok">Reparat</span>' + (chk.fb ? '<p class="small">' + fmt(chk.fb) + "</p>" : "") + "</div>";
@@ -1685,16 +1739,10 @@
   // Folosit de oralSave (ecranul) și de PrepApp.record (Jarvis): același scor, aceleași goluri.
   function recordOral(c, r) {
     const run = { ticks: r.ticks || {}, half: r.half || {} };
-    const p = tickSum(run, c) / c.k.length;
-    updO(c.id, p);
-    // Golurile cardului: contorul `mc` (+1 la un punct ratat, −1 la unul acoperit întreg), `m` (ratate acum), `w` (ce a marcat verdictul greșit) și versiunea bună.
-    const e = S.o[c.id], prev = gapCounts(e), mc = {}, missed = missedOf(run, c), fx = r.fixed || {}, open = missed.filter(i => !fx[i]);
-    c.k.forEach((_, i) => { const n = fx[i] ? 0 : missed.indexOf(i) >= 0 ? Math.min(MC_MAX, (prev[i] || 0) + 1) : Math.max(0, (prev[i] || 0) - 1); if (n) mc[i] = n; });
-    e.mc = mc;                                                    // și gol ({}): fără el, `m` ar fi citit ca date vechi
-    if (open.length) e.m = open; else delete e.m;
+    const p = tickSum(run, c) / c.k.length, missed = missedOf(run, c), fx = r.fixed || {};
+    // Scorul și cutia, plus golurile cardului (contorul `mc`, `m`, `w`, versiunea bună): le calculează proiecția, din punctele ratate și din cele reparate.
+    add({ type: "answer", form: "o", item: c.id, result: Object.assign({ p, k: c.k.length, missed, fixed: Object.keys(fx).filter(i => fx[i]).map(Number) }, r.wrong ? { wrong: r.wrong.slice(0, 3) } : {}, r.keep ? { keep: r.keep } : {}) });
     ["les", "chk"].forEach(nm => Object.keys(ui[nm] || {}).forEach(k => { if (k.indexOf(c.id + ":") === 0) delete ui[nm][k]; }));      // explicațiile și întrebările țintite ale cardului nu rămân în urmă
-    if (r.wrong) { const w = r.wrong.slice(0, 3); if (w.length) e.w = w; else delete e.w; }
-    if (r.keep) e.a = r.keep;
     commit();
     return { p, missed };
   }
@@ -1712,8 +1760,8 @@
     const run = ui.run, ids = Object.keys(run.scores);
     if (ids.length) {
       const avg = ids.reduce((s, id) => s + run.scores[id], 0) / ids.length;
-      S.h.push({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
-      S.h = S.h.slice(-HMAX); commit();
+      histAdd({ id: "h" + now(), ts: now(), kind: "oral", mode: "oral", title: run.title, n: ids.length, c: Math.round(avg * ids.length * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      commit();
       ui.result = { kind: "oral", title: run.title, items: ids.map(id => ({ id, p: run.scores[id] })), avg, mock: !!run.mock };
     }
     if (run.cert && ui.cert) { ui.result = null; if (!certLeft("o").length) ui.cert.step = "s"; Cert.save(); ui.tab = "cert"; }
@@ -1779,8 +1827,8 @@
     const run = ui.run, ids = Object.keys(run.grades);
     if (ids.length) {
       const sum = ids.reduce((a, id) => a + run.grades[id], 0);
-      S.h.push({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
-      S.h = S.h.slice(-HMAX); commit();
+      histAdd({ id: "h" + now(), ts: now(), kind: "open", mode: "open", title: run.title, n: ids.length, c: Math.round(sum / 2 * 100) / 100, dur: Math.round((now() - run.t0) / 1000) });
+      commit();
       ui.result = { kind: "open", title: run.title, items: ids.map(id => ({ id, g: run.grades[id] })), avg: sum / (2 * ids.length) };
     }
     ui.run = null; render(); window.scrollTo(0, 0);
@@ -2070,12 +2118,74 @@
       '<button class="btn sm" data-a="exp">' + (ui.prog.exp ? "Ascunde exportul" : "Exportă progresul") + "</button>" +
       '<button class="btn sm" data-a="imp">' + (ui.prog.imp ? "Ascunde importul" : "Importă") + "</button>" +
       '<button class="btn sm danger" data-a="reset">' + (ui.prog.reset ? "Confirmă: șterge tot" : "Resetează") + "</button></div>";
+    if (JSync) h += vJournalIO();
     if (ui.prog.exp) h += '<textarea class="io" id="exp-t" readonly aria-label="Progres exportat">' + esc(JSON.stringify(S)) + '</textarea><button class="btn sm" data-a="copy-exp">Copiază</button>';
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
+    if (JSync) h += vSync();
     h += vCfg();
+    h += vServerSettings();
     h += vAiSettings();
     return h;
+  }
+  // Starea sincronizării jurnalului și butonul „Sincronizează acum”. Adresa și secretul NU se introduc aici: formularul e cardul „Serverul” (`vServerCard`).
+  function vSync() {
+    const on = Conn.configured();
+    return '<section class="card stack-s" id="sync-card"><h3>Sincronizare</h3><p class="small" id="jsync-l">' + esc(JournalSync.label(JSync.status())) + "</p>" +
+      '<p class="xs muted">Progresul trece între telefon și laptop prin serverul tău. ' + (on ? "" : "Adaugă adresa și secretul în cardul „Serverul”, mai jos. ") + "Nu intră în export.</p>" +
+      '<p class="small" id="jwiped"' + (JSync.status().wiped ? "" : " hidden") + ">" + esc(WIPED_NOTE) + "</p>" +
+      (on ? '<div class="row"><button class="btn sm" data-a="srv-sync">Sincronizează acum</button><button class="btn sm" data-a="jresend">Retrimite jurnalul local</button>' +
+        '<button class="btn sm danger" data-a="jpurge">' + (ui.prog.purge ? "Renunță la ștergere" : "Șterge jurnalul de pe server") + "</button></div>" : "") +
+      (on && ui.prog.purge ? vPurgePanel() : "") +
+      (ui.prog.smsg ? '<p class="small' + (ui.prog.smsgBad ? " bad" : "") + '" id="jsv-msg" role="status">' + esc(ui.prog.smsg) + "</p>" : "") + "</section>";
+  }
+  // Exportul și importul jurnalului (tichetul 09): fișier JSON cu tot jurnalul, inclusiv textul lui Alex; nu poartă adresa sau secretul serverului.
+  const WIPED_NOTE = "Jurnalul de pe server a fost șters. Copia de pe acest dispozitiv a rămas întreagă și nu se retrimite singură; răspunsurile noi se trimit mai departe. Ca s-o trimiți din nou: „Retrimite jurnalul local”.";
+  function vJournalIO() {
+    return '<div class="row"><button class="btn sm" data-a="jexp">Exportă jurnalul</button><button class="btn sm" data-a="jimp">Importă jurnalul</button>' +
+      '<input type="file" id="jimp-f" accept=".json,application/json" hidden aria-label="Fișierul jurnalului"></div>' +
+      '<p class="xs muted">Jurnalul întreg, cu textul tău, într-un fișier .json (fără adresa și secretul serverului). Importul îl îmbină cu ce ai aici, fără dubluri, și merge fără semnal.</p>' +
+      (ui.prog.jmsg ? '<p class="small' + (ui.prog.jmsgBad ? " bad" : "") + '" id="jio-msg" role="status">' + esc(ui.prog.jmsg) + "</p>" : "");
+  }
+  // Ștergerea de pe server în doi pași: butonul deschide panoul, iar panoul cere cuvântul „sterge” (fără diacritice sau cu).
+  function vPurgePanel() {
+    return '<div class="stack-s" id="jpurge-panel"><p class="small"><b>Ștergi tot jurnalul de pe server.</b> Copia de pe acest dispozitiv (și de pe celelalte) rămâne. Nu se mai poate anula de pe server; dacă vrei înapoi, folosești „Retrimite jurnalul local” sau importul unui fișier exportat. Ce nu a ajuns încă pe server se trimite în continuare.</p>' +
+      '<input class="keyin" id="jpurge-w" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scrie „sterge” ca să confirmi" value="' + esc(ui.prog.pw) + '" aria-label="Cuvântul de confirmare">' +
+      '<div class="row"><button class="btn sm danger" data-a="jpurge-go"' + (ui.prog.busy ? " disabled" : "") + ">" + (ui.prog.busy ? "Se șterge…" : "Șterge definitiv de pe server") + '</button><button class="btn sm" data-a="jpurge-cancel">Renunță</button></div></div>';
+  }
+  function jSay(key, msg, bad) { ui.prog[key] = msg; ui.prog[key + "Bad"] = !!bad; if (ui.tab === "progress") render(); }
+  function jExport() {
+    J.events().then(evs => {
+      const doc = Journal.exportDoc(evs, { device: J.info().device }), text = JSON.stringify(doc);
+      const d = new Date(now()), pad = n => String(n).padStart(2, "0");
+      const name = "jurnal-onapsis-" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + ".json";
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" })), a = document.createElement("a");
+      a.href = url; a.download = name; a.hidden = true; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      jSay("jmsg", "Jurnal exportat: " + doc.count + (doc.count === 1 ? " eveniment" : " evenimente") + ", în " + name + ".", false);
+    }, () => jSay("jmsg", "Exportul nu a mers: jurnalul nu s-a putut citi.", true));
+  }
+  // Un text de export de jurnal (din fișier sau lipit) → îmbinare în jurnal. Nimic nu se importă dacă fișierul e stricat; ce lipsește aici intră în coada obișnuită de trimis.
+  function jImport(text) {
+    let doc;
+    try { doc = Journal.parseExport(text); } catch (e) { jSay("jmsg", e.message, true); return Promise.resolve(); }
+    return J.merge(doc.events).then(r => {
+      planCache = null; if (JSync) JSync.poke();
+      const known = doc.events.length - r.added;
+      ui.prog.imp = false;
+      jSay("jmsg", "Importat: " + r.added + (r.added === 1 ? " eveniment nou" : " evenimente noi") + ", " + known + (known === 1 ? " era deja aici." : " erau deja aici."), false);
+    }, () => jSay("jmsg", "Importul nu a mers: browserul nu a putut salva jurnalul.", true));
+  }
+  const PURGE_ERR = { auth: "Secret greșit: nu s-a șters nimic.", offline: "Fără semnal: nu s-a șters nimic. Încearcă din nou când ai semnal.", none: "Serverul nu e configurat.",
+    server: "Serverul nu a răspuns bine: poate nu s-a șters tot. Verifică starea și încearcă din nou.", client: "Serverul a refuzat cererea: nu s-a șters nimic." };
+  function jPurge() {
+    const w = String(ui.prog.pw || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (w !== "sterge") { toast("Scrie cuvântul „sterge” ca să confirmi"); return; }
+    ui.prog.busy = true; render();
+    JSync.purgeServer().then(res => {
+      ui.prog.busy = false; ui.prog.purge = false; ui.prog.pw = "";
+      jSay("smsg", "Jurnalul de pe server a fost șters (" + res.deleted + (res.deleted === 1 ? " eveniment" : " evenimente") + "). Copia de pe acest dispozitiv a rămas.", false);
+    }, e => { ui.prog.busy = false; jSay("smsg", PURGE_ERR[e && e.kind] || "Ștergerea nu a mers.", true); });
   }
   function vCfg() {
     const c = cfg(), iv = interviewDate();
@@ -2085,8 +2195,37 @@
       '<label class="small">Ore/seară <select class="keyin" id="cfg-h" aria-label="Ore pe seară">' + opts + "</select></label></div>" +
       '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button></div></section>';
   }
+  // Cardul „Serverul”: SINGURUL formular pentru adresa și secretul serverului (ServerConn / `Conn`). Progres îl arată direct, Jarvis îl refolosește cu `extra`
+  // (butoane proprii, în același card); sincronizarea jurnalului (tichetul 05) nu are formular propriu și e anunțată de `srvChanged`. Acțiunile `srv-save` / `srv-test` / `srv-del` sunt comune.
+  function vServerCard(extra) {
+    const c = Conn.configured() ? Conn.get() : null, d = ui.srv;
+    return '<section class="card stack-s"><h3>Serverul</h3>' +
+      '<p class="small">Verificarea AI, întrebările, Jarvis și sincronizarea trec prin serverul tău, care ține cheile Gemini și DeepSeek. Nu mai ai nevoie de chei în browser.</p>' +
+      '<p class="small" id="srv-st">' + (c ? "Configurat: " + esc(c.url.replace(/^https?:\/\//, "")) + " (secret …" + esc(c.secret.slice(-4)) + ")." : "Neconfigurat.") + "</p>" +
+      '<input class="keyin" id="srv-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Adresa serverului (https://…)" value="' + esc(d.url || (c ? c.url : "")) + '" aria-label="Adresa serverului">' +
+      '<input class="keyin" id="srv-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (c ? "Secret nou (înlocuiește)" : "Secretul serverului") + '" value="' + esc(d.secret) + '" aria-label="Secretul serverului">' +
+      '<div class="row"><button class="btn sm primary" data-a="srv-save">Salvează</button>' + (c ? '<button class="btn sm" data-a="srv-test">Testează AI</button><button class="btn sm danger" data-a="srv-del">Șterge</button>' : "") + (extra || "") + "</div>" +
+      '<p class="xs muted">Adresa și secretul rămân doar în browserul acestui dispozitiv: nu se sincronizează și nu intră în export. Serverul primește doar promptul (întrebarea, punctele cheie și răspunsul tău).</p></section>';
+  }
+  function vServerSettings() {
+    return AI.sample ? "" : vServerCard();               // în artifact, CSP blochează conexiunile către server
+  }
+  // Salvează din câmpurile cardului (`#srv-url`, `#srv-secret`); un secret gol păstrează secretul de acum. Întoarce true dacă s-a salvat.
+  function srvSave() {
+    const u = $("#srv-url"), k = $("#srv-secret"), c = Conn.get();
+    const url = ServerConn.normUrl(u ? u.value : ""), secret = ((k && k.value.trim()) || c.secret || "").trim();
+    if (!url) { toast("Adresa trebuie să înceapă cu https://"); return false; }
+    if (!secret) { toast("Lipsește secretul"); return false; }
+    if (!ServerConn.validSecret(secret)) { toast("Secretul: doar caractere ASCII, fără spații"); return false; }
+    try { Conn.set({ url, secret }); } catch (e) { toast("Browserul nu permite salvarea"); return false; }
+    ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server salvat"); srvChanged(); return true;
+  }
+  // Serverul s-a schimbat (salvat sau șters): sincronizarea jurnalului pornește din nou cu perechea nouă, sau se oprește dacă nu mai e nimic configurat.
+  function srvChanged() { if (JSync) JSync.syncNow(); }
   function vAiSettings() {
     if (AI.sample) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">La cardurile orale, Claude compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit. Nu ai nevoie de cheie: folosește contul tău Claude, iar prima dată ți se cere permisiunea.</p><p class="xs muted">Se trimit doar întrebarea, punctele cheie și răspunsul tău.</p></section>';
+    // Cu serverul configurat nu mai există câmp pentru cheia DeepSeek: nicio cerere nu pleacă direct din browser (cheia, dacă a rămas, nu se folosește).
+    if (Srv.configured()) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">Verificarea răspunsurilor și întrebările trec prin server. Cheia DeepSeek din browser nu se mai folosește.</p></section>';
     const k = AI.get();
     return '<section class="card stack-s"><h3>Verificare AI (DeepSeek)</h3>' +
       '<p class="small">La cardurile orale, DeepSeek compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit.</p>' +
@@ -2189,14 +2328,14 @@
     const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
     const a = b.dataset.a;
     switch (a) {
-      case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-mics":
+      case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-server-save": case "jv-server-clear": case "jv-mics":
       case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "dz": case "dz-map": case "dz-all": dzAct(a, b); break;
       case "tab": ui.tab = b.dataset.tab; if (ui.tab === "study" && ui.study.seg === "katas") { /* păstrează kata deschis */ } render(); window.scrollTo(0, 0); break;
       case "go": goTask(b.dataset.id); break;
-      case "plan-toggle": { const id = b.dataset.id; S.p[id] = { d: isDone(id) ? 0 : 1, t: now() }; commit(); render(); break; }
+      case "plan-toggle": { const id = b.dataset.id; add({ type: "plan", item: id, done: !isDone(id) }); commit(); render(); break; }
       case "mcq": startMcq(b.dataset.mode); break;
       case "mcq-mod": startMcq("module", { ms: [b.dataset.m] }); break;
       case "ans": answer(+b.dataset.pos); break;
@@ -2226,7 +2365,7 @@
       case "cert": if (ui.cert) openCert(); else startCert(); break;
       case "cert-open": ui.study.skel = null; ui.study.attempt = null; openCert(); break;
       case "cert-go": certGo(); break;
-      case "cert-new": if (!IV.ready()) toast("Certificarea are nevoie de Claude: deschide aplicația din artifact."); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
+      case "cert-new": if (!IV.ready()) toast(NEED_AI("Certificarea")); else { ui.cert = certNew(); Cert.save(); openCert(); } break;
       case "cert-skel": openSkelIn(b.dataset.k); break;
       case "cert-redo-q": if (ui.cert && ui.cert.res.q) startMcq("ids", { ids: ui.cert.res.q.wrong, title: "Greșelile din certificare" }); break;
       case "cert-copy": { const t = $("#cert-sum"); if (t) copyText(t.value, t); break; }
@@ -2243,6 +2382,7 @@
       case "iv-dunno": ivSend("dunno"); break;
       case "iv-finish": ivSend("finish"); break;
       case "iv-retry": ivRun(false); break;
+      case "iv-manual": ivManual(); break;
       case "iv-stop": ivStop(); break;
       case "rw-open": if (ui.run && ui.run.iv && !ui.run.rw) { ui.run.rw = { text: "", s: "idle" }; render(); const el = $("#rw-t"); if (el) el.focus(); } break;
       case "rw-check": rwCheck(); break;
@@ -2253,7 +2393,17 @@
         if (!AI.set(k)) { toast("Browserul nu permite salvarea cheii"); break; }
         render(); toast("Cheie salvată"); break;
       }
+      case "srv-sync": if (JSync) JSync.syncNow(); break;
+      case "jexp": if (JSync) jExport(); break;
+      case "jimp": { const f = $("#jimp-f"); if (f) { f.value = ""; f.click(); } break; }
+      case "jresend": if (JSync) JSync.resend().then(n => jSay("smsg", n + (n === 1 ? " eveniment pus" : " evenimente puse") + " în coada de trimis; serverul le păstrează pe cele care îi lipsesc.", false), () => jSay("smsg", "Nu s-a putut pune jurnalul în coadă.", true)); break;
+      case "jpurge": ui.prog.purge = !ui.prog.purge; ui.prog.pw = ""; ui.prog.busy = false; ui.prog.smsg = ""; render(); break;
+      case "jpurge-cancel": ui.prog.purge = false; ui.prog.pw = ""; render(); break;
+      case "jpurge-go": if (JSync && !ui.prog.busy) jPurge(); break;
       case "ds-del": AI.set(""); render(); toast("Cheie ștearsă"); break;
+      case "srv-save": srvSave(); break;
+      case "srv-del": Conn.clear(); ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server șters"); srvChanged(); break;
+      case "srv-test": srvTest(); break;
       case "ds-test": aiTest(); break;
       case "tick": if (ui.run) { const k = +b.dataset.k; ui.run.ticks[k] = !ui.run.ticks[k]; render(); } break;
       case "oral-save": oralSave(); break;
@@ -2268,7 +2418,7 @@
         const d = $("#cfg-d"), hs = $("#cfg-h");
         const iso = d ? d.value.trim() : "", h = hs ? +hs.value : 0;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || isNaN(parseIso(iso))) { toast("Alege o dată validă"); break; }
-        S.c = { d: iso, h: h > 0 ? h : P.cfg.hours, t: now() }; commit(); render(); toast("Salvat: planul s-a refăcut");
+        add({ type: "cfg", d: iso, h: h > 0 ? h : P.cfg.hours }); commit(); render(); toast("Salvat: planul s-a refăcut");
         break;
       }
       case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.skelDue = false; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
@@ -2290,7 +2440,7 @@
         const got = r.peek ? 0 : r.ticks.filter(Boolean).length, inCert = certSkelOn(k.id);
         updS(k.id, got / k.k.length);
         // timpul intră în istoric ca la celelalte exerciții (spentMin îl numără); o încercare lăsată deschisă se plafonează
-        S.h.push({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) }); S.h = S.h.slice(-HMAX);
+        histAdd({ id: "h" + now(), ts: now(), kind: "skel", mode: "skel", title: k.t, n: k.k.length, c: got, dur: Math.min(SKEL_DUR_MAX, Math.max(0, Math.round((now() - (r.t0 || now())) / 1000))) });
         Drafts.set(k.id, ""); delete ui.study.peeked[k.id]; commit();
         if (inCert) {
           certRecord("s", { id: k.id, p: got / k.k.length, miss: k.k.map((_, i) => i).filter(i => r.peek || !r.ticks[i]) });
@@ -2308,7 +2458,7 @@
       case "kata-back": ui.study.kata = null; ui.study.kEnd = 0; render(); window.scrollTo(0, 0); break;
       case "kata-hint": ui.study.hints++; render(); break;
       case "kata-timer": ui.study.kEnd = ui.study.kEnd ? 0 : now() + 20 * 60000; ui.study.kDone = false; render(); break;
-      case "kata-status": { const id = ui.study.kata; S.k[id] = { s: b.dataset.s, t: now() }; commit(); render(); toast("Notat"); break; }
+      case "kata-status": { const id = ui.study.kata; add({ type: "answer", form: "k", item: id, result: { s: b.dataset.s } }); commit(); render(); toast("Notat"); break; }
       case "copy-code": { const pre = b.parentElement.querySelector("pre"); copyText((P.kataCode || {})[b.dataset.k] || (P.skelCode || {})[b.dataset.k] || "", pre); break; }
       case "exp": ui.prog.exp = !ui.prog.exp; render(); break;
       case "imp": ui.prog.imp = !ui.prog.imp; render(); break;
@@ -2316,13 +2466,15 @@
       case "do-imp": {
         const t = $("#imp-t"); let data = null;
         try { data = JSON.parse(t.value); } catch (err) { toast("Textul nu e un export valid"); break; }
-        const res = mergeState(S, prune(normalize(data)));
-        S = res.state; commit(); ui.prog.imp = false; render(); toast("Progres importat");
+        if (data && data.format === Journal.EXPORT_FORMAT) { if (JSync) jImport(t.value); else toast("Jurnalul se importă doar în aplicația instalată"); break; }
+        const merged = mergeState(S, prune(normalize(data))).state, done = () => { commit(); ui.prog.imp = false; render(); toast("Progres importat"); };
+        if (!JSTORE) { J.replaceState(merged); done(); }                                  // fără depozit nu există îmbinare în jurnal: starea îmbinată trece prin proiecție și oglindă
+        else J.importState(merged).then(done, () => toast("Importul nu a mers"));       // intrările noi intră în jurnal ca evenimente sintetice
         break;
       }
       case "reset":
         if (!ui.prog.reset) { ui.prog.reset = true; render(); setTimeout(() => { if (ui.prog.reset) { ui.prog.reset = false; if (ui.tab === "progress") render(); } }, 4000); }
-        else { S = emptyState(); S.r = now(); ui.prog.reset = false; ui.result = null; commit(); render(); toast("Progres resetat"); }
+        else { add({ type: "reset" }); ui.prog.reset = false; ui.result = null; commit(); render(); toast("Progres resetat"); }
         break;
     }
   });
@@ -2347,6 +2499,13 @@
   document.addEventListener("pointercancel", talkEnd);
   document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest("#jv-talk")) e.preventDefault(); });
   document.addEventListener("change", e => {
+    const f = e.target;
+    if (f && f.id === "jimp-f" && f.files && f.files[0]) {
+      const file = f.files[0];
+      (file.text ? file.text() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsText(file); }))
+        .then(txt => jImport(txt), () => jSay("jmsg", "Fișierul nu s-a putut citi.", true));
+      return;
+    }
     const t = e.target, k = t && t.dataset && t.dataset.jv;
     if (!k) return;
     if (k === "module") { ui.jv.module = t.value; return; }
@@ -2359,6 +2518,9 @@
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
     else if (t && t.dataset && "skelCode" in t.dataset && ui.study.attempt) { ui.study.attempt.code = t.value; Drafts.set(ui.study.attempt.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
+    else if (t && t.id === "jpurge-w") ui.prog.pw = t.value;
+    else if (t && t.id === "srv-url") ui.srv.url = t.value;
+    else if (t && t.id === "srv-secret") ui.srv.secret = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;
     else if (t && t.dataset && t.dataset.chk && ui.chk && ui.chk[t.dataset.chk]) ui.chk[t.dataset.chk].ans = t.value;
@@ -2435,7 +2597,7 @@
       return parts.join("\n\n").slice(0, 900);
     },
     summary() { return { readiness: readiness().ready, daysLeft: daysLeft(), gaps: gapList().slice(0, 3).map(x => MOD[x.c.m].short + ": " + x.c.k[x.i]), role: P.cfg.role, profile: IV_PROFILE }; },
-    log(e) { S.h.push(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); S.h = S.h.slice(-HMAX); commit(); },
+    log(e) { histAdd(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); commit(); },
 
     // ----- Lecție: fișa unui modul, poziția lecției, recomandarea -----
     // Sursa lecției e fișa modulului: ideea principală, punctele (câte o bucată) și formulările de evitat; la modulele cu desfășurări și harta, plus desfășurările. Diagramele nu intră.
@@ -2451,14 +2613,13 @@
     lessonHeard(id, n) {
       const sh = P.sheets[id]; if (!sh || !sh.points) return;
       const e = S.l[id] || {}, k = Math.min(n, sh.points.length);
-      if (k > (e.n || 0)) { S.l[id] = Object.assign({}, e, { n: k, t: now() }); commit(); }
+      if (k > (e.n || 0)) { add({ type: "lesson", item: id, n: k }); commit(); }
     },
-    lessonDone(id) { S.l[id] = { n: 0, d: now(), t: now() }; commit(); },
+    lessonDone(id) { add({ type: "lesson", item: id, n: 0, done: true }); commit(); },
     // Resetarea: lecția revine la început, dar data ultimei terminări rămâne (recomandarea o folosește). `t` mai nou face ca resetarea să câștige la îmbinare.
     lessonReset(id) {
       if (!P.sheets[id]) return;
-      const e = S.l[id] || {};
-      S.l[id] = Object.assign({ n: 0, t: now() }, e.d ? { d: e.d } : {});
+      add({ type: "lesson", item: id, n: 0 });
       commit();
     },
     // Întâi lecția începută (cea mai recentă); altfel modulul cu cea mai mare nevoie dintre cele neterminate în ultimele 2 zile, fără Bonus și fără comportamental.
@@ -2484,19 +2645,29 @@
   const ASK_MAX = 6;
   const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
   const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey, model: "gemini-3.5-flash-lite" });      // cel mai rapid model gratuit: răspunsurile sunt scurte
-  // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
+  // Sursa: serverul propriu (PWA, prima); fără el, ca înainte: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis, altfel DeepSeek.
+  // Cu serverul configurat urmează doar `sample` la eșec: niciodată Gemini sau DeepSeek direct din browser. Fără server, se folosește prima sursă, fără căderi.
+  const askSources = () => {
+    const o = ServerAi.order({ server: Srv.configured(), sample: !!AI.sample, gemini: !!geminiKey(), deepseek: !!AI.get() });
+    return o[0] === "server" ? o : o.slice(0, 1);
+  };
+  const ASK_WHO = { server: "AI", sample: "Claude", gemini: "Gemini", deepseek: "DeepSeek" };
   const AskModel = {
-    ready: () => !!(AI.sample || geminiKey() || AI.get()),
-    name: () => (AI.sample ? "Claude" : geminiKey() ? "Gemini" : "DeepSeek"),
-    async generate(req) {
-      if (AI.sample) return sampleText(req.system + "\n\n" + req.user, "default");      // `sample` nu are prompt de sistem
-      if (geminiKey()) return gemText.generate(req);
-      return dsCall({ model: DS_MODEL, messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get());
+    ready: () => askSources().length > 0,
+    name: () => ASK_WHO[askSources()[0]] || "AI",
+    generate(req) {
+      const by = {
+        server: r => Srv.generate({ system: r.system, user: r.user, kind: "default", json: true }),      // Ask, scheletele: toate cer JSON
+        sample: r => sampleText(r.system + "\n\n" + r.user, "default"),                                // `sample` nu are prompt de sistem
+        gemini: r => gemText.generate(r),
+        deepseek: r => dsCall({ model: DS_MODEL, messages: [{ role: "system", content: r.system }, { role: "user", content: r.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get())
+      };
+      return ServerAi.run(askSources().map(n => ({ name: n, generate: by[n] })), req);
     }
   };
   const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
   const ASK_MSG = Object.assign({}, AI_MSG, {
-    nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
+    nokey: "Adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
     network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel.",
     timeout: "Modelul n-a răspuns la timp. Reîncearcă.", format: "Răspunsul modelului n-a avut formatul așteptat. Reîncearcă."
   });
@@ -2551,7 +2722,7 @@
   function vAsk(key, extra) {
     const st = ui.ask[key] || (ui.ask[key] = { open: false, draft: "", hist: [], busy: false, err: null });
     if (extra) Object.assign(st, extra);            // același obiect la fiecare randare: askSend îl modifică în timp ce se așteaptă răspunsul
-    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
+    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
     const k = esc(key);
     if (!st.open) return '<button class="btn sm ask-open" data-a="ask-open" data-k="' + k + '">Întreabă despre asta</button>';
     const kind = key.split(":")[0], full = st.hist.length >= ASK_MAX, ctx = askCtx(key), topic = ctx ? ctx.topic : "";
@@ -2634,7 +2805,6 @@
 
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
-  const IN_ARTIFACT = typeof window.claude !== "undefined";          // în artifact nu există microfon, iar CSP-ul blochează conexiunile către serverul vocal
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
   const BUILD = "__BUILD__";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
@@ -2648,8 +2818,10 @@
     try { localStorage.getItem("x"); return localStorage; }
     catch (e) { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: k => { delete m[k]; } }; }
   }
+  // Serverul platformei (adresă + secret, `onapsis-server-v1`) dă jetoane de scurtă durată pentru Live: cheia Gemini nu mai stă în telefon.
+  const jvTokens = LiveToken.create({ server: Conn, fetch: (u, i) => window.fetch(u, i) });
   function jvInit() {
-    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
+    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), server: Conn, getToken: jvFakes.getToken || jvTokens.get, clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
     return jv;
   }
   // Schimbările structurale redesenează ecranul; nivelul vocii și transcrierea se actualizează pe loc (altfel s-ar pierde textul scris și focusul).
@@ -2679,13 +2851,19 @@
   }
 
   function vJarvisHome(st, set) {
-    const hasKey = !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
+    const viaServer = Conn.configured(), hasKey = viaServer || !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
     if (!ui.jv.module || !MOD[ui.jv.module]) ui.jv.module = (mods[0] || {}).id || "";
     let h = '<div class="eyebrow">Jarvis · interviu vorbit</div>';
     h += '<section class="card stack-s"><h2>Vorbește cu Jarvis</h2><p class="small muted">Îți pune întrebări ca la interviu, te întreabă mai departe și îți notează răspunsurile ca în Oral. După ce începi, nu mai atingi ecranul.</p></section>';
     if (st.error) h += '<p class="jv-err" role="alert">' + esc(st.error.message) + "</p>";
-    if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi cheia Gemini.</p>';
-    const keyCard = '<section class="card stack-s"><h3>Cheia Gemini</h3>' +
+    if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi serverul (adresa și secretul) sau, dacă nu ai server, cheia Gemini.</p>';
+    // Cu server configurat, nu mai există câmp pentru cheia Gemini: Jarvis pornește cu un jeton de la server. Fără server rămâne cheia veche, ca rezervă.
+    // Formularul serverului e cel din Progres (`vServerCard`), cu un buton în plus pentru conexiunea Jarvis.
+    const serverCard = vServerCard(viaServer ? '<button class="btn sm" data-a="jv-key-test">Testează Jarvis</button>' : "") +
+      (viaServer ? '<p class="xs muted" id="jv-srvinfo">Jarvis pornește cu un jeton de la server; nu ai nevoie de cheia Gemini în telefon.</p>' +
+        (set.key ? '<p class="small muted" id="jv-oldkey">A rămas o cheie veche în acest browser (…' + esc(set.key.slice(-4)) + "). Dispare la prima sesiune pornită cu serverul.</p>" : "") +
+        '<p class="xs muted" id="jv-keytest" role="status">' + esc(ui.jv.keyTest) + '</p><p class="xs muted">Pe nivelul gratuit, Google poate folosi conversațiile: nu spune nimic confidențial.</p>' : "");
+    const keyCard = viaServer ? serverCard : serverCard + '<section class="card stack-s"><h3>Cheia Gemini (metodă veche)</h3><p class="xs muted">Folosită doar cât nu ai server configurat.</p>' +
       (hasKey ? '<p class="small" id="jv-keyinfo">Cheie salvată (…' + esc(set.key.slice(-4)) + ").</p>" : '<p class="small muted" id="jv-keyinfo">Nu ai încă o cheie. Creeaz-o gratuit în Google AI Studio (aistudio.google.com/apikey) și lipește-o aici.</p>') +
       '<input class="keyin" type="password" id="jv-key" autocomplete="off" placeholder="' + (hasKey ? "Cheie nouă (opțional)" : "Cheia din Google AI Studio") + '" value="' + esc(ui.jv.keyDraft) + '" aria-label="Cheia Gemini">' +
       '<div class="row"><button class="btn sm primary" data-a="jv-key-save">Salvează</button>' + (hasKey ? '<button class="btn sm" data-a="jv-key-test">Testează</button><button class="btn sm ghost" data-a="jv-key-clear">Șterge cheia</button>' : "") + "</div>" +
@@ -2802,7 +2980,15 @@
       case "jv-again": J.reset(); render(); break;
       case "jv-key-save": { const v = (ui.jv.keyDraft || "").trim(); if (!v) { toast("Lipește cheia"); break; } J.settings.set({ key: v }); ui.jv.keyDraft = ""; ui.jv.keyTest = ""; render(); break; }
       case "jv-key-clear": J.settings.set({ key: "" }); ui.jv.keyTest = ""; render(); break;
-      case "jv-key-test": ui.jv.keyTest = "Se verifică…"; render(); J.checkKey().then(r => { ui.jv.keyTest = r.ok ? "Cheia merge." : "Nu merge: " + (r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua."); render(); }); break;
+      case "jv-key-test": {
+        const viaServer = Conn.configured();
+        ui.jv.keyTest = "Se verifică…"; render();
+        J.checkKey().then(r => {
+          ui.jv.keyTest = r.ok ? (viaServer ? "Conexiunea merge." : "Cheia merge.") : "Nu merge: " + (viaServer ? J.errorText(r.reason) : r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua.");
+          render();
+        });
+        break;
+      }
       case "jv-mics": J.mics().then(list => { ui.jv.mics = list; render(); }, () => toast("Nu pot citi microfoanele")); break;
     }
   }
@@ -2828,9 +3014,10 @@
   }, 500);
 
   // ---------- boot ----------
+  // Când aplicația trece în fundal, evenimentele încă neconfirmate ajung în IndexedDB (oglinda le ține oricum în siguranță).
+  if (JOURNAL) { document.addEventListener("visibilitychange", () => { if (document.hidden) J.flush(); }); window.addEventListener("pagehide", () => { J.flush(); }); }
   function start(data) {
-    const local = loadLocal();
-    if (local) S = local;
+    if (!JOURNAL) { const local = loadLocal(); if (local) J.replaceState(local); }       // PWA: prima desenare vine din oglinda jurnalului, iar jurnalul se împacă cu IndexedDB mai jos
     ui.cert = Cert.load();
     if (data && data.ui && typeof data.ui === "object") {
       const u = data.ui;
@@ -2846,6 +3033,7 @@
     render();
     Sync.init();
     AI.init();
+    if (JOURNAL) J.load().then(() => { planCache = null; S = J.state(); softRender(); if (JSync) { JSync.attach(window, document); JSync.start(); } }, () => { /* fără IndexedDB: rămâne oglinda */ });
   }
   const hot = window.claude && window.claude.hot;
   if (hot && typeof hot.snapshot === "function") { try { hot.snapshot(() => ({ ui: snapshotUi() })); } catch (e) { /* opțional */ } }
@@ -2853,5 +3041,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { S = x; planCache = null; } };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J, sync: () => JSync };
 })();

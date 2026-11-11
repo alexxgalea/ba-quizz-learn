@@ -1,0 +1,3 @@
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+# boto3 vine cu runtime-ul Lambda; pentru rularea locală: pip install boto3

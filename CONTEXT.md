@@ -81,3 +81,9 @@ _Avoid_: silențios, doar ascultare
 **Vorbește**:
 Butonul ținut apăsat (push-to-talk) prin care Alex dă o comandă sau pune o întrebare pe Mut; cât e apăsat, Jarvis tace și ascultă.
 _Avoid_: push-to-talk (în interfață), microfon
+
+## Progres
+
+**Jurnal de încercări**:
+Lista tuturor răspunsurilor lui Alex, în ordinea în care au fost date; din ea se calculează cutiile, treptele și măsurătorile. Un eveniment nu se mai schimbă și are un id unic; setările, bifele din plan, poziția lecției și resetul sunt tot evenimente. Aplicația citește proiecția jurnalului (`S`), ținută în memorie și actualizată la fiecare eveniment, nu recalculată din tot jurnalul.
+_Avoid_: istoric (`S.h` e istoricul sesiunilor, un rând pe sesiune), log, stare îmbinată

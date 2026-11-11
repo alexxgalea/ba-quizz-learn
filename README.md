@@ -26,12 +26,15 @@ package.json       scripturi (validate, build, teste)
 src/
   shell.html       scheletul paginii
   app.js, app.css  aplicația, fără dependențe externe
-  live.js          Jarvis: serverul vocal (Gemini Live), protocolul și reluarea
+  server_conn.js   adresa și secretul serverului (`onapsis-server-v1`), un singur loc de citit
+  live_token.js    cere serverului un jeton de scurtă durată pentru Gemini Live (`POST /live-token`)
+  live.js          Jarvis: serverul vocal (Gemini Live), protocolul, jetonul și reluarea
   audio.js         Jarvis: microfon și difuzor în browser
   call.js          Jarvis: apelul vocal (stări, întrerupere, pauză, poarta microfonului, „Nu te aud”)
   jarvis.js        Jarvis: sesiunea (funcții oferite modelului, scor, setări, modul Lecție)
   ask.js           „Întreabă despre asta”: prompt, limite și verdict „în temă”
   gemini_text.js   un apel de text către Gemini (REST), pentru PWA
+  journal.js       jurnalul de încercări: forma evenimentului, proiecția în `S`, importul unui `S` vechi, îmbinarea (reuniune după id), depozitul IndexedDB cu coada netrimisă (vezi „Jurnal de încercări”)
   pwa/             iconița, service worker-ul
   data_*.js        module, grile, context, carduri orale, fișe, exerciții, schelete (data_skel.js), setări (data interviului, ore pe seară)
   expl/*.md        explicațiile grilelor, pe module (p1_*, p2_*, p3_*, perplexity.md)
@@ -69,6 +72,7 @@ python3 tools/test_terms.py
 python3 tools/test_ai.py     # verificarea AI la carduri orale (Claude/sample și DeepSeek simulate)
 python3 tools/test_gaps.py       # goluri (mc, w), teoria pe ce ai ratat, Studiu › Pentru tine
 python3 tools/test_interview.py  # intervievatorul: dialog, scor 1/0,5, memorie, rescriere, erori (sample simulat)
+python3 tools/test_iv_server.py  # intervievatorul, interviul tehnic simulat și Certificarea pe sursa de pe server (server simulat)
 python3 tools/test_plan.py   # planul generat, scadențele, întrebările deschise, formulările, setările
 node --test "tools/unit/*.test.mjs"   # Jarvis: Live, Audio (partea pură), Call, Jarvis, peste adaptoare false
 python3 tools/test_audio.py      # BrowserAudio în Chromium cu microfon fals
@@ -120,7 +124,7 @@ Glosarul (`src/expl/glosar.md`) are câte o secțiune `### Termen`, cu câmpuril
 
 ## Intervievator
 
-Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar fluxul „Verifică cu AI” rămâne ca înainte.
+Unde există o sursă pentru dialog: serverul propriu (PWA) sau `sample` (artifact), în această ordine. Fără niciuna butonul nu apare, iar fluxul „Verifică cu AI” rămâne ca înainte.
 
 1. Scrii răspunsul, apoi „Răspunde intervievatorului”. Un apel `quick` întoarce JSON `{"act":"followup","say":…}` sau `{"act":"done"}`. Intervievatorul are ton neutru, nu dă termenul răspunsului și cunoaște profilul tău (doar ca să formuleze concret). La cardurile BEH cere ce lipsește din STAR.
 2. Cel mult `IV_MAX` = 2 întrebări de continuare. „Nu știu” se trimite ca răspuns, iar „Încheie, vreau verdictul” funcționează oricând. „Done” sau un format greșit la întrebare duc direct la verdict.
@@ -128,9 +132,9 @@ Doar unde există `sample` (în artifact); în afara lui butonul nu apare, iar f
 4. Memorie pe card, în `S.o[id]`: `m` = indexurile punctelor neacoperite întreg (data viitoare intervievatorul le vizează primele) și `a` = ultima ta versiune bună. După verdict vezi „față de data trecută”. Cheile se scriu doar pe carduri făcute cu dialog (sau care le au deja), iar `mergeState` le păstrează ca pe restul itemului.
 5. „Rescrie-l” e opțional, după verdict și model. Reverificarea folosește verificatorul simplu, nu schimbă scorul și, la cel puțin 80% din puncte, salvează textul ca `a` (maximum 800 de caractere).
 
-6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără `sample` modul nu apare, iar planul păstrează textul vechi.
+6. **Interviu simulat** (Oral › Interviu simulat): 4 carduri din cel puțin 3 module, alese cu ponderile din „Recomandate” (`pickIvMock`). Salutul, tranzițiile și încheierea sunt text fix, fără apeluri în plus. Între carduri nu vezi modelul de răspuns și nu există rescriere; fiecare card trece prin `updO`, iar la final vezi ecranul de rezultat cu scorul pe card. Sarcina „oral” din plan recomandă intervievatorul, iar dimineața interviului are o încălzire de 2 carduri (`m-iv`, `go: { t: "ivmock", n: 2 }`). Fără server și fără `sample` modul nu apare, iar planul păstrează textul vechi.
 
-Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, iar „Continuă” reia pasul. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
+Fiecare apel are `cache: false` și primește tot dialogul în prompt (`sample` nu ține minte nimic). Nu există timer în pagină: ai „Se gândește…” și „Oprește”. Erorile folosesc `AI_MSG`; nu există reîncercare automată, „Continuă” reia pasul (după o eroare la verdict nu mai întreabă nimic: `iv.final`), iar „Fără AI: bifez eu punctele” lasă dialogul și trece cardul la bifele proprii. Cu serverul, un apel poate dura până la 50 s (limita clientului, `ServerAi`), iar „Oprește” îl întrerupe. Funcțiile pure (`parseTurn`, `parseIvVerdict`, `ivScore`, `ivTurnPrompt`, `ivVerdictPrompt`) sunt în `window.__prep`. Test: `python3 tools/test_interview.py`.
 
 ## Desfășurări
 
@@ -171,7 +175,7 @@ După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` 
 
 ## Certificare (testul integral)
 
-Un test de ~60 de minute, pornit din Plan (cardul „Certificare integrală”), în trei secțiuni, în ordinea probei. Doar cu `sample` (în artifact).
+Un test de ~60 de minute, pornit din Plan (cardul „Certificare integrală”), în trei secțiuni, în ordinea probei. Cu serverul propriu (PWA) sau cu `sample` (artifact); fără niciuna, butonul explică ce lipsește. Rezultatul intră în istoric (`kind: "cert"`) și în PWA, prin jurnal.
 
 - **Alegerea** (`pickCert`): 20 de grile (câte una din fiecare modul P1 și P2, două din module P3 diferite, fără Bonus), 6 carduri orale (3 sloturi de backend: `gil`/`asyncio`, `oop`/`python`/`pytest`, `asgi`; 3 de frontend: `react`, `js`/`ts`/`frontend`, un snippet `fedebug` cu `code`) și 2 schelete (Python dintr-un modul P1 de backend, TS / TSX din `frontend`). În fiecare modul sau slot alegerea e la întâmplare, ca scorul să măsoare; ce ai făcut în ultimele 20 de minute vine mai rar (`recentF`).
 - **Secțiunile** folosesc ecranele existente: grilele ca simulare (`mode: "mock"`, 15 minute, `run.cert`), cardurile orale cu intervievatorul (`mock: true`, `cert: true`), scheletele în Studiu, cu „← Certificare” în locul listei. Răspunsurile se notează ca în orice sesiune (Leitner, goluri, istoric).
@@ -207,6 +211,40 @@ La un card oral poți scrie răspunsul sau îl poți dicta cu butonul „Dicteaz
 - Răspunsul tău nu se salvează în progres; stă doar în sesiunea curentă.
 - Test: `python3 tools/test_ai.py` (DeepSeek, `sample` și microfonul simulate, nimic nu iese din mașină).
 
+## Jurnal de încercări
+
+Fiecare răspuns al lui Alex (și fiecare schimbare de setări, bifă de plan, poziție de lecție, reset) e un eveniment care nu se mai schimbă, într-un jurnal (`src/journal.js`, ADR 0003). `S` e proiecția jurnalului: o funcție pură (`Journal.project`) care dă exact ce dădeau `updQ` / `updO` / `updX` / `recordOral` peste starea veche. Aplicația citește `S` ca până acum; `updQ`, `updO`, `updX`, `updS`, kata-urile, golurile, planul, lecția, setările și resetul doar adaugă evenimente, iar proiecția se actualizează pe loc, nu din tot jurnalul.
+
+- Forma evenimentului și tipurile (`answer`, `guess`, `gap`, `cfg`, `plan`, `lesson`, `hist`, `state`, `reset`) sunt descrise în capul lui `src/journal.js`. Ordinea e după timp, apoi după id; îmbinarea a două liste e reuniunea după id; un `reset` ascunde tot ce e mai vechi.
+- În PWA (fără `window.claude`) jurnalul stă în IndexedDB (`onapsis-journal`: evenimente, coada netrimisă, instantaneul proiecției). O oglindă în `localStorage` (`onapsis-journal-v1`: proiecția + evenimentele încă neconfirmate de IndexedDB) face prima desenare sincronă; pornirea citește doar evenimentele de după instantaneu. Starea veche din `onapsis-prep-v1` se importă o dată, ca evenimente sintetice marcate `imported`. Sincronizarea veche prin `window.claude` nu rulează aici.
+- În artifact (`window.claude`) nimic nu se schimbă: aceleași reguli (proiecția), dar `S` se păstrează în `onapsis-prep-v1` și se sincronizează ca până acum; nu există IndexedDB.
+- Progres › Importă adaugă ce diferă ca evenimente sintetice (`Journal.importState`); id-urile sunt deterministe, deci același export importat de două ori nu dublează nimic.
+- Teste: `node --test tools/unit/journal.test.mjs` (proiecție, import, reset, doi dispozitive, goluri, depozit, repornire fără reluare) și `python3 tools/test_journal.py` (IndexedDB real, oglinda, migrarea, artifactul).
+
+### Sincronizarea
+
+În PWA, jurnalul se sincronizează cu serverul propriu (`server/`, README-ul lui; tichetul 05). Alex introduce adresa și secretul o dată pe dispozitiv, în Progres › Serverul (cardul `vServerCard`, același pentru AI, Jarvis și sincronizare); Progres › Sincronizare arată doar starea și butonul „Sincronizează acum”. Perechea stă doar în `localStorage` (`onapsis-server-v1`, JSON `{ url, secret }`, singurul accesor `ServerConn` din `src/server_conn.js`, care ține și regulile de validare: `ServerConn.normUrl`, `validSecret`, `conn.valid()`; sincronizarea își ia legătura din `Conn.valid()`, iar `srvSave` / `srv-del` o repornesc prin `srvChanged`), nu în `S`, în jurnal, în export sau în brief. Fără ea aplicația merge ca înainte.
+
+- `src/sync.js` (`JournalSync.create`, cod pur: `fetch`, cronometrele și `link` se injectează). Un ciclu trimite evenimentele netrimise în loturi de cel mult 500 (`POST /events`, antet `Authorization: Bearer <secret>`), le scoate din coadă doar după ce serverul le-a confirmat (`accepted` sau `duplicates`), apoi cere ce e nou după cursor (`GET /events?after=&limit=`) și îmbină cu `merge(events, { remote: true })`, până când `more` e fals. Cursorul stă lângă jurnal (`getAux("sync")`, legat de adresa serverului) și avansează abia după îmbinare. Nimic nu se pierde la o cădere în mijlocul unui lot: ce nu e confirmat rămâne în coadă, iar trimiterea repetată e idempotentă după id.
+- Rulează la pornire, la `online`, la revenirea în prim-plan (`visibilitychange`) și după fiecare răspuns (cu 1,5 s de așteptare, ca mai multe răspunsuri să plece într-un singur lot). Eșecurile de rețea sau 5xx se reîncearcă cu pauze tot mai mari (2 s, 4 s, … până la 5 min); un secret greșit (401) oprește reîncercările și apare în stare; un eveniment refuzat de server (4xx) nu le blochează pe celelalte.
+- Linia de stare din Progres: „La zi.” / „N netrimise.” / „Fără semnal · N netrimise.” / „Secret greșit.”, plus „Sincronizează acum”. Starea nu blochează nimic.
+- Starea veche din `onapsis-prep-v1`, importată la prima pornire, intră în coadă (serverul nu o are); id-urile sunt deterministe, deci o copie de pe alt dispozitiv se ignoră.
+- Teste: `node --test tools/unit/sync.test.mjs` (server fals în memorie, `tools/unit/fake_server.mjs`: un răspuns apare pe celălalt dispozitiv, răspunsuri date offline pe două dispozitive, reset, același eveniment de două ori, secret greșit, cădere în mijlocul unui lot, paginare și cursor) și `python3 tools/test_sync.py` (două dispozitive reale, server fals prin rutele Playwright).
+
+### Exportul și ștergerea jurnalului
+
+Tichetul 09 (povestea 7 a specului „platforma”): datele rămân ale lui Alex. Doar în PWA (cu IndexedDB); artifactul păstrează vechiul „Exportă progresul” / „Importă” (text `S`), care merge neschimbat.
+
+- **Progres › Salvare**: „Exportă jurnalul” descarcă `jurnal-onapsis-AAAA-LL-ZZ.json`, iar „Importă jurnalul” încarcă un astfel de fișier. Exportul vechi (textul `S`, „Exportă progresul” / „Importă”) rămâne; un fișier de jurnal lipit în caseta „Importă” e recunoscut după `format` și intră pe aceeași cale ca fișierul.
+- **Formatul fișierului** (`Journal.exportDoc`): `{ format: "ba-journal", version: 1, exportedAt, device, devices, count, events }`. `events` e tot jurnalul, în ordinea (t, id), cu textul lui Alex; `devices` are toate `dev` din evenimente plus dispozitivul care exportă. Nu conține adresa sau secretul serverului (funcția primește doar evenimente, iar testele verifică). Un `version` mai mare decât cel cunoscut e refuzat cu „actualizează aplicația”.
+- **Importul** (`Journal.parseExport` + `J.merge`): reuniune după id, deci același fișier importat de două ori nu adaugă nimic și nu dublează. Merge fără semnal. Fișierul se validează întreg înainte: un eveniment fără id, timp sau tip refuză tot fișierul („Nu s-a importat nimic”); mesajele sunt în română (gol, nu e JSON, nu e jurnal, e export `S`, versiune mai nouă, evenimente stricate). Ce lipsea local intră în coada obișnuită de trimis, ca orice eveniment: serverul păstrează ce nu are și ignoră ce are (după id); ce exista deja aici nu se pune în coadă.
+- **Ștergerea de pe server** (Progres › Sincronizare, doar cu serverul configurat): „Șterge jurnalul de pe server” deschide un panou, iar panoul cere cuvântul „sterge” (cu sau fără diacritice) și apoi „Șterge definitiv de pe server”. Un singur click nu șterge nimic. Trimite `POST /events/purge { "confirm": "purge-all-events" }`; copia locală nu se atinge (povestea 8). Ce nu ajunsese încă pe server (coada netrimisă) se trimite în continuare, fiindcă serverul nu-l avea.
+- **Epoca serverului** (cea mai simplă variantă sigură): după o ștergere numerele de secvență pornesc din nou de la 1, deci cursorul păstrat de alt dispozitiv n-ar mai însemna nimic (ar sări peste evenimentele noi). De aceea fiecare răspuns de la `GET` / `POST /events` poartă `epoch`, un șir care se schimbă la fiecare ștergere (`"0"` cât serverul n-a fost șters niciodată). `JournalSync` o ține lângă cursor (`getAux("sync")` = `{ url, after, epoch }`). La o epocă diferită de cea păstrată: cursorul se reia de la 0 și epoca nouă se păstrează, iar ecranul arată „Jurnalul de pe server a fost șters…”. Atât: datele locale rămân, iar ce era deja trimis NU se retrimite singur (Alex tocmai a șters serverul). Prima epocă văzută doar se reține; un server fără `epoch` (mai vechi) nu schimbă nimic.
+- **„Retrimite jurnalul local”** e singura cale de a pune tot jurnalul înapoi pe server: pune toate evenimentele locale în coada de trimis (`J.resendAll`, `store.markUnsent`), iar sincronizarea le trimite (serverul ignoră după id ce are deja; repetat, nu schimbă nimic). Importul unui fișier pe un dispozitiv care nu are evenimentele face același lucru pentru ce îi lipsea.
+- **Brief**: `node export/make_brief.js <jurnal.json | progress.json> <out.md>` citește exportul de jurnal (`S` se calculează cu aceeași proiecție) sau exportul vechi `S`; același progres dă același brief pe amândouă.
+- Teste: `node --test tools/unit/export.test.mjs` (formatul, textul și lipsa secretului, validarea, importul fără dubluri și offline, export → ștergere → import = aceeași proiecție, epoca pe două dispozitive, „Retrimite”, brief), `python3 tools/test_export.py` (butoanele, fișierul descărcat, confirmarea în doi pași, al doilea dispozitiv), `cd server && python3 -m pytest` (`tests/test_purge.py`, pe memorie și moto).
+- **Neverificat pe serverul real (AWS)**: `POST /events/purge` pe DynamoDB real (testat doar pe moto), permisiunea IAM `dynamodb:BatchWriteItem` adăugată în `template.yaml` (nu s-a lansat), CORS pentru POST către `/events/purge` din browser (metodele GET și POST sunt deja permise) și o ștergere pe un jurnal mare (timpul funcției). Ștergerea nu e atomică (evenimentele și marcajele, apoi contorul, apoi epoca); în uz obișnuit, cu un singur utilizator, nu contează.
+
 ## Publicare
 
 Aplicația e publicată ca artifact Claude privat: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT
@@ -215,11 +253,12 @@ Progresul stă în baza de date a artefactului, într-un document per utilizator
 
 ## Jarvis (interviu vorbit)
 
-Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/docs/app/; GitHub Pages servește rădăcina ramurii `main`): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini stă în `localStorage` (`onapsis-gemini-v1`), niciodată în starea aplicației, în export sau în brief.
+Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/docs/app/; GitHub Pages servește rădăcina ramurii `main`): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini (doar ca rezervă, cât nu e configurat un server) stă în `localStorage` (`onapsis-gemini-v1`); adresa și secretul serverului în `onapsis-server-v1`. Niciuna nu intră în starea aplicației, în export sau în brief.
 
 Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Pe scurt:
 
 - **Trei cusături**: `Live` (GeminiLive | FakeLive), `Audio` (BrowserAudio | FakeAudio), `PrepApp` (app.js | stub). `Call` și `Jarvis` stau peste ele. Fiecare fișier merge în pagină (declarații globale) și în Node (`module.exports`), fără importuri între ele.
+- **Jetonul de la server** (platforma, tichetul 08; `server/README.md` are contractul `POST /live-token`). Cu serverul configurat (adresă + secret, introduse în Progres › Serverul (același card apare și în Jarvis) și păstrate în `localStorage`, cheia `onapsis-server-v1`, JSON `{url, secret}`), Jarvis nu mai are câmp pentru cheia Gemini: la pornire cere un jeton (`LiveToken`, înainte de microfon, deci fără semnal vezi „Fără conexiune la server” și nu apare nicio cerere de permisiune), iar `GeminiLive` deschide `BidiGenerateContentConstrained?access_token=` pe v1beta. `cfg.getToken()` se cheamă la pornire, la reconectare când jetonul ține mai puțin de `renewMs` (12 minute: o conexiune ține ~10 minute, deci cu un prag de 5 jetonul ar putea expira între două reconectări) și o singură dată când Gemini refuză jetonul curent. Reconectările la `goAway` merg cu același jeton și cu handle-ul de reluare. Cu un jeton NOU handle-ul vechi nu e documentat: dacă e refuzat, sesiunea repornește curat și anunță `restarted`; Jarvis retrimite contextul (lecția: următoarea bucată vine cu `recap` de la ultima bucată auzită, cu `continuare: true`; antrenamentul: modelul e trimis la `next_card`). La fel după o redeschidere (`reopened`). Proba pe API-ul real: `docs/probe-jeton-live.html`. Fără server configurat rămâne, ca rezervă veche, câmpul pentru cheia Gemini (`onapsis-gemini-v1`); după prima sesiune pornită cu serverul cheia veche se șterge din browser.
 - **PrepApp** (`window.PrepApp`, în `app.js`): `next`, `record` (aceeași logică ca `oralSave`, prin `recordOral`), `theory`, `summary`, `log`, iar pentru Lecție `sheet`, `lessonHeard`, `lessonDone`, `lessonRec`. Rândurile din istoric au `kind: "jarvis"`; cele de lecție au și `lesson: true`.
 - **Teste**: `tools/unit` (Node, câte un fișier pe modul), `tools/test_audio.py`, `tools/test_prepapp.py`, `tools/test_jarvis.py` (înlocuitorii din `tools/jarvis_fakes.js` se injectează prin `window.__jarvisFakes`).
 - **Publicare PWA**: `npm run build && npm run pages`, apoi commit și push. GitHub Pages servește `docs/app` din ramură (Settings › Pages › Deploy from a branch › `/docs`).
