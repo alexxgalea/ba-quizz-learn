@@ -189,3 +189,13 @@ Rezumat, cu trimitere la secțiunile de mai sus: (1) secretele cu Secrets Manage
 - Că `POST /v1beta/auth_tokens` întoarce un jeton care deschide efectiv o sesiune pe `BidiGenerateContentConstrained` cu `gemini-3.8-live`: documentația o spune, dar nu am avut cheie Gemini ca s-o rulez.
 - Reluarea unei sesiuni Live cu alt jeton decât cel inițial.
 - Consumul real de capacitate DynamoDB al tranzacțiilor pe volumul importului.
+
+
+## 10. Verificat pentru tichetul 06 (`/ai`), 2026-11-11
+
+Surse: https://api-docs.deepseek.com/quick_start/pricing · https://api-docs.deepseek.com/api/create-chat-completion · https://aistudio.google.com/api-reference/generate-content (redirecționat de la ai.google.dev).
+
+- ✅ DeepSeek: `deepseek-flash` (DeepSeek-V4.1-Flash-1017) și `deepseek-v4-pro`; numele vechi `deepseek-v4-flash` merge încă, dar modelul a fost retras. `POST https://api.deepseek.com/chat/completions`; `response_format: {"type": "json_object"}` cere și un cuvânt „JSON” în prompt; `thinking: {"type": "disabled"}`; `max_tokens` 1–393216; textul e la `choices[0].message.content` și poate fi `null` sau gol (JSON nerecunoscut devine spații), deci serverul tratează conținutul gol ca eșec.
+- ✅ Gemini: `POST /v1beta/models/{model}:generateContent` e încă listat, fără notă de retragere. Documentația nouă de text promovează însă Interactions API (`/v1beta/interactions`, cu `input`, `system_instruction`, `generation_config`, antetul `Api-Revision`) cu exemplul `gemini-3.8-flash`. Serverul rămâne pe `generateContent` și `gemini-3.5-flash-lite` (verificat în secțiunea 5; același cod ca `src/gemini_text.js`); o migrare la Interactions API e o decizie de mai târziu, nu o urgență.
+- ✅ Cheia Gemini se trimite în antetul `x-goog-api-key` (pagina nouă de text îl folosește în exemple); serverul o pune acolo, nu în adresă, ca să nu ajungă în jurnale de acces sau de erori.
+- ❓ Nu s-a rulat niciun apel real (nu există chei în sandbox): formele cererilor și ale răspunsurilor sunt cele din documentație, acoperite de teste cu model fals.

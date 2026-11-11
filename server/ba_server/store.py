@@ -41,6 +41,12 @@ class EventStore(Protocol):
 
     def read(self, after: int, limit: int) -> Page: ...
 
+    def take_ai_slot(self, day: str, cap: int) -> bool:
+        """Contor zilnic pentru /ai (tichetul 06): crește atomic numărul cererilor din ziua
+        `day` (AAAA-LL-ZZ, UTC) și întoarce True cât timp nu depășește `cap`; altfel False,
+        fără să crească. `cap <= 0` refuză mereu (comutator de urgență pentru AI)."""
+        ...
+
 
 def dump(event: dict[str, Any]) -> str:
     """Forma stocată: JSON compact. Evită tipurile DynamoDB (float devine Decimal)."""
@@ -84,6 +90,15 @@ class MemoryStore:
         self._lock = threading.Lock()
         self._rows: list[tuple[int, str]] = []  # (număr, json); număr = index + 1
         self._ids: set[str] = set()
+        self._ai_days: dict[str, int] = {}
+
+    def take_ai_slot(self, day: str, cap: int) -> bool:
+        with self._lock:
+            n = self._ai_days.get(day, 0)
+            if cap <= 0 or n >= cap:
+                return False
+            self._ai_days[day] = n + 1
+            return True
 
     def append(self, events: list[dict[str, Any]]) -> AppendResult:
         unique, repeated = dedupe(copy.deepcopy(events))

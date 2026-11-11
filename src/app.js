@@ -554,7 +554,8 @@
     study: { seg: "sheets", open: null, kata: null, skel: null, skelDue: false, attempt: null, peeked: {}, hints: 0, kEnd: 0, gapOpen: {} },
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false },
-    jv: { module: "", typing: false, draft: "", keyDraft: "", srvUrl: "", srvSecret: "", keyTest: "", mics: [], holding: false, rst: false },
+    srv: { url: "", secret: "" },
+    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
     dz: {},                                          // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
     cert: null, certQuit: false                      // certificarea în curs sau ultima terminată pe dispozitivul ăsta (vezi Cert), nu în S
@@ -916,21 +917,29 @@
       try { this.sample = (await c.use("sample")) || null; } catch (e) { this.sample = null; }
       if (this.sample && !(ui.run && ui.run.ans)) render();
     },
-    ready() { return !!(this.sample || this.get()); },
-    name() { return this.sample ? "Claude" : "DeepSeek"; },
+    ready() { return !!(Srv.configured() || this.sample || this.get()); },
+    name() { return Srv.configured() ? "AI" : this.sample ? "Claude" : "DeepSeek"; },
     get() { try { return localStorage.getItem(DS_KEY) || ""; } catch (e) { return ""; } },
     set(k) { try { if (k) localStorage.setItem(DS_KEY, k); else localStorage.removeItem(DS_KEY); return true; } catch (e) { return false; } },
     mask: k => (k ? "…" + k.slice(-4) : "")
   };
+  // Serverul propriu: adresa și secretul au un singur accesor, `Conn` (ServerConn, src/server_conn.js, `localStorage` `onapsis-server-v1`, nu în S).
+  // Îl folosesc AI-ul (`Srv`), Jarvis (jetoanele) și, la tichetul 05, sincronizarea. Cu serverul configurat, nicio cerere AI nu pleacă direct către Gemini sau DeepSeek.
+  const Conn = ServerConn.create(jvStorage());
+  const Srv = ServerAi.create({ fetch: (u, i) => window.fetch(u, i), conn: Conn });
   const AI_MSG = {
-    nokey: "Adaugă mai întâi cheia DeepSeek, în Progres.",
+    nokey: "Adaugă mai întâi serverul (sau cheia DeepSeek), în Progres.",
+    srv_auth: "Serverul a refuzat secretul. Verific-l în Progres.",
+    srv_cap: "Ai atins plafonul zilnic de cereri AI. Revine mâine.",
+    srv_big: "Cererea e prea mare pentru server.",
+    srv_ai: "Niciun model AI nu răspunde acum. Reîncearcă mai târziu.",
     auth: "Cheia DeepSeek nu e validă. Verific-o în Progres.",
     credit: "Contul DeepSeek nu mai are credit.",
     rate: "Prea multe cereri. Așteaptă puțin și reîncearcă.",
     server: "DeepSeek nu răspunde acum. Reîncearcă.",
     http: "Cererea a fost respinsă. Reîncearcă.",
     timeout: "Verificarea a întârziat prea mult. Reîncearcă.",
-    network: "Nu pot ajunge la api.deepseek.com (rețea sau restricție a paginii).",
+    network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).",
     format: "Răspunsul AI nu avea formatul așteptat. Reîncearcă.",
     nogrant: "Accesul la Claude a fost refuzat. Reîncarcă pagina ca să-l poți permite.",
     refused: "Claude a refuzat cererea. Încearcă cu alt text.",
@@ -999,7 +1008,29 @@
       return v;
     } finally { clearTimeout(tm); }
   }
-  const aiGrade = (c, ans) => (AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans));
+  // Prin server: aceleași prompturi și același parser, o reîncercare pentru format. Dacă serverul pică, urmează `sample` (în artifact), nu Gemini sau DeepSeek direct.
+  async function srvGrade(c, ans) {
+    let last = null;
+    for (let a = 0; a < 2; a++) {
+      try {
+        const v = parseVerdict(await Srv.generate({ system: DS_SYS, user: aiUser(c, ans), kind: "default", json: true, maxTokens: 800 }), c.k.length);
+        if (v) return v;
+        last = aiError("format");
+      } catch (err) { if (err.code !== "format") throw err; last = err; }
+    }
+    throw last;
+  }
+  const aiGrade = (c, ans) => {
+    if (!Srv.configured()) return AI.sample ? sampleGrade(c, ans) : dsGrade(c, ans);
+    return ServerAi.run(AI.sample ? [{ generate: () => srvGrade(c, ans) }, { generate: () => sampleGrade(c, ans) }] : [{ generate: () => srvGrade(c, ans) }], null);
+  };
+  async function srvTest() {
+    const st = $("#srv-st"); if (st) st.textContent = "Se testează…";
+    let msg;
+    try { await Srv.generate({ user: "Răspunde cu un singur cuvânt: ok", kind: "quick", maxTokens: 8 }); msg = "Conexiune reușită: serverul răspunde."; }
+    catch (err) { msg = AI_MSG[err.code] || AI_MSG.network; }
+    const s2 = $("#srv-st"); if (s2) s2.textContent = msg;
+  }
   async function aiTest() {
     const key = AI.get(); if (!key) return;
     const st = $("#ds-st"); if (st) st.textContent = "Se testează…";
@@ -1092,7 +1123,7 @@
         (Mic.ok ? '<button class="btn sm' + (Mic.on ? " rec" : "") + '" id="mic-b" data-a="mic" aria-pressed="' + Mic.on + '">' + (Mic.on ? "Oprește" : "Dictează") + "</button>" : "") + "</div>" +
         '<textarea class="ans" id="ans-t" rows="5" maxlength="3000" placeholder="Scrie sau dictează răspunsul, în 3–4 propoziții" aria-label="Răspunsul tău"' + (busy ? " disabled" : "") + ">" + esc(run.ans || "") + "</textarea>";
       if (run.ai && run.ai.s === "err") h += '<p class="ai-err small" role="alert">' + esc(AI_MSG[run.ai.code] || AI_MSG.network) + "</p>";
-      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
+      if (!has) h += '<p class="muted small">Vrei verificare automată? Adaugă serverul sau cheia DeepSeek în <button class="btn sm ghost" data-a="tab" data-tab="progress">Progres</button></p>';
       h += "</section>";
       if (has) {
         const iv = IV.ready();
@@ -1220,6 +1251,13 @@
     try { r = await AI.sample(prompt, o); }
     catch (e) { throw aiError(e && e.code === "cancelled" ? "cancelled" : sampleCode(e)); }
     return r && r.text;
+  }
+  // Golurile (lecția, întrebarea țintită, verdictul ei) merg și prin server, nu doar prin `sample`. Interviul scris și Certificarea rămân pe `sample` (IV).
+  const gapReady = () => !!(AI.sample || Srv.configured());
+  function gapText(prompt, tier, json) {
+    if (!Srv.configured()) return sampleText(prompt, tier);
+    const srv = { generate: () => Srv.generate({ user: prompt, kind: tier === "quick" ? "quick" : "default", json: !!json }) };
+    return ServerAi.run(AI.sample ? [srv, { generate: () => sampleText(prompt, tier) }] : [srv], null);
   }
   const IV = {
     ready: () => !!AI.sample,
@@ -1577,21 +1615,21 @@
   }
   const stOf = (name, k) => (ui[name] || (ui[name] = {}))[k];
   async function gapExplain(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("les", k) && stOf("les", k).s === "busy") return;
     const mine = ui.les[k] = { s: "busy" }; render();
     let text = null, code = null;
-    try { text = await sampleText(gapLessonPrompt(c, i, gapEvidence(c)), "default"); } catch (err) { code = (err && err.code) || "network"; }
+    try { text = await gapText(gapLessonPrompt(c, i, gapEvidence(c)), "default", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.les[k] !== mine) return;
     ui.les[k] = text && text.trim() ? { s: "ok", text: text.trim().slice(0, 1200) } : { s: "err", code: code || "format" };
     render();
   }
   async function chkAsk(cid, i) {
-    const c = OBY[cid]; if (!c || !IV.ready()) return;
+    const c = OBY[cid]; if (!c || !gapReady()) return;
     const k = gapKey(cid, i); if (stOf("chk", k) && /^busy/.test(stOf("chk", k).s)) return;
     const mine = ui.chk[k] = { s: "busyq" }; render();
     let q = null, code = null;
-    try { q = await sampleText(gapAskPrompt(c, i, gapEvidence(c)), "quick"); } catch (err) { code = (err && err.code) || "network"; }
+    try { q = await gapText(gapAskPrompt(c, i, gapEvidence(c)), "quick", false); } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     ui.chk[k] = q && q.trim() ? { s: "q", q: q.trim().slice(0, 400), ans: "" } : { s: "err", code: code || "format", stage: "ask" };
     render();
@@ -1601,7 +1639,7 @@
     const ans = (st.ans || "").trim(); if (ans.length < 10) { toast("Scrie un răspuns mai lung"); return; }
     const mine = ui.chk[k] = { s: "busyg", q: st.q, ans }; render();
     let v = null, code = null;
-    try { v = parseGapGrade(await sampleText(gapGradePrompt(c, i, st.q, ans), "default")); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
+    try { v = parseGapGrade(await gapText(gapGradePrompt(c, i, st.q, ans), "default", true)); if (!v) code = "format"; } catch (err) { code = (err && err.code) || "network"; }
     if (ui.chk[k] !== mine) return;
     if (!v) ui.chk[k] = { s: "err", code, stage: "grade", q: st.q, ans };
     else if (v.covered) { ui.chk[k] = { s: "ok", q: st.q, ans, fb: v.feedback }; gapFix(cid, i); }
@@ -1617,7 +1655,7 @@
   }
   const lessonHtml = text => text.split(/\n+/).filter(Boolean).map(l => '<p class="rt">' + inlineRich(l).replace(/^(Ideea:|Unde s-a rupt gândirea ta:|Spune-l la interviu:)/, "<b>$1</b>") + "</p>").join("");
   function gapAi(c, i) {
-    if (!IV.ready()) return "";
+    if (!gapReady()) return "";
     const k = gapKey(c.id, i), les = stOf("les", k), chk = stOf("chk", k), data = ' data-c="' + c.id + '" data-i="' + i + '"';
     let h = "";
     if (chk && chk.s === "ok") h += '<div class="gap-ok"><span class="chip ok">Reparat</span>' + (chk.fb ? '<p class="small">' + fmt(chk.fb) + "</p>" : "") + "</div>";
@@ -2056,6 +2094,7 @@
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
     h += vCfg();
+    h += vServerSettings();
     h += vAiSettings();
     return h;
   }
@@ -2067,8 +2106,34 @@
       '<label class="small">Ore/seară <select class="keyin" id="cfg-h" aria-label="Ore pe seară">' + opts + "</select></label></div>" +
       '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button></div></section>';
   }
+  // Cardul „Serverul”: SINGURUL formular pentru adresa și secretul serverului (ServerConn / `Conn`). Progres îl arată direct, Jarvis îl refolosește cu `extra`
+  // (butoane proprii, în același card); tichetul 05 (Sincronizare) îl poate chema la fel. Acțiunile `srv-save` / `srv-test` / `srv-del` sunt comune.
+  function vServerCard(extra) {
+    const c = Conn.configured() ? Conn.get() : null, d = ui.srv;
+    return '<section class="card stack-s"><h3>Serverul</h3>' +
+      '<p class="small">Verificarea AI, întrebările, Jarvis și sincronizarea trec prin serverul tău, care ține cheile Gemini și DeepSeek. Nu mai ai nevoie de chei în browser.</p>' +
+      '<p class="small" id="srv-st">' + (c ? "Configurat: " + esc(c.url.replace(/^https?:\/\//, "")) + " (secret …" + esc(c.secret.slice(-4)) + ")." : "Neconfigurat.") + "</p>" +
+      '<input class="keyin" id="srv-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Adresa serverului (https://…)" value="' + esc(d.url || (c ? c.url : "")) + '" aria-label="Adresa serverului">' +
+      '<input class="keyin" id="srv-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (c ? "Secret nou (înlocuiește)" : "Secretul serverului") + '" value="' + esc(d.secret) + '" aria-label="Secretul serverului">' +
+      '<div class="row"><button class="btn sm primary" data-a="srv-save">Salvează</button>' + (c ? '<button class="btn sm" data-a="srv-test">Testează AI</button><button class="btn sm danger" data-a="srv-del">Șterge</button>' : "") + (extra || "") + "</div>" +
+      '<p class="xs muted">Adresa și secretul rămân doar în browserul acestui dispozitiv: nu se sincronizează și nu intră în export. Serverul primește doar promptul (întrebarea, punctele cheie și răspunsul tău).</p></section>';
+  }
+  function vServerSettings() {
+    return AI.sample ? "" : vServerCard();               // în artifact, CSP blochează conexiunile către server
+  }
+  // Salvează din câmpurile cardului (`#srv-url`, `#srv-secret`); un secret gol păstrează secretul de acum. Întoarce true dacă s-a salvat.
+  function srvSave() {
+    const u = $("#srv-url"), k = $("#srv-secret"), c = Conn.get();
+    const url = ServerAi.normUrl(u ? u.value : ""), secret = ((k && k.value.trim()) || c.secret || "").trim();
+    if (!url) { toast("Adresa trebuie să înceapă cu https://"); return false; }
+    if (!secret) { toast("Lipsește secretul"); return false; }
+    try { Conn.set({ url, secret }); } catch (e) { toast("Browserul nu permite salvarea"); return false; }
+    ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server salvat"); return true;
+  }
   function vAiSettings() {
     if (AI.sample) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">La cardurile orale, Claude compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit. Nu ai nevoie de cheie: folosește contul tău Claude, iar prima dată ți se cere permisiunea.</p><p class="xs muted">Se trimit doar întrebarea, punctele cheie și răspunsul tău.</p></section>';
+    // Cu serverul configurat nu mai există câmp pentru cheia DeepSeek: nicio cerere nu pleacă direct din browser (cheia, dacă a rămas, nu se folosește).
+    if (Srv.configured()) return '<section class="card stack-s"><h3>Verificare AI</h3><p class="small">Verificarea răspunsurilor și întrebările trec prin server. Cheia DeepSeek din browser nu se mai folosește.</p></section>';
     const k = AI.get();
     return '<section class="card stack-s"><h3>Verificare AI (DeepSeek)</h3>' +
       '<p class="small">La cardurile orale, DeepSeek compară răspunsul tău, scris sau dictat, cu punctele cheie și bifează ce ai acoperit.</p>' +
@@ -2236,6 +2301,9 @@
         render(); toast("Cheie salvată"); break;
       }
       case "ds-del": AI.set(""); render(); toast("Cheie ștearsă"); break;
+      case "srv-save": srvSave(); break;
+      case "srv-del": Conn.clear(); ui.srv = { url: "", secret: "" }; ui.jv.keyTest = ""; render(); toast("Server șters"); break;
+      case "srv-test": srvTest(); break;
       case "ds-test": aiTest(); break;
       case "tick": if (ui.run) { const k = +b.dataset.k; ui.run.ticks[k] = !ui.run.ticks[k]; render(); } break;
       case "oral-save": oralSave(); break;
@@ -2342,8 +2410,8 @@
     else if (t && t.id === "jv-t") ui.jv.draft = t.value;
     else if (t && t.dataset && "skelCode" in t.dataset && ui.study.attempt) { ui.study.attempt.code = t.value; Drafts.set(ui.study.attempt.id, t.value); }
     else if (t && t.id === "jv-key") ui.jv.keyDraft = t.value;
-    else if (t && t.id === "jv-srv-url") ui.jv.srvUrl = t.value;
-    else if (t && t.id === "jv-srv-secret") ui.jv.srvSecret = t.value;
+    else if (t && t.id === "srv-url") ui.srv.url = t.value;
+    else if (t && t.id === "srv-secret") ui.srv.secret = t.value;
     else if (t && t.id === "ans-t" && ui.run) { if (Mic.on) Mic.stop(); ui.run.ans = t.value; }
     else if (t && t.id === "iv-t" && ui.run && ui.run.iv) ui.run.iv.draft = t.value;
     else if (t && t.dataset && t.dataset.chk && ui.chk && ui.chk[t.dataset.chk]) ui.chk[t.dataset.chk].ans = t.value;
@@ -2468,19 +2536,29 @@
   const ASK_MAX = 6;
   const geminiKey = () => { try { return localStorage.getItem("onapsis-gemini-v1") || ""; } catch (e) { return ""; } };
   const gemText = GeminiText.create({ fetch: (u, i) => window.fetch(u, i), getKey: geminiKey, model: "gemini-3.5-flash-lite" });      // cel mai rapid model gratuit: răspunsurile sunt scurte
-  // Sursa: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis (PWA), altfel DeepSeek.
+  // Sursa: serverul propriu (PWA, prima); fără el, ca înainte: Claude prin `sample` (artifact), altfel Gemini cu cheia de la Jarvis, altfel DeepSeek.
+  // Cu serverul configurat urmează doar `sample` la eșec: niciodată Gemini sau DeepSeek direct din browser. Fără server, se folosește prima sursă, fără căderi.
+  const askSources = () => {
+    const o = ServerAi.order({ server: Srv.configured(), sample: !!AI.sample, gemini: !!geminiKey(), deepseek: !!AI.get() });
+    return o[0] === "server" ? o : o.slice(0, 1);
+  };
+  const ASK_WHO = { server: "AI", sample: "Claude", gemini: "Gemini", deepseek: "DeepSeek" };
   const AskModel = {
-    ready: () => !!(AI.sample || geminiKey() || AI.get()),
-    name: () => (AI.sample ? "Claude" : geminiKey() ? "Gemini" : "DeepSeek"),
-    async generate(req) {
-      if (AI.sample) return sampleText(req.system + "\n\n" + req.user, "default");      // `sample` nu are prompt de sistem
-      if (geminiKey()) return gemText.generate(req);
-      return dsCall({ model: DS_MODEL, messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get());
+    ready: () => askSources().length > 0,
+    name: () => ASK_WHO[askSources()[0]] || "AI",
+    generate(req) {
+      const by = {
+        server: r => Srv.generate({ system: r.system, user: r.user, kind: "default", json: true }),      // Ask, scheletele: toate cer JSON
+        sample: r => sampleText(r.system + "\n\n" + r.user, "default"),                                // `sample` nu are prompt de sistem
+        gemini: r => gemText.generate(r),
+        deepseek: r => dsCall({ model: DS_MODEL, messages: [{ role: "system", content: r.system }, { role: "user", content: r.user }], response_format: { type: "json_object" }, thinking: { type: "disabled" }, temperature: 0.3, max_tokens: 700, stream: false }, AI.get())
+      };
+      return ServerAi.run(askSources().map(n => ({ name: n, generate: by[n] })), req);
     }
   };
   const askEngine = Ask.create({ model: AskModel, role: P.cfg.role });
   const ASK_MSG = Object.assign({}, AI_MSG, {
-    nokey: "Adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
+    nokey: "Adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).", auth: "Cheia nu e validă. Verific-o în Jarvis (Gemini) sau în Progres (DeepSeek).",
     network: "Nu pot ajunge la serverul AI (rețea sau restricție a paginii).", empty: "Scrie o întrebare.", refused: "Modelul a refuzat cererea. Încearcă altfel.",
     timeout: "Modelul n-a răspuns la timp. Reîncearcă.", format: "Răspunsul modelului n-a avut formatul așteptat. Reîncearcă."
   });
@@ -2535,7 +2613,7 @@
   function vAsk(key, extra) {
     const st = ui.ask[key] || (ui.ask[key] = { open: false, draft: "", hist: [], busy: false, err: null });
     if (extra) Object.assign(st, extra);            // același obiect la fiecare randare: askSend îl modifică în timp ce se așteaptă răspunsul
-    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
+    if (!AskModel.ready()) return '<p class="xs muted ask-hint">Ca să poți întreba, adaugă serverul în Progres sau o cheie Gemini în tab-ul Jarvis (sau DeepSeek în Progres).</p>';
     const k = esc(key);
     if (!st.open) return '<button class="btn sm ask-open" data-a="ask-open" data-k="' + k + '">Întreabă despre asta</button>';
     const kind = key.split(":")[0], full = st.hist.length >= ASK_MAX, ctx = askCtx(key), topic = ctx ? ctx.topic : "";
@@ -2632,10 +2710,9 @@
     catch (e) { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: k => { delete m[k]; } }; }
   }
   // Serverul platformei (adresă + secret, `onapsis-server-v1`) dă jetoane de scurtă durată pentru Live: cheia Gemini nu mai stă în telefon.
-  const jvSrv = ServerConn.create(jvStorage());
-  const jvTokens = LiveToken.create({ server: jvSrv, fetch: (u, i) => window.fetch(u, i) });
+  const jvTokens = LiveToken.create({ server: Conn, fetch: (u, i) => window.fetch(u, i) });
   function jvInit() {
-    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), server: jvSrv, getToken: jvFakes.getToken || jvTokens.get, clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
+    if (!jv) jv = Jarvis.create({ call: Call, app: PrepApp, live: jvFakes.live || GeminiLive, audio: jvFakes.audio || BrowserAudio.create(), storage: jvStorage(), server: Conn, getToken: jvFakes.getToken || jvTokens.get, clock: jvFakes.clock || { now, after: (ms, fn) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); } }, onChange: jvChanged });
     return jv;
   }
   // Schimbările structurale redesenează ecranul; nivelul vocii și transcrierea se actualizează pe loc (altfel s-ar pierde textul scris și focusul).
@@ -2665,23 +2742,18 @@
   }
 
   function vJarvisHome(st, set) {
-    const viaServer = jvSrv.configured(), hasKey = viaServer || !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
+    const viaServer = Conn.configured(), hasKey = viaServer || !!set.key, mods = MODS.filter(m => ORAL_BY_M[m.id].length);
     if (!ui.jv.module || !MOD[ui.jv.module]) ui.jv.module = (mods[0] || {}).id || "";
     let h = '<div class="eyebrow">Jarvis · interviu vorbit</div>';
     h += '<section class="card stack-s"><h2>Vorbește cu Jarvis</h2><p class="small muted">Îți pune întrebări ca la interviu, te întreabă mai departe și îți notează răspunsurile ca în Oral. După ce începi, nu mai atingi ecranul.</p></section>';
     if (st.error) h += '<p class="jv-err" role="alert">' + esc(st.error.message) + "</p>";
     if (st.needKey && !hasKey) h += '<p class="jv-err" role="alert">Ca să pornești, adaugă mai întâi serverul (adresa și secretul) sau, dacă nu ai server, cheia Gemini.</p>';
     // Cu server configurat, nu mai există câmp pentru cheia Gemini: Jarvis pornește cu un jeton de la server. Fără server rămâne cheia veche, ca rezervă.
-    const srv = jvSrv.get();
-    const serverCard = viaServer
-      ? '<section class="card stack-s"><h3>Server</h3><p class="small" id="jv-srvinfo">Server configurat (' + esc(srv.url.replace(/^https?:\/\//, "").replace(/^(.{22}).+$/, "$1…")) + '). Jarvis pornește cu un jeton de la server; nu ai nevoie de cheia Gemini în telefon.</p>' +
+    // Formularul serverului e cel din Progres (`vServerCard`), cu un buton în plus pentru conexiunea Jarvis.
+    const serverCard = vServerCard(viaServer ? '<button class="btn sm" data-a="jv-key-test">Testează Jarvis</button>' : "") +
+      (viaServer ? '<p class="xs muted" id="jv-srvinfo">Jarvis pornește cu un jeton de la server; nu ai nevoie de cheia Gemini în telefon.</p>' +
         (set.key ? '<p class="small muted" id="jv-oldkey">A rămas o cheie veche în acest browser (…' + esc(set.key.slice(-4)) + "). Dispare la prima sesiune pornită cu serverul.</p>" : "") +
-        '<div class="row"><button class="btn sm" data-a="jv-key-test">Testează conexiunea</button><button class="btn sm ghost" data-a="jv-server-clear">Șterge serverul</button></div>' +
-        '<p class="xs muted" id="jv-keytest" role="status">' + esc(ui.jv.keyTest) + '</p><p class="xs muted">Pe nivelul gratuit, Google poate folosi conversațiile: nu spune nimic confidențial.</p></section>'
-      : '<section class="card stack-s"><h3>Server</h3><p class="small muted" id="jv-srvinfo">Adresa funcției și secretul tău. Rămân doar în acest browser. Cu ele, Jarvis nu mai are nevoie de cheia Gemini.</p>' +
-        '<input class="keyin" type="url" id="jv-srv-url" autocomplete="off" placeholder="https://….lambda-url.….on.aws" value="' + esc(ui.jv.srvUrl || srv.url) + '" aria-label="Adresa serverului">' +
-        '<input class="keyin" type="password" id="jv-srv-secret" autocomplete="off" placeholder="Secretul" value="' + esc(ui.jv.srvSecret) + '" aria-label="Secretul serverului">' +
-        '<div class="row"><button class="btn sm primary" data-a="jv-server-save">Salvează</button></div></section>';
+        '<p class="xs muted" id="jv-keytest" role="status">' + esc(ui.jv.keyTest) + '</p><p class="xs muted">Pe nivelul gratuit, Google poate folosi conversațiile: nu spune nimic confidențial.</p>' : "");
     const keyCard = viaServer ? serverCard : serverCard + '<section class="card stack-s"><h3>Cheia Gemini (metodă veche)</h3><p class="xs muted">Folosită doar cât nu ai server configurat.</p>' +
       (hasKey ? '<p class="small" id="jv-keyinfo">Cheie salvată (…' + esc(set.key.slice(-4)) + ").</p>" : '<p class="small muted" id="jv-keyinfo">Nu ai încă o cheie. Creeaz-o gratuit în Google AI Studio (aistudio.google.com/apikey) și lipește-o aici.</p>') +
       '<input class="keyin" type="password" id="jv-key" autocomplete="off" placeholder="' + (hasKey ? "Cheie nouă (opțional)" : "Cheia din Google AI Studio") + '" value="' + esc(ui.jv.keyDraft) + '" aria-label="Cheia Gemini">' +
@@ -2800,7 +2872,7 @@
       case "jv-key-save": { const v = (ui.jv.keyDraft || "").trim(); if (!v) { toast("Lipește cheia"); break; } J.settings.set({ key: v }); ui.jv.keyDraft = ""; ui.jv.keyTest = ""; render(); break; }
       case "jv-key-clear": J.settings.set({ key: "" }); ui.jv.keyTest = ""; render(); break;
       case "jv-key-test": {
-        const viaServer = jvSrv.configured();
+        const viaServer = Conn.configured();
         ui.jv.keyTest = "Se verifică…"; render();
         J.checkKey().then(r => {
           ui.jv.keyTest = r.ok ? (viaServer ? "Conexiunea merge." : "Cheia merge.") : "Nu merge: " + (viaServer ? J.errorText(r.reason) : r.reason === "auth" ? "cheia nu e validă." : r.reason === "quota" ? "limita gratuită a fost atinsă." : "verifică rețeaua.");
@@ -2808,13 +2880,6 @@
         });
         break;
       }
-      case "jv-server-save": {
-        const url = (ui.jv.srvUrl || jvSrv.get().url).trim(), secret = (ui.jv.srvSecret || "").trim();
-        if (!/^https:\/\/[^\s/]+/i.test(url)) { toast("Adresa trebuie să înceapă cu https://"); break; }
-        if (!secret) { toast("Lipește secretul"); break; }
-        jvSrv.set({ url, secret }); ui.jv.srvUrl = ""; ui.jv.srvSecret = ""; ui.jv.keyTest = ""; render(); break;
-      }
-      case "jv-server-clear": jvSrv.clear(); ui.jv.keyTest = ""; render(); break;
       case "jv-mics": J.mics().then(list => { ui.jv.mics = list; render(); }, () => toast("Nu pot citi microfoanele")); break;
     }
   }

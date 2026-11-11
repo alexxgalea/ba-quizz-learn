@@ -14,6 +14,7 @@ Toate, afară de `/health`, cer antetul `Authorization: Bearer <secret>`.
 | `GET /events?after=<cursor>&limit=<n>` | Întoarce evenimentele cu număr mai mare decât `after` (implicit 0), în ordinea sosirii, cel mult `limit` (implicit 100, maximum 500). Răspuns: `{"events": [...], "cursor": n, "more": bool}`. Clientul repetă cu `after=cursor` cât timp `more` e `true`. |
 | `POST /live-token` (fără corp) | Jeton de scurtă durată pentru Gemini Live (tichetul 08). Serverul cere la Gemini un jeton cu `uses: 1`, `expireTime` = acum + 60 de minute și `newSessionExpireTime` = acum + 2 minute. Răspuns: `{"token": "auth_tokens/…", "expireAt": "2026-11-12T19:00:00Z", "expiresIn": 3600}`. Erori: `503 {"detail": {"error": "gemini_key_missing"}}` (serverul n-are `GEMINI_API_KEY`), `502` cu `error` = `gemini_unreachable`, `gemini_error` (plus `upstream_status`) sau `gemini_bad_response`. Cheia Gemini și corpul erorii Google nu ajung niciodată la client. |
 | `GET /health` | `{"ok": true}`, fără secret. |
+| `POST /ai` | Promptul gata făcut al clientului, textul modelului înapoi. Vezi „AI prin server” mai jos. |
 
 Orice altceva fără secret primește `401 {"detail": "unauthorized"}`, la fel pentru secret lipsă, greșit sau neconfigurat (inclusiv cu corp stricat). Documentația automată FastAPI e oprită.
 
@@ -39,6 +40,18 @@ server/
 ```
 
 **Rutere noi (tichetele 06 `/ai` și 08 `/live-token`).** Un fișier nou în `ba_server/routers/`, cu `router = APIRouter()`. `create_app` îl găsește singur și pune secretul pe fiecare rută a lui; un ruter public declară `PUBLIC = True` (ca `health.py`). Codul evenimentelor nu se atinge. Un ruter își ia depozitul și setările cu `Depends(get_store)` / `Depends(get_settings)`; cheile Gemini și DeepSeek se adaugă în `Settings` (variabile de mediu ale funcției, nu Secrets Manager: costă 0,40 USD pe secret pe lună).
+
+**AI prin server (tichetul 06).** `POST /ai` cu corpul `{"system": "", "user": "...", "kind": "quick" | "default", "json_mode": false, "max_tokens": null, "model": null}` (`user` obligatoriu; `max_tokens` 1–4096, implicit 500 la `quick` și 1500 la `default`; `model` = `"gemini"` sau `"deepseek"`, sursa încercată prima). Răspuns `200`: `{"text": "...", "model": "gemini" | "deepseek"}`. Gemini (`gemini-3.5-flash-lite`, `generateContent`, cheia în antetul `x-goog-api-key`) răspunde întâi; la orice eșec (HTTP, rețea, text gol, blocat) urmează DeepSeek (`deepseek-flash`, `/chat/completions`, `thinking` oprit). `json_mode` cere JSON (`responseMimeType`, respectiv `response_format: json_object`). Erorile au `{"detail": "<cod>"}`:
+
+| Cod HTTP | `detail` | Când |
+|---|---|---|
+| 401 | `unauthorized` | secret lipsă sau greșit (ca la toate rutele) |
+| 413 | `prompt_too_large` | `system` + `user` > `AI_MAX_PROMPT_CHARS` (nu consumă plafonul) |
+| 429 | `daily_cap` | plafonul zilnic `AI_DAILY_CAP` e atins (ziua UTC; 0 oprește AI-ul) |
+| 502 | `ai_unavailable` | niciun model n-a dat text, sau nu e nicio cheie |
+| 422 | (lista FastAPI) | corp invalid (nu consumă plafonul) |
+
+Clientul mapează fiecare cod la un mesaj și lasă calea fără AI (bifele proprii). Plafonul e un articol `AI#<zi>` în același tabel, cu `ADD cnt` condiționat de plafon (atomic), în spatele aceleiași interfețe de depozit (`take_ai_slot`; `MemoryStore` în teste). Fiecare cerere admisă consumă o unitate, chiar dacă modelele pică. Apelurile HTTP trec printr-un client injectabil (`ba_server/models.py`, `create_app(..., model_http=...)`), deci testele folosesc un model fals. Jurnalele spun doar sursa, motivul (`auth`, `rate`, `server`, `empty`, `network`) și mărimea; nu intră chei, secret sau textul promptului. Variabile de mediu: `GEMINI_API_KEY`, `DEEPSEEK_API_KEY` (parametri `NoEcho` ai șablonului; o cheie lipsă înseamnă sursa sărită), `AI_DAILY_CAP` (implicit 300), `AI_MAX_PROMPT_CHARS` (60000), `AI_TIMEOUT_S` (20 pe model; funcția are 60 s), `GEMINI_MODEL`, `DEEPSEEK_MODEL`.
 
 **Datele.** Un tabel DynamoDB, partiția `u#alex` (un singur utilizator, dar cheia permite mai mulți), trei feluri de articole:
 
@@ -74,10 +87,10 @@ Se poate face doar după tichetul 03 (contul AWS). Pași, o singură dată:
 
    ```
    cd server
-   BA_SECRET='<secretul>' GEMINI_API_KEY='<cheia Gemini>' AWS_REGION=<regiunea> make deploy
+   BA_SECRET='<secretul>' GEMINI_API_KEY='<cheia>' DEEPSEEK_API_KEY='<cheia>' AWS_REGION=<regiunea> make deploy
    ```
 
-   `GEMINI_API_KEY` ajunge variabilă de mediu a funcției (nu stă în repo) și e folosită doar de serviciile care vorbesc cu Gemini (`/live-token`). Fără ea, `/live-token` răspunde 503 și Jarvis arată un mesaj clar.
+   `GEMINI_API_KEY` ajunge variabilă de mediu a funcției (nu stă în repo) și o folosesc `/live-token` (tichetul 08) și `/ai` (tichetul 06); `DEEPSEEK_API_KEY` e rezerva de la `/ai`. La fiecare lansare le dai din nou, iar una lipsă se golește (sursa respectivă se sare). Fără Gemini, `/live-token` răspunde 503 și Jarvis arată un mesaj clar; fără nicio cheie, `/ai` răspunde `502 ai_unavailable`.
 
    Scriptul construiește pachetul (Linux x86_64, Python 3.14), apoi rulează `sam deploy` și la sfârșit scrie adresa funcției (`https://<id>.lambda-url.<regiune>.on.aws`). Aceeași comandă actualizează serverul; dai de fiecare dată același secret (un secret diferit îl înlocuiește pe cel vechi, iar dispozitivele vechi sunt refuzate).
 4. Notează adresa în `.scratch/platforma/issues/04-serverul-minim.md` și bifează „Lansat”.
@@ -89,3 +102,5 @@ Opțional: `ReservedConcurrency=5` în `--parameter-overrides` (în `deploy.sh`)
 Tabelul are `DeletionPolicy: Retain`: dacă ștergi stiva, datele rămân. Costul așteptat e zero în limitele Always Free (Lambda: 1 milion de cereri pe lună; DynamoDB: 25 GB și 25 RCU/WCU); vezi `research/platforma-facts.md`, secțiunile 1 și 2, pentru ce se întâmplă la 6 luni.
 
 **Netestat pe AWS real.** Șablonul și scriptul nu au fost rulate pe un cont AWS (nu exista contul). La primul deploy pot ieși mici ajustări: numărul versiunii stratului Lambda Web Adapter (`LambdaAdapterLayerX86:30`, verifică ultima versiune în README-ul proiectului `awslabs/aws-lambda-web-adapter`), proprietatea `InvokedViaFunctionUrl` a permisiunii, cota de memorie a contului nou.
+
+Tichetul 06, tot netestat pe AWS real: apelurile către Gemini și DeepSeek (în teste sunt false), `ADD cnt` pe DynamoDB real (doar pe moto) și cele două modele la rând sub `Timeout: 60`.
