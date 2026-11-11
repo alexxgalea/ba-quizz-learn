@@ -31,6 +31,10 @@ def new_epoch() -> str:
 PAGE_BYTES = 3_000_000
 
 
+class PurgeInProgress(Exception):
+    """O ștergere a jurnalului e începută și neterminată: scrierile așteaptă (503, clientul reîncearcă)."""
+
+
 @dataclass(frozen=True)
 class AppendResult:
     accepted: list[str] = field(default_factory=list)  # ids noi, în ordine

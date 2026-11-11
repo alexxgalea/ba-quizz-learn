@@ -6,14 +6,17 @@ Cinci feluri de articole în aceeași partiție (`pk`):
 - `sk = "S#<n>"`, `n` completat cu zerouri la 12 cifre: evenimentul (`data` = JSON).
 - `sk = "I#<id>"`: marcajul de idempotență al id-ului, cu `n`.
 - `sk = "AI#<zi>"`: contorul zilnic al cererilor la `/ai` (`cnt`), pe ziua UTC.
-- `sk = "E"`: epoca (`v`), scrisă doar de `purge` (tichetul 09); lipsă = `INITIAL_EPOCH`.
+- `sk = "E"`: epoca (`v`) și, cât ține o ștergere, `purging` (tokenul ei); scris doar de
+  `purge` (tichetul 09). `v` lipsă = `INITIAL_EPOCH`.
 
 Scrierea e o singură `TransactWriteItems` pe lot (cel mult 49 de evenimente:
-contorul + 2 articole pe eveniment încap în cele 100 de acțiuni). Tranzacția
+contorul, verificarea epocii și 2 articole pe eveniment încap în cele 100 de acțiuni). Tranzacția
 mută contorul de la `n` la `n + k` doar dacă el e încă `n`, deci tranzacțiile se
 comit în ordinea numerelor și un cititor nu vede 6 înaintea lui 5. Dacă alt
 scriitor a câștigat, tranzacția pică pe condiție și lotul se reia de la citirea
-contorului. Detalii și surse: `research/platforma-facts.md`, secțiunea 7.
+contorului. Aceeași tranzacție verifică și articolul `E` (ConditionCheck: aceeași epocă,
+fără `purging`), deci o scriere care a citit starea dinaintea unei ștergeri nu poate fi
+comisă după ea. Detalii și surse: `research/platforma-facts.md`, secțiunea 7.
 """
 from __future__ import annotations
 
@@ -23,9 +26,20 @@ from typing import Any, Callable
 
 from botocore.exceptions import ClientError
 
-from .store import INITIAL_EPOCH, AppendResult, EventStore, Page, PurgeResult, dedupe, dump, new_epoch, take_page
+from .store import (
+    INITIAL_EPOCH,
+    AppendResult,
+    EventStore,
+    Page,
+    PurgeInProgress,
+    PurgeResult,
+    dedupe,
+    dump,
+    new_epoch,
+    take_page,
+)
 
-MAX_EVENTS_PER_TX = 49  # 1 contor + 2 * 49 = 99 <= 100 de acțiuni
+MAX_EVENTS_PER_TX = 49  # 1 contor + 1 verificare a epocii + 2 * 49 = 100 de acțiuni
 MAX_TX_BYTES = 3_500_000  # sub limita de 4 MB a unei tranzacții
 SEQ_WIDTH = 12
 MAX_ATTEMPTS = 12
@@ -102,14 +116,55 @@ class DynamoStore(EventStore):
     # ---- epoca și ștergerea (tichetul 09) -----------------------------------
 
     def epoch(self) -> str:
+        v, _ = self._epoch_state()
+        return INITIAL_EPOCH if v is None else v
+
+    def is_purging(self) -> bool:
         item = self._table.get_item(Key={"pk": self._pk, "sk": "E"}, ConsistentRead=True).get("Item")
-        return str(item["v"]) if item else INITIAL_EPOCH
+        return bool(item and "purging" in item)
+
+    def _epoch_state(self) -> tuple[str | None, bool]:
+        """(v sau None dacă articolul `E` n-are `v`, ștergere în curs?)."""
+        item = self._table.get_item(Key={"pk": self._pk, "sk": "E"}, ConsistentRead=True).get("Item")
+        if not item:
+            return None, False
+        return (str(item["v"]) if "v" in item else None), "purging" in item
 
     def purge(self) -> PurgeResult:
-        """Șterge `N`, `S#*` și `I#*` ale partiției; păstrează `AI#*`. Nu e atomică: întâi
-        evenimentele și marcajele, apoi contorul, apoi se scrie epoca nouă. Un cititor care
-        vine între timp vede un jurnal gol (sau pe jumătate gol) cu epoca veche; își
-        corectează cursorul la următoarea cerere, după epoca nouă."""
+        """Șterge `N`, `S#*` și `I#*` ale partiției; păstrează `AI#*`. În trei pași, ca să nu
+        rămână evenimente orfane și ca o cădere la mijloc să se vadă:
+
+        1. `E.purging = <token>`: de aici scrierile sunt refuzate (condiția tranzacției de
+           scriere cere `attribute_not_exists(purging)`), iar epoca publicată rămâne cea veche;
+        2. se șterg evenimentele, marcajele și contorul (cititorii văd epoca veche și date
+           pe jumătate șterse, deci nu-și mută cursorul);
+        3. o singură actualizare, condiționată de token: `E.v = <epoca nouă>` și fără `purging`.
+
+        Dacă pasul 2 pică, `purging` rămâne și epoca nu s-a schimbat: scrierile primesc
+        `PurgeInProgress` (503) până când un nou `purge` termină treaba."""
+        token = new_epoch()
+        self._table.update_item(
+            Key={"pk": self._pk, "sk": "E"},
+            UpdateExpression="SET purging = :t",
+            ExpressionAttributeValues={":t": token},
+        )
+        deleted = self._wipe()
+        epoch = new_epoch()
+        try:
+            self._table.update_item(
+                Key={"pk": self._pk, "sk": "E"},
+                UpdateExpression="SET v = :v REMOVE purging",
+                ConditionExpression="purging = :t",
+                ExpressionAttributeValues={":v": epoch, ":t": token},
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                raise RuntimeError("altă ștergere a preluat jurnalul; reîncearcă") from None
+            raise
+        return PurgeResult(deleted, epoch)
+
+    def _wipe(self) -> int:
+        """Pasul 2 al lui `purge`; întoarce câte evenimente a șters."""
         keys: list[str] = []
         kwargs: dict[str, Any] = {
             "KeyConditionExpression": "pk = :pk",
@@ -136,9 +191,7 @@ class DynamoStore(EventStore):
                     self._sleep(0.05)
             else:
                 raise RuntimeError("ștergerea nu s-a terminat")
-        epoch = new_epoch()
-        self._table.put_item(Item={"pk": self._pk, "sk": "E", "v": epoch})
-        return PurgeResult(deleted, epoch)
+        return deleted
 
     # ---- citire ---------------------------------------------------------
 
@@ -195,9 +248,26 @@ class DynamoStore(EventStore):
         dups = [i for i in ids if i in have]
         if not fresh:
             return [], dups
+        epoch, purging = self._epoch_state()  # înaintea contorului: ordinea contează (vezi `purge`)
+        if purging:
+            raise PurgeInProgress()
         old = self._counter()
         self._before_write()
         actions: list[dict[str, Any]] = [
+            {
+                "ConditionCheck": {
+                    "TableName": self._name,
+                    "Key": {"pk": self._pk, "sk": "E"},
+                    **(
+                        {"ConditionExpression": "attribute_not_exists(v) AND attribute_not_exists(purging)"}
+                        if epoch is None
+                        else {
+                            "ConditionExpression": "v = :epoch AND attribute_not_exists(purging)",
+                            "ExpressionAttributeValues": {":epoch": epoch},
+                        }
+                    ),
+                }
+            },
             {
                 "Update": {
                     "TableName": self._name,
