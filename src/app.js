@@ -203,15 +203,19 @@
   function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); lsOK = true; } catch (e) { lsOK = false; } }
   // Jurnalul de încercări (src/journal.js): fiecare schimbare a lui S e un eveniment, iar S e proiecția lui, ținută în memorie și actualizată pe loc.
   // În PWA (JOURNAL) jurnalul stă în IndexedDB, cu oglindă în localStorage pentru prima desenare; în artifact doar proiectează, iar S se păstrează ca până acum (localStorage + sincronizarea prin `window.claude`).
+  const JSTORE = JOURNAL ? Journal.idbStore() : null;
   const J = Journal.create({
     clock: now, hmax: HMAX, retryMs: 4000,
-    store: JOURNAL ? Journal.idbStore() : null,
+    store: JSTORE,
     mirror: JOURNAL ? Journal.localMirror((() => { try { return window.localStorage; } catch (e) { return null; } })(), JOURNAL_KEY) : null,
     legacy: JOURNAL ? loadLocal : null,
     onState: s => { S = s; planCache = null; }
   });
   S = J.state();
-  const add = e => J.append(e);                         // un eveniment nou; S se actualizează pe loc
+  // Sincronizarea jurnalului cu serverul propriu (src/sync.js, src/server_link.js; doar PWA, doar cu IndexedDB). Adresa și secretul stau în localStorage (`onapsis-server-v1`), nu în S, nu în jurnal.
+  // Nu blochează nimic: fără semnal sau cu secret greșit evenimentele rămân în coadă și ecranul arată starea.
+  const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => ServerLink.get(), onStatus: () => paintStatus() }) : null;
+  const add = e => { const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
   const histAdd = row => add({ type: "hist", row });
   function commit() { planCache = null; if (!JOURNAL) saveLocal(); Sync.push(); paintHeader(); }
 
@@ -270,6 +274,7 @@
       if (this.dirty && !this.dead) { clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 1500 + Math.random() * 2000); }
     },
     label() {
+      if (JOURNAL && JSync && ServerLink.get()) return JournalSync.label(JSync.status());     // PWA cu server: starea jurnalului
       if (this.status === "synced") return "Sincronizat cu contul tău: vezi același progres pe telefon și pe laptop.";
       if (this.status === "syncing") return "Se sincronizează…";
       if (this.status === "full") return "Spațiul de sincronizare e plin; progresul rămâne salvat pe acest dispozitiv.";
@@ -584,9 +589,13 @@
   }
   function paintStatus() {
     const d = $("#sdot");
-    if (d) { d.className = "sync-dot" + (Sync.status === "synced" ? " on" : Sync.status === "syncing" ? " busy" : ""); d.title = Sync.label(); }
+    const js = JSync ? JSync.status().state : "";
+    const st = JOURNAL && (js === "synced" || js === "syncing") ? js : Sync.status;
+    if (d) { d.className = "sync-dot" + (st === "synced" ? " on" : st === "syncing" ? " busy" : ""); d.title = Sync.label(); }
     const s = $("#sync-l"); if (s) s.textContent = Sync.label();
+    paintSync();
   }
+  function paintSync() { const el = $("#jsync-l"); if (el && JSync) el.textContent = JournalSync.label(JSync.status()); }
   function paintTabs() { document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false")); }
 
   // ---------- render ----------
@@ -2055,9 +2064,18 @@
     if (ui.prog.exp) h += '<textarea class="io" id="exp-t" readonly aria-label="Progres exportat">' + esc(JSON.stringify(S)) + '</textarea><button class="btn sm" data-a="copy-exp">Copiază</button>';
     if (ui.prog.imp) h += '<textarea class="io" id="imp-t" aria-label="Lipește progresul exportat" placeholder="Lipește aici textul exportat de pe alt dispozitiv"></textarea><button class="btn sm primary" data-a="do-imp">Importă (îmbină cu progresul de aici)</button>';
     h += "</section>";
+    if (JSync) h += vSync();
     h += vCfg();
     h += vAiSettings();
     return h;
+  }
+  function vSync() {
+    const l = ServerLink.get();
+    return '<section class="card stack-s" id="sync-card"><h3>Sincronizare</h3><p class="small" id="jsync-l">' + esc(JournalSync.label(JSync.status())) + "</p>" +
+      '<p class="xs muted">Progresul trece între telefon și laptop printr-un server propriu. Adresa și secretul se introduc o singură dată pe fiecare dispozitiv și rămân doar în browserul acesta: nu intră în export.</p>' +
+      '<input class="keyin" id="srv-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Adresa serverului (https://…on.aws)" value="' + esc(l ? l.url : "") + '" aria-label="Adresa serverului">' +
+      '<input class="keyin" id="srv-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (l ? "Secret nou (înlocuiește)" : "Secretul serverului") + '" aria-label="Secretul serverului">' +
+      '<div class="row"><button class="btn sm primary" data-a="srv-save">Salvează</button>' + (l ? '<button class="btn sm" data-a="srv-sync">Sincronizează acum</button><button class="btn sm danger" data-a="srv-del">Șterge</button>' : "") + "</div></section>";
   }
   function vCfg() {
     const c = cfg(), iv = interviewDate();
@@ -2235,6 +2253,16 @@
         if (!AI.set(k)) { toast("Browserul nu permite salvarea cheii"); break; }
         render(); toast("Cheie salvată"); break;
       }
+      case "srv-save": {
+        const u = $("#srv-url"), k = $("#srv-secret"), old = ServerLink.get();
+        const url = ServerLink.cleanUrl(u ? u.value : ""), secret = (k && k.value.trim()) || (old ? old.secret : "");
+        if (!url) { toast("Adresa trebuie să înceapă cu https://"); break; }
+        if (!/^[\x21-\x7e]+$/.test(secret)) { toast("Introdu secretul (doar caractere ASCII, fără spații)"); break; }
+        if (!ServerLink.set({ url, secret })) { toast("Browserul nu permite salvarea"); break; }
+        render(); toast("Salvat: se sincronizează"); JSync.syncNow(); break;
+      }
+      case "srv-sync": JSync.syncNow(); break;
+      case "srv-del": ServerLink.clear(); render(); toast("Server șters de pe acest dispozitiv"); JSync.syncNow(); break;
       case "ds-del": AI.set(""); render(); toast("Cheie ștearsă"); break;
       case "ds-test": aiTest(); break;
       case "tick": if (ui.run) { const k = +b.dataset.k; ui.run.ticks[k] = !ui.run.ticks[k]; render(); } break;
@@ -2828,7 +2856,7 @@
     render();
     Sync.init();
     AI.init();
-    if (JOURNAL) J.load().then(() => { planCache = null; S = J.state(); softRender(); }, () => { /* fără IndexedDB: rămâne oglinda */ });
+    if (JOURNAL) J.load().then(() => { planCache = null; S = J.state(); softRender(); if (JSync) { JSync.attach(window, document); JSync.start(); } }, () => { /* fără IndexedDB: rămâne oglinda */ });
   }
   const hot = window.claude && window.claude.hot;
   if (hot && typeof hot.snapshot === "function") { try { hot.snapshot(() => ({ ui: snapshotUi() })); } catch (e) { /* opțional */ } }
@@ -2836,5 +2864,5 @@
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J, sync: () => JSync };
 })();

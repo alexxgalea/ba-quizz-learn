@@ -218,6 +218,16 @@ Fiecare răspuns al lui Alex (și fiecare schimbare de setări, bifă de plan, p
 - Progres › Importă adaugă ce diferă ca evenimente sintetice (`Journal.importState`); id-urile sunt deterministe, deci același export importat de două ori nu dublează nimic.
 - Teste: `node --test tools/unit/journal.test.mjs` (proiecție, import, reset, doi dispozitive, goluri, depozit, repornire fără reluare) și `python3 tools/test_journal.py` (IndexedDB real, oglinda, migrarea, artifactul).
 
+### Sincronizarea
+
+În PWA, jurnalul se sincronizează cu serverul propriu (`server/`, README-ul lui; tichetul 05). Alex introduce adresa și secretul o dată pe dispozitiv, în Progres › Sincronizare; perechea stă doar în `localStorage` (`onapsis-server-v1`, JSON `{ url, secret }`, accesor `ServerLink` în `src/server_link.js`), nu în `S`, în jurnal, în export sau în brief. Fără ea aplicația merge ca înainte.
+
+- `src/sync.js` (`JournalSync.create`, cod pur: `fetch`, cronometrele și `link` se injectează). Un ciclu trimite evenimentele netrimise în loturi de cel mult 500 (`POST /events`, antet `Authorization: Bearer <secret>`), le scoate din coadă doar după ce serverul le-a confirmat (`accepted` sau `duplicates`), apoi cere ce e nou după cursor (`GET /events?after=&limit=`) și îmbină cu `merge(events, { remote: true })`, până când `more` e fals. Cursorul stă lângă jurnal (`getAux("sync")`, legat de adresa serverului) și avansează abia după îmbinare. Nimic nu se pierde la o cădere în mijlocul unui lot: ce nu e confirmat rămâne în coadă, iar trimiterea repetată e idempotentă după id.
+- Rulează la pornire, la `online`, la revenirea în prim-plan (`visibilitychange`) și după fiecare răspuns (cu 1,5 s de așteptare, ca mai multe răspunsuri să plece într-un singur lot). Eșecurile de rețea sau 5xx se reîncearcă cu pauze tot mai mari (2 s, 4 s, … până la 5 min); un secret greșit (401) oprește reîncercările și apare în stare; un eveniment refuzat de server (4xx) nu le blochează pe celelalte.
+- Linia de stare din Progres: „La zi.” / „N netrimise.” / „Fără semnal · N netrimise.” / „Secret greșit.”, plus „Sincronizează acum”. Starea nu blochează nimic.
+- Starea veche din `onapsis-prep-v1`, importată la prima pornire, intră în coadă (serverul nu o are); id-urile sunt deterministe, deci o copie de pe alt dispozitiv se ignoră.
+- Teste: `node --test tools/unit/sync.test.mjs` (server fals în memorie, `tools/unit/fake_server.mjs`: un răspuns apare pe celălalt dispozitiv, răspunsuri date offline pe două dispozitive, reset, același eveniment de două ori, secret greșit, cădere în mijlocul unui lot, paginare și cursor) și `python3 tools/test_sync.py` (două dispozitive reale, server fals prin rutele Playwright).
+
 ## Publicare
 
 Aplicația e publicată ca artifact Claude privat: https://claude.ai/artifact/PNwBxGppDYNrt1CYGpM7HT

@@ -522,7 +522,7 @@ test("an old state kept by the app (the legacy key) becomes imported events the 
   assert.equal(r.fresh, false);
   assert.deepEqual(Journal.project(await store.allEvents()), S);
   assert.ok((await store.allEvents()).every(e => e.imported));
-  assert.deepEqual(await j.unsent(), [], "synthetic events from the local copy are not queued: they are the same data the server may already hold");
+  assert.deepEqual((await j.unsent()).map(e => e.id), (await store.allEvents()).map(e => e.id), "the server does not have the old state yet, so the synthetic events are queued (their ids are deterministic: a copy from another device is ignored)");
   const k = Journal.create({ device: "dev-a", store, legacy: () => ({ v: 1, r: 0, q: { stale: { b: 1, n: 1, c: 0, l: 0, t: 1 } }, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] }) });
   await k.load();
   assert.deepEqual(k.state(), S, "once the store has a journal, the old key is no longer the truth");

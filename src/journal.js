@@ -159,6 +159,7 @@ const Journal = (() => {
   function memStore() {
     const events = new Map(), outbox = new Set();
     let snapshot = null, meta = null;
+    const aux = new Map();
     const st = {
       stats: { loads: 0, commits: 0, allEvents: 0, eventsAfter: 0, eventsRead: 0 }, failing: false,
       async load() { st.stats.loads++; return { snapshot: clone(snapshot) || null, meta: clone(meta) || null }; },
@@ -181,7 +182,10 @@ const Journal = (() => {
       async allEvents() { st.stats.allEvents++; const r = sortedCopy(Array.from(events.values())); st.stats.eventsRead += r.length; return clone(r); },
       async outbox() { return clone(sortedCopy(Array.from(outbox).map(id => events.get(id)).filter(Boolean))); },
       async markSent(ids) { ids.forEach(id => outbox.delete(id)); },
-      async clear() { events.clear(); outbox.clear(); snapshot = null; meta = null; },
+      // valori mici lângă jurnal (cursorul sincronizării): același depozit, altă cheie decât instantaneul
+      async getAux(key) { return clone(aux.get(key)) || null; },
+      async setAux(key, v) { if (st.failing) throw new Error("commit failed"); aux.set(key, clone(v)); },
+      async clear() { events.clear(); outbox.clear(); aux.clear(); snapshot = null; meta = null; },
       // cârlige pentru teste
       setSnapshot(s) { snapshot = clone(s); },
       clearSnapshot() { snapshot = null; }
@@ -245,6 +249,8 @@ const Journal = (() => {
         return sortedCopy(evs.filter(Boolean));
       },
       async markSent(ids) { const db = await open(), tx = db.transaction("outbox", "readwrite"), d = done(tx); ids.forEach(id => tx.objectStore("outbox").delete(id)); await d; },
+      async getAux(key) { const db = await open(), r = await req(db.transaction("meta", "readonly").objectStore("meta").get("aux:" + key)); return r ? r.v : null; },
+      async setAux(key, v) { const db = await open(), tx = db.transaction("meta", "readwrite"), d = done(tx); tx.objectStore("meta").put({ key: "aux:" + key, v }); await d; },
       async clear() { const db = await open(), tx = db.transaction(["events", "outbox", "meta"], "readwrite"), d = done(tx); ["events", "outbox", "meta"].forEach(n => tx.objectStore(n).clear()); await d; }
     };
   }
@@ -342,7 +348,7 @@ const Journal = (() => {
         if (had) {                                                    // starea există (oglindă sau cheia veche), jurnalul nu: o scriem ca evenimente sintetice, fără coadă (e aceeași informație)
           const evs = importState(S);
           for (const e of evs) if (!last || cmp(e, last) > 0) last = keyOf(e);
-          await store.commit({ events: evs, snapshot: snap(), meta: { dev: device, seq } });
+          await store.commit({ events: evs, outbox: evs.map(e => e.id), snapshot: snap(), meta: { dev: device, seq } });   // în coadă: serverul nu are starea veche; ids deterministe, deci un duplicat de pe alt dispozitiv se ignoră
         }
         loaded = true;
         await flushTask();
@@ -403,6 +409,9 @@ const Journal = (() => {
       async events() { if (!store) return []; await flush(); return store.allEvents(); },
       async unsent() { if (!store) return []; await flush(); return store.outbox(); },
       markSent: ids => (store ? enqueue(() => store.markSent(ids)) : Promise.resolve()),
+      // Valori mici păstrate lângă jurnal (cursorul sincronizării). Fără depozit: nimic se păstrează.
+      getAux: key => (store ? enqueue(() => store.getAux(key)) : Promise.resolve(null)),
+      setAux: (key, v) => (store ? enqueue(() => store.setAux(key, v)) : Promise.resolve()),
       info: () => ({ device, last, applied, pending: pending.length, mirrorOk, failures, legacyBoot, durable: mirrorOk || (!!store && failures === 0) })
     };
   }

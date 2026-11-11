@@ -96,7 +96,7 @@ async def main():
         await pg.wait_for_timeout(400)
         ev = await events(pg)
         check("it is written to the journal as imported events", len(ev) >= 6 and all(e.get("imported") for e in ev), len(ev))
-        check("without being queued to send", await pg.evaluate("window.__prep.journal().unsent()") == [])
+        check("and queued to send (the server does not have the old state)", len(await pg.evaluate("window.__prep.journal().unsent()")) == len(ev))
         proj = await pg.evaluate("window.__prep.journal().events().then(e => e.length)")
         legacy_state = st
         await pg.reload(); await pg.wait_for_timeout(500)
