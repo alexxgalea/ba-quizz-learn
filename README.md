@@ -169,6 +169,21 @@ După interviul cu managerul, prioritățile urmează ce a semnalat: P1 = `gil` 
 - **Interviu tehnic simulat** (Oral): 7 carduri, câte unul pe slot, în ordinea probei: threading/asyncio, OOP, testing/generatori, FastAPI, frontend (React/TS), un snippet, un scenariu de design (`pickTechMock`, cu ponderile `wO`). Persoana anunță snippet-ul și designul.
 - Faptele verificate pe surse primare: `research/interview-facts.md`.
 
+## Certificare (testul integral)
+
+Un test de ~60 de minute, pornit din Plan (cardul „Certificare integrală”), în trei secțiuni, în ordinea probei. Doar cu `sample` (în artifact).
+
+- **Alegerea** (`pickCert`): 20 de grile (câte una din fiecare modul P1 și P2, două din module P3 diferite, fără Bonus), 6 carduri orale (3 sloturi de backend: `gil`/`asyncio`, `oop`/`python`/`pytest`, `asgi`; 3 de frontend: `react`, `js`/`ts`/`frontend`, un snippet `fedebug` cu `code`) și 2 schelete (Python dintr-un modul P1 de backend, TS / TSX din `frontend`). În fiecare modul sau slot alegerea e la întâmplare, ca scorul să măsoare; ce ai făcut în ultimele 20 de minute vine mai rar (`recentF`).
+- **Secțiunile** folosesc ecranele existente: grilele ca simulare (`mode: "mock"`, 15 minute, `run.cert`), cardurile orale cu intervievatorul (`mock: true`, `cert: true`), scheletele în Studiu, cu „← Certificare” în locul listei. Răspunsurile se notează ca în orice sesiune (Leitner, goluri, istoric).
+- **Starea** e în `ui.cert` (`{ v, step: q|o|s|done, ids, res, t0, done }`), salvată în `localStorage` (`onapsis-cert-v1`) după fiecare secțiune, card oral și schelet, deci o reîncărcare reia de unde ai rămas. „Ieși” dintr-o secțiune te întoarce la certificare; cardurile și scheletele deja notate rămân.
+- **Scorul** (`certScore`): grile 20%, explică 50%, cod 30% (`CERT_W`); trecut cu cel puțin 70% în total și 60% la fiecare secțiune. Modulele adună grilele, cardurile și scheletele lor. Golurile (cel mult 5, sub 80%): oral și cod cântăresc ×3 față de o grilă, apoi prioritatea modulului.
+- **Rezultatul** intră în `S.h` ca `kind: "cert"` (fără `dur`, ca `spentMin` să nu numere timpul de două ori) și apare în Plan și în istoric. Ecranul final are golurile cu acțiuni (cardul, scheletul, fișa), modulele sub 100% și un rezumat în text, de copiat pentru Claude.
+- Test: `python3 tools/test_cert.py`.
+
+## Pattern-uri
+
+Studiu › Pattern-uri (`vPatterns`, date în `src/data_patterns.js`, `P.extra.patterns`): un tabel „Cum alegi” (problema ta → pattern-ul), 15 pattern-uri pe larg (Factory, Builder, Singleton, Adapter, Facade, Decorator, Proxy, Strategy, Template Method, Observer, Command, Iterator, Chain of Responsibility, Dependency Injection, Repository + Unit of Work), fiecare cu Problema, De ce, Când, Când nu, un exemplu Python (≤ 36 de caractere pe rând, verificat de `validate.mjs`), echivalentul din React/TS, Legătura cu experiența ta și fraza pentru interviu, plus „Ce se confundă” (Adapter / Facade / Decorator / Proxy, Factory / Builder, Strategy / Template Method, Observer / pub/sub, DI / Singleton, Repository / Active Record). Butonul „Exersează cu voce tare” pornește cele 5 carduri orale `o-pat-*` (modulul `oop`), cu intervievatorul unde există `sample`. Deschis / închis: `ui.study.gapOpen` (`pat:<slug>`). Test: `python3 tools/test_patterns.py`.
+
 ## Goluri și teorie
 
 Ce ratezi la oral se înregistrează pe fiecare card, în `S.o[id]`: `mc` (index punct → de câte ori l-ai ratat; +1 la un punct neacoperit întreg, −1 la unul acoperit întreg, maximum 9), `m` (punctele ratate ultima dată), `w` (cel mult 3 afirmații marcate greșite de verdict). Se actualizează la fiecare „Salvează”, cu sau fără intervievator; la cardurile vechi, `m` valorează 1 per punct. `mergeState` le îmbină ca pe restul itemului.
@@ -200,7 +215,7 @@ Progresul stă în baza de date a artefactului, într-un document per utilizator
 
 ## Jarvis (interviu vorbit)
 
-Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/app/): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini stă în `localStorage` (`onapsis-gemini-v1`), niciodată în starea aplicației, în export sau în brief.
+Tab-ul „Jarvis” e un dialog vocal cu un intervievator AI (Gemini Live, nivelul gratuit). Merge doar în aplicația PWA (https://alexxgalea.github.io/ba-quizz-learn/docs/app/; GitHub Pages servește rădăcina ramurii `main`): în artifact nu există microfon, iar CSP-ul blochează conexiunile, deci tab-ul trimite la PWA. Cheia Gemini stă în `localStorage` (`onapsis-gemini-v1`), niciodată în starea aplicației, în export sau în brief.
 
 Designul, deciziile și rezultatele probei de pe telefon: `docs/superpowers/specs/2026-10-22-jarvis-voice-interviewer-design.md`. Pe scurt:
 
