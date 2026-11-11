@@ -89,13 +89,15 @@ Resources:
       Policies:
         - Statement:
             - Effect: Allow
-              # TransactWriteItems cere Put/Update pe fiecare articol atins.
+              # TransactWriteItems cere Put/Update pe fiecare articol atins, iar un ConditionCheck
+              # (verificarea epocii la scriere) cere ConditionCheckItem. Moto nu verifică IAM.
               Action:
                 - dynamodb:GetItem
                 - dynamodb:BatchGetItem
                 - dynamodb:Query
                 - dynamodb:PutItem
                 - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
                 # POST /events/purge (tichetul 09): BatchWriteItem acoperă și DeleteRequest; DeleteItem nu e acordat
                 - dynamodb:BatchWriteItem
               Resource: !GetAtt EventsTable.Arn

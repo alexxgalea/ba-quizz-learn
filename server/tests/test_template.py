@@ -107,3 +107,23 @@ def test_purge_has_the_dynamodb_actions_it_needs():
     actions = FN["Policies"][0]["Statement"][0]["Action"]
     assert "dynamodb:BatchWriteItem" in actions and "dynamodb:DeleteItem" not in actions  # batch delete se autorizează prin BatchWriteItem
     assert set(FN["FunctionUrlConfig"]["Cors"]["AllowMethods"]) == {"GET", "POST"}  # purge e POST: CORS nu se lărgește
+
+
+def test_iam_covers_every_operation_the_store_uses():
+    """Moto nu verifică IAM, așa că un tip de operație adăugat în cod fără permisiune ar pica doar pe AWS real
+    (500 AccessDenied la POST /events). Fiecare tip de acțiune dintr-o tranzacție cere permisiunea lui."""
+    code = (ROOT / "ba_server" / "dynamo.py").read_text(encoding="utf-8")
+    actions = set(FN["Policies"][0]["Statement"][0]["Action"])
+    needs = {
+        '"ConditionCheck"': "dynamodb:ConditionCheckItem",
+        '"Put"': "dynamodb:PutItem",
+        '"Update"': "dynamodb:UpdateItem",
+        ".get_item(": "dynamodb:GetItem",
+        ".query(": "dynamodb:Query",
+        ".batch_writer(": "dynamodb:BatchWriteItem",
+        ".batch_write_item(": "dynamodb:BatchWriteItem",
+        ".batch_get_item(": "dynamodb:BatchGetItem",
+    }
+    for marker, action in needs.items():
+        if marker in code:
+            assert action in actions, f"{marker} din dynamo.py cere {action} în politica funcției"
