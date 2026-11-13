@@ -323,6 +323,46 @@ async def sequences(b, scheme):
     await ctx.close()
 
 
+async def modes(b, scheme):
+    """Tichet 06 (lectie-sincronizata): „Cu ecran” / „Doar audio” se aleg în vLessonHome, stau în onapsis-jarvis-v1, iar pe audio ecranul arată doar comenzile."""
+    tag = scheme + " mode: "
+    ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
+    await pin(ctx)
+    await ctx.add_init_script(path=FAKES)
+    pg = await ctx.new_page(); errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "fonts" not in m.text and "Failed to load resource" not in m.text else None)
+    await pg.route("**/fonts.*", lambda r: r.abort())
+    await fresh(pg)
+    await ev(pg, "localStorage.setItem('onapsis-gemini-v1', 'TESTKEY1234')"); await pg.reload(); await pg.wait_for_timeout(400)
+    await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
+    check(tag + "the home offers Cu ecran and Doar audio, with Cu ecran chosen at first", await pg.locator('#jv-mode [data-a="jv-mode"]').count() == 2 and await pg.locator('#jv-mode [data-v="ecran"]').get_attribute("aria-pressed") == "true" and await pg.locator('#jv-mode [data-v="audio"]').get_attribute("aria-pressed") == "false")
+    await pg.screenshot(path=str(SHOTS / f"lesson_mode_home_{scheme}.png"))
+    for mute in [False, True]:
+        await pg.click('#jv-mode [data-v="audio"]'); await pg.wait_for_timeout(100)
+        saved = await ev(pg, "JSON.parse(localStorage.getItem('onapsis-jarvis-v1') || '{}')")
+        check(tag + "Doar audio is chosen and kept in onapsis-jarvis-v1", saved.get("mode") == "audio" and await pg.locator('#jv-mode [data-v="audio"]').get_attribute("aria-pressed") == "true", saved)
+        if mute: await ev(pg, "(() => { const s = JSON.parse(localStorage.getItem('onapsis-jarvis-v1') || '{}'); s.muted = true; localStorage.setItem('onapsis-jarvis-v1', JSON.stringify(s)); })()")
+        await pg.click("#jv-rec"); await pg.wait_for_timeout(250)
+        await tool(pg, "next_chunk")
+        check(tag + "audio" + (" + Mut" if mute else "") + ": no card with the text, only the controls", await pg.locator("#jv-chunk").count() == 0 and await pg.locator('[data-a="jv-pause"]').count() == 1 and await pg.locator('[data-a="jv-repeat"]').count() == 1 and await pg.locator('[data-a="jv-skip"]').count() == 1 and await pg.locator("#jv-talk").count() == (1 if mute else 0), await text(pg, "main"))
+        check(tag + "the screen state says audio and the page does not scroll sideways", await ev(pg, "window.__prep && true") and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"))
+        await pg.screenshot(path=str(SHOTS / f"lesson_mode_audio{'_mut' if mute else ''}_{scheme}.png"))
+        await pg.click('[data-a="jv-stop"]'); await pg.wait_for_timeout(200)
+        await pg.click('[data-a="jv-again"]'); await pg.wait_for_timeout(150)
+    await ev(pg, "(() => { const s = JSON.parse(localStorage.getItem('onapsis-jarvis-v1') || '{}'); s.muted = false; localStorage.setItem('onapsis-jarvis-v1', JSON.stringify(s)); })()")
+    await pg.reload(); await pg.wait_for_timeout(400)
+    await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
+    check(tag + "the choice survives a reload", await pg.locator('#jv-mode [data-v="audio"]').get_attribute("aria-pressed") == "true")
+    await pg.click('#jv-mode [data-v="ecran"]'); await pg.wait_for_timeout(100)
+    await pg.click("#jv-rec"); await pg.wait_for_timeout(250)
+    await tool(pg, "next_chunk")
+    check(tag + "Cu ecran: the card is there, as before", await pg.locator("#jv-chunk").count() == 1)
+    await pg.screenshot(path=str(SHOTS / f"lesson_mode_ecran_{scheme}.png"))
+    check(tag + "no page errors", not errs, errs)
+    await ctx.close()
+
+
 async def unfoldings(b):
     """Tichet 10: lecția pe un modul cu desfășurări (oop) dă modelului harta și desfășurarea punctului; pe unul fără (aws) merge ca înainte."""
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
@@ -383,6 +423,7 @@ async def main():
         for scheme in ["light", "dark"]:
             await screens(b, scheme)
             await sequences(b, scheme)
+            await modes(b, scheme)
         await unfoldings(b)
         await artifact(b)
         await b.close()

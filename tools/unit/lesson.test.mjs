@@ -1004,3 +1004,73 @@ test("a module outside the asyncio trial gets whole chunks with the unfolding, a
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.k, r.of, r.tip, typeof r.desf], [undefined, undefined, undefined, "object"]);
 });
+
+// ---------- „Cu ecran” și „Doar audio” (tichetul 06) ----------
+
+const SCREEN_WORDS = /ecran|cartona|\bvezi|\buite\b|uit[ăa] |rând|pe cod|aici/i;
+const withMode = mode => { const t = setup(); t.jarvis.settings.set({ mode }); return t; };
+
+test("the mode is 'ecran' by default, is kept in the Jarvis settings and reaches the screen state", async () => {
+  const t = setup();
+  assert.equal(t.jarvis.settings.get().mode, "ecran");
+  t.jarvis.settings.set({ mode: "audio" });
+  assert.equal(JSON.parse(t.storage.data["onapsis-jarvis-v1"]).mode, "audio");
+  assert.equal(t.make().settings.get().mode, "audio");
+  await begin(t, "asyncio");
+  assert.equal(t.state().lesson.mode, "audio");
+  const o = await begin(setup(), "asyncio");
+  assert.equal(o.state().lesson.mode, "ecran");
+});
+
+test("the mode is read at the start: changing it in the middle of a lesson does not change the lesson", async () => {
+  const t = await begin(withMode("audio"), "asyncio");
+  t.jarvis.settings.set({ mode: "ecran" });
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([t.state().lesson.mode, SCREEN_WORDS.test(r.instruction)], ["audio", false]);
+});
+
+test("on 'Cu ecran' the instructions may point to the screen and tell Jarvis the third line can be mentioned", async () => {
+  const t = await begin(withMode("ecran"), "asyncio");
+  const r = await t.tool("next_chunk");
+  assert.match(t.live.cfg.system, /ecran/);
+  assert.match(t.live.cfg.system, /rândul al treilea/);
+  assert.match(r.instruction, /cartonaș/);
+});
+
+test("on 'Doar audio' neither the system instructions nor any sequence instruction point to the screen", async () => {
+  const t = await begin(withMode("audio"), "asyncio");
+  assert.equal(SCREEN_WORDS.test(t.live.cfg.system), false, t.live.cfg.system.match(SCREEN_WORDS) + "");
+  assert.match(t.live.cfg.system, /în cuvinte/);
+  const said = [];
+  for (let n = 1; n <= 3; n++) for (const s of Jarvis.lessonSequences(seqSheet(), n, true)) said.push([s.tip, s.instruction]);
+  assert.ok(said.length >= 10);
+  for (const [tip, ins] of said) assert.equal(SCREEN_WORDS.test(ins), false, tip + ": " + ins);
+  // și ce primește modelul în răspunsurile next_chunk, până la închidere
+  for (let i = 0; i < 40 && !t.state().lesson.closing; i++) {
+    const r = await t.tool("next_chunk"); speak(t);
+    assert.equal(SCREEN_WORDS.test(r.instruction || ""), false, r.instruction);
+    t.clock.advance(3100);
+  }
+  assert.equal(t.state().lesson.closing, true);
+});
+
+test("on 'Doar audio' the code is told in words: the example says so, and the text of the sequences is the same as before", async () => {
+  const a = Jarvis.lessonSequences(seqSheet(), 1, true), e = Jarvis.lessonSequences(seqSheet(), 1);
+  assert.match(a.find(x => x.tip === "exemplu").instruction, /în cuvinte/);
+  assert.match(a.find(x => x.tip === "exemplu").instruction, /nu citi codul/i);
+  assert.deepEqual(a.map(x => [x.tip, x.continut]), e.map(x => [x.tip, x.continut]));
+  assert.notEqual(a[0].instruction, e[0].instruction);
+});
+
+test("the four combinations of mode and Mut work: the sequences go on, the window opens only without Mut", async () => {
+  for (const mode of ["ecran", "audio"]) for (const muted of [false, true]) {
+    const t = setup(); t.jarvis.settings.set({ mode, muted });
+    await begin(t, "asyncio");
+    for (let k = 1; k <= 5; k++) await deliver(t);
+    const l = t.state().lesson;
+    assert.deepEqual([l.mode, l.muted, t.audio.beeps, t.app.pos.asyncio], [mode, muted, muted ? [] : ["window"], 1], mode + "/" + muted);
+    if (!muted) t.clock.advance(3100);
+    const r = await t.tool("next_chunk");
+    assert.deepEqual([r.n, r.k], [2, 1], mode + "/" + muted);
+  }
+});
