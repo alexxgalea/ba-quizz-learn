@@ -6,11 +6,13 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `README.md` și secțiunea „Lecție” din `CLAUDE.md` sunt la zi.
-- [ ] `node validate.mjs`, `node build.mjs`, `npm run test:unit` și testele din `tools/` trec.
-- [ ] `npm run pages`, commit și push.
+- [x] `README.md` și secțiunea „Lecție” din `CLAUDE.md` sunt la zi.
+- [x] `node validate.mjs`, `node build.mjs`, `npm run test:unit` și testele din `tools/` trec.
+- [x] `npm run pages`, commit (push și PR: la coordonator).
 - [ ] Mesaj scurt pentru Alex, în română, despre ce s-a schimbat.
 
 ## Comments
+
+Tichetul 03 s-a sărit (hotărârea lui Alex); 09 și 10 rămân deschise. Mesajul pentru Alex se trimite după ce PR-ul e îmbinat și pagina servește build-ul nou.

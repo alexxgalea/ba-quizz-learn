@@ -72,3 +72,7 @@ Secvențele scurte s-ar putea să rupă firul. De aceea se construiesc întâi p
 
 - Fiecare secvență e un tur separat al modelului, cu un apel de funcție între ele. Dacă pauza dintre secvențe se aude, proba de la tichetul 03 o va arăta; atunci alternativa e o singură cerere pe bucată, cu cartonașele schimbate după transcriere.
 - Bugetul zilnic Gemini: mai multe tururi pe bucată înseamnă mai multe cereri. De măsurat la probă.
+
+## Stare la integrare (13 noiembrie 2026)
+
+Gata: 01, 02, 04, 05, 06, 07, 08, 11. Tichetul 03 (proba lui Alex pe `asyncio`) s-a sărit din hotărârea lui Alex: toate modulele merg pe secvențe, iar alternativa din „Further Notes” rămâne dacă firul se rupe la ascultare. Tichetele 09 (lecția care întreabă) și 10 (lecția inversă) rămân deschise.

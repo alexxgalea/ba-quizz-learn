@@ -567,6 +567,8 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-lrow .modrow { flex: 1; min-width: 0; }
 .jv-lrow .btn { flex: none; }
 #jv-rec-reset { align-self: flex-start; }
+.jv-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jv-mode .btn { min-height: 48px; }
 .jv-chunk-card { gap: 10px; }
 .jv-pos { font-size: 15px; font-weight: 700; color: var(--accent); }
 .jv-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
@@ -579,6 +581,14 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 #jv-lesson .jv-stage .jv-warn { flex: 1; }
 .jv-chunk-card .jv-chunk { max-height: 34vh; overflow-y: auto; }
 #jv-lesson.is-mut .jv-chunk { max-height: 22vh; }
+.jv-chunk.jv-t-exemplu, .jv-chunk.jv-t-pas { max-height: none; }
+.jv-chunk.jv-empty { min-height: 4em; }
+.jv-chunk-card .jv-chunk.jv-t-harta, .jv-chunk-card .jv-chunk.jv-t-recap { max-height: 44vh; }
+#jv-lesson.is-mut .jv-chunk.jv-t-harta, #jv-lesson.is-mut .jv-chunk.jv-t-recap { max-height: 30vh; }
+.jv-tip { margin-bottom: 4px; }
+.jv-sub { min-height: 3em; border-top: 1px solid var(--line, rgba(128,128,128,.25)); padding-top: 6px; }
+.jv-sub p { margin: 0 0 2px; }
+.jv-chunk .code { margin: 0; }
 #jv-lesson .jv-ctl { grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 6px; }
 #jv-lesson .jv-ctl .btn { padding-inline: 2px; font-size: 15px; }
 #jv-lesson .jv-ctl .btn, #jv-lesson .jv-mutes .btn { min-height: 56px; font-size: 16px; }
@@ -629,6 +639,8 @@ ul.pts.num .pb > .dz { width: calc(100% + 32px); margin-left: -32px; }
 .cert-sec h3 { margin: 0; }
 .cert-gap .pts { margin: 0; }
 .cert-gap .btn { align-self: flex-start; }
+.jv-mark { color: var(--acc, inherit); }
+.jv-q { font-style: italic; }
 
 </style>
 </head>
@@ -7602,7 +7614,7 @@ const Jarvis = (() => {
   const MAX_TRANSCRIPT = 8;
   const SETTINGS_ITEM = "onapsis-jarvis-v1";
   const SILENCE = { short: 800, normal: 1200, long: 2000 };          // „Răbdare”: cât tace Alex până consideră Jarvis că a terminat
-  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false };
+  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false, mode: "ecran" };
   // Lecția: cât durează fereastra de ascultare, cât așteaptă o întrebare fără răspuns, cât rămâne valabilă o pauză (după ea bucata se reia de la început)
   // și pauzele dintre încercările de reconectare (în total ~60 s; celelalte moduri păstrează cele trei încercări din GeminiLive).
   const WINDOW_MS = 3000, ASK_WAIT_MS = 12000, PAUSE_KEEP_MS = 10 * 60000;
@@ -7616,8 +7628,71 @@ const Jarvis = (() => {
     restart: "Alex a cerut să reiei lecția de la început: apelează next_chunk pentru prima bucată și începe din nou cu introducerea din „intro”.",
     back: "Conexiunea a revenit. Spune «Reiau de unde am rămas», apoi ",
     // Sesiunea a repornit fără istoric (jeton nou): modelul trebuie să ceară din nou cardul curent.
+    seq: "Continuă: apelează next_chunk pentru secvența următoare a bucății.",
     restarted: "Sesiunea s-a reînnoit și nu mai ții minte conversația de până acum. Spune într-o propoziție că reiei întrebarea, apoi apelează next_card."
   };
+
+  // Secvențele (spec .scratch/lectie-sincronizata): o bucată se dă pe câmpuri ale desfășurării, fiecare cu cartonașul ei.
+  // Toate modulele merg pe secvențe; fără desfășurare, bucata are doar secvența `punct`.
+  const SEQ_RULE = " Spune doar ce e pe cartonaș, în ordinea de pe cartonaș, în 15–30 de secunde, cu vorbele tale. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+  const SEQ_INSTR = {
+    problema: "Spune problema de pe cartonaș." + SEQ_RULE,
+    ideea: "Spune ideea de pe cartonaș." + SEQ_RULE,
+    exemplu: "Povestește exemplul de pe cartonaș: ce face codul și ce iese, cu rezultatul din comentarii. Nu citi codul caracter cu caracter." + SEQ_RULE,
+    analogie: "Spune analogia de pe cartonaș." + SEQ_RULE,
+    pas: "Spune pașii de pe cartonaș, în ordine, ca o poveste în timp." + SEQ_RULE,
+    cpp: "Spune comparația cu C++ de pe cartonaș și unde nu ține." + SEQ_RULE,
+    punct: "Spune punctul din fișă de pe cartonaș ca încheiere a bucății." + SEQ_RULE,
+    capcane: "Spune formulările de evitat de pe cartonaș, ca „capcane la interviu”." + SEQ_RULE,
+    recap: "Recapitulează din cartonaș: spune grupurile de puncte, pe rând, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+  };
+  // „Doar audio”: aceleași secvențe, dar fără nicio trimitere la ce e pe ecran; codul se povestește în cuvinte.
+  const SEQ_RULE_A = " Spune doar ce e în material, în ordinea lui, în 15–30 de secunde, cu vorbele tale. Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+  const SEQ_INSTR_A = {
+    problema: "Spune problema din material." + SEQ_RULE_A,
+    ideea: "Spune ideea din material." + SEQ_RULE_A,
+    exemplu: "Povestește exemplul în cuvinte: ce face codul, pe părți, în ordine, și ce rezultat iese (rezultatul e în comentarii). Nu citi codul și nu rosti simboluri, paranteze sau numere de linie: numește lucrurile pe nume (de exemplu „funcția care așteaptă”)." + SEQ_RULE_A,
+    analogie: "Spune analogia din material." + SEQ_RULE_A,
+    pas: "Spune pașii din material, în ordine, ca o poveste în timp, în cuvinte, fără să citești codul." + SEQ_RULE_A,
+    cpp: "Spune comparația cu C++ din material și unde nu ține." + SEQ_RULE_A,
+    punct: "Spune punctul din fișă din material ca încheiere a bucății." + SEQ_RULE_A,
+    capcane: "Spune formulările de evitat din material, ca „capcane la interviu”." + SEQ_RULE_A,
+    recap: "Recapitulează din material: spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+  };
+  const rng = g => (g.a === g.b ? String(g.a) : g.a + "–" + g.b) + ": " + g.t;
+  // Cartonașele de deschidere și de încheiere (text scris de aplicație, nu de model): harta modulului (fără hartă, ideea principală), capcanele, recapitularea.
+  const mapText = sh => sh.map ? sh.map.g.map(rng).join("\n") : sh.lead;
+  function openSeq(sh, total, name, audio) {
+    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", rule = audio ? SEQ_RULE_A : SEQ_RULE, src = audio ? "din material" : "de pe cartonaș";
+    return sh.map
+      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + rule }
+      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + rule };
+  }
+  // La reluarea dintr-o poziție: propoziția de amintire are cartonașul punctului amintit.
+  function recallSeq(sh, from, resumed, audio) {
+    const src = audio ? "din material" : "de pe cartonaș";
+    return { tip: "punct", continut: sh.points[from - 1], instruction: (resumed ? "Spune într-o propoziție „Reiau de unde am rămas, la …” și amintește punctul " + src + "." : "Amintește într-o propoziție punctul " + src + ", ca în „Data trecută am ajuns la …”.") + (audio ? SEQ_RULE_A : SEQ_RULE) };
+  }
+  function closingSeqs(sh, audio) {
+    const I = audio ? SEQ_INSTR_A : SEQ_INSTR;
+    const out = [];
+    if (sh.avoid.length) out.push({ tip: "capcane", continut: sh.avoid.join("\n"), instruction: I.capcane });
+    out.push({ tip: "recap", continut: mapText(sh), instruction: I.recap });
+    return out;
+  }
+  const unfence = c => { const m = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(String(c)); return (m ? m[1] : String(c)).replace(/\s+$/, ""); };
+  // Secvențele bucății n (1..total) a unei fișe { points, desf? }; `audio` schimbă doar instrucțiunile (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
+  // Câmpurile care lipsesc se sar; „Legătură” nu are secvență. Fără desfășurare rămâne doar `punct`. Cartonașul codului (exemplu, pas) vine fără gardurile ```.
+  function lessonSequences(sheet, n, audio) {
+    const x = (sheet.desf && sheet.desf[n - 1]) || {}, out = [];
+    const add = (tip, continut) => { if (continut) out.push({ tip, continut, instruction: (audio ? SEQ_INSTR_A : SEQ_INSTR)[tip] }); };
+    add("problema", x.p); add("ideea", x.i);
+    if (x.ex) add("exemplu", unfence(x.ex)); else add("analogie", x.an);
+    add("pas", x.pas && unfence(x.pas));
+    add("cpp", x.cpp || x.nu ? [x.cpp, x.nu && "Unde nu ține: " + x.nu].filter(Boolean).join("\n") : "");
+    add("punct", sheet.points[n - 1]);
+    return out;
+  }
 
   const NO_ARGS = { type: "OBJECT", properties: {} };
   const MODULE = { type: "STRING", description: "Modulul dorit (de exemplu gil, asyncio, oop, pytest, asgi, design)" };
@@ -7667,7 +7742,7 @@ const Jarvis = (() => {
   // Funcțiile lecției (spec Lecție): bucata următoare, repetă, pauză, încheiere. „Mai simplu” și „exemplu” se tratează fără funcție.
   function makeLessonTools(ctx) {
     return [
-      { name: "next_chunk", description: "Dă bucata următoare a lecției: textul punctului din fișă, numărul ei și totalul (la prima bucată și introducerea: harta modulului sau ideea principală; la punctele cu desfășurare, și materialul ei, în „desf”; la final capcanele). Apeleaz-o doar când aplicația sau Alex cer bucata următoare.", parameters: NO_ARGS, run: async () => ctx.nextChunk() },
+      { name: "next_chunk", description: "Dă bucata următoare a lecției: textul punctului din fișă, numărul ei și totalul (la prima bucată și introducerea: harta modulului sau ideea principală; la punctele cu desfășurare, și materialul ei, în „desf”; la final capcanele). Apeleaz-o doar când aplicația sau Alex cer bucata următoare. Dacă răspunsul are „k” și „of”, bucata se dă pe secvențe: primești o singură secvență (tip și text) și o spui așa cum cere „instruction”.", parameters: NO_ARGS, run: async () => ctx.nextChunk() },
       { name: "repeat_chunk", description: "Dă din nou bucata curentă, ca s-o explici de la început, când aplicația sau Alex cer să repeți.", parameters: NO_ARGS, run: async () => ctx.repeatChunk() },
       { name: "pause_session", description: "Pune lecția pe pauză, la cererea lui Alex.", parameters: NO_ARGS, run: async () => ctx.pause() },
       { name: "end_session", description: "Încheie lecția, când Alex cere să oprești. După ce o apelezi, ia-ți rămas-bun în două propoziții.", parameters: NO_ARGS, run: async () => ctx.endSession() }
@@ -7681,14 +7756,18 @@ const Jarvis = (() => {
       "Ești Jarvis, asistentul vocal al lui Alex, care se pregătește pentru un interviu tehnic" + (sum.role ? " de " + sum.role : "") + ". Vorbești doar în română; termenii tehnici (thread, worker, endpoint, commit) rămân în engleză. " + (sum.profile || ""),
       "În această sesiune ții o lecție: îi explici cu voce tare fișa modulului „" + o.name + "”, bucată cu bucată. Nu ești intervievator și nu-l examinezi: nu pui întrebări de verificare și nu dai scor, doar explici.",
       "Ton: politicos și sec, cu umor discret, ca Jarvis pentru Tony Stark. Îi spui „Alex”. Vorbești ca într-o conversație, în propoziții scurte, ușor de urmărit pe ureche, fără liste și fără markdown.",
+      o.audio
+        ? "Alex ascultă doar, fără să urmărească nimic în față: tot ce spui trebuie să se înțeleagă din auz. Nu face trimiteri vizuale. Codul îl povestești în cuvinte: ce face fiecare parte și ce iese, fără să-l citești, fără simboluri rostite și fără numere de linie."
+        : "Alex poate urmări pe ecran textul secvenței curente. Poți trimite scurt la el („rândul al treilea”), dar spune tot și cu vorbele tale: ecranul doar ajută.",
       "",
       "Cum conduci lecția:",
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
-      "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale și cu un exemplu legat de experiența lui Alex (Django/DRF, Celery, Keycloak, Docker Swarm, Elasticsearch, computer vision). Rămâi la ce ai primit: fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
-      "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare ține locul exemplului din experiența lui Alex: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
-      "3. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
+      "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale. Rămâi la ce ai primit: fără exemple din afara materialului, fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
+      "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare e singurul exemplu: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
+      "3. Dacă răspunsul are „tip”: „harta”, e deschiderea lecției: spui problema modulului și grupurile de puncte " + (o.audio ? "din material" : "de pe cartonaș") + ", după „instruction”. Dacă are „tip”: „punct” la începutul bucății și „instruction” cere amintirea poziției, spui doar acea propoziție. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
+      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (" + (o.audio ? "materialul pe care îl spui" : "cartonașul pe care îl vede Alex") + ") și „instruction”. Spui doar " + (o.audio ? "materialul" : "cartonașul") + ", în ordinea lui, și te oprești; aplicația cere secvența următoare.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
-      "5. Când next_chunk dă „closing”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
+      "5. Când next_chunk dă „closing” cu „k” și „of”, finalul vine pe secvențe: „capcane” (formulările de evitat) și „recap” (recapitularea din " + (o.audio ? "material" : "cartonaș") + ", scrisă de aplicație: n-o alcătuiești tu), iar la „recap” închei cu un rămas-bun scurt. Când „closing” nu are „k”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",
       "Comenzi și întrebări de la Alex:",
       "- „repetă” → repeat_chunk. „sari”, „mai departe”, „următoarea” → next_chunk. „pauză” → pause_session. „gata”, „oprește” → end_session, apoi rămas-bun în două propoziții.",
@@ -7766,7 +7845,7 @@ const Jarvis = (() => {
         return { results, average: results.length ? results.reduce((a, r) => a + r.score, 0) / results.length : 0 };
       },
       async pause() { if (sess.mode === "lesson") lessonPause(); else sess.call.pause(); return { ok: true }; },
-      async nextChunk() { quiet(); return deliver(lz.idx + 1, false); },
+      async nextChunk() { quiet(); const c = lz.cur; return c && c.advance ? deliver(c.n, false, c.k + 1) : deliver(lz.idx + 1, false); },
       async repeatChunk() { quiet(); return deliver(lz.cur ? lz.cur.n : lz.idx + 1, true); },
       async skipCard() {
         if (sess.card) sess.done.push(sess.card.id);
@@ -7780,11 +7859,50 @@ const Jarvis = (() => {
     // `lz.cur` = bucata dată modelului (n = 1..total, total + 1 = finalul cu capcanele); `delivering` rămâne adevărat până se redă toată.
     let lz = null;
     const sync = () => { if (lz) change({ lesson: lessonView() }); };
+    // Cartonașul cerut (`cur`) se arată abia când începe sunetul lui: până atunci rămâne pe ecran cel auzit (`lz.shown`); `lz.pend` e cel în așteptare.
+    function snap(c) {
+      const closing = c.n > lz.total, q = c.seqs[c.k - 1];
+      return { card: { tip: q.tip, continut: q.continut }, k: c.k, of: c.seqs.length, n: Math.min(c.n, lz.total), closing, text: closing ? "" : lz.sheet.points[c.n - 1], traps: closing ? lz.sheet.avoid.slice() : [] };
+    }
+    // Subtitrarea: ultimele două rânduri (propoziții) spuse de model de când a apărut cartonașul afișat.
+    function subtitle() {
+      const list = state.transcript.filter(u => u.who === "model");
+      let from = lz.subId == null ? -1 : list.findIndex(u => u.id === lz.subId);
+      let text = list.slice(from < 0 ? 0 : from).map((u, i) => from >= 0 && i === 0 ? u.text.slice(lz.subLen) : u.text).join(" ").trim();
+      return text ? text.split(/(?<=[.!?…])\s+/).slice(-2) : [];
+    }
+    // Subtitrarea pornește de unde a ajuns transcrierea modelului în clipa schimbării cartonașului.
+    function markSub() {
+      const last = state.transcript.filter(u => u.who === "model").at(-1);
+      lz.subId = last ? last.id : null; lz.subLen = last ? last.text.length : 0;
+    }
+    function showPending() {
+      if (!lz.pend) return;
+      lz.shown = lz.pend; lz.pend = null;
+      markSub();
+    }
+    // Răspunsul la o întrebare liberă: „mai simplu” și „exemplu” (cerere scurtă) lasă cartonașul bucății, cu etichetă; orice altceva trece pe cartonașul `intrebare`.
+    // Întrebarea apare doar dacă transcrierea intrării a adus-o (altfel cartonașul are doar eticheta). Nu se salvează nicăieri.
+    function askKind(q) {
+      const x = (q || "").toLowerCase();
+      if (!x || x.split(/\s+/).length > 8) return null;
+      return /mai simplu/.test(x) ? "Mai simplu" : /exemplu/.test(x) ? "Alt exemplu" : null;
+    }
+    function applyQuestion() {
+      const b = lz.qBase, q = lz.qText || "", kind = b && b.card && b.card.tip !== "intrebare" ? askKind(q) : null;
+      lz.shown = kind ? Object.assign({}, b, { card: Object.assign({}, b.card, { eticheta: kind }) })
+        : { card: { tip: "intrebare", continut: q }, k: 1, of: 1, n: b ? b.n : 0, closing: !!(b && b.closing), text: b ? b.text : "", traps: b ? b.traps : [] };
+    }
+    function showAnswer() {
+      lz.qBase = lz.shown && lz.shown.card.tip === "intrebare" ? lz.qBase : lz.shown;
+      lz.answering = true;
+      applyQuestion(); markSub();
+    }
     function lessonView() {
-      const c = lz.cur, closing = !!c && c.n > lz.total;
+      const c = lz.cur, sh = lz.shown;
       const status = lz.lost ? "lost" : lz.paused ? "paused" : lz.window ? "window" : lz.asking || lz.talking ? "asking"
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
-      return { module: lz.module, name: lz.name, n: c ? Math.min(c.n, lz.total) : 0, total: lz.total, pos: lz.pos0, closing, text: c && !closing ? lz.sheet.points[c.n - 1] : "", traps: closing ? lz.sheet.avoid.slice() : [], heard: lz.heard.size, muted: lz.muted, talking: lz.talking, status };
+      return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, text: sh ? sh.text : "", traps: sh ? sh.traps : [], heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
     function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
@@ -7820,10 +7938,13 @@ const Jarvis = (() => {
     // Ce urmează după ce modelul a terminat de vorbit: bucata s-a auzit toată sau a fost un răspuns la o întrebare.
     function onSpoken() {
       if (!lz || lz.paused || lz.lost) return;
+      lz.answering = false;
       if (lz.endRequested) { sess.call.end(); return; }
       const c = lz.cur;
       if (c && c.delivering) {
         c.delivering = false;
+        // Mijlocul unei bucăți pe secvențe: se cere secvența următoare; fereastra și poziția așteaptă ultima.
+        if (c.seqs && c.k < c.seqs.length) { c.advance = true; sess.call.say(MSG.seq); sync(); return; }
         if (c.n <= lz.total) { lz.heard.add(c.n); env.app.lessonHeard(lz.module, c.n); }
         else { lz.closingHeard = true; env.app.lessonDone(lz.module); sess.call.end(); return; }
         afterChunk();
@@ -7832,7 +7953,7 @@ const Jarvis = (() => {
     }
     // Continuarea după o întrerupere: bucata neauzită se reia, una auzită trece la următoarea (sau își redeschide fereastra).
     function continueLesson(prefix, windowOk) {
-      const c = lz.cur, cut = lz.redo || (c && c.delivering);      // `redo`: bucata a fost tăiată de o întrebare
+      const c = lz.cur, cut = lz.redo || (c && (c.delivering || c.advance));      // `redo`: bucata a fost tăiată de o întrebare; între secvențe, bucata se reia de la prima
       lz.redo = false;
       if (!c) sess.call.say(prefix + MSG.next);
       else if (cut) sess.call.say(prefix + MSG.repeat);
@@ -7840,44 +7961,22 @@ const Jarvis = (() => {
       else sess.call.say(prefix + MSG.next);
       sync();
     }
-    // Desfășurarea unui punct, cu chei pe înțelesul modelului (aceleași câmpuri ca DESF_FIELDS din lib.mjs; jarvis.js se testează în Node, deci nu le importă); câmpurile care lipsesc nu apar. Indexul ei e indexul punctului.
-    const DZ_KEYS = [["p", "problema"], ["i", "ideea"], ["ex", "exemplu"], ["an", "analogie"], ["pas", "pas_cu_pas"], ["cpp", "in_cpp"], ["nu", "unde_nu_tine"], ["leg", "legatura"]];
-    function dzMaterial(sh, n) {
-      const x = sh.desf && sh.desf[n - 1];
-      if (!x) return null;
-      const out = {};
-      DZ_KEYS.forEach(([k, name]) => { if (x[k]) out[name] = x[k]; });
-      return out;
-    }
     // Bucata dată modelului. Prima dată vine cu introducerea (harta modulului sau ideea principală) și numărul de bucăți (sau cu recapitularea, dacă lecția continuă dintr-o poziție).
-    function deliver(n, again) {
+    function deliver(n, again, k) {
       const sh = lz.sheet, total = lz.total, first = !lz.started;
       // Cerută dincolo de final (de ex. Sari pe capcane): lecția se încheie după rămas-bun, altfel fereastra și MSG.next ar cere bucăți la nesfârșit.
       if (n > total + 1) { quiet(); lz.endRequested = true; return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun în două propoziții; aplicația încheie sesiunea, deci nu mai apela nicio funcție." }; }
       lz.started = true; lz.idx = n; lz.cur = { n, delivering: true }; lz.redo = false;
-      let r;
-      if (n <= total) {
-        r = { kind: "chunk", n, total, module: lz.name, text: sh.points[n - 1], instruction: "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi." };
-        const dz = dzMaterial(sh, n);
-        if (dz) {
-          r.desf = dz;
-          r.instruction = "Explică bucata pornind de la desfășurare: problema, ideea, apoi exemplul din desfășurare sau analogia, pașii din „pas_cu_pas” (dacă există), în ordine, și, dacă există, comparația cu C++ cu „unde nu ține”. Folosește exemplul din desfășurare, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Cu vorbele tale, în 1–1,5 minute. Fără fapte noi, nici față de punct, nici față de desfășurare.";
-        }
-      } else {
-        r = { kind: "closing", module: lz.name, lead: sh.lead, recap_from: [sh.lead].concat(sh.points), instruction: "Spune capcanele la interviu (dacă există), apoi o recapitulare în trei propoziții și un rămas-bun." };
-        if (sh.avoid.length) r.traps = sh.avoid.slice();
-      }
-      if (first) {
-        // După o repornire de sesiune (jeton nou, handle refuzat) modelul nu mai știe ce a spus: recapitularea pornește de la ultima bucată auzită, nu de la poziția salvată.
-        const from = lz.recapN != null ? lz.recapN : lz.pos0, resumed = lz.recapN != null;
-        lz.recapN = null;
-        if (from === 0 && n === 1) {
-          const say = lz.name + ", în " + total + " idei. Prima: …";
-          // Cu harta modulului lecția se deschide cu problema mare și cu grupurile de puncte; fără ea, cu ideea principală.
-          r.intro = sh.map ? { module: lz.name, total, say, harta: { problema: sh.map.p, grupuri: sh.map.g.map(g => ({ puncte: g.a === g.b ? String(g.a) : g.a + "–" + g.b, text: g.t })) } }
-            : { module: lz.name, lead: sh.lead, total, say };
-        } else if (from > 0) { r.recap = { n: from, text: sh.points[from - 1] }; if (resumed) r.recap.continuare = true; }
-      }
+      // După o repornire de sesiune (jeton nou, handle refuzat) modelul nu mai știe ce a spus: recapitularea pornește de la ultima bucată auzită, nu de la poziția salvată.
+      let from = 0, resumed = false;
+      if (first) { from = lz.recapN != null ? lz.recapN : lz.pos0; resumed = lz.recapN != null; lz.recapN = null; lz.lead = null; }
+      // Deschiderea (harta sau amintirea poziției) e prima secvență a primei bucăți date; reperează aceeași bucată la repetare.
+      if (first) lz.lead = from === 0 && n === 1 ? { n, seq: openSeq(sh, total, lz.name, lz.mode === "audio") } : from > 0 ? { n, seq: recallSeq(sh, from, resumed, lz.mode === "audio") } : null;
+      const audio = lz.mode === "audio", base = n <= total ? lessonSequences(sh, n, audio) : closingSeqs(sh, audio);
+      const seqs = lz.lead && lz.lead.n === n ? [lz.lead.seq].concat(base) : base, q = seqs[(k || 1) - 1];
+      lz.cur.seqs = seqs; lz.cur.k = k || 1;
+      const r = { kind: n <= total ? "chunk" : "closing", n, total, module: lz.name, k: lz.cur.k, of: seqs.length, tip: q.tip, continut: q.continut, instruction: q.instruction };
+      lz.pend = snap(lz.cur);
       if (again) r.repeat = true;
       sync();
       return r;
@@ -7885,7 +7984,7 @@ const Jarvis = (() => {
     function lessonPause() {
       if (!lz || lz.paused || lz.lost) return;
       lz.wasBusy = state.phase === "speaking" || state.phase === "thinking";
-      quiet();
+      quiet(); lz.pend = null;
       lz.paused = true; lz.pausedAt = env.clock.now();
       sess.call.pause({ keep: true });
       sync();
@@ -7907,7 +8006,8 @@ const Jarvis = (() => {
     function interruptWith(msg) {
       if (!lz || !sess.call || lz.paused || lz.lost) return;
       quiet(); lz.redo = false;
-      if (lz.cur) lz.cur.delivering = false;
+      if (lz.cur) { lz.cur.delivering = false; lz.cur.advance = false; }
+      lz.pend = null;
       sess.call.interrupt(msg); sync();
     }
     function lessonTalk(down) {
@@ -7915,8 +8015,8 @@ const Jarvis = (() => {
       if (!down) { lz.talking = false; sess.call.talk(false); if (!lz.paused && !lz.lost) armAsk(); sync(); return; }     // eliberarea contează oricând
       if (lz.paused || lz.lost) return;
       cancelTimers();
-      lz.window = false; lz.asking = true; lz.talking = true;
-      if (lz.cur && lz.cur.delivering) { lz.cur.delivering = false; lz.redo = true; }        // bucata tăiată de întrebare se reia după răspuns
+      lz.window = false; lz.asking = true; lz.talking = true; lz.pend = null; lz.qText = ""; lz.answering = false;
+      if (lz.cur && (lz.cur.delivering || lz.cur.advance)) { lz.cur.delivering = false; lz.cur.advance = false; lz.redo = true; }        // bucata tăiată de întrebare se reia după răspuns
       sess.call.talk(true);
       armAsk();
       sync();
@@ -7924,7 +8024,7 @@ const Jarvis = (() => {
     // Sesiunea Live a repornit fără istoric (jeton nou cu handle refuzat, sau redeschidere după pierderea conexiunii): modelul nu mai știe ce a explicat.
     // Următoarea bucată vine cu recapitularea ultimei bucăți auzite întregi; poziția salvată a lecției (`lz.idx`) rămâne a aplicației.
     function lessonRecontext() {
-      const c = lz.cur, cut = lz.redo || (c && c.delivering);
+      const c = lz.cur, cut = lz.redo || (c && (c.delivering || c.advance));
       lz.started = false;
       lz.recapN = Math.max(0, Math.min(lz.total, lz.idx - (cut ? 1 : 0)));
     }
@@ -7933,13 +8033,17 @@ const Jarvis = (() => {
       if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
       else if (e.type === "spoken") onSpoken();
       else if (e.type === "voice") {
-        if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; armAsk(); sync(); }
+        if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; lz.qText = ""; armAsk(); sync(); }
       } else if (e.type === "state") {
-        if (e.state === "speaking" && lz.asking && !lz.talking) { lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
+        if (e.state === "speaking") showPending();
+        if (e.state === "speaking" && lz.asking && !lz.talking) { showAnswer(); lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
         else sync();
-      } else if (e.type === "transcript") { if (lz.asking && e.who === "me") armAsk(); }
+      } else if (e.type === "transcript") {
+        if (e.who === "me" && (lz.asking || lz.answering)) { lz.qText = e.text; if (lz.answering) { applyQuestion(); sync(); } }
+        if (lz.asking && e.who === "me") armAsk();
+      }
       else if (e.type === "warn") {
-        if (e.code === "reconnecting") { lz.reconnecting = true; lz.cutOff = true; quiet(); sess.call.cut(); }
+        if (e.code === "reconnecting") { lz.reconnecting = true; lz.cutOff = true; lz.pend = null; quiet(); sess.call.cut(); }
         else if (e.code == null && lz.reconnecting) { lz.reconnecting = false; if (!lz.paused) { lz.cutOff = false; continueLesson(MSG.back, false); } }
       } else if (e.type === "lost") {
         quiet();
@@ -7976,8 +8080,8 @@ const Jarvis = (() => {
       }
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
-        muted: !!st.muted, window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
-        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null } : null;
+        muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
+        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
       // deci primul `getToken` din sesiune îl întoarce pe acesta, iar următoarele (reconectări, redeschidere) cer altul.
@@ -7991,7 +8095,7 @@ const Jarvis = (() => {
       }
       const summary = env.app.summary();
       const config = Object.assign(lesson
-        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
+        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, audio: lz.mode === "audio", summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
         : { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) }, auth);
       const onEvent = e => {
         if (lz && !sess.finished) lessonEvent(e);
@@ -8003,6 +8107,7 @@ const Jarvis = (() => {
           const list = state.transcript.slice(), i = list.findIndex(u => u.id === e.id);
           if (i >= 0) list[i] = { id: e.id, who: e.who, text: e.text }; else list.push({ id: e.id, who: e.who, text: e.text });
           change({ transcript: list.slice(-MAX_TRANSCRIPT) });
+          if (lz && e.who === "model") sync();
         } else if (e.type === "level") change({ level: e.v });
         else if (e.type === "warn") change({ warn: e.code });
         else if (e.type === "ended") finish(e.reason);
@@ -8042,7 +8147,7 @@ const Jarvis = (() => {
         if (!lz || !sess.call || lz.paused || lz.lost) return;
         quiet();
         env.app.lessonReset(lz.module);
-        lz.pos0 = 0; lz.idx = 0; lz.cur = null; lz.started = false; lz.redo = false;
+        lz.pos0 = 0; lz.idx = 0; lz.cur = null; lz.started = false; lz.redo = false; lz.shown = null; lz.pend = null;
         sess.call.interrupt(MSG.restart); sync();
       },
       skip: () => interruptWith(MSG.skip),
@@ -8060,7 +8165,7 @@ const Jarvis = (() => {
     };
   }
 
-  return { create, buildSystem, buildLessonSystem };
+  return { create, buildSystem, buildLessonSystem, lessonSequences };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Jarvis;
 
@@ -11252,7 +11357,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     const a = b.dataset.a;
     switch (a) {
       case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-server-save": case "jv-server-clear": case "jv-mics":
-      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
+      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": case "jv-mode": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "dz": case "dz-map": case "dz-all": dzAct(a, b); break;
@@ -11729,7 +11834,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
-  const BUILD = "6b76715";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
+  const BUILD = "919b572";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };
@@ -11751,11 +11856,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   function jvChanged() {
     if (ui.tab !== "jarvis") return;
     const st = jv.getState(), L = st.lesson;
-    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost"].join(",")].join("|");
+    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost", L.mode, L.mode === "audio" ? "" : [L.k, L.card && L.card.tip, L.card && L.card.eticheta, L.card && L.card.continut].join(",")].join(",")].join("|");
     // Cât ține apăsat Vorbește, butonul nu se înlocuiește: ridicarea degetului ar ajunge pe un element dispărut.
     if (sig !== jvSig && !ui.jv.holding) { jvSig = sig; render(); } else jvPaint(st);
   }
+  // Subtitrarea vie: ultimele două rânduri spuse de Jarvis, sub cartonaș (se actualizează pe loc).
+  const jvSub = L => '<div id="jv-sub" class="jv-sub small muted" aria-live="off" data-h="' + esc((L.sub || []).join("|")) + '">' + (L.sub || []).map(x => "<p>" + esc(x) + "</p>").join("") + "</div>";
   function jvPaint(st) {
+    const sb = $("#jv-sub"); if (sb && st.lesson) { const h = (st.lesson.sub || []).join("|"); if (sb.dataset.h !== h) { sb.dataset.h = h; sb.innerHTML = (st.lesson.sub || []).map(x => "<p>" + esc(x) + "</p>").join(""); } }
     const orb = $("#jv-orb"); if (orb) orb.style.setProperty("--lv", Math.min(1, st.level * 4).toFixed(2));
     const ls = $("#jv-state"); if (ls && st.lesson && st.phase !== "ended") { const t = JV_LSTATE[st.lesson.status] || ""; if (ls.textContent !== t) ls.textContent = t; }
     const tr = $("#jv-tr"); if (tr) { const html = jvTranscript(st); if (tr.dataset.h !== html) { tr.dataset.h = html; tr.innerHTML = html; } }
@@ -11812,7 +11920,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     if (!rec) return "";
     const sub = rec.pos > 0 ? "Continuă " + rec.name + ", " + rec.pos + "/" + rec.total : rec.name + ", " + rec.total + " idei";
     const mods = MODS.filter(m => P.sheets[m.id] && P.sheets[m.id].points && P.sheets[m.id].points.length);
+    const mode = jvInit().settings.get().mode === "audio" ? "audio" : "ecran";
+    const modeBtn = (v, t) => '<button class="btn' + (mode === v ? " primary" : "") + '" data-a="jv-mode" data-v="' + v + '" aria-pressed="' + (mode === v) + '">' + t + "</button>";
     let h = '<section class="card stack-s"><h3>Lecție</h3><p class="small muted">Jarvis îți explică fișa unui modul cu voce tare, bucată cu bucată. Tu doar asculți. O poți opri sau poți întreba oricând.</p>' +
+      '<div class="jv-mode" id="jv-mode" role="group" aria-label="Cum asculți">' + modeBtn("ecran", "Cu ecran") + modeBtn("audio", "Doar audio") + '</div><p class="xs muted" id="jv-mode-h">' + (mode === "audio" ? "Jarvis povestește tot în cuvinte, inclusiv codul. Ecranul arată doar comenzile." : "Pe ecran apare textul fiecărei secvențe, iar Jarvis poate trimite la el.") + '</p>' +
       '<button class="btn primary block jv-rec" id="jv-rec" data-a="jv-lesson" data-m="' + rec.module + '"><span class="jv-rec-t">Ascultă lecția recomandată</span><span class="jv-rec-s">' + esc(sub) + "</span></button>" +
       (rec.pos > 0 ? '<button class="btn sm ghost" id="jv-rec-reset" data-a="jv-lesson-reset" data-m="' + rec.module + '">Resetează lecția</button>' : "") +
       '<details class="jv-lessons"><summary class="small">Alege altă temă (' + mods.length + ")</summary><div class=\"stack-s\" style=\"margin-top:8px\">" +
@@ -11820,6 +11931,19 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
         (l.n > 0 ? '<button class="btn sm" data-a="jv-lesson-reset" data-m="' + m.id + '" aria-label="Resetează lecția ' + esc(m.short) + '">Resetează</button>' : "") + "</div>"; }).join("") +
       "</div></details></section>";
     return h;
+  }
+  // Cartonașul secvenței curente, după tip: cod colorat la exemplu, rânduri la pas, text în rest.
+  const JV_TIP = { problema: "Problema", ideea: "Ideea", exemplu: "Exemplu", analogie: "Analogie", pas: "Pas cu pas", cpp: "În C++", punct: "Punctul", harta: "Harta modulului", recap: "Recapitulare", intrebare: "Întrebarea ta" };
+  // Harta și recapitularea: rândurile „1–3: text” cu intervalul îngroșat; prima linie a hărții e problema modulului.
+  const jvRows = t => t.split("\n").map(x => { const m = /^(\d+(?:–\d+)?): (.*)$/.exec(x); return "<p>" + (m ? "<b>" + m[1] + "</b> " + inlineRich(m[2]) : inlineRich(x)) + "</p>"; }).join("");
+  function jvCard(L) {
+    const c = L.card;
+    if (!c) return '<div id="jv-chunk" class="jv-chunk jv-empty"></div>';
+    const lab = c.tip === "capcane" ? "" : '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + (L.of > 1 && c.tip !== "intrebare" ? " · " + L.k + "/" + L.of : "") + (c.eticheta ? ' · <b class="jv-mark">' + esc(c.eticheta) + "</b>" : "") + "</div>";
+    const body = c.tip === "exemplu" ? codeBlock(c.continut, false, true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
+      : c.tip === "capcane" ? "<b>Capcane la interviu</b>" + c.continut.split("\n").map(x => "<p>" + fmt(x) + "</p>").join("")
+      : c.tip === "harta" || c.tip === "recap" ? jvRows(c.continut) : c.tip === "intrebare" ? (c.continut ? '<p class="jv-q">' + esc(c.continut) + "</p>" : "") : inlineRich(c.continut);
+    return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
   }
   // În lecție: textul bucății curente, n/total, comenzile mari pentru o singură mână, transcrierea restrânsă.
   function vLessonActive(st) {
@@ -11830,8 +11954,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     else if (st.warn === "reconnecting") h += '<div class="jv-warn" role="status">Reconectare…</div>';
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
-    if (L.closing) h += '<div id="jv-chunk" class="jv-chunk"><b>Capcane la interviu</b>' + (L.traps.length ? L.traps.map(x => "<p>" + fmt(x) + "</p>").join("") : "<p>Recapitulare și rămas-bun.</p>") + "</div>";
-    else h += '<div id="jv-chunk" class="jv-chunk">' + (L.text ? inlineRich(L.text) : '<span class="muted">Jarvis începe lecția…</span>') + "</div>";
+    if (L.mode === "audio") { /* doar audio: fără cartonaș, doar comenzile mari */ }
+    else h += jvCard(L);
+    if (L.mode !== "audio") h += jvSub(L);
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +
@@ -11894,6 +12019,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
       case "jv-repeat": J.repeat(); break;
       case "jv-skip": J.skip(); break;
       case "jv-mute": J.setMuted(!J.settings.get().muted); break;
+      case "jv-mode": J.settings.set({ mode: b.dataset.v === "audio" ? "audio" : "ecran" }); render(); break;
       case "jv-stop": J.stop(); break;
       case "jv-pause": J.pause(); break;
       case "jv-resume": J.resume(); break;
