@@ -77,12 +77,12 @@ test("the first message tells the model to begin the lesson and to ask for the f
 
 // ---------- instrucțiunile de sistem ----------
 
-test("the system instructions ask for examples from Alex's experience, no new facts, no lists, English terms and Jarvis as explainer", async () => {
+test("the system instructions ask for no examples from outside the material, no new facts, no lists, English terms and Jarvis as explainer", async () => {
   const t = await begin(setup());
   const s = t.live.cfg.system;
   assert.match(s, /Jarvis/);
   assert.match(s, /1.{1,3}1,5 minute/);
-  assert.match(s, /Django.*Celery.*Keycloak.*Docker Swarm/s);
+  assert.match(s, /fără exemple din afara materialului/);
   assert.match(s, /fără fapte noi/i);
   assert.match(s, /fără liste și fără markdown/);
   assert.match(s, /engleză/);
@@ -830,7 +830,7 @@ test("with an unfolding the chunk instruction asks for its example, not an inven
 test("without an unfolding the chunk has no material field and the same instruction as before", async () => {
   const t = await begin(setup());
   const r = await t.tool("next_chunk");
-  assert.deepEqual(["desf" in r, r.instruction], [false, "Explică bucata cu vorbele tale, cu un exemplu din experiența lui Alex, în 1–1,5 minute. Fără fapte noi."]);
+  assert.deepEqual(["desf" in r, r.instruction], [false, "Explică bucata cu vorbele tale, în 1–1,5 minute. Fără exemple din afara bucății, fără fapte noi."]);
 });
 
 test("the first chunk opens with the module map when there is one, in place of the main idea", async () => {
@@ -1003,4 +1003,20 @@ test("a module outside the asyncio trial gets whole chunks with the unfolding, a
   const t = await begin(setup(), "oop");
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.k, r.of, r.tip, typeof r.desf], [undefined, undefined, undefined, "object"]);
+});
+
+// ---------- module fără desfășurări: fără improvizație ----------
+
+test("no lesson instruction asks for an example from outside the material", async () => {
+  const sys = Jarvis.buildLessonSystem({ name: "django", muted: false, summary: {} });
+  assert.equal(/experien/i.test(sys), false);
+  for (const q of Object.values(Jarvis.lessonSequences({ points: SHEET.points, desf: SHEET_AS.desf }, 1)).map(x => x.instruction)) assert.equal(/experien/i.test(q), false);
+  const t = await begin(setup(), "django"), r = await t.tool("next_chunk");
+  assert.equal(/experien/i.test(r.instruction) || /experien/i.test(t.live.cfg.system), false);
+});
+
+test("a module without unfoldings (django) has one sequence per chunk, the point, spoken from the card", () => {
+  const P = loadData(new URL("../../", import.meta.url));
+  for (const m of ["dbmodels", "aws", "django"]) for (let n = 1; n <= P.sheets[m].points.length; n++)
+    assert.deepEqual(Jarvis.lessonSequences({ points: P.sheets[m].points }, n).map(x => [x.tip, x.continut]), [["punct", P.sheets[m].points[n - 1]]]);
 });
