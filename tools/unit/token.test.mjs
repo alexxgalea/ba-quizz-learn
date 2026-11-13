@@ -341,20 +341,21 @@ test("the connection test goes through a token when a server is set", async () =
 test("a lesson whose session restarted without history recaps the last chunk heard and says it is a continuation", async () => {
   const t = jarvisSetup();
   await t.jarvis.start({ mode: "lesson", module: "django" });
-  for (let i = 0; i < 2; i++) { await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); }
+  // django: prima bucată are două secvențe (harta, punctul), a doua una
+  for (let i = 0; i < 3; i++) { await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); }
   t.live.emit({ type: "reconnecting" }); t.live.emit({ type: "restarted" }); t.live.emit({ type: "live" });
   const r = await t.tool("next_chunk");
-  assert.deepEqual([r.n, r.recap, "intro" in r], [3, { n: 2, text: "create_task programează o corutină.", continuare: true }, false]);
+  assert.deepEqual([r.n, r.k, r.tip, r.continut, /Reiau de unde am rămas/.test(r.instruction), r.tip === "harta"], [3, 1, "punct", "create_task programează o corutină.", true, false]);
 });
 
 test("a chunk cut by the restart is repeated with the recap of the one before it", async () => {
   const t = jarvisSetup();
   await t.jarvis.start({ mode: "lesson", module: "django" });
-  await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain();
+  for (let i = 0; i < 2; i++) { await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); }   // bucata 1 (harta + punctul)
   await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) });          // bucata 2 e în curs
   t.live.emit({ type: "reconnecting" }); t.live.emit({ type: "restarted" }); t.live.emit({ type: "live" });
   const r = await t.tool("repeat_chunk");
-  assert.deepEqual([r.n, r.recap.n, r.recap.continuare], [2, 1, true]);
+  assert.deepEqual([r.n, r.k, r.tip, r.continut, /Reiau de unde am rămas/.test(r.instruction)], [2, 1, "punct", "Corutina cedează la await.", true]);
   assert.equal(t.state().lesson.pos, 0);                     // poziția salvată a lecției nu s-a mișcat
 });
 
@@ -363,7 +364,7 @@ test("a restart before anything was heard gives the introduction again, not a re
   await t.jarvis.start({ mode: "lesson", module: "django" });
   t.live.emit({ type: "restarted" });
   const r = await t.tool("next_chunk");
-  assert.deepEqual([r.n, "intro" in r, "recap" in r], [1, true, false]);
+  assert.deepEqual([r.n, r.tip, /Reiau|Data trecută/.test(r.instruction)], [1, "harta", false]);
 });
 
 test("a training session whose model lost its thread is told to ask for a card again", async () => {
@@ -376,11 +377,11 @@ test("a training session whose model lost its thread is told to ask for a card a
 test("after a lost connection, the reopened session recaps too (the model has no history either)", async () => {
   const t = jarvisSetup();
   await t.jarvis.start({ mode: "lesson", module: "django" });
-  await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain();
+  for (let i = 0; i < 2; i++) { await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); }
   t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
   await t.jarvis.resume();
   const r = await t.tool("next_chunk");
-  assert.deepEqual([r.n, r.recap && r.recap.n], [2, 1]);
+  assert.deepEqual([r.n, r.tip, r.continut], [2, "punct", "Corutina cedează la await."]);
 });
 
 test("a call that loses the signal while renewing the token goes on pause like any lost connection, and Reia reopens it", async () => {

@@ -48,8 +48,7 @@ const Jarvis = (() => {
   };
 
   // Secvențele (spec .scratch/lectie-sincronizata): o bucată se dă pe câmpuri ale desfășurării, fiecare cu cartonașul ei.
-  // Proba e doar pe asyncio; tichetul 08 șterge condiția (SEQ_MODULES) și toate modulele merg pe secvențe.
-  const SEQ_MODULES = ["asyncio"];
+  // Toate modulele merg pe secvențe; fără desfășurare, bucata are doar secvența `punct`.
   const SEQ_RULE = " Spune doar ce e pe cartonaș, în ordinea de pe cartonaș, în 15–30 de secunde, cu vorbele tale. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
   const SEQ_INSTR = {
     problema: "Spune problema de pe cartonaș." + SEQ_RULE,
@@ -277,9 +276,8 @@ const Jarvis = (() => {
     const sync = () => { if (lz) change({ lesson: lessonView() }); };
     // Cartonașul cerut (`cur`) se arată abia când începe sunetul lui: până atunci rămâne pe ecran cel auzit (`lz.shown`); `lz.pend` e cel în așteptare.
     function snap(c) {
-      const closing = c.n > lz.total;
-      const card = c.seqs ? { tip: c.seqs[c.k - 1].tip, continut: c.seqs[c.k - 1].continut } : closing ? (lz.sheet.avoid.length ? { tip: "capcane", continut: lz.sheet.avoid.join("\n") } : { tip: "recap", continut: "Recapitulare și rămas-bun." }) : { tip: "punct", continut: lz.sheet.points[c.n - 1] };
-      return { card, k: c.seqs ? c.k : 1, of: c.seqs ? c.seqs.length : 1, n: Math.min(c.n, lz.total), closing, text: closing ? "" : lz.sheet.points[c.n - 1], traps: closing ? lz.sheet.avoid.slice() : [] };
+      const closing = c.n > lz.total, q = c.seqs[c.k - 1];
+      return { card: { tip: q.tip, continut: q.continut }, k: c.k, of: c.seqs.length, n: Math.min(c.n, lz.total), closing, text: closing ? "" : lz.sheet.points[c.n - 1], traps: closing ? lz.sheet.avoid.slice() : [] };
     }
     // Subtitrarea: ultimele două rânduri (propoziții) spuse de model de când a apărut cartonașul afișat.
     function subtitle() {
@@ -378,52 +376,21 @@ const Jarvis = (() => {
       else sess.call.say(prefix + MSG.next);
       sync();
     }
-    // Desfășurarea unui punct, cu chei pe înțelesul modelului (aceleași câmpuri ca DESF_FIELDS din lib.mjs; jarvis.js se testează în Node, deci nu le importă); câmpurile care lipsesc nu apar. Indexul ei e indexul punctului.
-    const DZ_KEYS = [["p", "problema"], ["i", "ideea"], ["ex", "exemplu"], ["an", "analogie"], ["pas", "pas_cu_pas"], ["cpp", "in_cpp"], ["nu", "unde_nu_tine"], ["leg", "legatura"]];
-    function dzMaterial(sh, n) {
-      const x = sh.desf && sh.desf[n - 1];
-      if (!x) return null;
-      const out = {};
-      DZ_KEYS.forEach(([k, name]) => { if (x[k]) out[name] = x[k]; });
-      return out;
-    }
     // Bucata dată modelului. Prima dată vine cu introducerea (harta modulului sau ideea principală) și numărul de bucăți (sau cu recapitularea, dacă lecția continuă dintr-o poziție).
     function deliver(n, again, k) {
       const sh = lz.sheet, total = lz.total, first = !lz.started;
       // Cerută dincolo de final (de ex. Sari pe capcane): lecția se încheie după rămas-bun, altfel fereastra și MSG.next ar cere bucăți la nesfârșit.
       if (n > total + 1) { quiet(); lz.endRequested = true; return { done: true, message: "Lecția s-a terminat. Ia-ți rămas-bun în două propoziții; aplicația încheie sesiunea, deci nu mai apela nicio funcție." }; }
       lz.started = true; lz.idx = n; lz.cur = { n, delivering: true }; lz.redo = false;
-      const useSeq = SEQ_MODULES.includes(lz.module);
       // După o repornire de sesiune (jeton nou, handle refuzat) modelul nu mai știe ce a spus: recapitularea pornește de la ultima bucată auzită, nu de la poziția salvată.
       let from = 0, resumed = false;
       if (first) { from = lz.recapN != null ? lz.recapN : lz.pos0; resumed = lz.recapN != null; lz.recapN = null; lz.lead = null; }
       // Deschiderea (harta sau amintirea poziției) e prima secvență a primei bucăți date; reperează aceeași bucată la repetare.
-      if (first && useSeq) lz.lead = from === 0 && n === 1 ? { n, seq: openSeq(sh, total, lz.name, lz.mode === "audio") } : from > 0 ? { n, seq: recallSeq(sh, from, resumed, lz.mode === "audio") } : null;
-      let r;
-      if (useSeq) {
-        const audio = lz.mode === "audio", base = n <= total ? lessonSequences(sh, n, audio) : closingSeqs(sh, audio);
-        const seqs = lz.lead && lz.lead.n === n ? [lz.lead.seq].concat(base) : base, q = seqs[(k || 1) - 1];
-        lz.cur.seqs = seqs; lz.cur.k = k || 1;
-        r = { kind: n <= total ? "chunk" : "closing", n, total, module: lz.name, k: lz.cur.k, of: seqs.length, tip: q.tip, continut: q.continut, instruction: q.instruction };
-      } else if (n <= total) {
-        r = { kind: "chunk", n, total, module: lz.name, text: sh.points[n - 1], instruction: "Explică bucata cu vorbele tale, în 1–1,5 minute. Fără exemple din afara bucății, fără fapte noi." };
-        const dz = dzMaterial(sh, n);
-        if (dz) {
-          r.desf = dz;
-          r.instruction = "Explică bucata pornind de la desfășurare: problema, ideea, apoi exemplul din desfășurare sau analogia, pașii din „pas_cu_pas” (dacă există), în ordine, și, dacă există, comparația cu C++ cu „unde nu ține”. Folosește exemplul din desfășurare, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Cu vorbele tale, în 1–1,5 minute. Fără fapte noi, nici față de punct, nici față de desfășurare.";
-        }
-      } else {
-        r = { kind: "closing", module: lz.name, lead: sh.lead, recap_from: [sh.lead].concat(sh.points), instruction: "Spune capcanele la interviu (dacă există), apoi o recapitulare în trei propoziții și un rămas-bun." };
-        if (sh.avoid.length) r.traps = sh.avoid.slice();
-      }
-      if (first && !useSeq) {
-        if (from === 0 && n === 1) {
-          const say = lz.name + ", în " + total + " idei. Prima: …";
-          // Cu harta modulului lecția se deschide cu problema mare și cu grupurile de puncte; fără ea, cu ideea principală.
-          r.intro = sh.map ? { module: lz.name, total, say, harta: { problema: sh.map.p, grupuri: sh.map.g.map(g => ({ puncte: g.a === g.b ? String(g.a) : g.a + "–" + g.b, text: g.t })) } }
-            : { module: lz.name, lead: sh.lead, total, say };
-        } else if (from > 0) { r.recap = { n: from, text: sh.points[from - 1] }; if (resumed) r.recap.continuare = true; }
-      }
+      if (first) lz.lead = from === 0 && n === 1 ? { n, seq: openSeq(sh, total, lz.name, lz.mode === "audio") } : from > 0 ? { n, seq: recallSeq(sh, from, resumed, lz.mode === "audio") } : null;
+      const audio = lz.mode === "audio", base = n <= total ? lessonSequences(sh, n, audio) : closingSeqs(sh, audio);
+      const seqs = lz.lead && lz.lead.n === n ? [lz.lead.seq].concat(base) : base, q = seqs[(k || 1) - 1];
+      lz.cur.seqs = seqs; lz.cur.k = k || 1;
+      const r = { kind: n <= total ? "chunk" : "closing", n, total, module: lz.name, k: lz.cur.k, of: seqs.length, tip: q.tip, continut: q.continut, instruction: q.instruction };
       lz.pend = snap(lz.cur);
       if (again) r.repeat = true;
       sync();
