@@ -623,3 +623,5 @@ ul.pts.num .pb > .dz { width: calc(100% + 32px); margin-left: -32px; }
 .cert-sec h3 { margin: 0; }
 .cert-gap .pts { margin: 0; }
 .cert-gap .btn { align-self: flex-start; }
+.jv-mark { color: var(--acc, inherit); }
+.jv-q { font-style: italic; }

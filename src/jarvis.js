@@ -288,11 +288,32 @@ const Jarvis = (() => {
       let text = list.slice(from < 0 ? 0 : from).map((u, i) => from >= 0 && i === 0 ? u.text.slice(lz.subLen) : u.text).join(" ").trim();
       return text ? text.split(/(?<=[.!?…])\s+/).slice(-2) : [];
     }
+    // Subtitrarea pornește de unde a ajuns transcrierea modelului în clipa schimbării cartonașului.
+    function markSub() {
+      const last = state.transcript.filter(u => u.who === "model").at(-1);
+      lz.subId = last ? last.id : null; lz.subLen = last ? last.text.length : 0;
+    }
     function showPending() {
       if (!lz.pend) return;
       lz.shown = lz.pend; lz.pend = null;
-      const last = state.transcript.filter(u => u.who === "model").at(-1);
-      lz.subId = last ? last.id : null; lz.subLen = last ? last.text.length : 0;
+      markSub();
+    }
+    // Răspunsul la o întrebare liberă: „mai simplu” și „exemplu” (cerere scurtă) lasă cartonașul bucății, cu etichetă; orice altceva trece pe cartonașul `intrebare`.
+    // Întrebarea apare doar dacă transcrierea intrării a adus-o (altfel cartonașul are doar eticheta). Nu se salvează nicăieri.
+    function askKind(q) {
+      const x = (q || "").toLowerCase();
+      if (!x || x.split(/\s+/).length > 8) return null;
+      return /mai simplu/.test(x) ? "Mai simplu" : /exemplu/.test(x) ? "Alt exemplu" : null;
+    }
+    function applyQuestion() {
+      const b = lz.qBase, q = lz.qText || "", kind = b && b.card && b.card.tip !== "intrebare" ? askKind(q) : null;
+      lz.shown = kind ? Object.assign({}, b, { card: Object.assign({}, b.card, { eticheta: kind }) })
+        : { card: { tip: "intrebare", continut: q }, k: 1, of: 1, n: b ? b.n : 0, closing: !!(b && b.closing), text: b ? b.text : "", traps: b ? b.traps : [] };
+    }
+    function showAnswer() {
+      lz.qBase = lz.shown && lz.shown.card.tip === "intrebare" ? lz.qBase : lz.shown;
+      lz.answering = true;
+      applyQuestion(); markSub();
     }
     function lessonView() {
       const c = lz.cur, sh = lz.shown;
@@ -334,6 +355,7 @@ const Jarvis = (() => {
     // Ce urmează după ce modelul a terminat de vorbit: bucata s-a auzit toată sau a fost un răspuns la o întrebare.
     function onSpoken() {
       if (!lz || lz.paused || lz.lost) return;
+      lz.answering = false;
       if (lz.endRequested) { sess.call.end(); return; }
       const c = lz.cur;
       if (c && c.delivering) {
@@ -441,7 +463,7 @@ const Jarvis = (() => {
       if (!down) { lz.talking = false; sess.call.talk(false); if (!lz.paused && !lz.lost) armAsk(); sync(); return; }     // eliberarea contează oricând
       if (lz.paused || lz.lost) return;
       cancelTimers();
-      lz.window = false; lz.asking = true; lz.talking = true; lz.pend = null;
+      lz.window = false; lz.asking = true; lz.talking = true; lz.pend = null; lz.qText = ""; lz.answering = false;
       if (lz.cur && (lz.cur.delivering || lz.cur.advance)) { lz.cur.delivering = false; lz.cur.advance = false; lz.redo = true; }        // bucata tăiată de întrebare se reia după răspuns
       sess.call.talk(true);
       armAsk();
@@ -459,12 +481,15 @@ const Jarvis = (() => {
       if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
       else if (e.type === "spoken") onSpoken();
       else if (e.type === "voice") {
-        if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; armAsk(); sync(); }
+        if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; lz.qText = ""; armAsk(); sync(); }
       } else if (e.type === "state") {
         if (e.state === "speaking") showPending();
-        if (e.state === "speaking" && lz.asking && !lz.talking) { lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
+        if (e.state === "speaking" && lz.asking && !lz.talking) { showAnswer(); lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
         else sync();
-      } else if (e.type === "transcript") { if (lz.asking && e.who === "me") armAsk(); }
+      } else if (e.type === "transcript") {
+        if (e.who === "me" && (lz.asking || lz.answering)) { lz.qText = e.text; if (lz.answering) { applyQuestion(); sync(); } }
+        if (lz.asking && e.who === "me") armAsk();
+      }
       else if (e.type === "warn") {
         if (e.code === "reconnecting") { lz.reconnecting = true; lz.cutOff = true; lz.pend = null; quiet(); sess.call.cut(); }
         else if (e.code == null && lz.reconnecting) { lz.reconnecting = false; if (!lz.paused) { lz.cutOff = false; continueLesson(MSG.back, false); } }
