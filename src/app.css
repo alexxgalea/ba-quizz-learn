@@ -570,6 +570,8 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-chunk-card .jv-chunk.jv-t-harta, .jv-chunk-card .jv-chunk.jv-t-recap { max-height: 44vh; }
 #jv-lesson.is-mut .jv-chunk.jv-t-harta, #jv-lesson.is-mut .jv-chunk.jv-t-recap { max-height: 30vh; }
 .jv-tip { margin-bottom: 4px; }
+.jv-sub { min-height: 3em; border-top: 1px solid var(--line, rgba(128,128,128,.25)); padding-top: 6px; }
+.jv-sub p { margin: 0 0 2px; }
 .jv-chunk .code { margin: 0; }
 #jv-lesson .jv-ctl { grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 6px; }
 #jv-lesson .jv-ctl .btn { padding-inline: 2px; font-size: 15px; }

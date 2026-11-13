@@ -304,7 +304,7 @@ test("the model calling next_chunk by a spoken 'sari' closes the window and canc
   const t = await begin(setup());
   await deliver(t);
   t.audio.level(0.2);
-  await t.tool("next_chunk");
+  await t.tool("next_chunk"); sound(t);
   t.clock.advance(20000);
   assert.deepEqual([t.state().lesson.n, t.texts().length], [2, 1]);
 });
@@ -663,7 +663,7 @@ test("the screen state shows the current chunk's number, the total, its position
   const t = setup();
   t.app.pos.django = 1;
   await begin(t);
-  await t.tool("next_chunk");
+  await t.tool("next_chunk"); sound(t);
   const l = t.state().lesson;
   assert.deepEqual([l.module, l.name, l.n, l.total, l.text, l.muted], ["django", "django", 2, 4, SHEET.points[1], false]);
 });
@@ -770,7 +770,7 @@ test("after Reset the model gets the main idea and the first chunk again", async
   const t = await begin(setup());
   await deliver(t); t.clock.advance(3100); await deliver(t);
   t.jarvis.restart();
-  const r = await t.tool("next_chunk");
+  const r = await t.tool("next_chunk"); sound(t);
   assert.deepEqual([r.n, r.text, r.intro.total, "recap" in r, t.state().lesson.n], [1, SHEET.points[0], 4, false, 1]);
 });
 
@@ -964,12 +964,58 @@ test("on Mut the sequences and then the next chunk follow without a window", asy
 test("the lesson view exposes the current card as tip and content, and the closing as traps", async () => {
   const t = await begin(setup(), "asyncio");
   assert.equal(t.state().lesson.card, null);
-  await deliver(t); await deliver(t); await t.tool("next_chunk");
+  await deliver(t); await deliver(t); await t.tool("next_chunk"); sound(t);
   let l = t.state().lesson;
   assert.deepEqual([l.card, l.k, l.of, l.n], [{ tip: "ideea", continut: SHEET_AS.desf[0].i }, 3, 6, 1]);
   const o = await begin(setup(), "django");
-  await o.tool("next_chunk");
+  await deliver(o);
   assert.deepEqual(o.state().lesson.card, { tip: "punct", continut: SHEET.points[0] });
+});
+
+// ---------- cartonașul se schimbă când începe sunetul ----------
+
+const sound = t => t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+const say = (t, text, id = "m1") => t.live.emit({ type: "transcript", id, who: "model", text });
+
+test("a requested card stays hidden until its sound starts; the old one stays on screen", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  await t.tool("next_chunk");
+  assert.deepEqual([t.state().lesson.card.tip, t.state().lesson.k], ["harta", 1]);
+  sound(t);
+  assert.deepEqual([t.state().lesson.card.tip, t.state().lesson.k], ["problema", 2]);
+});
+
+test("the very first card does not show before it is heard", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk");
+  assert.equal(t.state().lesson.card, null);
+  sound(t);
+  assert.equal(t.state().lesson.card.tip, "harta");
+});
+
+test("a pause or Vorbește before the sound leaves no unheard card on screen", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  await t.tool("next_chunk"); t.jarvis.pause();
+  sound(t);
+  assert.equal(t.state().lesson.card.tip, "harta");
+  const u = await begin(setup(), "asyncio");
+  await deliver(u);
+  await u.tool("next_chunk"); u.jarvis.talk(true); sound(u);
+  assert.equal(u.state().lesson.card.tip, "harta");
+});
+
+test("the subtitle shows the last two lines the model spoke since the card changed, and empties on the next card", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); sound(t);
+  say(t, "Prima propoziție. A doua. A treia!");
+  assert.deepEqual(t.state().lesson.sub, ["A doua.", "A treia!"]);
+  speak(t);
+  await t.tool("next_chunk"); say(t, "Prima propoziție. A doua. A treia! Noua.", "m1"); sound(t);
+  assert.deepEqual(t.state().lesson.sub, []);
+  say(t, "Prima propoziție. A doua. A treia! Noua. Alta.", "m1");
+  assert.deepEqual(t.state().lesson.sub, ["Noua.", "Alta."]);
 });
 
 test("Repetă in the middle of a chunk starts it again from the first sequence", async () => {
@@ -1032,7 +1078,7 @@ async function toAsyncClosing(t) {
 
 test("the opening is a sequence of its own: the map card with the problem and the groups, before the problem of point 1", async () => {
   const t = await begin(setup(), "asyncio");
-  const r = await t.tool("next_chunk");
+  const r = await t.tool("next_chunk"); sound(t);
   assert.deepEqual([r.tip, r.k, r.of, t.state().lesson.card.tip, t.state().lesson.card.continut.split("\n")], ["harta", 1, 6, "harta", [SHEET_AS.map.p, "1–2: cum rulează bucla", "3: cum colectezi rezultatele"]]);
   assert.match(r.instruction, /asyncio, în 3 idei/);
   assert.equal("intro" in r, false);
@@ -1049,12 +1095,12 @@ test("without a map the opening card is the main idea", async () => {
 
 test("the closing comes in two sequences, the traps and then the recap, and the recap text is ours: the groups of the map", async () => {
   const t = setup(); await toAsyncClosing(t);
-  const c1 = await t.tool("next_chunk");
+  const c1 = await t.tool("next_chunk"); sound(t);
   assert.deepEqual([c1.kind, c1.n, c1.k, c1.of, c1.tip, c1.continut, t.state().lesson.card.tip, "recap_from" in c1], ["closing", 4, 1, 2, "capcane", SHEET_AS.avoid.join("\n"), "capcane", false]);
   speak(t);
   assert.match(t.texts().at(-1), /next_chunk/);
   assert.deepEqual([t.app.doneLessons, t.state().phase !== "ended"], [[], true]);
-  const c2 = await t.tool("next_chunk");
+  const c2 = await t.tool("next_chunk"); sound(t);
   assert.deepEqual([c2.k, c2.tip, c2.continut, t.state().lesson.card], [2, "recap", "1–2: cum rulează bucla\n3: cum colectezi rezultatele", { tip: "recap", continut: c2.continut }]);
   assert.match(c2.instruction, /rămas-bun/);
 });
@@ -1086,7 +1132,7 @@ test("Sari on the traps ends the lesson with the goodbye and does not count the 
 test("from a saved position the recall sentence has the card of the point recalled", async () => {
   const t = setup(); t.app.pos.asyncio = 2;
   await begin(t, "asyncio");
-  const r = await t.tool("next_chunk");
+  const r = await t.tool("next_chunk"); sound(t);
   assert.deepEqual([r.n, r.k, r.of, r.tip, r.continut, t.state().lesson.card.continut], [3, 1, 3, "punct", SHEET_AS.points[1], SHEET_AS.points[1]]);
   assert.match(r.instruction, /Data trecută/);
   speak(t);

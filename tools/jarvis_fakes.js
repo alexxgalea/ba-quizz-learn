@@ -52,6 +52,7 @@
     }
     ctl.clock.t = end;
   };
+  ctl.sound = () => onEvent({ type: "audio", pcm: new Int16Array([1]) });
   ctl.speak = () => { onEvent({ type: "audio", pcm: new Int16Array([1]) }); onEvent({ type: "turnComplete" }); ctl.drain(); };
   const clock = { now: () => ctl.clock.t, after: (ms, fn) => { const tm = { at: ctl.clock.t + ms, fn }; timers.push(tm); return () => { const i = timers.indexOf(tm); if (i >= 0) timers.splice(i, 1); }; } };
   window.__jarvisFakes = { live, audio, clock, getToken, ctl };

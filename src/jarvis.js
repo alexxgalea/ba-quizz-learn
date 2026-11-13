@@ -275,12 +275,30 @@ const Jarvis = (() => {
     // `lz.cur` = bucata dată modelului (n = 1..total, total + 1 = finalul cu capcanele); `delivering` rămâne adevărat până se redă toată.
     let lz = null;
     const sync = () => { if (lz) change({ lesson: lessonView() }); };
+    // Cartonașul cerut (`cur`) se arată abia când începe sunetul lui: până atunci rămâne pe ecran cel auzit (`lz.shown`); `lz.pend` e cel în așteptare.
+    function snap(c) {
+      const closing = c.n > lz.total;
+      const card = c.seqs ? { tip: c.seqs[c.k - 1].tip, continut: c.seqs[c.k - 1].continut } : closing ? (lz.sheet.avoid.length ? { tip: "capcane", continut: lz.sheet.avoid.join("\n") } : { tip: "recap", continut: "Recapitulare și rămas-bun." }) : { tip: "punct", continut: lz.sheet.points[c.n - 1] };
+      return { card, k: c.seqs ? c.k : 1, of: c.seqs ? c.seqs.length : 1, n: Math.min(c.n, lz.total), closing, text: closing ? "" : lz.sheet.points[c.n - 1], traps: closing ? lz.sheet.avoid.slice() : [] };
+    }
+    // Subtitrarea: ultimele două rânduri (propoziții) spuse de model de când a apărut cartonașul afișat.
+    function subtitle() {
+      const list = state.transcript.filter(u => u.who === "model");
+      let from = lz.subId == null ? -1 : list.findIndex(u => u.id === lz.subId);
+      let text = list.slice(from < 0 ? 0 : from).map((u, i) => from >= 0 && i === 0 ? u.text.slice(lz.subLen) : u.text).join(" ").trim();
+      return text ? text.split(/(?<=[.!?…])\s+/).slice(-2) : [];
+    }
+    function showPending() {
+      if (!lz.pend) return;
+      lz.shown = lz.pend; lz.pend = null;
+      const last = state.transcript.filter(u => u.who === "model").at(-1);
+      lz.subId = last ? last.id : null; lz.subLen = last ? last.text.length : 0;
+    }
     function lessonView() {
-      const c = lz.cur, closing = !!c && c.n > lz.total;
+      const c = lz.cur, sh = lz.shown;
       const status = lz.lost ? "lost" : lz.paused ? "paused" : lz.window ? "window" : lz.asking || lz.talking ? "asking"
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
-      const card = !c ? null : c.seqs ? { tip: c.seqs[c.k - 1].tip, continut: c.seqs[c.k - 1].continut } : closing ? (lz.sheet.avoid.length ? { tip: "capcane", continut: lz.sheet.avoid.join("\n") } : { tip: "recap", continut: "Recapitulare și rămas-bun." }) : { tip: "punct", continut: lz.sheet.points[c.n - 1] };
-      return { card, k: c && c.seqs ? c.k : 1, of: c && c.seqs ? c.seqs.length : 1, module: lz.module, name: lz.name, n: c ? Math.min(c.n, lz.total) : 0, total: lz.total, pos: lz.pos0, closing, text: c && !closing ? lz.sheet.points[c.n - 1] : "", traps: closing ? lz.sheet.avoid.slice() : [], heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
+      return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, text: sh ? sh.text : "", traps: sh ? sh.traps : [], heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
     function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
@@ -384,6 +402,7 @@ const Jarvis = (() => {
             : { module: lz.name, lead: sh.lead, total, say };
         } else if (from > 0) { r.recap = { n: from, text: sh.points[from - 1] }; if (resumed) r.recap.continuare = true; }
       }
+      lz.pend = snap(lz.cur);
       if (again) r.repeat = true;
       sync();
       return r;
@@ -391,7 +410,7 @@ const Jarvis = (() => {
     function lessonPause() {
       if (!lz || lz.paused || lz.lost) return;
       lz.wasBusy = state.phase === "speaking" || state.phase === "thinking";
-      quiet();
+      quiet(); lz.pend = null;
       lz.paused = true; lz.pausedAt = env.clock.now();
       sess.call.pause({ keep: true });
       sync();
@@ -414,6 +433,7 @@ const Jarvis = (() => {
       if (!lz || !sess.call || lz.paused || lz.lost) return;
       quiet(); lz.redo = false;
       if (lz.cur) { lz.cur.delivering = false; lz.cur.advance = false; }
+      lz.pend = null;
       sess.call.interrupt(msg); sync();
     }
     function lessonTalk(down) {
@@ -421,7 +441,7 @@ const Jarvis = (() => {
       if (!down) { lz.talking = false; sess.call.talk(false); if (!lz.paused && !lz.lost) armAsk(); sync(); return; }     // eliberarea contează oricând
       if (lz.paused || lz.lost) return;
       cancelTimers();
-      lz.window = false; lz.asking = true; lz.talking = true;
+      lz.window = false; lz.asking = true; lz.talking = true; lz.pend = null;
       if (lz.cur && (lz.cur.delivering || lz.cur.advance)) { lz.cur.delivering = false; lz.cur.advance = false; lz.redo = true; }        // bucata tăiată de întrebare se reia după răspuns
       sess.call.talk(true);
       armAsk();
@@ -441,11 +461,12 @@ const Jarvis = (() => {
       else if (e.type === "voice") {
         if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; armAsk(); sync(); }
       } else if (e.type === "state") {
+        if (e.state === "speaking") showPending();
         if (e.state === "speaking" && lz.asking && !lz.talking) { lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
         else sync();
       } else if (e.type === "transcript") { if (lz.asking && e.who === "me") armAsk(); }
       else if (e.type === "warn") {
-        if (e.code === "reconnecting") { lz.reconnecting = true; lz.cutOff = true; quiet(); sess.call.cut(); }
+        if (e.code === "reconnecting") { lz.reconnecting = true; lz.cutOff = true; lz.pend = null; quiet(); sess.call.cut(); }
         else if (e.code == null && lz.reconnecting) { lz.reconnecting = false; if (!lz.paused) { lz.cutOff = false; continueLesson(MSG.back, false); } }
       } else if (e.type === "lost") {
         quiet();
@@ -483,7 +504,7 @@ const Jarvis = (() => {
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
         muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
-        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null } : null;
+        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
       // deci primul `getToken` din sesiune îl întoarce pe acesta, iar următoarele (reconectări, redeschidere) cer altul.
@@ -509,6 +530,7 @@ const Jarvis = (() => {
           const list = state.transcript.slice(), i = list.findIndex(u => u.id === e.id);
           if (i >= 0) list[i] = { id: e.id, who: e.who, text: e.text }; else list.push({ id: e.id, who: e.who, text: e.text });
           change({ transcript: list.slice(-MAX_TRANSCRIPT) });
+          if (lz && e.who === "model") sync();
         } else if (e.type === "level") change({ level: e.v });
         else if (e.type === "warn") change({ warn: e.code });
         else if (e.type === "ended") finish(e.reason);
@@ -548,7 +570,7 @@ const Jarvis = (() => {
         if (!lz || !sess.call || lz.paused || lz.lost) return;
         quiet();
         env.app.lessonReset(lz.module);
-        lz.pos0 = 0; lz.idx = 0; lz.cur = null; lz.started = false; lz.redo = false;
+        lz.pos0 = 0; lz.idx = 0; lz.cur = null; lz.started = false; lz.redo = false; lz.shown = null; lz.pend = null;
         sess.call.interrupt(MSG.restart); sync();
       },
       skip: () => interruptWith(MSG.skip),

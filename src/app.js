@@ -2832,7 +2832,10 @@
     // Cât ține apăsat Vorbește, butonul nu se înlocuiește: ridicarea degetului ar ajunge pe un element dispărut.
     if (sig !== jvSig && !ui.jv.holding) { jvSig = sig; render(); } else jvPaint(st);
   }
+  // Subtitrarea vie: ultimele două rânduri spuse de Jarvis, sub cartonaș (se actualizează pe loc).
+  const jvSub = L => '<div id="jv-sub" class="jv-sub small muted" aria-live="off" data-h="' + esc((L.sub || []).join("|")) + '">' + (L.sub || []).map(x => "<p>" + esc(x) + "</p>").join("") + "</div>";
   function jvPaint(st) {
+    const sb = $("#jv-sub"); if (sb && st.lesson) { const h = (st.lesson.sub || []).join("|"); if (sb.dataset.h !== h) { sb.dataset.h = h; sb.innerHTML = (st.lesson.sub || []).map(x => "<p>" + esc(x) + "</p>").join(""); } }
     const orb = $("#jv-orb"); if (orb) orb.style.setProperty("--lv", Math.min(1, st.level * 4).toFixed(2));
     const ls = $("#jv-state"); if (ls && st.lesson && st.phase !== "ended") { const t = JV_LSTATE[st.lesson.status] || ""; if (ls.textContent !== t) ls.textContent = t; }
     const tr = $("#jv-tr"); if (tr) { const html = jvTranscript(st); if (tr.dataset.h !== html) { tr.dataset.h = html; tr.innerHTML = html; } }
@@ -2925,6 +2928,7 @@
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
     if (L.mode === "audio") { /* doar audio: fără cartonaș, doar comenzile mari */ }
     else h += jvCard(L);
+    if (L.mode !== "audio") h += jvSub(L);
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +

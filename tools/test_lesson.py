@@ -23,6 +23,7 @@ async def text(pg, sel): return await pg.locator(sel).inner_text()
 async def emit(pg, e): await pg.evaluate(f"e => {CTL}.emit(e)", e); await pg.wait_for_timeout(60)
 async def sent(pg): return await ev(pg, f"{CTL}.live.sent")
 async def texts(pg): return [x["text"] for x in await sent(pg) if "text" in x]
+async def sound(pg): await ev(pg, f"{CTL}.sound()"); await pg.wait_for_timeout(60)
 async def tool(pg, name): r = await ev(pg, f"{CTL}.tool('{name}')"); await pg.wait_for_timeout(60); return r
 
 MODS = "() => window.PREP.modules.map(m => ({ id: m.id, p: m.p, short: m.short, n: (window.PREP.sheets[m.id].points || []).length }))"
@@ -190,6 +191,8 @@ async def screens(b, scheme):
 
     # --- bucata curentă pe ecran
     r = await tool(pg, "next_chunk")
+    check(tag + "the requested card is not on screen before its sound starts", await pg.locator("#jv-chunk.jv-empty").count() == 1, await text(pg, "#jv-chunk"))
+    await sound(pg)
     pts = await ev(pg, "window.PREP.sheets.gil.points")
     shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
     check(tag + "the current chunk's text from the sheet is on screen", pts[4].replace("`", "")[:40] in shown, shown)
@@ -226,8 +229,9 @@ async def screens(b, scheme):
     await pg.click('[data-a="jv-restart"]'); await pg.click('[data-a="jv-restart"]'); await pg.wait_for_timeout(120)
     last = (await texts(pg))[-1]
     check(tag + "the second tap restarts the lesson from the beginning", (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] == 0 and "next_chunk" in last and "început" in last, last)
-    await tool(pg, "next_chunk")
+    await tool(pg, "next_chunk"); await sound(pg)
     check(tag + "after the restart the screen shows the first chunk again", "1/" in (await text(pg, "#jv-pos")).replace(" ", "") and (await ev(pg, "window.PREP.sheets.gil.points[0]")).replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-pos"))
+    await pg.click('[data-a="jv-repeat"]'); await pg.wait_for_timeout(80)       # taie sunetul, ca microfonul să rămână liber mai jos
     await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
     await pg.click('[data-a="jv-pause"]'); await pg.wait_for_timeout(80)
     check(tag + "Pauză becomes Reia", await pg.locator('[data-a="jv-resume"]').count() == 1 and await pg.locator('[data-a="jv-pause"]').count() == 0 and await ev(pg, f"{CTL}.audio.pauses") == 1)
@@ -243,6 +247,8 @@ async def screens(b, scheme):
     colour = await ev(pg, "getComputedStyle(document.querySelector('#jv-lesson')).color")
     check(tag + "on Mut the lesson text keeps the normal ink colour", colour == await ev(pg, "getComputedStyle(document.body).color"), colour)
     await pg.screenshot(path=str(SHOTS / f"lesson_mute_{scheme}.png"))
+    await pg.wait_for_timeout(3500)          # toast-ul „Lecția reîncepe” acoperă butonul cât stă pe ecran
+    await pg.locator("#jv-talk").scroll_into_view_if_needed()
     box = await pg.locator("#jv-talk").bounding_box()
     await pg.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     await pg.mouse.down(); await pg.wait_for_timeout(80)
@@ -295,7 +301,7 @@ async def sequences(b, scheme):
     await pg.click('#sheet-asyncio summary'); await pg.wait_for_timeout(150)
     await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)
     seen = []
-    r = await tool(pg, "next_chunk")
+    r = await tool(pg, "next_chunk"); await sound(pg)
     for _ in range(8):
         seen.append((r["tip"], r["k"], r["of"]))
         tip = await pg.locator("#jv-chunk").get_attribute("data-tip")
@@ -320,7 +326,13 @@ async def sequences(b, scheme):
         if r["k"] == r["of"]: break
         await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
         check(tag + "after a sequence the app asks for the next one, with no window", "next_chunk" in (await texts(pg))[-1] and await ev(pg, f"{CTL}.audio.beeps") == [], await ev(pg, f"{CTL}.audio.beeps"))
+        prev = await pg.locator("#jv-chunk").get_attribute("data-tip")
         r = await tool(pg, "next_chunk")
+        check(tag + "the old card stays until the new sound starts", await pg.locator("#jv-chunk").get_attribute("data-tip") == prev, prev)
+        await sound(pg)
+        await emit(pg, {"type": "transcript", "id": "s" + str(r["k"]), "who": "model", "text": "Prima frază. A doua frază. A treia frază."})
+        sub = (await text(pg, "#jv-sub")).split("\n")
+        check(tag + "the subtitle shows the last two lines under the card", [x for x in sub if x] == ["A doua frază.", "A treia frază."] or r["tip"] != "ideea", sub)
     check(tag + "the first chunk went harta, problema, ideea, exemplu, cpp, punct in order", [x[0] for x in seen][:4] == ["harta", "problema", "ideea", "exemplu"] and seen[-1][0] == "punct", seen)
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(100)
     check(tag + "the window opens only after the last sequence", await ev(pg, f"{CTL}.audio.beeps") == ["window"])
@@ -335,12 +347,12 @@ async def sequences(b, scheme):
             await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(60)
             r = await tool(pg, "next_chunk")
         await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(60)
-    r = await tool(pg, "next_chunk")
+    r = await tool(pg, "next_chunk"); await sound(pg)
     check(tag + "the closing starts with the traps card", r["tip"] == "capcane" and await pg.locator('#jv-chunk[data-tip="capcane"]').count() == 1 and "Capcane la interviu" in await text(pg, "#jv-chunk"), r)
     await pg.screenshot(path=str(SHOTS / f"lesson_seq_capcane_{scheme}.png"))
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
     check(tag + "after the traps the app asks for the recap and the lesson is not over", "next_chunk" in (await texts(pg))[-1] and await pg.locator("#jv-lesson").count() == 1)
-    r = await tool(pg, "next_chunk")
+    r = await tool(pg, "next_chunk"); await sound(pg)
     mp = await ev(pg, "window.PREP.desf.asyncio.map")
     shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
     check(tag + "the recap card shows the groups of the map, written by the app", r["tip"] == "recap" and await pg.locator('#jv-chunk[data-tip="recap"]').count() == 1 and all(g["t"].replace("`", "")[:20] in shown for g in mp["g"]) and "Recapitulare" in shown, shown)
