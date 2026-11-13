@@ -2899,12 +2899,16 @@
     return h;
   }
   // Cartonașul secvenței curente, după tip: cod colorat la exemplu, rânduri la pas, text în rest.
-  const JV_TIP = { problema: "Problema", ideea: "Ideea", exemplu: "Exemplu", analogie: "Analogie", pas: "Pas cu pas", cpp: "În C++", punct: "Punctul" };
+  const JV_TIP = { problema: "Problema", ideea: "Ideea", exemplu: "Exemplu", analogie: "Analogie", pas: "Pas cu pas", cpp: "În C++", punct: "Punctul", harta: "Harta modulului", recap: "Recapitulare" };
+  // Harta și recapitularea: rândurile „1–3: text” cu intervalul îngroșat; prima linie a hărții e problema modulului.
+  const jvRows = t => t.split("\n").map(x => { const m = /^(\d+(?:–\d+)?): (.*)$/.exec(x); return "<p>" + (m ? "<b>" + m[1] + "</b> " + inlineRich(m[2]) : inlineRich(x)) + "</p>"; }).join("");
   function jvCard(L) {
     const c = L.card;
-    if (!c) return '<div id="jv-chunk" class="jv-chunk"><span class="muted">Jarvis începe lecția…</span></div>';
-    const lab = L.of > 1 ? '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + " · " + L.k + "/" + L.of + "</div>" : "";
-    const body = c.tip === "exemplu" ? codeBlock(c.continut, false, true) : c.tip === "pas" ? codeBlock(c.continut, true, true) : inlineRich(c.continut);
+    if (!c) return '<div id="jv-chunk" class="jv-chunk jv-empty"></div>';
+    const lab = c.tip === "capcane" ? "" : '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + (L.of > 1 ? " · " + L.k + "/" + L.of : "") + "</div>";
+    const body = c.tip === "exemplu" ? codeBlock(c.continut, false, true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
+      : c.tip === "capcane" ? "<b>Capcane la interviu</b>" + c.continut.split("\n").map(x => "<p>" + fmt(x) + "</p>").join("")
+      : c.tip === "harta" || c.tip === "recap" ? jvRows(c.continut) : inlineRich(c.continut);
     return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
   }
   // În lecție: textul bucății curente, n/total, comenzile mari pentru o singură mână, transcrierea restrânsă.
@@ -2916,8 +2920,7 @@
     else if (st.warn === "reconnecting") h += '<div class="jv-warn" role="status">Reconectare…</div>';
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
-    if (L.closing) h += '<div id="jv-chunk" class="jv-chunk"><b>Capcane la interviu</b>' + (L.traps.length ? L.traps.map(x => "<p>" + fmt(x) + "</p>").join("") : "<p>Recapitulare și rămas-bun.</p>") + "</div>";
-    else h += jvCard(L);
+    h += jvCard(L);
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +

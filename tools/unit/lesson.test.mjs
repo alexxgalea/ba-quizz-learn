@@ -932,7 +932,7 @@ test("the real asyncio sheet gives sequences for every point and the real django
 test("next_chunk on asyncio gives one sequence with its place in the chunk and the model does not get the next one", async () => {
   const t = await begin(setup(), "asyncio");
   const r = await t.tool("next_chunk");
-  assert.deepEqual([r.kind, r.n, r.k, r.of, r.tip, r.continut, "desf" in r, "text" in r], ["chunk", 1, 1, 5, "problema", SHEET_AS.desf[0].p, false, false]);
+  assert.deepEqual([r.kind, r.n, r.k, r.of, r.tip, r.continut, "desf" in r, "text" in r], ["chunk", 1, 1, 6, "harta", [SHEET_AS.map.p, "1–2: cum rulează bucla", "3: cum colectezi rezultatele"].join("\n"), false, false]);
   assert.equal(JSON.stringify(r).includes("await"), false);
 });
 
@@ -941,14 +941,14 @@ test("after a sequence is spoken the app asks for the next one and does not open
   await t.tool("next_chunk"); speak(t);
   assert.deepEqual([t.audio.beeps, /next_chunk/.test(t.texts().at(-1)), t.app.pos.asyncio || 0], [[], true, 0]);
   const r = await t.tool("next_chunk");
-  assert.deepEqual([r.n, r.k, r.tip], [1, 2, "ideea"]);
+  assert.deepEqual([r.n, r.k, r.tip], [1, 2, "problema"]);
 });
 
 test("the listening window opens only after the last sequence, which also writes lessonHeard", async () => {
   const t = await begin(setup(), "asyncio");
-  for (let k = 1; k <= 4; k++) { await deliver(t); assert.deepEqual([t.audio.beeps.length, t.app.pos.asyncio || 0], [0, 0]); }
+  for (let k = 1; k <= 5; k++) { await deliver(t); assert.deepEqual([t.audio.beeps.length, t.app.pos.asyncio || 0], [0, 0]); }
   const last = await deliver(t);
-  assert.deepEqual([last.k, last.of, last.tip, t.audio.beeps, t.app.pos.asyncio], [5, 5, "punct", ["window"], 1]);
+  assert.deepEqual([last.k, last.of, last.tip, t.audio.beeps, t.app.pos.asyncio], [6, 6, "punct", ["window"], 1]);
   t.clock.advance(3100);
   const next = await t.tool("next_chunk");
   assert.deepEqual([next.n, next.k, next.tip], [2, 1, "problema"]);
@@ -957,16 +957,16 @@ test("the listening window opens only after the last sequence, which also writes
 test("on Mut the sequences and then the next chunk follow without a window", async () => {
   const t = setup(); t.jarvis.settings.set({ muted: true });
   await begin(t, "asyncio");
-  for (let k = 1; k <= 5; k++) await deliver(t);
+  for (let k = 1; k <= 6; k++) await deliver(t);
   assert.deepEqual([t.audio.beeps, t.app.pos.asyncio, /next_chunk/.test(t.texts().at(-1))], [[], 1, true]);
 });
 
 test("the lesson view exposes the current card as tip and content, and the closing as traps", async () => {
   const t = await begin(setup(), "asyncio");
   assert.equal(t.state().lesson.card, null);
-  await deliver(t); await t.tool("next_chunk");
+  await deliver(t); await deliver(t); await t.tool("next_chunk");
   let l = t.state().lesson;
-  assert.deepEqual([l.card, l.k, l.of, l.n], [{ tip: "ideea", continut: SHEET_AS.desf[0].i }, 2, 5, 1]);
+  assert.deepEqual([l.card, l.k, l.of, l.n], [{ tip: "ideea", continut: SHEET_AS.desf[0].i }, 3, 6, 1]);
   const o = await begin(setup(), "django");
   await o.tool("next_chunk");
   assert.deepEqual(o.state().lesson.card, { tip: "punct", continut: SHEET.points[0] });
@@ -978,7 +978,7 @@ test("Repetă in the middle of a chunk starts it again from the first sequence",
   await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.jarvis.repeat();
   const r = await t.tool("repeat_chunk");
-  assert.deepEqual([r.n, r.k, r.tip, r.repeat, t.app.pos.asyncio || 0], [1, 1, "problema", true, 0]);
+  assert.deepEqual([r.n, r.k, r.tip, r.repeat, t.app.pos.asyncio || 0], [1, 1, "harta", true, 0]);
 });
 
 test("Sari in the middle of a chunk goes to the next chunk, not to the next sequence", async () => {
@@ -1019,4 +1019,84 @@ test("a module without unfoldings (django) has one sequence per chunk, the point
   const P = loadData(new URL("../../", import.meta.url));
   for (const m of ["dbmodels", "aws", "django"]) for (let n = 1; n <= P.sheets[m].points.length; n++)
     assert.deepEqual(Jarvis.lessonSequences({ points: P.sheets[m].points }, n).map(x => [x.tip, x.continut]), [["punct", P.sheets[m].points[n - 1]]]);
+});
+
+// ---------- harta, capcanele și recapitularea (tichetul 04) ----------
+
+// Ascultă `asyncio` până la ultima bucată, fără să deschidă ferestre de întrebări (Mut).
+async function toAsyncClosing(t) {
+  t.jarvis.settings.set({ muted: true });
+  await begin(t, "asyncio");
+  for (let i = 0; i < SHEET_AS.points.length; i++) { let r; do { r = await deliver(t); } while (r.k < r.of); }
+}
+
+test("the opening is a sequence of its own: the map card with the problem and the groups, before the problem of point 1", async () => {
+  const t = await begin(setup(), "asyncio");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.tip, r.k, r.of, t.state().lesson.card.tip, t.state().lesson.card.continut.split("\n")], ["harta", 1, 6, "harta", [SHEET_AS.map.p, "1–2: cum rulează bucla", "3: cum colectezi rezultatele"]]);
+  assert.match(r.instruction, /asyncio, în 3 idei/);
+  assert.equal("intro" in r, false);
+  speak(t);
+  assert.deepEqual([t.audio.beeps, (await t.tool("next_chunk")).tip], [[], "problema"]);
+});
+
+test("without a map the opening card is the main idea", async () => {
+  const t = setup(); const sheet = t.app.sheet; t.app.sheet = id => Object.assign(sheet(id), { map: undefined });
+  await begin(t, "asyncio");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.tip, r.continut, r.of], ["harta", SHEET_AS.lead, 6]);
+});
+
+test("the closing comes in two sequences, the traps and then the recap, and the recap text is ours: the groups of the map", async () => {
+  const t = setup(); await toAsyncClosing(t);
+  const c1 = await t.tool("next_chunk");
+  assert.deepEqual([c1.kind, c1.n, c1.k, c1.of, c1.tip, c1.continut, t.state().lesson.card.tip, "recap_from" in c1], ["closing", 4, 1, 2, "capcane", SHEET_AS.avoid.join("\n"), "capcane", false]);
+  speak(t);
+  assert.match(t.texts().at(-1), /next_chunk/);
+  assert.deepEqual([t.app.doneLessons, t.state().phase !== "ended"], [[], true]);
+  const c2 = await t.tool("next_chunk");
+  assert.deepEqual([c2.k, c2.tip, c2.continut, t.state().lesson.card], [2, "recap", "1–2: cum rulează bucla\n3: cum colectezi rezultatele", { tip: "recap", continut: c2.continut }]);
+  assert.match(c2.instruction, /rămas-bun/);
+});
+
+test("hearing the recap to the end finishes the lesson from the app; the traps alone do not", async () => {
+  const t = setup(); await toAsyncClosing(t);
+  await deliver(t);
+  assert.deepEqual([t.app.doneLessons, t.state().phase !== "ended"], [[], true]);
+  await deliver(t);
+  assert.deepEqual([t.app.doneLessons, t.state().phase], [["asyncio"], "ended"]);
+});
+
+test("without a map the recap is the main idea, and without traps the closing is only the recap", async () => {
+  const t = setup(); const sheet = t.app.sheet; t.app.sheet = id => Object.assign(sheet(id), { map: undefined, avoid: [] });
+  await toAsyncClosing(t);
+  const c = await t.tool("next_chunk");
+  assert.deepEqual([c.k, c.of, c.tip, c.continut], [1, 1, "recap", SHEET_AS.lead]);
+});
+
+test("Sari on the traps ends the lesson with the goodbye and does not count the closing as heard", async () => {
+  const t = setup(); await toAsyncClosing(t);
+  await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.jarvis.skip();
+  const r = await t.tool("next_chunk");
+  speak(t);
+  assert.deepEqual([r.done, t.state().phase, t.app.doneLessons], [true, "ended", []]);
+});
+
+test("from a saved position the recall sentence has the card of the point recalled", async () => {
+  const t = setup(); t.app.pos.asyncio = 2;
+  await begin(t, "asyncio");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.n, r.k, r.of, r.tip, r.continut, t.state().lesson.card.continut], [3, 1, 3, "punct", SHEET_AS.points[1], SHEET_AS.points[1]]);
+  assert.match(r.instruction, /Data trecută/);
+  speak(t);
+  const r2 = await t.tool("next_chunk");
+  assert.deepEqual([r2.k, r2.tip, r2.continut], [2, "ideea", SHEET_AS.desf[2].i]);
+});
+
+test("a lesson that has heard every point starts with the recall and then the closing sequences", async () => {
+  const t = setup(); t.app.pos.asyncio = 3;
+  await begin(t, "asyncio");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.kind, r.k, r.of, r.tip, r.continut], ["closing", 1, 3, "punct", SHEET_AS.points[2]]);
 });
