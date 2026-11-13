@@ -29,7 +29,7 @@ const Jarvis = (() => {
   const MAX_TRANSCRIPT = 8;
   const SETTINGS_ITEM = "onapsis-jarvis-v1";
   const SILENCE = { short: 800, normal: 1200, long: 2000 };          // „Răbdare”: cât tace Alex până consideră Jarvis că a terminat
-  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false };
+  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false, mode: "ecran" };
   // Lecția: cât durează fereastra de ascultare, cât așteaptă o întrebare fără răspuns, cât rămâne valabilă o pauză (după ea bucata se reia de la început)
   // și pauzele dintre încercările de reconectare (în total ~60 s; celelalte moduri păstrează cele trei încercări din GeminiLive).
   const WINDOW_MS = 3000, ASK_WAIT_MS = 12000, PAUSE_KEEP_MS = 10 * 60000;
@@ -62,31 +62,46 @@ const Jarvis = (() => {
     capcane: "Spune formulările de evitat de pe cartonaș, ca „capcane la interviu”." + SEQ_RULE,
     recap: "Recapitulează din cartonaș: spune grupurile de puncte, pe rând, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
   };
+  // „Doar audio”: aceleași secvențe, dar fără nicio trimitere la ce e pe ecran; codul se povestește în cuvinte.
+  const SEQ_RULE_A = " Spune doar ce e în material, în ordinea lui, în 15–30 de secunde, cu vorbele tale. Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+  const SEQ_INSTR_A = {
+    problema: "Spune problema din material." + SEQ_RULE_A,
+    ideea: "Spune ideea din material." + SEQ_RULE_A,
+    exemplu: "Povestește exemplul în cuvinte: ce face codul, pe părți, în ordine, și ce rezultat iese (rezultatul e în comentarii). Nu citi codul și nu rosti simboluri, paranteze sau numere de linie: numește lucrurile pe nume (de exemplu „funcția care așteaptă”)." + SEQ_RULE_A,
+    analogie: "Spune analogia din material." + SEQ_RULE_A,
+    pas: "Spune pașii din material, în ordine, ca o poveste în timp, în cuvinte, fără să citești codul." + SEQ_RULE_A,
+    cpp: "Spune comparația cu C++ din material și unde nu ține." + SEQ_RULE_A,
+    punct: "Spune punctul din fișă din material ca încheiere a bucății." + SEQ_RULE_A,
+    capcane: "Spune formulările de evitat din material, ca „capcane la interviu”." + SEQ_RULE_A,
+    recap: "Recapitulează din material: spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+  };
   const rng = g => (g.a === g.b ? String(g.a) : g.a + "–" + g.b) + ": " + g.t;
   // Cartonașele de deschidere și de încheiere (text scris de aplicație, nu de model): harta modulului (fără hartă, ideea principală), capcanele, recapitularea.
   const mapText = sh => sh.map ? sh.map.g.map(rng).join("\n") : sh.lead;
-  function openSeq(sh, total, name) {
-    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”";
+  function openSeq(sh, total, name, audio) {
+    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", rule = audio ? SEQ_RULE_A : SEQ_RULE, src = audio ? "din material" : "de pe cartonaș";
     return sh.map
-      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului de pe cartonaș și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + SEQ_RULE }
-      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală de pe cartonaș." + say + SEQ_RULE };
+      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + rule }
+      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + rule };
   }
   // La reluarea dintr-o poziție: propoziția de amintire are cartonașul punctului amintit.
-  function recallSeq(sh, from, resumed) {
-    return { tip: "punct", continut: sh.points[from - 1], instruction: (resumed ? "Spune într-o propoziție „Reiau de unde am rămas, la …” și amintește punctul de pe cartonaș." : "Amintește într-o propoziție punctul de pe cartonaș, ca în „Data trecută am ajuns la …”.") + SEQ_RULE };
+  function recallSeq(sh, from, resumed, audio) {
+    const src = audio ? "din material" : "de pe cartonaș";
+    return { tip: "punct", continut: sh.points[from - 1], instruction: (resumed ? "Spune într-o propoziție „Reiau de unde am rămas, la …” și amintește punctul " + src + "." : "Amintește într-o propoziție punctul " + src + ", ca în „Data trecută am ajuns la …”.") + (audio ? SEQ_RULE_A : SEQ_RULE) };
   }
-  function closingSeqs(sh) {
+  function closingSeqs(sh, audio) {
+    const I = audio ? SEQ_INSTR_A : SEQ_INSTR;
     const out = [];
-    if (sh.avoid.length) out.push({ tip: "capcane", continut: sh.avoid.join("\n"), instruction: SEQ_INSTR.capcane });
-    out.push({ tip: "recap", continut: mapText(sh), instruction: SEQ_INSTR.recap });
+    if (sh.avoid.length) out.push({ tip: "capcane", continut: sh.avoid.join("\n"), instruction: I.capcane });
+    out.push({ tip: "recap", continut: mapText(sh), instruction: I.recap });
     return out;
   }
   const unfence = c => { const m = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(String(c)); return (m ? m[1] : String(c)).replace(/\s+$/, ""); };
-  // Secvențele bucății n (1..total) a unei fișe { points, desf? } (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
+  // Secvențele bucății n (1..total) a unei fișe { points, desf? }; `audio` schimbă doar instrucțiunile (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
   // Câmpurile care lipsesc se sar; „Legătură” nu are secvență. Fără desfășurare rămâne doar `punct`. Cartonașul codului (exemplu, pas) vine fără gardurile ```.
-  function lessonSequences(sheet, n) {
+  function lessonSequences(sheet, n, audio) {
     const x = (sheet.desf && sheet.desf[n - 1]) || {}, out = [];
-    const add = (tip, continut) => { if (continut) out.push({ tip, continut, instruction: SEQ_INSTR[tip] }); };
+    const add = (tip, continut) => { if (continut) out.push({ tip, continut, instruction: (audio ? SEQ_INSTR_A : SEQ_INSTR)[tip] }); };
     add("problema", x.p); add("ideea", x.i);
     if (x.ex) add("exemplu", unfence(x.ex)); else add("analogie", x.an);
     add("pas", x.pas && unfence(x.pas));
@@ -143,7 +158,7 @@ const Jarvis = (() => {
   // Funcțiile lecției (spec Lecție): bucata următoare, repetă, pauză, încheiere. „Mai simplu” și „exemplu” se tratează fără funcție.
   function makeLessonTools(ctx) {
     return [
-      { name: "next_chunk", description: "Dă bucata următoare a lecției: textul punctului din fișă, numărul ei și totalul (la prima bucată și introducerea: harta modulului sau ideea principală; la punctele cu desfășurare, și materialul ei, în „desf”; la final capcanele). Apeleaz-o doar când aplicația sau Alex cer bucata următoare. Dacă răspunsul are „k” și „of”, bucata se dă pe secvențe: primești o singură secvență (tip și cartonaș) și o spui așa cum cere „instruction”.", parameters: NO_ARGS, run: async () => ctx.nextChunk() },
+      { name: "next_chunk", description: "Dă bucata următoare a lecției: textul punctului din fișă, numărul ei și totalul (la prima bucată și introducerea: harta modulului sau ideea principală; la punctele cu desfășurare, și materialul ei, în „desf”; la final capcanele). Apeleaz-o doar când aplicația sau Alex cer bucata următoare. Dacă răspunsul are „k” și „of”, bucata se dă pe secvențe: primești o singură secvență (tip și text) și o spui așa cum cere „instruction”.", parameters: NO_ARGS, run: async () => ctx.nextChunk() },
       { name: "repeat_chunk", description: "Dă din nou bucata curentă, ca s-o explici de la început, când aplicația sau Alex cer să repeți.", parameters: NO_ARGS, run: async () => ctx.repeatChunk() },
       { name: "pause_session", description: "Pune lecția pe pauză, la cererea lui Alex.", parameters: NO_ARGS, run: async () => ctx.pause() },
       { name: "end_session", description: "Încheie lecția, când Alex cere să oprești. După ce o apelezi, ia-ți rămas-bun în două propoziții.", parameters: NO_ARGS, run: async () => ctx.endSession() }
@@ -157,15 +172,18 @@ const Jarvis = (() => {
       "Ești Jarvis, asistentul vocal al lui Alex, care se pregătește pentru un interviu tehnic" + (sum.role ? " de " + sum.role : "") + ". Vorbești doar în română; termenii tehnici (thread, worker, endpoint, commit) rămân în engleză. " + (sum.profile || ""),
       "În această sesiune ții o lecție: îi explici cu voce tare fișa modulului „" + o.name + "”, bucată cu bucată. Nu ești intervievator și nu-l examinezi: nu pui întrebări de verificare și nu dai scor, doar explici.",
       "Ton: politicos și sec, cu umor discret, ca Jarvis pentru Tony Stark. Îi spui „Alex”. Vorbești ca într-o conversație, în propoziții scurte, ușor de urmărit pe ureche, fără liste și fără markdown.",
+      o.audio
+        ? "Alex ascultă doar, fără să urmărească nimic în față: tot ce spui trebuie să se înțeleagă din auz. Nu face trimiteri vizuale. Codul îl povestești în cuvinte: ce face fiecare parte și ce iese, fără să-l citești, fără simboluri rostite și fără numere de linie."
+        : "Alex poate urmări pe ecran textul secvenței curente. Poți trimite scurt la el („rândul al treilea”), dar spune tot și cu vorbele tale: ecranul doar ajută.",
       "",
       "Cum conduci lecția:",
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
       "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale. Rămâi la ce ai primit: fără exemple din afara materialului, fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
       "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare e singurul exemplu: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
-      "3. Dacă răspunsul are „tip”: „harta”, e deschiderea lecției: spui problema modulului și grupurile de puncte de pe cartonaș, după „instruction”. Dacă are „tip”: „punct” la începutul bucății și „instruction” cere amintirea poziției, spui doar acea propoziție. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
-      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (cartonașul pe care îl vede Alex) și „instruction”. Spui doar cartonașul, în ordinea lui, și te oprești; aplicația cere secvența următoare.",
+      "3. Dacă răspunsul are „tip”: „harta”, e deschiderea lecției: spui problema modulului și grupurile de puncte " + (o.audio ? "din material" : "de pe cartonaș") + ", după „instruction”. Dacă are „tip”: „punct” la începutul bucății și „instruction” cere amintirea poziției, spui doar acea propoziție. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
+      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (" + (o.audio ? "materialul pe care îl spui" : "cartonașul pe care îl vede Alex") + ") și „instruction”. Spui doar " + (o.audio ? "materialul" : "cartonașul") + ", în ordinea lui, și te oprești; aplicația cere secvența următoare.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
-      "5. Când next_chunk dă „closing” cu „k” și „of”, finalul vine pe secvențe: „capcane” (formulările de evitat) și „recap” (recapitularea de pe cartonaș, scrisă de aplicație: n-o alcătuiești tu), iar la „recap” închei cu un rămas-bun scurt. Când „closing” nu are „k”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
+      "5. Când next_chunk dă „closing” cu „k” și „of”, finalul vine pe secvențe: „capcane” (formulările de evitat) și „recap” (recapitularea din " + (o.audio ? "material" : "cartonaș") + ", scrisă de aplicație: n-o alcătuiești tu), iar la „recap” închei cu un rămas-bun scurt. Când „closing” nu are „k”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",
       "Comenzi și întrebări de la Alex:",
       "- „repetă” → repeat_chunk. „sari”, „mai departe”, „următoarea” → next_chunk. „pauză” → pause_session. „gata”, „oprește” → end_session, apoi rămas-bun în două propoziții.",
@@ -262,7 +280,7 @@ const Jarvis = (() => {
       const status = lz.lost ? "lost" : lz.paused ? "paused" : lz.window ? "window" : lz.asking || lz.talking ? "asking"
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
       const card = !c ? null : c.seqs ? { tip: c.seqs[c.k - 1].tip, continut: c.seqs[c.k - 1].continut } : closing ? (lz.sheet.avoid.length ? { tip: "capcane", continut: lz.sheet.avoid.join("\n") } : { tip: "recap", continut: "Recapitulare și rămas-bun." }) : { tip: "punct", continut: lz.sheet.points[c.n - 1] };
-      return { card, k: c && c.seqs ? c.k : 1, of: c && c.seqs ? c.seqs.length : 1, module: lz.module, name: lz.name, n: c ? Math.min(c.n, lz.total) : 0, total: lz.total, pos: lz.pos0, closing, text: c && !closing ? lz.sheet.points[c.n - 1] : "", traps: closing ? lz.sheet.avoid.slice() : [], heard: lz.heard.size, muted: lz.muted, talking: lz.talking, status };
+      return { card, k: c && c.seqs ? c.k : 1, of: c && c.seqs ? c.seqs.length : 1, module: lz.module, name: lz.name, n: c ? Math.min(c.n, lz.total) : 0, total: lz.total, pos: lz.pos0, closing, text: c && !closing ? lz.sheet.points[c.n - 1] : "", traps: closing ? lz.sheet.avoid.slice() : [], heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
     function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
@@ -340,10 +358,10 @@ const Jarvis = (() => {
       let from = 0, resumed = false;
       if (first) { from = lz.recapN != null ? lz.recapN : lz.pos0; resumed = lz.recapN != null; lz.recapN = null; lz.lead = null; }
       // Deschiderea (harta sau amintirea poziției) e prima secvență a primei bucăți date; reperează aceeași bucată la repetare.
-      if (first && useSeq) lz.lead = from === 0 && n === 1 ? { n, seq: openSeq(sh, total, lz.name) } : from > 0 ? { n, seq: recallSeq(sh, from, resumed) } : null;
+      if (first && useSeq) lz.lead = from === 0 && n === 1 ? { n, seq: openSeq(sh, total, lz.name, lz.mode === "audio") } : from > 0 ? { n, seq: recallSeq(sh, from, resumed, lz.mode === "audio") } : null;
       let r;
       if (useSeq) {
-        const base = n <= total ? lessonSequences(sh, n) : closingSeqs(sh);
+        const audio = lz.mode === "audio", base = n <= total ? lessonSequences(sh, n, audio) : closingSeqs(sh, audio);
         const seqs = lz.lead && lz.lead.n === n ? [lz.lead.seq].concat(base) : base, q = seqs[(k || 1) - 1];
         lz.cur.seqs = seqs; lz.cur.k = k || 1;
         r = { kind: n <= total ? "chunk" : "closing", n, total, module: lz.name, k: lz.cur.k, of: seqs.length, tip: q.tip, continut: q.continut, instruction: q.instruction };
@@ -464,7 +482,7 @@ const Jarvis = (() => {
       }
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
-        muted: !!st.muted, window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
+        muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
         winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
@@ -479,7 +497,7 @@ const Jarvis = (() => {
       }
       const summary = env.app.summary();
       const config = Object.assign(lesson
-        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
+        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, audio: lz.mode === "audio", summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
         : { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) }, auth);
       const onEvent = e => {
         if (lz && !sess.finished) lessonEvent(e);

@@ -551,6 +551,8 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-lrow .modrow { flex: 1; min-width: 0; }
 .jv-lrow .btn { flex: none; }
 #jv-rec-reset { align-self: flex-start; }
+.jv-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jv-mode .btn { min-height: 48px; }
 .jv-chunk-card { gap: 10px; }
 .jv-pos { font-size: 15px; font-weight: 700; color: var(--accent); }
 .jv-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
