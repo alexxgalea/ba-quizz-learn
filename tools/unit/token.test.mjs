@@ -267,7 +267,7 @@ function jarvisSetup(over = {}) {
 }
 
 test("training and lesson start with no Gemini key in localStorage", async () => {
-  for (const opts of [{ mode: "train" }, { mode: "lesson", module: "asyncio" }]) {
+  for (const opts of [{ mode: "train" }, { mode: "lesson", module: "django" }]) {
     const t = jarvisSetup();
     const ok = await t.jarvis.start(opts);
     assert.deepEqual([ok, t.state().needKey, t.state().phase !== "idle", "key" in t.live.cfg, typeof t.live.cfg.getToken, t.storage.data], [true, false, true, false, "function", {}], opts.mode);
@@ -294,7 +294,7 @@ test("the other token failures each have their own message and none leaves the s
   for (const [reason, re] of Object.entries(want)) {
     const t = jarvisSetup();
     t.tokens.fail = reason;
-    await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+    await t.jarvis.start({ mode: "lesson", module: "django" });
     assert.deepEqual([t.state().phase, t.state().error.code, re.test(t.state().error.message)], ["idle", reason, true], reason);
   }
 });
@@ -302,9 +302,9 @@ test("the other token failures each have their own message and none leaves the s
 test("a lesson that cannot get a token can be started again once the signal is back", async () => {
   const t = jarvisSetup();
   t.tokens.fail = "offline";
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   t.tokens.fail = null;
-  assert.equal(await t.jarvis.start({ mode: "lesson", module: "asyncio" }), true);
+  assert.equal(await t.jarvis.start({ mode: "lesson", module: "django" }), true);
 });
 
 test("with a server set, the old key is dropped from the browser once a session has started", async () => {
@@ -340,7 +340,7 @@ test("the connection test goes through a token when a server is set", async () =
 
 test("a lesson whose session restarted without history recaps the last chunk heard and says it is a continuation", async () => {
   const t = jarvisSetup();
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   for (let i = 0; i < 2; i++) { await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); }
   t.live.emit({ type: "reconnecting" }); t.live.emit({ type: "restarted" }); t.live.emit({ type: "live" });
   const r = await t.tool("next_chunk");
@@ -349,7 +349,7 @@ test("a lesson whose session restarted without history recaps the last chunk hea
 
 test("a chunk cut by the restart is repeated with the recap of the one before it", async () => {
   const t = jarvisSetup();
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain();
   await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) });          // bucata 2 e în curs
   t.live.emit({ type: "reconnecting" }); t.live.emit({ type: "restarted" }); t.live.emit({ type: "live" });
@@ -360,7 +360,7 @@ test("a chunk cut by the restart is repeated with the recap of the one before it
 
 test("a restart before anything was heard gives the introduction again, not a recap", async () => {
   const t = jarvisSetup();
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   t.live.emit({ type: "restarted" });
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.n, "intro" in r, "recap" in r], [1, true, false]);
@@ -375,7 +375,7 @@ test("a training session whose model lost its thread is told to ask for a card a
 
 test("after a lost connection, the reopened session recaps too (the model has no history either)", async () => {
   const t = jarvisSetup();
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain();
   t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
   await t.jarvis.resume();
@@ -385,7 +385,7 @@ test("after a lost connection, the reopened session recaps too (the model has no
 
 test("a call that loses the signal while renewing the token goes on pause like any lost connection, and Reia reopens it", async () => {
   const t = jarvisSetup();
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   t.live.emit({ type: "closed", reason: "offline", code: 0, detail: "nu ajung la server" });
   assert.deepEqual([t.state().phase, t.state().lesson.status], ["paused", "lost"]);
   assert.equal(await t.jarvis.resume(), true);

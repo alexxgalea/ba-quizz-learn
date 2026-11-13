@@ -144,6 +144,18 @@ export const SHEET_DZ = {
   ]
 };
 
+// Fișa lui `asyncio` cu desfășurări (modulul pe care merg secvențele): punctul 1 are toate câmpurile, 2 are analogie și pas cu pas, 3 doar ideea.
+export const SHEET_AS = {
+  lead: "Event loop-ul rulează corutine pe un singur thread.",
+  points: ["Corutina cedează la `await`.", "`create_task` programează o corutină.", "`gather` colectează rezultatele."],
+  avoid: ["„asyncio e multithreading.”"],
+  map: { p: "Un server async pornește mii de cereri pe un singur thread.", g: [{ a: 1, b: 2, t: "cum rulează bucla" }, { a: 3, b: 3, t: "cum colectezi rezultatele" }] },
+  desf: [
+    { p: "O corutină care așteaptă blochează toate celelalte?", i: "La `await`, corutina cedează bucla.", ex: "```python\nasync def f():\n    await asyncio.sleep(1)  # cedează\n    return 1\n```", cpp: "Un `epoll_wait` într-o buclă `while`.", nu: "Handlerul C++ nu păstrează variabilele locale.", leg: "AIO-01." },
+    { p: "Cum pornești o corutină fără să aștepți?", i: "`create_task` o programează în buclă.", an: "Ca o comandă dată la bucătărie, fără să aștepți farfuria.", pas: "```text\ncreate_task(f)\nawait -> bucla rulează f\nf termină\n```" },
+    { i: "`gather` întoarce rezultatele în ordinea argumentelor." }
+  ]
+};
 // PrepApp în memorie: păstrează în `recorded` și `logged` ce primește.
 export function stubApp(cards = [CARD_A, CARD_B]) {
   const app = { recorded: [], logged: [], nextCalls: [] };
@@ -160,7 +172,15 @@ export function stubApp(cards = [CARD_A, CARD_B]) {
   app.log = entry => { app.logged.push(entry); };
   // Lecția: poziția pe modul (`pos`) și modulele terminate (`doneLessons`).
   app.pos = {}; app.doneLessons = [];
-  app.sheet = id => id === "oop" ? { module: "oop", name: "OOP", lead: SHEET_DZ.lead, points: SHEET_DZ.points.slice(), avoid: SHEET_DZ.avoid.slice(), total: SHEET_DZ.points.length, pos: app.pos.oop || 0, map: SHEET_DZ.map, desf: SHEET_DZ.desf } : id === "asyncio" ? { module: "asyncio", name: "asyncio", lead: SHEET.lead, points: SHEET.points.slice(), avoid: SHEET.avoid.slice(), total: SHEET.points.length, pos: app.pos.asyncio || 0 } : id === "gil" ? { module: "gil", name: "GIL & threads", lead: "GIL-ul limitează paralelismul.", points: ["Un singur thread rulează bytecode.", "Procesele ocolesc GIL."], avoid: [], total: 2, pos: app.pos.gil || 0 } : null;
+  // `asyncio` = fișa cu desfășurări (secvențe), `django` = fișa simplă, fără desfășurări, `oop` = desfășurări într-un modul fără secvențe.
+  const plain = (id, name, sh) => ({ module: id, name, lead: sh.lead, points: sh.points.slice(), avoid: sh.avoid.slice(), total: sh.points.length, pos: app.pos[id] || 0 });
+  app.sheet = id => {
+    if (id === "oop") return Object.assign(plain("oop", "OOP", SHEET_DZ), { map: SHEET_DZ.map, desf: SHEET_DZ.desf });
+    if (id === "asyncio") return Object.assign(plain("asyncio", "asyncio", SHEET_AS), { map: SHEET_AS.map, desf: SHEET_AS.desf });
+    if (id === "django") return plain("django", "django", SHEET);
+    if (id === "gil") return { module: "gil", name: "GIL & threads", lead: "GIL-ul limitează paralelismul.", points: ["Un singur thread rulează bytecode.", "Procesele ocolesc GIL."], avoid: [], total: 2, pos: app.pos.gil || 0 };
+    return null;
+  };
   app.lessonHeard = (id, n) => { app.pos[id] = Math.max(app.pos[id] || 0, n); };
   app.lessonDone = id => { app.pos[id] = 0; app.doneLessons.push(id); };
   app.lessonReset = id => { app.pos[id] = 0; app.resets = (app.resets || 0) + 1; };

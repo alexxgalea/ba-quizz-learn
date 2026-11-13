@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { fakeLive, fakeAudio, fakeClock, memoryStorage, stubApp, SHEET, SHEET_DZ } from "./fakes.mjs";
+import { fakeLive, fakeAudio, fakeClock, memoryStorage, stubApp, SHEET, SHEET_DZ, SHEET_AS } from "./fakes.mjs";
+import { loadData, buildDesf, readDesfFiles } from "../../lib.mjs";
 
 const require = createRequire(import.meta.url);
 const Call = require("../../src/call.js");
@@ -26,13 +27,13 @@ function setup(over = {}) {
 const speak = t => { t.live.emit({ type: "audio", pcm: Int16Array.of(1) }); t.live.emit({ type: "turnComplete" }); t.audio.drain(); };
 // Modelul cere o bucată și o spune până la capăt.
 async function deliver(t, tool = "next_chunk") { const r = await t.tool(tool); speak(t); return r; }
-async function begin(t, module = "asyncio") { await t.jarvis.start({ mode: "lesson", module }); return t; }
+async function begin(t, module = "django") { await t.jarvis.start({ mode: "lesson", module }); return t; }
 
 // ---------- pornirea ----------
 
 test("a lesson without a key asks for one and does not connect", async () => {
   const t = setup({ storage: memoryStorage() });
-  await t.jarvis.start({ mode: "lesson", module: "asyncio" });
+  await t.jarvis.start({ mode: "lesson", module: "django" });
   assert.deepEqual([t.state().needKey, t.state().phase, t.live.cfg], [true, "idle", null]);
 });
 
@@ -71,7 +72,7 @@ test("the lesson asks for a reconnection schedule of about a minute, which the o
 
 test("the first message tells the model to begin the lesson and to ask for the first chunk", async () => {
   const t = await begin(setup());
-  assert.match(t.texts()[0], /lecția despre asyncio.*next_chunk/s);
+  assert.match(t.texts()[0], /lecția despre django.*next_chunk/s);
 });
 
 // ---------- instrucțiunile de sistem ----------
@@ -271,7 +272,7 @@ test("Sari interrupts the chunk and asks for the next one, without counting the 
   await t.tool("next_chunk");
   t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.jarvis.skip();
-  assert.deepEqual([t.audio.flushes, t.texts().at(-1).includes("next_chunk"), t.app.pos.asyncio || 0], [1, true, 0]);
+  assert.deepEqual([t.audio.flushes, t.texts().at(-1).includes("next_chunk"), t.app.pos.django || 0], [1, true, 0]);
 });
 
 test("after a skipped chunk the next one, heard in full, moves the position to it", async () => {
@@ -280,7 +281,7 @@ test("after a skipped chunk the next one, heard in full, moves the position to i
   t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.jarvis.skip();
   await deliver(t);
-  assert.equal(t.app.pos.asyncio, 2);
+  assert.equal(t.app.pos.django, 2);
 });
 
 test("Repetă interrupts and asks the model to give the current chunk again", async () => {
@@ -341,7 +342,7 @@ test("on Mut the second chunk follows the first without any wait", async () => {
   await begin(t);
   await deliver(t);
   await deliver(t);
-  assert.deepEqual([t.state().lesson.n, t.texts().length, t.app.pos.asyncio], [2, 3, 2]);
+  assert.deepEqual([t.state().lesson.n, t.texts().length, t.app.pos.django], [2, 3, 2]);
 });
 
 test("Vorbește held on Mut stops Jarvis and opens the microphone only while it is held", async () => {
@@ -368,7 +369,7 @@ test("after a question asked with Vorbește in the middle of a chunk, the chunk 
   t.jarvis.talk(false);
   t.live.emit({ type: "interrupted" });
   speak(t);
-  assert.deepEqual([t.app.pos.asyncio || 0, /repeat_chunk/.test(t.texts().at(-1))], [0, true]);
+  assert.deepEqual([t.app.pos.django || 0, /repeat_chunk/.test(t.texts().at(-1))], [0, true]);
 });
 
 test("after a question asked with Vorbește between chunks, the lesson moves on to the next chunk", async () => {
@@ -445,7 +446,7 @@ test("after a pause the chunk that went on playing is counted as heard once it h
   t.live.emit({ type: "turnComplete" });
   await t.jarvis.resume();
   t.audio.drain();
-  assert.deepEqual([t.app.pos.asyncio, t.audio.beeps], [1, ["window"]]);
+  assert.deepEqual([t.app.pos.django, t.audio.beeps], [1, ["window"]]);
 });
 
 test("a chunk interrupted by Pauză is not heard until it has played in full", async () => {
@@ -453,7 +454,7 @@ test("a chunk interrupted by Pauză is not heard until it has played in full", a
   await t.tool("next_chunk");
   t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.jarvis.pause();
-  assert.deepEqual([t.app.pos.asyncio || 0, t.state().lesson.heard], [0, 0]);
+  assert.deepEqual([t.app.pos.django || 0, t.state().lesson.heard], [0, 0]);
 });
 
 test("after a pause of more than ten minutes the chunk starts again from the beginning", async () => {
@@ -509,7 +510,7 @@ test("when the connection is being restored the chunk in progress is dropped and
   t.live.emit({ type: "reconnecting" });
   const flushed = t.audio.flushes;
   t.live.emit({ type: "live" });
-  assert.deepEqual([flushed, t.app.pos.asyncio || 0, t.texts().at(-1)], [1, 0, t.texts().at(-1)]);
+  assert.deepEqual([flushed, t.app.pos.django || 0, t.texts().at(-1)], [1, 0, t.texts().at(-1)]);
   assert.match(t.texts().at(-1), /Reiau de unde am rămas.*repeat_chunk/s);
 });
 
@@ -526,7 +527,7 @@ test("a connection that does not come back puts the lesson on pause with a warni
   await t.tool("next_chunk");
   t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
-  assert.deepEqual([t.state().phase, t.audio.beeps, t.state().lesson.status, t.audio.stopped, t.app.pos.asyncio || 0], ["paused", ["warn"], "lost", false, 0]);
+  assert.deepEqual([t.state().phase, t.audio.beeps, t.state().lesson.status, t.audio.stopped, t.app.pos.django || 0], ["paused", ["warn"], "lost", false, 0]);
 });
 
 test("Reia after a lost connection opens a new session and the model resumes the chunk", async () => {
@@ -559,7 +560,7 @@ test("the session reconnection after a goAway replays the interrupted chunk", as
   t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.live.emit({ type: "reconnecting" });
   t.live.emit({ type: "live" });
-  assert.deepEqual([t.state().lesson.n, t.app.pos.asyncio], [2, 1]);
+  assert.deepEqual([t.state().lesson.n, t.app.pos.django], [2, 1]);
   assert.match(t.texts().at(-1), /repeat_chunk/);
 });
 
@@ -571,15 +572,15 @@ test("the position advances only when a chunk has played in full", async () => {
   await t.tool("next_chunk");
   t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
   t.jarvis.skip();
-  assert.equal(t.app.pos.asyncio, 1);
+  assert.equal(t.app.pos.django, 1);
 });
 
 test("hearing the closing finishes the lesson: the position goes back to zero, the date is noted and the call ends", async () => {
   const t = await begin(setup());
   for (let i = 0; i < 4; i++) { await deliver(t); t.clock.advance(3100); }
-  const before = t.app.pos.asyncio;
+  const before = t.app.pos.django;
   await deliver(t);
-  assert.deepEqual([before, t.app.pos.asyncio, t.app.doneLessons, t.state().phase], [4, 0, ["asyncio"], "ended"]);
+  assert.deepEqual([before, t.app.pos.django, t.app.doneLessons, t.state().phase], [4, 0, ["django"], "ended"]);
 });
 
 // Capcanele au început să se audă, dar nu s-au terminat.
@@ -606,7 +607,7 @@ test("ending past the end does not count the skipped closing as heard: the posit
   t.jarvis.skip();
   await t.tool("next_chunk");
   speak(t);
-  assert.deepEqual([t.app.pos.asyncio, t.app.doneLessons], [4, []]);
+  assert.deepEqual([t.app.pos.django, t.app.doneLessons], [4, []]);
 });
 
 test("on Mut, a next_chunk asked after the end also ends the lesson after the goodbye", async () => {
@@ -639,12 +640,12 @@ test("stopping before the closing keeps the position where it was", async () => 
   const t = await begin(setup());
   await deliver(t); t.clock.advance(3100); await deliver(t);
   await t.jarvis.stop();
-  assert.deepEqual([t.app.pos.asyncio, t.app.doneLessons], [2, []]);
+  assert.deepEqual([t.app.pos.django, t.app.doneLessons], [2, []]);
 });
 
 test("from a saved position the lesson starts with a recap of the last chunk heard and continues with the next", async () => {
   const t = setup();
-  t.app.pos.asyncio = 2;
+  t.app.pos.django = 2;
   await begin(t);
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.n, r.text, r.recap.n, r.recap.text, "intro" in r], [3, SHEET.points[2], 2, SHEET.points[1], false]);
@@ -652,7 +653,7 @@ test("from a saved position the lesson starts with a recap of the last chunk hea
 
 test("a lesson that has heard every point but not the closing starts with the closing", async () => {
   const t = setup();
-  t.app.pos.asyncio = 4;
+  t.app.pos.django = 4;
   await begin(t);
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.kind, r.recap.n], ["closing", 4]);
@@ -660,11 +661,11 @@ test("a lesson that has heard every point but not the closing starts with the cl
 
 test("the screen state shows the current chunk's number, the total, its position and the text from the sheet", async () => {
   const t = setup();
-  t.app.pos.asyncio = 1;
+  t.app.pos.django = 1;
   await begin(t);
   await t.tool("next_chunk");
   const l = t.state().lesson;
-  assert.deepEqual([l.module, l.name, l.n, l.total, l.text, l.muted], ["asyncio", "asyncio", 2, 4, SHEET.points[1], false]);
+  assert.deepEqual([l.module, l.name, l.n, l.total, l.text, l.muted], ["django", "django", 2, 4, SHEET.points[1], false]);
 });
 
 // ---------- istoric ----------
@@ -674,7 +675,7 @@ test("ending after at least one chunk heard logs one row marked as a lesson, wit
   await deliver(t);
   t.clock.advance(125000);
   await t.jarvis.stop();
-  assert.deepEqual(t.app.logged, [{ title: "Jarvis · Lecție · asyncio", n: 1, c: 0, dur: 125, lesson: true }]);
+  assert.deepEqual(t.app.logged, [{ title: "Jarvis · Lecție · django", n: 1, c: 0, dur: 125, lesson: true }]);
 });
 
 test("a lesson in which nothing was heard to the end logs nothing", async () => {
@@ -713,10 +714,10 @@ test("hearing the whole sheet counts the points, not the closing: the screen and
 
 test("a lesson that only hears the closing still logs one row", async () => {
   const t = setup();
-  t.app.pos.asyncio = 4;
+  t.app.pos.django = 4;
   await begin(t);
   await deliver(t);
-  assert.deepEqual([t.app.logged.length, t.app.logged[0].n, t.app.doneLessons], [1, 1, ["asyncio"]]);
+  assert.deepEqual([t.app.logged.length, t.app.logged[0].n, t.app.doneLessons], [1, 1, ["django"]]);
 });
 
 test("releasing Vorbește during a pause is not lost: after Reia the microphone stays closed", async () => {
@@ -762,7 +763,7 @@ test("Reset in the middle of a lesson sends the position back to zero and asks t
   const t = await begin(setup());
   await deliver(t); t.clock.advance(3100); await deliver(t);
   t.jarvis.restart();
-  assert.deepEqual([t.app.pos.asyncio, t.app.resets, /next_chunk/.test(t.texts().at(-1)), /început/.test(t.texts().at(-1)), t.audio.flushes], [0, 1, true, true, 1]);
+  assert.deepEqual([t.app.pos.django, t.app.resets, /next_chunk/.test(t.texts().at(-1)), /început/.test(t.texts().at(-1)), t.audio.flushes], [0, 1, true, true, 1]);
 });
 
 test("after Reset the model gets the main idea and the first chunk again", async () => {
@@ -787,7 +788,7 @@ test("a chunk heard after Reset moves the position from zero again", async () =>
   await deliver(t); t.clock.advance(3100); await deliver(t);
   t.jarvis.restart();
   await deliver(t);
-  assert.equal(t.app.pos.asyncio, 1);
+  assert.equal(t.app.pos.django, 1);
 });
 
 test("Reset does nothing while the lesson is paused", async () => {
@@ -795,7 +796,7 @@ test("Reset does nothing while the lesson is paused", async () => {
   await deliver(t);
   t.jarvis.pause();
   t.jarvis.restart();
-  assert.deepEqual([t.app.resets || 0, t.app.pos.asyncio], [0, 1]);
+  assert.deepEqual([t.app.resets || 0, t.app.pos.django], [0, 1]);
 });
 
 // ---------- desfășurările (spec .scratch/desfasurari, tichet 10) ----------
@@ -893,4 +894,113 @@ test("after Reset on a module with a map the model is told to begin again with t
   t.jarvis.restart();
   const msg = t.texts().at(-1), r = await t.tool("next_chunk");
   assert.deepEqual([/ideea principală/.test(msg), /intro/.test(msg), r.n, "harta" in r.intro, "recap" in r], [false, true, 1, true, false]);
+});
+
+// ---------- secvențe și cartonașe (asyncio) ----------
+
+const seqSheet = (over = {}) => Object.assign({ points: SHEET_AS.points, desf: SHEET_AS.desf }, over);
+const tips = (sh, n) => Jarvis.lessonSequences(sh, n).map(x => x.tip);
+
+test("lessonSequences gives the sequences in order, skips the missing fields and has none for Legătură", () => {
+  assert.deepEqual([1, 2, 3].map(n => tips(seqSheet(), n)), [
+    ["problema", "ideea", "exemplu", "cpp", "punct"],
+    ["problema", "ideea", "analogie", "pas", "punct"],
+    ["ideea", "punct"]]);
+});
+
+test("each sequence has a type, a card content and an instruction; code cards come without fences", () => {
+  const q = Jarvis.lessonSequences(seqSheet(), 1);
+  assert.equal(q.every(x => x.tip && x.continut && x.instruction), true);
+  const by = Object.fromEntries(q.map(x => [x.tip, x]));
+  assert.deepEqual([by.problema.continut, by.exemplu.continut.startsWith("async def f()"), by.exemplu.continut.includes("```"), by.punct.continut],
+    [SHEET_AS.desf[0].p, true, false, SHEET_AS.points[0]]);
+  assert.match(by.cpp.continut, /epoll_wait/); assert.match(by.cpp.continut, /Handlerul C\+\+ nu păstrează/);
+  assert.equal(Jarvis.lessonSequences(seqSheet(), 2).find(x => x.tip === "pas").continut.includes("```"), false);
+});
+
+test("a sheet without unfoldings has only the point sequence", () => {
+  assert.deepEqual(Jarvis.lessonSequences({ points: SHEET.points }, 2).map(x => [x.tip, x.continut]), [["punct", SHEET.points[1]]]);
+});
+
+test("the real asyncio sheet gives sequences for every point and the real django sheet only the point", () => {
+  const P = loadData(new URL("../../", import.meta.url)), { desf } = buildDesf(P, readDesfFiles(new URL("../../", import.meta.url)));
+  const as = { points: P.sheets.asyncio.points, desf: desf.asyncio.items };
+  for (let n = 1; n <= as.points.length; n++) { const t = tips(as, n); assert.equal(t.at(-1), "punct"); assert.equal(t.includes("ideea") && t.includes("problema"), true); }
+  assert.deepEqual(tips({ points: P.sheets.django.points }, 1), ["punct"]);
+});
+
+test("next_chunk on asyncio gives one sequence with its place in the chunk and the model does not get the next one", async () => {
+  const t = await begin(setup(), "asyncio");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.kind, r.n, r.k, r.of, r.tip, r.continut, "desf" in r, "text" in r], ["chunk", 1, 1, 5, "problema", SHEET_AS.desf[0].p, false, false]);
+  assert.equal(JSON.stringify(r).includes("await"), false);
+});
+
+test("after a sequence is spoken the app asks for the next one and does not open the window", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  assert.deepEqual([t.audio.beeps, /next_chunk/.test(t.texts().at(-1)), t.app.pos.asyncio || 0], [[], true, 0]);
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.n, r.k, r.tip], [1, 2, "ideea"]);
+});
+
+test("the listening window opens only after the last sequence, which also writes lessonHeard", async () => {
+  const t = await begin(setup(), "asyncio");
+  for (let k = 1; k <= 4; k++) { await deliver(t); assert.deepEqual([t.audio.beeps.length, t.app.pos.asyncio || 0], [0, 0]); }
+  const last = await deliver(t);
+  assert.deepEqual([last.k, last.of, last.tip, t.audio.beeps, t.app.pos.asyncio], [5, 5, "punct", ["window"], 1]);
+  t.clock.advance(3100);
+  const next = await t.tool("next_chunk");
+  assert.deepEqual([next.n, next.k, next.tip], [2, 1, "problema"]);
+});
+
+test("on Mut the sequences and then the next chunk follow without a window", async () => {
+  const t = setup(); t.jarvis.settings.set({ muted: true });
+  await begin(t, "asyncio");
+  for (let k = 1; k <= 5; k++) await deliver(t);
+  assert.deepEqual([t.audio.beeps, t.app.pos.asyncio, /next_chunk/.test(t.texts().at(-1))], [[], 1, true]);
+});
+
+test("the lesson view exposes the current card as tip and content, and the closing as traps", async () => {
+  const t = await begin(setup(), "asyncio");
+  assert.equal(t.state().lesson.card, null);
+  await deliver(t); await t.tool("next_chunk");
+  let l = t.state().lesson;
+  assert.deepEqual([l.card, l.k, l.of, l.n], [{ tip: "ideea", continut: SHEET_AS.desf[0].i }, 2, 5, 1]);
+  const o = await begin(setup(), "django");
+  await o.tool("next_chunk");
+  assert.deepEqual(o.state().lesson.card, { tip: "punct", continut: SHEET.points[0] });
+});
+
+test("Repetă in the middle of a chunk starts it again from the first sequence", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t); await deliver(t);
+  await t.tool("next_chunk"); t.live.emit({ type: "audio", pcm: Int16Array.of(1) });
+  t.jarvis.repeat();
+  const r = await t.tool("repeat_chunk");
+  assert.deepEqual([r.n, r.k, r.tip, r.repeat, t.app.pos.asyncio || 0], [1, 1, "problema", true, 0]);
+});
+
+test("Sari in the middle of a chunk goes to the next chunk, not to the next sequence", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.jarvis.skip();
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.n, r.k], [2, 1]);
+});
+
+test("a question between sequences restarts the chunk from its first sequence", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t); await deliver(t);
+  t.jarvis.talk(true); t.jarvis.talk(false);
+  speak(t);
+  assert.match(t.texts().at(-1), /repeat_chunk/);
+  const r = await t.tool("repeat_chunk");
+  assert.deepEqual([r.n, r.k], [1, 1]);
+});
+
+test("a module outside the asyncio trial gets whole chunks with the unfolding, as before", async () => {
+  const t = await begin(setup(), "oop");
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.k, r.of, r.tip, typeof r.desf], [undefined, undefined, undefined, "object"]);
 });

@@ -2828,7 +2828,7 @@
   function jvChanged() {
     if (ui.tab !== "jarvis") return;
     const st = jv.getState(), L = st.lesson;
-    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost"].join(",")].join("|");
+    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost", L.k, L.card && L.card.tip, L.card && L.card.continut].join(",")].join("|");
     // Cât ține apăsat Vorbește, butonul nu se înlocuiește: ridicarea degetului ar ajunge pe un element dispărut.
     if (sig !== jvSig && !ui.jv.holding) { jvSig = sig; render(); } else jvPaint(st);
   }
@@ -2898,6 +2898,15 @@
       "</div></details></section>";
     return h;
   }
+  // Cartonașul secvenței curente, după tip: cod colorat la exemplu, rânduri la pas, text în rest.
+  const JV_TIP = { problema: "Problema", ideea: "Ideea", exemplu: "Exemplu", analogie: "Analogie", pas: "Pas cu pas", cpp: "În C++", punct: "Punctul" };
+  function jvCard(L) {
+    const c = L.card;
+    if (!c) return '<div id="jv-chunk" class="jv-chunk"><span class="muted">Jarvis începe lecția…</span></div>';
+    const lab = L.of > 1 ? '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + " · " + L.k + "/" + L.of + "</div>" : "";
+    const body = c.tip === "exemplu" ? codeBlock(c.continut, false, true) : c.tip === "pas" ? codeBlock(c.continut, true, true) : inlineRich(c.continut);
+    return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
+  }
   // În lecție: textul bucății curente, n/total, comenzile mari pentru o singură mână, transcrierea restrânsă.
   function vLessonActive(st) {
     const L = st.lesson, pct = L.total ? Math.round(L.n / L.total * 100) : 0;
@@ -2908,7 +2917,7 @@
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
     if (L.closing) h += '<div id="jv-chunk" class="jv-chunk"><b>Capcane la interviu</b>' + (L.traps.length ? L.traps.map(x => "<p>" + fmt(x) + "</p>").join("") : "<p>Recapitulare și rămas-bun.</p>") + "</div>";
-    else h += '<div id="jv-chunk" class="jv-chunk">' + (L.text ? inlineRich(L.text) : '<span class="muted">Jarvis începe lecția…</span>') + "</div>";
+    else h += jvCard(L);
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +
