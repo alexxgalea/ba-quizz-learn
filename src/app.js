@@ -2833,9 +2833,10 @@
     if (sig !== jvSig && !ui.jv.holding) { jvSig = sig; render(); } else jvPaint(st);
   }
   // Subtitrarea vie: ultimele două rânduri spuse de Jarvis, sub cartonaș (se actualizează pe loc).
-  const jvSub = L => '<div id="jv-sub" class="jv-sub small muted" aria-live="off" data-h="' + esc((L.sub || []).join("|")) + '">' + (L.sub || []).map(x => "<p>" + esc(x) + "</p>").join("") + "</div>";
+  const subRows = L => (L.sub || []).map(x => "<p>" + esc(x) + "</p>").join(""), subKey = L => (L.sub || []).join("|");
+  const jvSub = L => '<div id="jv-sub" class="jv-sub small muted" aria-live="off" data-h="' + esc(subKey(L)) + '">' + subRows(L) + "</div>";
   function jvPaint(st) {
-    const sb = $("#jv-sub"); if (sb && st.lesson) { const h = (st.lesson.sub || []).join("|"); if (sb.dataset.h !== h) { sb.dataset.h = h; sb.innerHTML = (st.lesson.sub || []).map(x => "<p>" + esc(x) + "</p>").join(""); } }
+    const sb = $("#jv-sub"); if (sb && st.lesson) { const h = subKey(st.lesson); if (sb.dataset.h !== h) { sb.dataset.h = h; sb.innerHTML = subRows(st.lesson); } }
     const orb = $("#jv-orb"); if (orb) orb.style.setProperty("--lv", Math.min(1, st.level * 4).toFixed(2));
     const ls = $("#jv-state"); if (ls && st.lesson && st.phase !== "ended") { const t = JV_LSTATE[st.lesson.status] || ""; if (ls.textContent !== t) ls.textContent = t; }
     const tr = $("#jv-tr"); if (tr) { const html = jvTranscript(st); if (tr.dataset.h !== html) { tr.dataset.h = html; tr.innerHTML = html; } }
@@ -2912,7 +2913,7 @@
     const c = L.card;
     if (!c) return '<div id="jv-chunk" class="jv-chunk jv-empty"></div>';
     const lab = c.tip === "capcane" ? "" : '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + (L.of > 1 && c.tip !== "intrebare" ? " · " + L.k + "/" + L.of : "") + (c.eticheta ? ' · <b class="jv-mark">' + esc(c.eticheta) + "</b>" : "") + "</div>";
-    const body = c.tip === "exemplu" ? codeBlock(c.continut, false, true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
+    const body = c.tip === "exemplu" ? codeBlock(c.continut, isFE(L.module), true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
       : c.tip === "capcane" ? "<b>Capcane la interviu</b>" + c.continut.split("\n").map(x => "<p>" + fmt(x) + "</p>").join("")
       : c.tip === "harta" || c.tip === "recap" ? jvRows(c.continut) : c.tip === "intrebare" ? (c.continut ? '<p class="jv-q">' + esc(c.continut) + "</p>" : "") : inlineRich(c.continut);
     return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
@@ -2926,9 +2927,7 @@
     else if (st.warn === "reconnecting") h += '<div class="jv-warn" role="status">Reconectare…</div>';
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
-    if (L.mode === "audio") { /* doar audio: fără cartonaș, doar comenzile mari */ }
-    else h += jvCard(L);
-    if (L.mode !== "audio") h += jvSub(L);
+    if (L.mode !== "audio") h += jvCard(L) + jvSub(L);        // doar audio: fără cartonaș, doar comenzile mari
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +

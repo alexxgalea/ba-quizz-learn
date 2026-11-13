@@ -666,13 +666,13 @@ test("a lesson that has heard every point but not the closing starts with the cl
   assert.deepEqual([r.kind, r.seqs.map(x => x.tip), r.seqs[0].continut], ["closing", ["punct", "capcane", "recap"], SHEET.points[3]]);
 });
 
-test("the screen state shows the current chunk's number, the total, its position and the text from the sheet", async () => {
+test("the screen state shows the current chunk's number, the total, its position and the card from the sheet", async () => {
   const t = setup();
   t.app.pos.django = 1;
   await begin(t);
   await chunk(t); sound(t);
   const l = t.state().lesson;
-  assert.deepEqual([l.module, l.name, l.n, l.total, l.text, l.muted], ["django", "django", 2, 4, SHEET.points[1], false]);
+  assert.deepEqual([l.module, l.name, l.n, l.total, l.card.continut, l.muted], ["django", "django", 2, 4, SHEET.points[1], false]);
 });
 
 // ---------- istoric ----------
@@ -956,8 +956,9 @@ test("on Mut the sequences and then the next chunk follow without a window", asy
   assert.deepEqual([t.audio.beeps, t.app.pos.asyncio, /next_chunk/.test(t.texts().at(-1))], [[], 1, true]);
 });
 
-test("the lesson view exposes the current card as tip and content, and the closing as traps", async () => {
+test("the lesson view exposes the current card as tip and content, and no longer the old text or traps", async () => {
   const t = await begin(setup(), "asyncio");
+  assert.equal(["text", "traps"].some(f => f in t.state().lesson), false);
   assert.equal(t.state().lesson.card, null);
   await deliver(t); await deliver(t); await t.tool("next_chunk"); sound(t);
   let l = t.state().lesson;
@@ -1392,6 +1393,22 @@ test("'mai simplu' and 'exemplu' keep the chunk card and add a label", async () 
   const u = await begin(setup(), "asyncio");
   await askMid(u, "Dă-mi un exemplu"); sound(u);
   assert.deepEqual([u.state().lesson.card.tip, u.state().lesson.card.eticheta], ["problema", "Alt exemplu"]);
+});
+
+test("the request forms are tolerant of diacritics, punctuation and a polite tail", async () => {
+  for (const [q, label] of [["mai simplu", "Mai simplu"], ["Explică-mi mai simplu!", "Mai simplu"], ["Mai simplu, te rog.", "Mai simplu"], ["Alt exemplu", "Alt exemplu"], ["Încă un exemplu, te rog", "Alt exemplu"], ["Un exemplu?", "Alt exemplu"], ["exemplu", "Alt exemplu"], ["Dă-mi un exemplu.", "Alt exemplu"]]) {
+    const t = await begin(setup(), "asyncio");
+    await askMid(t, q); sound(t);
+    assert.deepEqual([q, t.state().lesson.card.tip, t.state().lesson.card.eticheta], [q, "problema", label]);
+  }
+});
+
+test("a short question ABOUT an example or about 'simpler' is a question, not a request", async () => {
+  for (const q of ["Ce e un exemplu de closure?", "De ce e exemplul ăsta greșit?", "Cum arată un exemplu cu TaskGroup?", "E mai simplu cu gather?", "Care e cel mai simplu exemplu?", "Exemplu de ce?"]) {
+    const t = await begin(setup(), "asyncio");
+    await askMid(t, q); sound(t);
+    assert.deepEqual([q, t.state().lesson.card.tip, t.state().lesson.card.continut], [q, "intrebare", q]);
+  }
 });
 
 test("a long question that only mentions an example is still a question", async () => {

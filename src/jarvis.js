@@ -49,47 +49,44 @@ const Jarvis = (() => {
 
   // Secvențele (spec .scratch/lectie-sincronizata): o bucată se dă pe câmpuri ale desfășurării, fiecare cu cartonașul ei.
   // Toate modulele merg pe secvențe; fără desfășurare, bucata are doar secvența `punct`.
-  const SEQ_RULE = " Spune doar ce e pe cartonaș, în ordinea de pe cartonaș, în 15–30 de secunde, cu vorbele tale. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
-  const SEQ_INSTR = {
-    problema: "Spune problema de pe cartonaș." + SEQ_RULE,
-    ideea: "Spune ideea de pe cartonaș." + SEQ_RULE,
-    exemplu: "Povestește exemplul de pe cartonaș: ce face codul și ce iese, cu rezultatul din comentarii. Nu citi codul caracter cu caracter." + SEQ_RULE,
-    analogie: "Spune analogia de pe cartonaș." + SEQ_RULE,
-    pas: "Spune pașii de pe cartonaș, în ordine, ca o poveste în timp." + SEQ_RULE,
-    cpp: "Spune comparația cu C++ de pe cartonaș și unde nu ține." + SEQ_RULE,
-    punct: "Spune punctul din fișă de pe cartonaș ca încheiere a bucății." + SEQ_RULE,
-    capcane: "Spune formulările de evitat de pe cartonaș, ca „capcane la interviu”." + SEQ_RULE,
-    recap: "Recapitulează din cartonaș: spune grupurile de puncte, pe rând, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+  // Un singur șablon pentru ambele moduri: cu ecran sursa e „de pe cartonaș”, doar audio e „din material” și nu există nicio trimitere vizuală (codul se povestește în cuvinte).
+  const seqKit = audio => {
+    const src = audio ? "din material" : "de pe cartonaș";
+    const rule = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș") + ", în 15–30 de secunde, cu vorbele tale."
+      + (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale." : "")
+      + " Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+    const instr = {
+      problema: "Spune problema " + src + "." + rule,
+      ideea: "Spune ideea " + src + "." + rule,
+      exemplu: (audio ? "Povestește exemplul în cuvinte: ce face codul, pe părți, în ordine, și ce rezultat iese (rezultatul e în comentarii). Nu citi codul și nu rosti simboluri, paranteze sau numere de linie: numește lucrurile pe nume (de exemplu „funcția care așteaptă”)."
+        : "Povestește exemplul " + src + ": ce face codul și ce iese, cu rezultatul din comentarii. Nu citi codul caracter cu caracter.") + rule,
+      analogie: "Spune analogia " + src + "." + rule,
+      pas: "Spune pașii " + src + ", în ordine, ca o poveste în timp" + (audio ? ", în cuvinte, fără să citești codul." : ".") + rule,
+      cpp: "Spune comparația cu C++ " + src + " și unde nu ține." + rule,
+      punct: "Spune punctul din fișă " + src + " ca încheiere a bucății." + rule,
+      capcane: "Spune formulările de evitat " + src + ", ca „capcane la interviu”." + rule,
+      recap: "Recapitulează " + (audio ? "din material" : "din cartonaș") + ": spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+    };
+    return { src, rule, instr };
   };
-  // „Doar audio”: aceleași secvențe, dar fără nicio trimitere la ce e pe ecran; codul se povestește în cuvinte.
-  const SEQ_RULE_A = " Spune doar ce e în material, în ordinea lui, în 15–30 de secunde, cu vorbele tale. Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
-  const SEQ_INSTR_A = {
-    problema: "Spune problema din material." + SEQ_RULE_A,
-    ideea: "Spune ideea din material." + SEQ_RULE_A,
-    exemplu: "Povestește exemplul în cuvinte: ce face codul, pe părți, în ordine, și ce rezultat iese (rezultatul e în comentarii). Nu citi codul și nu rosti simboluri, paranteze sau numere de linie: numește lucrurile pe nume (de exemplu „funcția care așteaptă”)." + SEQ_RULE_A,
-    analogie: "Spune analogia din material." + SEQ_RULE_A,
-    pas: "Spune pașii din material, în ordine, ca o poveste în timp, în cuvinte, fără să citești codul." + SEQ_RULE_A,
-    cpp: "Spune comparația cu C++ din material și unde nu ține." + SEQ_RULE_A,
-    punct: "Spune punctul din fișă din material ca încheiere a bucății." + SEQ_RULE_A,
-    capcane: "Spune formulările de evitat din material, ca „capcane la interviu”." + SEQ_RULE_A,
-    recap: "Recapitulează din material: spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
-  };
+  const KIT = { ecran: seqKit(false), audio: seqKit(true) };
+  const kitOf = audio => audio ? KIT.audio : KIT.ecran;
   const rng = g => (g.a === g.b ? String(g.a) : g.a + "–" + g.b) + ": " + g.t;
   // Cartonașele de deschidere și de încheiere (text scris de aplicație, nu de model): harta modulului (fără hartă, ideea principală), capcanele, recapitularea.
   const mapText = sh => sh.map ? sh.map.g.map(rng).join("\n") : sh.lead;
   function openSeq(sh, total, name, audio) {
-    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", rule = audio ? SEQ_RULE_A : SEQ_RULE, src = audio ? "din material" : "de pe cartonaș";
+    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", { rule, src } = kitOf(audio);
     return sh.map
       ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + rule }
       : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + rule };
   }
   // La reluarea dintr-o poziție: propoziția de amintire are cartonașul punctului amintit.
   function recallSeq(sh, from, resumed, audio) {
-    const src = audio ? "din material" : "de pe cartonaș";
-    return { tip: "punct", continut: sh.points[from - 1], instruction: (resumed ? "Spune într-o propoziție „Reiau de unde am rămas, la …” și amintește punctul " + src + "." : "Amintește într-o propoziție punctul " + src + ", ca în „Data trecută am ajuns la …”.") + (audio ? SEQ_RULE_A : SEQ_RULE) };
+    const { rule, src } = kitOf(audio);
+    return { tip: "punct", continut: sh.points[from - 1], instruction: (resumed ? "Spune într-o propoziție „Reiau de unde am rămas, la …” și amintește punctul " + src + "." : "Amintește într-o propoziție punctul " + src + ", ca în „Data trecută am ajuns la …”.") + rule };
   }
   function closingSeqs(sh, audio) {
-    const I = audio ? SEQ_INSTR_A : SEQ_INSTR;
+    const I = kitOf(audio).instr;
     const out = [];
     if (sh.avoid.length) out.push({ tip: "capcane", continut: sh.avoid.join("\n"), instruction: I.capcane });
     out.push({ tip: "recap", continut: mapText(sh), instruction: I.recap });
@@ -100,7 +97,7 @@ const Jarvis = (() => {
   // Câmpurile care lipsesc se sar; „Legătură” nu are secvență. Fără desfășurare rămâne doar `punct`. Cartonașul codului (exemplu, pas) vine fără gardurile ```.
   function lessonSequences(sheet, n, audio) {
     const x = (sheet.desf && sheet.desf[n - 1]) || {}, out = [];
-    const add = (tip, continut) => { if (continut) out.push({ tip, continut, instruction: (audio ? SEQ_INSTR_A : SEQ_INSTR)[tip] }); };
+    const add = (tip, continut) => { if (continut) out.push({ tip, continut, instruction: kitOf(audio).instr[tip] }); };
     add("problema", x.p); add("ideea", x.i);
     if (x.ex) add("exemplu", unfence(x.ex)); else add("analogie", x.an);
     add("pas", x.pas && unfence(x.pas));
@@ -277,7 +274,7 @@ const Jarvis = (() => {
     // Cartonașul cerut (`cur`) se arată abia când începe sunetul lui: până atunci rămâne pe ecran cel auzit (`lz.shown`); `lz.pend` e cel în așteptare.
     function snap(c) {
       const closing = c.n > lz.total, q = c.seqs[c.k - 1];
-      return { card: { tip: q.tip, continut: q.continut }, k: c.k, of: c.seqs.length, n: Math.min(c.n, lz.total), closing, text: closing ? "" : lz.sheet.points[c.n - 1], traps: closing ? lz.sheet.avoid.slice() : [] };
+      return { card: { tip: q.tip, continut: q.continut }, k: c.k, of: c.seqs.length, n: Math.min(c.n, lz.total), closing };
     }
     // Subtitrarea: ultimele două rânduri (propoziții) spuse de model de când a apărut cartonașul afișat.
     function subtitle() {
@@ -298,15 +295,17 @@ const Jarvis = (() => {
     }
     // Răspunsul la o întrebare liberă: „mai simplu” și „exemplu” (cerere scurtă) lasă cartonașul bucății, cu etichetă; orice altceva trece pe cartonașul `intrebare`.
     // Întrebarea apare doar dacă transcrierea intrării a adus-o (altfel cartonașul are doar eticheta). Nu se salvează nicăieri.
+    // Doar formele de cerere, toată propoziția („mai simplu, te rog”, „dă-mi un exemplu”); o întrebare despre un exemplu rămâne întrebare.
+    const REQ_SIMPLER = /^(te rog )?((explica|spune)( mi)? )?(asta |din nou )?mai simplu( te rog| va rog)?$/;
+    const REQ_EXAMPLE = /^(te rog )?((da|dai|spune|arata)( mi)? )?(inca un |un |alt )?exemplu( te rog| va rog)?$/;
     function askKind(q) {
-      const x = (q || "").toLowerCase();
-      if (!x || x.split(/\s+/).length > 8) return null;
-      return /mai simplu/.test(x) ? "Mai simplu" : /exemplu/.test(x) ? "Alt exemplu" : null;
+      const x = String(q || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+      return REQ_SIMPLER.test(x) ? "Mai simplu" : REQ_EXAMPLE.test(x) ? "Alt exemplu" : null;
     }
     function applyQuestion() {
       const b = lz.qBase, q = lz.qText || "", kind = b && b.card && b.card.tip !== "intrebare" ? askKind(q) : null;
       lz.shown = kind ? Object.assign({}, b, { card: Object.assign({}, b.card, { eticheta: kind }) })
-        : { card: { tip: "intrebare", continut: q }, k: 1, of: 1, n: b ? b.n : 0, closing: !!(b && b.closing), text: b ? b.text : "", traps: b ? b.traps : [] };
+        : { card: { tip: "intrebare", continut: q }, k: 1, of: 1, n: b ? b.n : 0, closing: !!(b && b.closing) };
     }
     function showAnswer() {
       lz.qBase = lz.shown && lz.shown.card.tip === "intrebare" ? lz.qBase : lz.shown;
@@ -317,7 +316,7 @@ const Jarvis = (() => {
       const c = lz.cur, sh = lz.shown;
       const status = lz.lost ? "lost" : lz.paused ? "paused" : lz.window ? "window" : lz.asking || lz.talking ? "asking"
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
-      return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, text: sh ? sh.text : "", traps: sh ? sh.traps : [], heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
+      return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
     function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
