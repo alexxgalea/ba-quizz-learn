@@ -346,3 +346,16 @@ function fakeTimers() {
   t.settle = async () => { for (let i = 0; i < 20; i++) await new Promise(r => setImmediate(r)); };
   return t;
 }
+
+test("offline retries stay short: the network can come back without an `online` event (phones are unreliable about it)", async () => {
+  const srv = fakeServer(), timers = fakeTimers(), a = await device("dev-a", srv, { sync: { setTimeout: timers.set, clearTimeout: timers.clear, now: timers.now, random: () => 1 } });
+  srv.down = true;
+  for (let i = 0; i < 12; i++) { answer(a, "py-0" + (1 + i % 9)); await a.sync.syncNow(); }       // twelve failed cycles in airplane mode
+  assert.equal(a.sync.status().state, "offline");
+  assert.ok(timers.nextDelay() <= 30000, "after many failures the next try is at most 30 s away, not minutes: " + timers.nextDelay());
+  srv.down = false;                                                                                  // reconnected, no `online` event delivered
+  timers.advance(timers.nextDelay()); await timers.settle(a.sync);
+  assert.equal(a.sync.status().state, "synced");
+  assert.equal(a.sync.status().unsent, 0);
+  assert.equal(srv.events.length, 12);
+});

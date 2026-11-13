@@ -34,3 +34,6 @@ Adresa: _(de completat după lansare)_
 Alex a lansat de pe Mac cu `make deploy` (fără chei AI, la prima lansare). Din afara contului, fără secret: `GET /health` dă 200 `{"ok":true}`, `GET /events` dă 401, iar preflight-ul CORS din `https://alexxgalea.github.io` întoarce 200 cu `Access-Control-Allow-Origin` pe acea origine, metodele GET și POST și antetele `authorization`, `content-type`. Rămân de verificat cu secretul (`make smoke`) și din PWA: citirea și scrierea evenimentelor, sincronizarea între dispozitive.
 
 Corecturi făcute la prima lansare: `deploy.sh` fără bit de execuție, `deploy.sh` trimitea parametri cu valoare goală (SAM CLI îi refuză), testul de secrete scana `.venv`.
+
+### 2026-11-11, prima rulare reală
+`POST /events` dădea 500 (`AccessDenied`) pe AWS real: tranzacția de scriere folosește un `ConditionCheck`, iar politica funcției n-avea `dynamodb:ConditionCheckItem`. Moto nu verifică IAM. Reparat (PR #8), cu un test care cere în politică fiecare tip de operație folosit de `dynamo.py`. După relansare, Alex a văzut „La zi” în PWA.

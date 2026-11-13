@@ -36,6 +36,8 @@ const JournalSync = (() => {
     const rnd = opts.random || Math.random, now = opts.now || Date.now;
     const batch = opts.batch || BATCH, debounceMs = opts.debounceMs == null ? 1500 : opts.debounceMs, timeoutMs = opts.timeoutMs || 20000;
     const base = (opts.backoff && opts.backoff.base) || 2000, cap = (opts.backoff && opts.backoff.max) || 300000;
+    // Fără semnal, telefoanele nu anunță mereu revenirea (evenimentul `online` lipsește sau vine prea devreme), deci pauza rămâne scurtă: reîncercarea costă o cerere eșuată.
+    const offCap = Math.min(cap, (opts.backoff && opts.backoff.offlineMax) || 30000);
     let st = { state: "idle", unsent: 0, stuck: 0, lastOk: 0, retryAt: 0, error: "", wiped: 0 };
     let running = null, paused = false, again = false, fails = 0, debT = 0, retryT = 0, poked = false, purging = null;
 
@@ -130,7 +132,7 @@ const JournalSync = (() => {
       const kind = err ? err.kind : "client";
       emit({ state: kind === "auth" ? "auth" : kind === "offline" ? "offline" : "error", unsent: n, stuck, retryAt: 0, error: err ? err.message : "refuzat" });
       if (kind === "offline" || kind === "server" || kind === "local") {
-        const wait = Math.min(cap, base * Math.pow(2, Math.min(fails, 20))) * (0.5 + rnd() * 0.5);
+        const wait = Math.min(kind === "offline" ? offCap : cap, base * Math.pow(2, Math.min(fails, 20))) * (0.5 + rnd() * 0.5);
         fails++;
         emit({ retryAt: now() + wait });
         retryT = T(() => { retryT = 0; syncNow(); }, wait);
