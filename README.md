@@ -19,7 +19,7 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 ## Structura
 
 ```text
-build.mjs          construiește dist/pregatire-onapsis.html (artifact) și dist/app (PWA)
+build.mjs          construiește dist/pregatire-onapsis.html (rămâne ca bază a testelor de interfață; artifactul e retras) și dist/app (PWA, publicat)
 lib.mjs            încarcă datele și parsează explicațiile (Markdown)
 validate.mjs       verifică datele, explicațiile și glosarul
 package.json       scripturi (validate, build, teste)
