@@ -569,6 +569,7 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-chunk.jv-empty { min-height: 4em; }
 .jv-chunk-card .jv-chunk.jv-t-harta, .jv-chunk-card .jv-chunk.jv-t-recap { max-height: 44vh; }
 #jv-lesson.is-mut .jv-chunk.jv-t-harta, #jv-lesson.is-mut .jv-chunk.jv-t-recap { max-height: 30vh; }
+#jv-lesson.is-mut .jv-chunk.jv-t-exemplu, #jv-lesson.is-mut .jv-chunk.jv-t-pas { max-height: none; }
 .jv-tip { margin-bottom: 4px; }
 .jv-sub { min-height: 3em; border-top: 1px solid var(--line, rgba(128,128,128,.25)); padding-top: 6px; }
 .jv-sub p { margin: 0 0 2px; }
@@ -623,5 +624,5 @@ ul.pts.num .pb > .dz { width: calc(100% + 32px); margin-left: -32px; }
 .cert-sec h3 { margin: 0; }
 .cert-gap .pts { margin: 0; }
 .cert-gap .btn { align-self: flex-start; }
-.jv-mark { color: var(--acc, inherit); }
+.jv-mark { color: var(--accent); }
 .jv-q { font-style: italic; }
