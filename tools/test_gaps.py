@@ -1,6 +1,7 @@
 # Checks the gap tracking and "smart theory": per-point miss counters (mc), wrong claims (w), theory on the verdict screen and Study › Pentru tine.
 import asyncio, pathlib, json
 from playwright.async_api import async_playwright
+from fixed_day import pin
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "dist" / "pregatire-onapsis.html").as_uri()
 SHOTS = ROOT / "shots"
@@ -46,6 +47,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch()
         ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2)
+        await pin(ctx)
         pg = await ctx.new_page(); errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "fonts" not in m.text and "Failed to load resource" not in m.text else None)
@@ -137,6 +139,7 @@ async def main():
 
         # 5) with sample: the verdict's wrong claims are saved (w) and shown first in the theory; mock hides the theory
         ctx2 = await b.new_context(viewport={"width": 360, "height": 740})
+        await pin(ctx2)
         await ctx2.add_init_script(SAMPLE)
         pg2 = await ctx2.new_page(); errs2 = []
         pg2.on("pageerror", lambda e: errs2.append(str(e)))
@@ -237,6 +240,7 @@ async def main():
 
         # 9) without sample there is no AI step in the theory
         ctx3 = await b.new_context(viewport={"width": 360, "height": 740}); pg3 = await ctx3.new_page()
+        await pin(ctx3)
         await pg3.route("**/fonts.*", lambda r: r.abort()); await fresh(pg3)
         await seed(pg3, A["id"], {"b": 1, "n": 1, "s": 30, "t": 1000, "mc": {"1": 2}, "m": [1]})
         await pg3.click('.tab[data-tab="study"]'); await pg3.click('[data-a="seg"][data-seg="gaps"]'); await pg3.click('details.gap >> summary'); await pg3.wait_for_timeout(100)

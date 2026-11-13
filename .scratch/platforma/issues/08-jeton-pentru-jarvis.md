@@ -31,3 +31,11 @@ Deschide `docs/probe-jeton-live.html` (aceeași origine ca PWA-ul, deci adresa �
 4. **D** (sesiune nouă, fără handle, cu un jeton nou).
 
 Lipite rezultatele aici. Rămân neverificate pe real: formatul exact al erorii Gemini la un jeton expirat sau la un handle străin (regexul din `closeInfo` e o presupunere), `newSessionExpireTime` de 2 minute la reluare, și CORS-ul `POST /live-token` de pe `alexxgalea.github.io` (preflight cu `authorization`; șablonul îl permite).
+
+### 2026-11-13, proba cu serverul real (`docs/probe-jeton-live.html`, Alex)
+Serverul are acum cheia Gemini (a doua lansare). Rezultate:
+- **A**: jetonul de la `POST /live-token` deschide o sesiune pe `BidiGenerateContentConstrained` cu `gemini-3.8-live` (`setupComplete`, răspuns „Ok.”). La prima rulare A a picat cu `1011 Resource has been exhausted (e.g. check quota)`: cotă, nu jeton (la a doua rulare, după ce Jarvis fusese închis, a trecut). Condiția de oprire a tichetului nu se declanșează.
+- **B**: reluare cu același jeton și handle: acceptată, cu context (răspuns „Portocală.”).
+- **C**: reluare cu **alt jeton** și handle-ul vechi: acceptată, cu context. Documentația Google nu o descrie; observată pe 2026-11-13. Calea de siguranță din aplicație (repornire curată cu `recap`, evenimentul `restarted`) rămâne pentru cazul în care Gemini o refuză.
+- **D**: sesiune nouă, fără handle, cu jeton nou: merge.
+- Jarvis pornește și rulează în PWA, prin serverul real.

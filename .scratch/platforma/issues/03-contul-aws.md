@@ -12,7 +12,7 @@
 - [x] Alarmă de buget la 1 USD, pe e-mail.
 - [x] Amintirea la 5 luni nu mai are rost: contul e deja pe planul plătit, deci regula celor 6 luni nu se aplică. Rămâne alarma de buget ca plasă de siguranță.
 - [x] Regiunea aleasă: `eu-central-1` (Frankfurt). Adresa funcției (Function URL) nu există în toate regiunile și nu am putut confirma Frankfurt dintr-o sursă primară; se vede la primul deploy (dacă nu merge, alternativa e `eu-west-1`).
-- [ ] Accesul pentru lansare e pus unde spune tichetul 04, nu în repo.
+- [x] Accesul pentru lansare: utilizatorul IAM `ba-deploy`, cheia în `~/.aws/` pe laptopul lui Alex (`aws configure`), nu în repo. Lansarea din tichetul 04 a mers cu el.
 
 ## Comments
 

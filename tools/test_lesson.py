@@ -2,6 +2,7 @@
 # Live și Audio sunt înlocuite de tools/jarvis_fakes.js; protocolul și sunetul real sunt acoperite de tools/unit/*.test.mjs.
 import asyncio, pathlib
 from playwright.async_api import async_playwright
+from fixed_day import pin
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "dist" / "pregatire-onapsis.html").as_uri()
 SHOTS = ROOT / "shots"
@@ -28,6 +29,7 @@ MODS = "() => window.PREP.modules.map(m => ({ id: m.id, p: m.p, short: m.short, 
 
 async def app_logic(b):
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
+    await pin(ctx)
     pg = await ctx.new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
     await pg.route("**/fonts.*", lambda r: r.abort())
@@ -130,6 +132,7 @@ async def app_logic(b):
 async def screens(b, scheme):
     tag = scheme + ": "
     ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
+    await pin(ctx)
     await ctx.add_init_script(path=FAKES)
     pg = await ctx.new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -276,6 +279,7 @@ async def screens(b, scheme):
 async def unfoldings(b):
     """Tichet 10: lecția pe un modul cu desfășurări (oop) dă modelului harta și desfășurarea punctului; pe unul fără (aws) merge ca înainte."""
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
+    await pin(ctx)
     await ctx.add_init_script(path=FAKES)
     pg = await ctx.new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -310,6 +314,7 @@ async def unfoldings(b):
 
 async def artifact(b):
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
+    await pin(ctx)
     await ctx.add_init_script("window.claude = { use: async () => null };")
     await ctx.add_init_script(path=FAKES)
     pg = await ctx.new_page(); errs = []
