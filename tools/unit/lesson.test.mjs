@@ -1237,3 +1237,75 @@ test("on 'Doar audio' the map, the recall, the traps and the recap also have ins
   // varianta „fără hartă” și ideea principală, fără trimitere la ecran
   assert.equal(SCREEN_WORDS.test(r1.instruction), false);
 });
+
+// ---------- întrebări, „mai simplu”, „exemplu” (tichetul 05) ----------
+
+const heard = (t, text) => t.live.emit({ type: "transcript", who: "me", text });
+async function askMid(t, q) {
+  await deliver(t); await t.tool("next_chunk"); sound(t);          // harta auzită, problema pe ecran
+  t.jarvis.talk(true); if (q) heard(t, q); t.jarvis.talk(false);
+  t.live.emit({ type: "interrupted" });                          // întrebarea taie bucata în curs
+}
+
+test("a free question switches the screen to the question card, with Alex's words and the answer as subtitle", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "De ce anulează TaskGroup grupul?");
+  assert.equal(t.state().lesson.card.tip, "problema");
+  sound(t); say(t, "Pentru că un task a eșuat. Restul se anulează.");
+  const l = t.state().lesson;
+  assert.deepEqual([l.card, l.sub, l.n], [{ tip: "intrebare", continut: "De ce anulează TaskGroup grupul?" }, ["Pentru că un task a eșuat.", "Restul se anulează."], 1]);
+});
+
+test("when the question text arrives after the answer started, the card gets it", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t);
+  sound(t);
+  assert.equal(t.state().lesson.card.continut, "");
+  heard(t, "De ce?");
+  assert.deepEqual(t.state().lesson.card, { tip: "intrebare", continut: "De ce?" });
+});
+
+test("a question never shows the text of the previous one", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "Prima?"); sound(t); speak(t);
+  await t.tool("repeat_chunk"); sound(t);
+  t.jarvis.talk(true); t.jarvis.talk(false); t.live.emit({ type: "interrupted" }); sound(t);
+  assert.deepEqual(t.state().lesson.card, { tip: "intrebare", continut: "" });
+});
+
+test("when Jarvis returns to the lesson the chunk card returns, from its first sequence, without a mark", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "De ce?");
+  sound(t); speak(t);
+  assert.match(t.texts().at(-1), /repeat_chunk/);
+  await t.tool("repeat_chunk"); sound(t);
+  const l = t.state().lesson;
+  assert.deepEqual([l.card.tip, l.card.eticheta, l.k, l.sub], ["harta", undefined, 1, []]);
+});
+
+test("'mai simplu' and 'exemplu' keep the chunk card and add a label", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "Mai simplu, te rog."); sound(t);
+  assert.deepEqual([t.state().lesson.card.tip, t.state().lesson.card.eticheta, t.state().lesson.k], ["problema", "Mai simplu", 2]);
+  const u = await begin(setup(), "asyncio");
+  await askMid(u, "Dă-mi un exemplu"); sound(u);
+  assert.deepEqual([u.state().lesson.card.tip, u.state().lesson.card.eticheta], ["problema", "Alt exemplu"]);
+});
+
+test("a long question that only mentions an example is still a question", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "În exemplul acesta, de ce se oprește bucla când un task aruncă o excepție?"); sound(t);
+  assert.equal(t.state().lesson.card.tip, "intrebare");
+});
+
+test("the question is kept nowhere: not in the app, results or gaps", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "De ce?"); sound(t); speak(t);
+  assert.deepEqual([t.app.logged.length, JSON.stringify(t.app).includes("De ce?")], [0, false]);
+});
+
+test("a question on a module without sequences also gets the question card", async () => {
+  const t = await begin(setup(), "django");
+  await deliver(t); t.jarvis.talk(true); heard(t, "Cum?"); t.jarvis.talk(false); t.live.emit({ type: "interrupted" }); sound(t);
+  assert.deepEqual(t.state().lesson.card, { tip: "intrebare", continut: "Cum?" });
+});

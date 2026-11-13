@@ -337,6 +337,21 @@ async def sequences(b, scheme):
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(100)
     check(tag + "the window opens only after the last sequence", await ev(pg, f"{CTL}.audio.beeps") == ["window"])
     check(tag + "the position moves only then", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 1)
+    # --- întrebare liberă în fereastră: cartonașul `intrebare`, cu întrebarea și răspunsul ca subtitrare; apoi „mai simplu” păstrează cartonașul
+    await ev(pg, f"{CTL}.level(0.2)")
+    await emit(pg, {"type": "transcript", "who": "me", "text": "Mai simplu"})
+    await sound(pg)
+    check(tag + "'mai simplu' keeps the chunk card with its label", await pg.locator("#jv-chunk .jv-mark").count() == 1 and "Mai simplu" in await text(pg, "#jv-chunk .jv-mark") and await pg.locator('#jv-chunk[data-tip="intrebare"]').count() == 0, await text(pg, "#jv-chunk"))
+    await pg.screenshot(path=str(SHOTS / f"lesson_masimplu_{scheme}.png"))
+    await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
+    await ev(pg, f"{CTL}.advance(500)"); await ev(pg, f"{CTL}.level(0)"); await ev(pg, f"{CTL}.level(0.2)")
+    await emit(pg, {"type": "transcript", "who": "me", "text": "De ce nu merge await în afara unui async def?"})
+    await sound(pg)
+    await emit(pg, {"type": "transcript", "who": "model", "text": "Pentru că await are nevoie de o corutină. Altfel nu are ce suspenda."})
+    check(tag + "a free question shows the question card with the question and the answer subtitle", await pg.locator('#jv-chunk[data-tip="intrebare"]').count() == 1 and "De ce nu merge await" in await text(pg, "#jv-chunk") and "Întrebarea ta" in await text(pg, "#jv-chunk") and "Altfel nu are ce suspenda." in await text(pg, "#jv-sub"), await text(pg, "#jv-chunk"))
+    check(tag + "the question card fits at 360 px", await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"))
+    await pg.screenshot(path=str(SHOTS / f"lesson_intrebare_{scheme}.png"))
+    await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
     # --- finalul: capcane, apoi recapitulare; lecția se încheie după recap
     total = (await ev(pg, "window.PrepApp.sheet('asyncio')"))["total"]
     await ev(pg, f"{CTL}.audio.beeps.length = 0")

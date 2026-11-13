@@ -6,11 +6,13 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Se verifică în `live.js` dacă transcrierea intrării există; rezultatul e notat aici, sub `## Comments`.
-- [ ] La o întrebare liberă, `#jv-chunk` nu mai arată cartonașul vechi fără nicio marcă.
-- [ ] Întrebările lui Alex tot nu se salvează nicăieri.
-- [ ] Teste de unitate pentru cele trei cazuri.
+- [x] Se verifică în `live.js` dacă transcrierea intrării există; rezultatul e notat aici, sub `## Comments`.
+- [x] La o întrebare liberă, `#jv-chunk` nu mai arată cartonașul vechi fără nicio marcă.
+- [x] Întrebările lui Alex tot nu se salvează nicăieri.
+- [x] Teste de unitate pentru cele trei cazuri.
 
 ## Comments
+
+Transcrierea intrării există: `live.js` cere `inputAudioTranscription: {}` în setup (l. 27) și emite `transcript` cu `who: "me"`; `Call` o adună în replici cu id. Textul întrebării apare pe cartonaș dacă ajunge înainte sau în timpul răspunsului; altfel cartonașul `intrebare` arată doar eticheta „Întrebarea ta”. „Mai simplu” și „exemplu” se recunosc doar din transcrierea lui Alex (cerere de cel mult 8 cuvinte cu „mai simplu” sau „exemplu”); fără transcriere, cartonașul trece pe `intrebare`.
