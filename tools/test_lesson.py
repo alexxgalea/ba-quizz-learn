@@ -26,6 +26,12 @@ async def texts(pg): return [x["text"] for x in await sent(pg) if "text" in x]
 async def sound(pg): await ev(pg, f"{CTL}.sound()"); await pg.wait_for_timeout(60)
 async def tool(pg, name): r = await ev(pg, f"{CTL}.tool('{name}')"); await pg.wait_for_timeout(60); return r
 
+async def to_last(pg, r):
+    """Spune secvențele bucății una după alta până la ultima (punctul); întoarce rezultatul ei."""
+    while r["k"] < r["of"]:
+        await ev(pg, f"{CTL}.speak()"); r = await tool(pg, "next_chunk"); await sound(pg)
+    return r
+
 MODS = "() => window.PREP.modules.map(m => ({ id: m.id, p: m.p, short: m.short, n: (window.PREP.sheets[m.id].points || []).length }))"
 
 async def app_logic(b):
@@ -131,7 +137,7 @@ async def app_logic(b):
 
 
 async def screens(b, scheme):
-    # Lecția pe un modul fără secvențe (gil); secvențele de pe asyncio sunt în sequences().
+    # Lecția pe gil (toate modulele merg pe secvențe); cartonașele pe tipuri sunt în sequences().
     tag = scheme + ": "
     ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
     await pin(ctx)
@@ -193,6 +199,7 @@ async def screens(b, scheme):
     r = await tool(pg, "next_chunk")
     check(tag + "the requested card is not on screen before its sound starts", await pg.locator("#jv-chunk.jv-empty").count() == 1, await text(pg, "#jv-chunk"))
     await sound(pg)
+    await to_last(pg, r)          # toate modulele merg pe secvențe: amintirea punctului 4, desfășurarea, apoi punctul 5
     pts = await ev(pg, "window.PREP.sheets.gil.points")
     shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
     check(tag + "the current chunk's text from the sheet is on screen", pts[4].replace("`", "")[:40] in shown, shown)
@@ -229,7 +236,8 @@ async def screens(b, scheme):
     await pg.click('[data-a="jv-restart"]'); await pg.click('[data-a="jv-restart"]'); await pg.wait_for_timeout(120)
     last = (await texts(pg))[-1]
     check(tag + "the second tap restarts the lesson from the beginning", (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] == 0 and "next_chunk" in last and "început" in last, last)
-    await tool(pg, "next_chunk"); await sound(pg)
+    r = await tool(pg, "next_chunk"); await sound(pg)
+    await to_last(pg, r)      # harta, desfășurarea, apoi punctul 1
     check(tag + "after the restart the screen shows the first chunk again", "1/" in (await text(pg, "#jv-pos")).replace(" ", "") and (await ev(pg, "window.PREP.sheets.gil.points[0]")).replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-pos"))
     await pg.click('[data-a="jv-repeat"]'); await pg.wait_for_timeout(80)       # taie sunetul, ca microfonul să rămână liber mai jos
     await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
@@ -433,12 +441,18 @@ async def unfoldings(b):
     await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
     await pg.click('#sheet-oop summary'); await pg.wait_for_timeout(150)
     await pg.click('#sheet-oop [data-a="listen"]'); await pg.wait_for_timeout(250)
+    async def whole(first):
+        out = [first]
+        while out[-1]["k"] < out[-1]["of"]:
+            await ev(pg, f"{CTL}.speak()"); out.append(await tool(pg, "next_chunk"))
+        return out
     r1 = await tool(pg, "next_chunk")
-    check("the lesson on a module with unfoldings opens with its map, not with the main idea", "harta" in r1["intro"] and "lead" not in r1["intro"] and r1["intro"]["harta"]["problema"] == d["map"]["p"] and len(r1["intro"]["harta"]["grupuri"]) == len(d["map"]["g"]), r1.get("intro"))
-    check("the first chunk brings the unfolding of the first point, with the same text as in Studiu", r1["text"] == pts[0] and r1["desf"]["problema"] == d["items"][0]["p"] and r1["desf"]["ideea"] == d["items"][0]["i"], r1.get("desf"))
-    check("the chunk instruction asks for the unfolding's example and for the code to be told", "exemplul din desfășurare" in r1["instruction"] and "caracter cu caracter" in r1["instruction"], r1["instruction"])
-    r2 = await tool(pg, "next_chunk")
-    check("the next chunk has no map and brings its own unfolding", "intro" not in r2 and r2["n"] == 2 and r2["desf"]["problema"] == d["items"][1]["p"], r2.get("desf"))
+    c1 = await whole(r1)
+    check("the lesson on a module with unfoldings opens with its map card, not with the main idea", c1[0]["tip"] == "harta" and d["map"]["p"] in c1[0]["continut"] and all(g["t"] in c1[0]["continut"] for g in d["map"]["g"]) and "intro" not in r1, c1[0])
+    check("the first chunk goes through the unfolding of the first point, then the point as in Studiu", c1[1]["tip"] == "problema" and c1[1]["continut"] == d["items"][0]["p"] and c1[2]["continut"] == d["items"][0]["i"] and c1[-1]["tip"] == "punct" and c1[-1]["continut"] == pts[0], [x["tip"] for x in c1])
+    check("the example sequence asks for the card's example and for the code to be told", any(x["tip"] == "exemplu" and "exemplul de pe cartonaș" in x["instruction"] and "Nu citi codul" in x["instruction"] for x in c1), [x["tip"] for x in c1])
+    await ev(pg, f"{CTL}.speak()"); r2 = await tool(pg, "next_chunk")
+    check("the next chunk has no map and begins with its own problem", r2["tip"] != "harta" and r2["n"] == 2 and r2["k"] == 1 and (r2["continut"] == d["items"][1]["p"] or not d["items"][1].get("p")), r2)
     check("the lesson has as many chunks as the sheet has points", r1["total"] == len(pts) == len(d["items"]), r1["total"])
     sys_ = await ev(pg, f"{CTL}.live.cfg.system")
     check("the model's instructions do not carry the map or the unfoldings", d["map"]["p"] not in sys_ and all(x["p"] not in sys_ for x in d["items"]))
@@ -449,7 +463,26 @@ async def unfoldings(b):
     await pg.click('#sheet-aws [data-a="listen"]'); await pg.wait_for_timeout(250)
     a1 = await tool(pg, "next_chunk")
     lead = await ev(pg, "window.PREP.sheets.aws.lead")
-    check("the lesson on a module without unfoldings is as before: main idea in the intro, no map, no unfolding", a1["intro"]["lead"] == lead and "harta" not in a1["intro"] and "desf" not in a1 and a1["instruction"].startswith("Explică bucata cu vorbele tale"), a1)
+    a = await whole(a1)
+    check("a module without unfoldings goes through sequences too: the main idea as the opening card, then only the point", [x["tip"] for x in a] == ["harta", "punct"] and a[0]["continut"] == lead and "desf" not in a1 and "text" not in a1, [x["tip"] for x in a])
+    # --- modul frontend (react): cartonașele exemplu (✗ / ✓) și pas încap la 360 px, fără derulare în card sau în lateral
+    await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-react summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-react [data-a="listen"]'); await pg.wait_for_timeout(250)
+    r = await tool(pg, "next_chunk"); await sound(pg)
+    got = set()
+    for _ in range(60):
+        if r.get("done") or ("exemplu" in got and "pas" in got): break
+        if r["tip"] in ("exemplu", "pas"):
+            got.add(r["tip"])
+            box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
+            check("react: the " + r["tip"] + " card fits at 360 px", box["h"] <= box["c"] + 1 and box["w"] <= box["cw"] + 1 and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"), box)
+            if r["tip"] == "exemplu": check("react: the example card shows the wrong and the right variant", "✗" in await text(pg, "#jv-chunk") and "✓" in await text(pg, "#jv-chunk"), await text(pg, "#jv-chunk"))
+        await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(60)
+        r = await tool(pg, "next_chunk"); await sound(pg)
+        if r["k"] == 1: await ev(pg, f"{CTL}.advance(3100)")
+    check("react: both an example and a step-by-step card were seen", got == {"exemplu", "pas"}, got)
+    await pg.click('[data-a="jv-stop"]'); await pg.wait_for_timeout(200)
     check("no page errors (unfoldings)", not errs, errs)
     await ctx.close()
 
