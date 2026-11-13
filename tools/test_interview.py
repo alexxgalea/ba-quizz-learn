@@ -2,6 +2,7 @@
 # `window.claude.sample` is scripted: every call is recorded (kind, tier, cache, prompt) and answers come from per-kind queues.
 import asyncio, pathlib, json
 from playwright.async_api import async_playwright
+from fixed_day import pin
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "dist" / "pregatire-onapsis.html").as_uri()
 SHOTS = ROOT / "shots"
@@ -63,6 +64,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch()
         ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2)
+        await pin(ctx)
         await ctx.add_init_script(SAMPLE)
         pg = await ctx.new_page()
         errs = []
@@ -369,6 +371,7 @@ async def main():
 
         # 7) without `sample` (outside the artifact): no interviewer button, the old flow is untouched
         ctx2 = await b.new_context(viewport={"width": 360, "height": 740})
+        await pin(ctx2)
         pg2 = await ctx2.new_page(); errs2 = []
         pg2.on("pageerror", lambda e: errs2.append(str(e)))
         await pg2.route("**/fonts.*", lambda r: r.abort())
