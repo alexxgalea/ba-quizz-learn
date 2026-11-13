@@ -130,6 +130,7 @@ async def app_logic(b):
 
 
 async def screens(b, scheme):
+    # Lecția pe un modul fără secvențe (gil); secvențele de pe asyncio sunt în sequences().
     tag = scheme + ": "
     ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
     await pin(ctx)
@@ -143,10 +144,10 @@ async def screens(b, scheme):
 
     # --- Studiu: butonul „Ascultă” pe fișă
     await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
-    await pg.click('#sheet-asyncio summary'); await pg.wait_for_timeout(150)
-    check(tag + "the open sheet has a Ascultă button", await pg.locator('#sheet-asyncio [data-a="listen"][data-m="asyncio"]').count() == 1)
+    await pg.click('#sheet-gil summary'); await pg.wait_for_timeout(150)
+    check(tag + "the open sheet has a Ascultă button", await pg.locator('#sheet-gil [data-a="listen"][data-m="gil"]').count() == 1)
     await pg.screenshot(path=str(SHOTS / f"lesson_sheet_{scheme}.png"))
-    await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(200)
+    await pg.click('#sheet-gil [data-a="listen"]'); await pg.wait_for_timeout(200)
     check(tag + "without a key Ascultă leads to the key field and does not connect", await pg.locator("#jv-key").count() == 1 and await ev(pg, f"{CTL}.live.cfg") is None)
     check(tag + "the key screen says why, without naming a mode", "cheia Gemini" in await text(pg, "main"))
 
@@ -159,29 +160,29 @@ async def screens(b, scheme):
     check(tag + "the list offers every module, Bonus and behavioural included", await lst.count() == len(mods), await lst.count())
     check(tag + "the Jarvis home shows the build version, so a stale phone cache is easy to spot", __import__("re").fullmatch(r"Versiune [0-9a-f]{7}", await text(pg, "#jv-build")) is not None, await text(pg, "#jv-build"))
     await pg.screenshot(path=str(SHOTS / f"lesson_home_{scheme}.png"))
-    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 4)")
+    await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
     await pg.click('.tab[data-tab="progress"]'); await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
     rec = await ev(pg, "window.PrepApp.lessonRec()")
-    n = (await ev(pg, "window.PrepApp.sheet('asyncio')"))["total"]
-    check(tag + "a started lesson turns the button into Continuă, with n/total", "Continuă asyncio, 4/" + str(n) in (await text(pg, "#jv-rec")).replace("\n", " "), await text(pg, "#jv-rec"))
+    n = (await ev(pg, "window.PrepApp.sheet('gil')"))["total"]
+    check(tag + "a started lesson turns the button into Continuă, with n/total", "Continuă GIL & threads, 4/" + str(n) in (await text(pg, "#jv-rec")).replace("\n", " "), await text(pg, "#jv-rec"))
 
     # --- resetarea din ecran
-    check(tag + "a started lesson offers Resetează lecția under the recommended button and a Resetează in its row", await pg.locator("#jv-rec-reset").count() == 1 and await pg.locator('.jv-lessons [data-a="jv-lesson-reset"][data-m="asyncio"]').count() == 1)
+    check(tag + "a started lesson offers Resetează lecția under the recommended button and a Resetează in its row", await pg.locator("#jv-rec-reset").count() == 1 and await pg.locator('.jv-lessons [data-a="jv-lesson-reset"][data-m="gil"]').count() == 1)
     check(tag + "only started lessons have a reset", await pg.locator('.jv-lessons [data-a="jv-lesson-reset"]').count() == 1)
     await pg.screenshot(path=str(SHOTS / f"lesson_home_started_{scheme}.png"))
     await pg.click("#jv-rec-reset"); await pg.wait_for_timeout(150)
-    check(tag + "the reset sends the lesson back to the start and the buttons go away", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0 and await pg.locator("#jv-rec-reset").count() == 0 and "Continuă asyncio" not in await text(pg, "main") and await pg.locator('[data-a="jv-lesson-reset"]').count() == 0)
+    check(tag + "the reset sends the lesson back to the start and the buttons go away", (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] == 0 and await pg.locator("#jv-rec-reset").count() == 0 and "Continuă GIL & threads" not in await text(pg, "main") and await pg.locator('[data-a="jv-lesson-reset"]').count() == 0)
     check(tag + "the reset does not start a lesson", await ev(pg, f"{CTL}.live.cfg") is None)
-    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 4)")
+    await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
     await pg.click('.tab[data-tab="progress"]'); await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
-    await pg.click('.jv-lessons summary'); await pg.click('.jv-lessons [data-a="jv-lesson-reset"][data-m="asyncio"]'); await pg.wait_for_timeout(150)
-    check(tag + "the reset in the module list works too", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0)
-    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 4)")
+    await pg.click('.jv-lessons summary'); await pg.click('.jv-lessons [data-a="jv-lesson-reset"][data-m="gil"]'); await pg.wait_for_timeout(150)
+    check(tag + "the reset in the module list works too", (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] == 0)
+    await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
     await pg.click('.tab[data-tab="progress"]'); await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
     await pg.wait_for_function("(() => { const t = document.getElementById('toast'); return !t || t.hidden; })()")      # toast-ul „revine la început” stă 2,4 s peste butoane
 
     # --- pornirea din fișă, cu poziția salvată
-    await pg.click('.tab[data-tab="study"]'); await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)
+    await pg.click('.tab[data-tab="study"]'); await pg.click('#sheet-gil [data-a="listen"]'); await pg.wait_for_timeout(250)
     cfg = await ev(pg, f"({{ names: {CTL}.live.cfg.tools.map(t => t.name).sort(), sys: {CTL}.live.cfg.system }})")
     check(tag + "Ascultă on the sheet starts the lesson with the lesson functions", cfg["names"] == ["end_session", "next_chunk", "pause_session", "repeat_chunk"], cfg["names"])
     check(tag + "the lesson screen shows the module and the controls", await pg.locator("#jv-lesson").count() == 1 and all([await pg.locator(f'[data-a="{a}"]').count() == 1 for a in ["jv-pause", "jv-repeat", "jv-skip", "jv-stop", "jv-mute"]]))
@@ -189,7 +190,7 @@ async def screens(b, scheme):
 
     # --- bucata curentă pe ecran
     r = await tool(pg, "next_chunk")
-    pts = await ev(pg, "window.PREP.sheets.asyncio.points")
+    pts = await ev(pg, "window.PREP.sheets.gil.points")
     shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
     check(tag + "the current chunk's text from the sheet is on screen", pts[4].replace("`", "")[:40] in shown, shown)
     check(tag + "n/total is shown", f"5/{n}" in (await text(pg, "#jv-pos")).replace(" ", ""), await text(pg, "#jv-pos"))
@@ -219,15 +220,15 @@ async def screens(b, scheme):
     await pg.screenshot(path=str(SHOTS / f"lesson_controls_{scheme}.png"))
     n_before = len(await texts(pg))
     await pg.click('[data-a="jv-restart"]'); await pg.wait_for_timeout(80)
-    check(tag + "the first tap on Reset only asks for confirmation", "Sigur" in await text(pg, '[data-a="jv-restart"]') and len(await texts(pg)) == n_before and (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] >= 1)
+    check(tag + "the first tap on Reset only asks for confirmation", "Sigur" in await text(pg, '[data-a="jv-restart"]') and len(await texts(pg)) == n_before and (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] >= 1)
     await pg.wait_for_timeout(4300)
     check(tag + "the confirmation fades back to Reset after a few seconds", "Sigur" not in await text(pg, '[data-a="jv-restart"]'))
     await pg.click('[data-a="jv-restart"]'); await pg.click('[data-a="jv-restart"]'); await pg.wait_for_timeout(120)
     last = (await texts(pg))[-1]
-    check(tag + "the second tap restarts the lesson from the beginning", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0 and "next_chunk" in last and "început" in last, last)
+    check(tag + "the second tap restarts the lesson from the beginning", (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] == 0 and "next_chunk" in last and "început" in last, last)
     await tool(pg, "next_chunk")
-    check(tag + "after the restart the screen shows the first chunk again", "1/" in (await text(pg, "#jv-pos")).replace(" ", "") and (await ev(pg, "window.PREP.sheets.asyncio.points[0]")).replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-pos"))
-    await ev(pg, "window.PrepApp.lessonHeard('asyncio', 4)")
+    check(tag + "after the restart the screen shows the first chunk again", "1/" in (await text(pg, "#jv-pos")).replace(" ", "") and (await ev(pg, "window.PREP.sheets.gil.points[0]")).replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-pos"))
+    await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
     await pg.click('[data-a="jv-pause"]'); await pg.wait_for_timeout(80)
     check(tag + "Pauză becomes Reia", await pg.locator('[data-a="jv-resume"]').count() == 1 and await pg.locator('[data-a="jv-pause"]').count() == 0 and await ev(pg, f"{CTL}.audio.pauses") == 1)
     await pg.screenshot(path=str(SHOTS / f"lesson_paused_{scheme}.png"))
@@ -269,9 +270,55 @@ async def screens(b, scheme):
     check(tag + "Gata ends the lesson with one history row marked as a lesson", h["lesson"] is True and h["n"] >= 1 and "Lecție" in h["title"], h)
     check(tag + "the end screen shows the lesson, not card results", await pg.locator(".jv-res").count() == 0 and "idee" in await text(pg, "main"), await text(pg, "main"))
     await pg.screenshot(path=str(SHOTS / f"lesson_ended_{scheme}.png"))
-    await ev(pg, "window.PrepApp.lessonHeard('asyncio', window.PrepApp.sheet('asyncio').total)")
+    await ev(pg, "window.PrepApp.lessonHeard('gil', window.PrepApp.sheet('gil').total)")
     await pg.click('.tab[data-tab="study"]'); await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
     check(tag + "with every point heard the end screen points at the closing, not at a missing idea", "capcanele" in await text(pg, "main") and "ideea 12" not in await text(pg, "main"), await text(pg, "main"))
+    check(tag + "no page errors", not errs, errs)
+    await ctx.close()
+
+
+async def sequences(b, scheme):
+    """Tichet 01 (lectie-sincronizata): pe asyncio bucata vine pe secvențe, iar #jv-chunk arată cartonașul secvenței, după tip."""
+    tag = scheme + " seq: "
+    ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
+    await pin(ctx)
+    await ctx.add_init_script(path=FAKES)
+    pg = await ctx.new_page(); errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "fonts" not in m.text and "Failed to load resource" not in m.text else None)
+    await pg.route("**/fonts.*", lambda r: r.abort())
+    await fresh(pg)
+    await ev(pg, "localStorage.setItem('onapsis-gemini-v1', 'TESTKEY1234')"); await pg.reload(); await pg.wait_for_timeout(400)
+    d = await ev(pg, "window.PREP.desf.asyncio")
+    it = d["items"][0]
+    await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-asyncio summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)
+    seen = []
+    r = await tool(pg, "next_chunk")
+    for _ in range(8):
+        seen.append((r["tip"], r["k"], r["of"]))
+        tip = await pg.locator("#jv-chunk").get_attribute("data-tip")
+        check(tag + "the card on screen has the type of the sequence " + r["tip"], tip == r["tip"], tip)
+        if r["tip"] == "problema":
+            check(tag + "the problem card has the problem text", it["p"].replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-chunk"))
+        if r["tip"] == "exemplu":
+            check(tag + "the example card shows the whole code block, coloured", await pg.locator("#jv-chunk pre.code").count() == 1 and await pg.locator("#jv-chunk pre.code .ln").count() == len([l for l in r["continut"].split("\n")]) and "```" not in await text(pg, "#jv-chunk"), await text(pg, "#jv-chunk"))
+            box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
+            check(tag + "the whole example is visible, with no scroll inside the card or sideways", box["h"] <= box["c"] + 1 and box["w"] <= box["cw"] + 1 and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"), box)
+            await pg.screenshot(path=str(SHOTS / f"lesson_seq_exemplu_{scheme}.png"))
+        if r["tip"] == "pas":
+            check(tag + "the steps card shows rows of plain text", await pg.locator("#jv-chunk pre.code").count() == 1)
+            await pg.screenshot(path=str(SHOTS / f"lesson_seq_pas_{scheme}.png"))
+        if r["tip"] == "ideea": await pg.screenshot(path=str(SHOTS / f"lesson_seq_ideea_{scheme}.png"))
+        if r["k"] == r["of"]: break
+        await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
+        check(tag + "after a sequence the app asks for the next one, with no window", "next_chunk" in (await texts(pg))[-1] and await ev(pg, f"{CTL}.audio.beeps") == [], await ev(pg, f"{CTL}.audio.beeps"))
+        r = await tool(pg, "next_chunk")
+    check(tag + "the chunk went problema, ideea, exemplu, cpp, punct in order", [x[0] for x in seen][:3] == ["problema", "ideea", "exemplu"] and seen[-1][0] == "punct", seen)
+    await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(100)
+    check(tag + "the window opens only after the last sequence", await ev(pg, f"{CTL}.audio.beeps") == ["window"])
+    check(tag + "the position moves only then", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 1)
     check(tag + "no page errors", not errs, errs)
     await ctx.close()
 
@@ -335,6 +382,7 @@ async def main():
         await app_logic(b)
         for scheme in ["light", "dark"]:
             await screens(b, scheme)
+            await sequences(b, scheme)
         await unfoldings(b)
         await artifact(b)
         await b.close()
