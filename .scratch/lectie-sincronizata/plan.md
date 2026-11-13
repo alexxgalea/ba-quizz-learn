@@ -8,3 +8,5 @@ Hotărât cu Alex, 13 noiembrie 2026 (la pornirea implementării):
 - Tichetul 10 rămâne semn de carte.
 
 Graful: 01 → {02, 04, 06, 07}; 02 → 05; {04, 05, 06, 07} → 08 → 11. Fiindcă tichetul 03 nu mai blochează, 08 așteaptă doar 04–07.
+
+Stare: 01, 02, 04, 05, 06, 07, 08 și 11 gata; 03 sărit (hotărârea lui Alex), 09 și 10 deschise.
