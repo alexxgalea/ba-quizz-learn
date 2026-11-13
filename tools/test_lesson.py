@@ -300,6 +300,12 @@ async def sequences(b, scheme):
         seen.append((r["tip"], r["k"], r["of"]))
         tip = await pg.locator("#jv-chunk").get_attribute("data-tip")
         check(tag + "the card on screen has the type of the sequence " + r["tip"], tip == r["tip"], tip)
+        if r["tip"] == "harta":
+            mp = await ev(pg, "window.PREP.desf.asyncio.map")
+            shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
+            check(tag + "the map card shows the module problem and every group while Jarvis says the map", mp["p"].replace("`", "")[:30] in shown and all(g["t"].replace("`", "")[:20] in shown for g in mp["g"]) and await pg.locator("#jv-chunk p").count() == 1 + len(mp["g"]), shown)
+            check(tag + "no placeholder while the map is spoken", "începe lecția" not in await text(pg, "main"))
+            await pg.screenshot(path=str(SHOTS / f"lesson_seq_harta_{scheme}.png"))
         if r["tip"] == "problema":
             check(tag + "the problem card has the problem text", it["p"].replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-chunk"))
         if r["tip"] == "exemplu":
@@ -315,10 +321,32 @@ async def sequences(b, scheme):
         await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
         check(tag + "after a sequence the app asks for the next one, with no window", "next_chunk" in (await texts(pg))[-1] and await ev(pg, f"{CTL}.audio.beeps") == [], await ev(pg, f"{CTL}.audio.beeps"))
         r = await tool(pg, "next_chunk")
-    check(tag + "the chunk went problema, ideea, exemplu, cpp, punct in order", [x[0] for x in seen][:3] == ["problema", "ideea", "exemplu"] and seen[-1][0] == "punct", seen)
+    check(tag + "the first chunk went harta, problema, ideea, exemplu, cpp, punct in order", [x[0] for x in seen][:4] == ["harta", "problema", "ideea", "exemplu"] and seen[-1][0] == "punct", seen)
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(100)
     check(tag + "the window opens only after the last sequence", await ev(pg, f"{CTL}.audio.beeps") == ["window"])
     check(tag + "the position moves only then", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 1)
+    # --- finalul: capcane, apoi recapitulare; lecția se încheie după recap
+    total = (await ev(pg, "window.PrepApp.sheet('asyncio')"))["total"]
+    await ev(pg, f"{CTL}.audio.beeps.length = 0")
+    await pg.click('[data-a="jv-mute"]'); await pg.wait_for_timeout(80)
+    for i in range(2, total + 1):
+        r = await tool(pg, "next_chunk")
+        while r["k"] < r["of"]:
+            await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(60)
+            r = await tool(pg, "next_chunk")
+        await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(60)
+    r = await tool(pg, "next_chunk")
+    check(tag + "the closing starts with the traps card", r["tip"] == "capcane" and await pg.locator('#jv-chunk[data-tip="capcane"]').count() == 1 and "Capcane la interviu" in await text(pg, "#jv-chunk"), r)
+    await pg.screenshot(path=str(SHOTS / f"lesson_seq_capcane_{scheme}.png"))
+    await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
+    check(tag + "after the traps the app asks for the recap and the lesson is not over", "next_chunk" in (await texts(pg))[-1] and await pg.locator("#jv-lesson").count() == 1)
+    r = await tool(pg, "next_chunk")
+    mp = await ev(pg, "window.PREP.desf.asyncio.map")
+    shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
+    check(tag + "the recap card shows the groups of the map, written by the app", r["tip"] == "recap" and await pg.locator('#jv-chunk[data-tip="recap"]').count() == 1 and all(g["t"].replace("`", "")[:20] in shown for g in mp["g"]) and "Recapitulare" in shown, shown)
+    await pg.screenshot(path=str(SHOTS / f"lesson_seq_recap_{scheme}.png"))
+    await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(120)
+    check(tag + "the lesson ends only after the recap was heard", await pg.locator("#jv-lesson").count() == 0 and (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 0, await text(pg, "main"))
     check(tag + "no page errors", not errs, errs)
     await ctx.close()
 
