@@ -2329,7 +2329,7 @@
     const a = b.dataset.a;
     switch (a) {
       case "jv-start": case "jv-stop": case "jv-pause": case "jv-resume": case "jv-stai": case "jv-type": case "jv-send": case "jv-again": case "jv-key-save": case "jv-key-clear": case "jv-key-test": case "jv-server-save": case "jv-server-clear": case "jv-mics":
-      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": jvAct(a, b); break;
+      case "jv-lesson": case "jv-lesson-reset": case "jv-repeat": case "jv-skip": case "jv-restart": case "jv-mute": case "jv-mode": jvAct(a, b); break;
       case "listen": ui.tab = "jarvis"; render(); window.scrollTo(0, 0); jvAct("jv-lesson", b); break;
       case "ask-open": case "ask-close": case "ask-new": case "ask-send": case "ask-sug": askAct(a, b); break;
       case "dz": case "dz-map": case "dz-all": dzAct(a, b); break;
@@ -2828,11 +2828,15 @@
   function jvChanged() {
     if (ui.tab !== "jarvis") return;
     const st = jv.getState(), L = st.lesson;
-    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost"].join(",")].join("|");
+    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost", L.mode, L.mode === "audio" ? "" : [L.k, L.card && L.card.tip, L.card && L.card.eticheta, L.card && L.card.continut].join(",")].join(",")].join("|");
     // Cât ține apăsat Vorbește, butonul nu se înlocuiește: ridicarea degetului ar ajunge pe un element dispărut.
     if (sig !== jvSig && !ui.jv.holding) { jvSig = sig; render(); } else jvPaint(st);
   }
+  // Subtitrarea vie: ultimele două rânduri spuse de Jarvis, sub cartonaș (se actualizează pe loc).
+  const subRows = L => (L.sub || []).map(x => "<p>" + esc(x) + "</p>").join(""), subKey = L => (L.sub || []).join("|");
+  const jvSub = L => '<div id="jv-sub" class="jv-sub small muted" aria-live="off" data-h="' + esc(subKey(L)) + '">' + subRows(L) + "</div>";
   function jvPaint(st) {
+    const sb = $("#jv-sub"); if (sb && st.lesson) { const h = subKey(st.lesson); if (sb.dataset.h !== h) { sb.dataset.h = h; sb.innerHTML = subRows(st.lesson); } }
     const orb = $("#jv-orb"); if (orb) orb.style.setProperty("--lv", Math.min(1, st.level * 4).toFixed(2));
     const ls = $("#jv-state"); if (ls && st.lesson && st.phase !== "ended") { const t = JV_LSTATE[st.lesson.status] || ""; if (ls.textContent !== t) ls.textContent = t; }
     const tr = $("#jv-tr"); if (tr) { const html = jvTranscript(st); if (tr.dataset.h !== html) { tr.dataset.h = html; tr.innerHTML = html; } }
@@ -2889,7 +2893,10 @@
     if (!rec) return "";
     const sub = rec.pos > 0 ? "Continuă " + rec.name + ", " + rec.pos + "/" + rec.total : rec.name + ", " + rec.total + " idei";
     const mods = MODS.filter(m => P.sheets[m.id] && P.sheets[m.id].points && P.sheets[m.id].points.length);
+    const mode = jvInit().settings.get().mode === "audio" ? "audio" : "ecran";
+    const modeBtn = (v, t) => '<button class="btn' + (mode === v ? " primary" : "") + '" data-a="jv-mode" data-v="' + v + '" aria-pressed="' + (mode === v) + '">' + t + "</button>";
     let h = '<section class="card stack-s"><h3>Lecție</h3><p class="small muted">Jarvis îți explică fișa unui modul cu voce tare, bucată cu bucată. Tu doar asculți. O poți opri sau poți întreba oricând.</p>' +
+      '<div class="jv-mode" id="jv-mode" role="group" aria-label="Cum asculți">' + modeBtn("ecran", "Cu ecran") + modeBtn("audio", "Doar audio") + '</div><p class="xs muted" id="jv-mode-h">' + (mode === "audio" ? "Jarvis povestește tot în cuvinte, inclusiv codul. Ecranul arată doar comenzile." : "Pe ecran apare textul fiecărei secvențe, iar Jarvis poate trimite la el.") + '</p>' +
       '<button class="btn primary block jv-rec" id="jv-rec" data-a="jv-lesson" data-m="' + rec.module + '"><span class="jv-rec-t">Ascultă lecția recomandată</span><span class="jv-rec-s">' + esc(sub) + "</span></button>" +
       (rec.pos > 0 ? '<button class="btn sm ghost" id="jv-rec-reset" data-a="jv-lesson-reset" data-m="' + rec.module + '">Resetează lecția</button>' : "") +
       '<details class="jv-lessons"><summary class="small">Alege altă temă (' + mods.length + ")</summary><div class=\"stack-s\" style=\"margin-top:8px\">" +
@@ -2897,6 +2904,19 @@
         (l.n > 0 ? '<button class="btn sm" data-a="jv-lesson-reset" data-m="' + m.id + '" aria-label="Resetează lecția ' + esc(m.short) + '">Resetează</button>' : "") + "</div>"; }).join("") +
       "</div></details></section>";
     return h;
+  }
+  // Cartonașul secvenței curente, după tip: cod colorat la exemplu, rânduri la pas, text în rest.
+  const JV_TIP = { problema: "Problema", ideea: "Ideea", exemplu: "Exemplu", analogie: "Analogie", pas: "Pas cu pas", cpp: "În C++", punct: "Punctul", harta: "Harta modulului", recap: "Recapitulare", intrebare: "Întrebarea ta" };
+  // Harta și recapitularea: rândurile „1–3: text” cu intervalul îngroșat; prima linie a hărții e problema modulului.
+  const jvRows = t => t.split("\n").map(x => { const m = /^(\d+(?:–\d+)?): (.*)$/.exec(x); return "<p>" + (m ? "<b>" + m[1] + "</b> " + inlineRich(m[2]) : inlineRich(x)) + "</p>"; }).join("");
+  function jvCard(L) {
+    const c = L.card;
+    if (!c) return '<div id="jv-chunk" class="jv-chunk jv-empty"></div>';
+    const lab = c.tip === "capcane" ? "" : '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + (L.of > 1 && c.tip !== "intrebare" ? " · " + L.k + "/" + L.of : "") + (c.eticheta ? ' · <b class="jv-mark">' + esc(c.eticheta) + "</b>" : "") + "</div>";
+    const body = c.tip === "exemplu" ? codeBlock(c.continut, isFE(L.module), true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
+      : c.tip === "capcane" ? "<b>Capcane la interviu</b>" + c.continut.split("\n").map(x => "<p>" + fmt(x) + "</p>").join("")
+      : c.tip === "harta" || c.tip === "recap" ? jvRows(c.continut) : c.tip === "intrebare" ? (c.continut ? '<p class="jv-q">' + esc(c.continut) + "</p>" : "") : inlineRich(c.continut);
+    return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
   }
   // În lecție: textul bucății curente, n/total, comenzile mari pentru o singură mână, transcrierea restrânsă.
   function vLessonActive(st) {
@@ -2907,8 +2927,7 @@
     else if (st.warn === "reconnecting") h += '<div class="jv-warn" role="status">Reconectare…</div>';
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
-    if (L.closing) h += '<div id="jv-chunk" class="jv-chunk"><b>Capcane la interviu</b>' + (L.traps.length ? L.traps.map(x => "<p>" + fmt(x) + "</p>").join("") : "<p>Recapitulare și rămas-bun.</p>") + "</div>";
-    else h += '<div id="jv-chunk" class="jv-chunk">' + (L.text ? inlineRich(L.text) : '<span class="muted">Jarvis începe lecția…</span>') + "</div>";
+    if (L.mode !== "audio") h += jvCard(L) + jvSub(L);        // doar audio: fără cartonaș, doar comenzile mari
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +
@@ -2971,6 +2990,7 @@
       case "jv-repeat": J.repeat(); break;
       case "jv-skip": J.skip(); break;
       case "jv-mute": J.setMuted(!J.settings.get().muted); break;
+      case "jv-mode": J.settings.set({ mode: b.dataset.v === "audio" ? "audio" : "ecran" }); render(); break;
       case "jv-stop": J.stop(); break;
       case "jv-pause": J.pause(); break;
       case "jv-resume": J.resume(); break;

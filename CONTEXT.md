@@ -62,6 +62,14 @@ _Avoid_: podcast, curs, explicație
 Unitatea unei lecții: un punct din fișă, dezvoltat de Jarvis cu un exemplu, fără fapte noi. Ideea principală deschide lecția, iar formulările de evitat o încheie, drept capcane.
 _Avoid_: segment, chunk, pas
 
+**Secvență**:
+O parte a unei bucăți: problema, ideea, exemplul, pașii sau comparația cu C++, spusă în 15–30 de secunde. Aplicația o dă modelului singură, cu `next_chunk`, și cere următoarea după ce s-a auzit; fereastra de ascultare vine doar după ultima.
+_Avoid_: segment, pas
+
+**Cartonaș**:
+Ce arată ecranul în timpul unei secvențe: exact textul sau codul din care vorbește Jarvis (tip și conținut). Același conținut ajunge la model, ca să se audă ce se vede.
+_Avoid_: card
+
 **Poziția lecției**:
 Prima bucată a unui modul pe care Alex n-a ascultat-o până la capăt; de acolo continuă lecția următoare, după o propoziție de recapitulare. Revine la început când fișa e ascultată toată.
 _Avoid_: progresul lecției, bookmark
