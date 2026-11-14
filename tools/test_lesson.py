@@ -321,9 +321,12 @@ async def sequences(b, scheme):
             check(tag + "no placeholder while the map is spoken", "începe lecția" not in await text(pg, "main"))
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_harta_{scheme}.png"))
         if r["tip"] == "problema":
-            check(tag + "the problem card has the problem text", it["p"].replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-chunk"))
+            # punctul 1 de la asyncio are tablă: cuvinte cheie, nu paragraful (tichetul 01, lectia-tabla)
+            kw = r["continut"]["cuvinte"]
+            shown = [x for x in (await text(pg, "#jv-chunk")).split("\n") if x.strip()]
+            check(tag + "the problem card is a board: only the keywords, no paragraph", isinstance(r["continut"], dict) and await pg.locator("#jv-chunk.jv-board .jv-kw li").count() == len(kw) and all(k in shown for k in kw) and it["p"].replace("`", "")[:30] not in " ".join(shown), shown)
         if r["tip"] == "exemplu":
-            check(tag + "the example card shows the whole code block, coloured", await pg.locator("#jv-chunk pre.code").count() == 1 and await pg.locator("#jv-chunk pre.code .ln").count() == len([l for l in r["continut"].split("\n")]) and "```" not in await text(pg, "#jv-chunk"), await text(pg, "#jv-chunk"))
+            check(tag + "the example card shows the whole code block, coloured", await pg.locator("#jv-chunk pre.code").count() == 1 and await pg.locator("#jv-chunk pre.code .ln").count() == len(r["continut"]["cod"].split("\n")) and "```" not in await text(pg, "#jv-chunk"), await text(pg, "#jv-chunk"))
             box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
             check(tag + "the whole example is visible, with no scroll inside the card or sideways", box["h"] <= box["c"] + 1 and box["w"] <= box["cw"] + 1 and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"), box)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_exemplu_{scheme}.png"))
@@ -335,7 +338,13 @@ async def sequences(b, scheme):
         if r["tip"] == "pas":
             check(tag + "the steps card shows rows of plain text", await pg.locator("#jv-chunk pre.code").count() == 1)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_pas_{scheme}.png"))
-        if r["tip"] == "ideea": await pg.screenshot(path=str(SHOTS / f"lesson_seq_ideea_{scheme}.png"))
+        if r["tip"] == "ideea":
+            words = [w for w in (await text(pg, "#jv-chunk")).split()[3:] if w != "↓"]      # fără eticheta „Ideea · 3/6” și săgeți
+            check(tag + "the idea board has its keywords and the whole scheme, in about 25 words at most", await pg.locator("#jv-chunk .jv-kw li").count() == len(r["continut"]["cuvinte"]) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(r["continut"]["schema"].split("\n")) and len(words) <= 25, words)
+            box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
+            check(tag + "the whole board is visible at 360 px, no scroll inside the card or sideways", box["h"] <= box["c"] + 1 and box["w"] <= box["cw"] + 1 and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"), box)
+            await pg.screenshot(path=str(SHOTS / f"lesson_seq_ideea_{scheme}.png"))
+            await pg.locator("#jv-chunk").screenshot(path=str(SHOTS / f"lesson_board_{scheme}.png"))
         if r["k"] == r["of"]: break
         await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
         check(tag + "after a sequence the app asks for the next one, with no window", "next_chunk" in (await texts(pg))[-1] and await ev(pg, f"{CTL}.audio.beeps") == [], await ev(pg, f"{CTL}.audio.beeps"))

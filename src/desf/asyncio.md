@@ -28,6 +28,21 @@ aio.run(main())
 În C++: Un event loop de mână e o buclă `while` în jurul lui `epoll_wait` sau `select` (API-uri POSIX, nu C++): așteaptă mai mulți descriptori, apoi cheamă handlerul celui pregătit.
 Unde nu ține: Handlerul C++ e un callback, deci păstrezi tu starea între apeluri, într-o structură. O corutină își păstrează variabilele locale între `await`-uri.
 Legătură: AIO-01 și GIL-14. În JavaScript, event loop-ul rulează tot pe un singur thread, iar un job se termină înainte să înceapă altul.
+Tablă:
+- problema: 1.000 de conexiuni; un thread pe conexiune
+- ideea: un singur thread; await cedează bucla
+- schemă:
+```text
+A rulează
+↓ await
+A se suspendă
+↓ bucla alege B
+B rulează
+↓ I/O gata
+bucla reia A
+```
+- cpp: epoll_wait
+- punct: concurență cooperativă
 
 ### 2
 Greu: da

@@ -223,6 +223,76 @@ test("Pas cu pas: at most 8 short lines, and not empty", () => {
   has(feErrs(doc(MAP, item(1, { pas: "Pas cu pas:\n" }), item(2), item(3))), /punctul 1.*Pas cu pas.*gol/);
 });
 
+// Tablă: cuvintele cheie și schema din lecție. Itemul de bază are Exemplu (fără Analogie, fără În C++), deci cere problema, ideea și punct.
+const TAB = (...lines) => "Tablă:\n" + lines.join("\n");
+const TAB_OK = [TAB("- problema: două cuvinte; alt cuvânt", "- ideea: ideea mea", "- punct: încheierea")];
+
+test("Tablă: parsed into keywords per sequence and a schema without fences, not counted in the words", () => {
+  const t = TAB("- problema: 1.000 de conexiuni; un thread pe conexiune", "- ideea: await cedează bucla", "- schemă:", fence("text", "A rulează", "↓ await", "B rulează"), "- punct: concurență cooperativă");
+  const d = parseDesf(doc(MAP, item(1, { tab: t }), item(2), item(3)), "oop.md");
+  assert.deepEqual(d.items[0].tab, { problema: ["1.000 de conexiuni", "un thread pe conexiune"], ideea: ["await cedează bucla"], schema: "A rulează\n↓ await\nB rulează", punct: ["concurență cooperativă"] });
+  assert.equal(d.items[0].tabErr, undefined);
+  assert.equal(d.items[1].tab, undefined);
+  assert.deepEqual(errs(doc(MAP, item(1, { tab: t }), item(2), item(3))), []);
+  // item (60) + 80 de cuvinte de tablă ar depăși 100: trece doar dacă tabla nu se numără
+  assert.deepEqual(errs(doc(MAP, item(1, { tab: TAB("- problema: a b c d; a b c d", "- ideea: a b c d; a b c d", "- punct: a b c d") }), item(2), item(3))), []);
+});
+
+test("Tablă: a Tablă-looking line inside the schema fence is not read as a key", () => {
+  const t = TAB("- problema: a", "- ideea: b", "- schemă:", fence("text", "- punct: nu e cheie"), "- punct: c");
+  const d = parseDesf(doc(MAP, item(1, { tab: t }), item(2), item(3)), "oop.md");
+  assert.deepEqual(d.items[0].tab.punct, ["c"]);
+  assert.equal(d.items[0].tab.schema, "- punct: nu e cheie");
+});
+
+test("Tablă: asks for the keywords of every sequence the point has (problema, ideea, punct; cpp with În C++, analogie without Exemplu)", () => {
+  const withTab = (over, ...lines) => doc(MAP, item(1, Object.assign({ tab: TAB(...lines) }, over)), item(2), item(3));
+  const base = ["- problema: a", "- ideea: b", "- punct: c"];
+  assert.deepEqual(errs(withTab({}, ...base)), []);
+  has(errs(withTab({}, "- ideea: b", "- punct: c")), /punctul 1.*Tablă.*problema/);
+  has(errs(withTab({}, "- problema: a", "- ideea: b")), /punctul 1.*Tablă.*punct/);
+  has(errs(withTab({ cpp: "În C++: " + w(5), nu: "Unde nu ține: " + w(5) }, ...base)), /punctul 1.*Tablă.*cpp/);
+  has(errs(withTab({}, ...base, "- cpp: x")), /punctul 1.*Tablă.*cpp.*nu are secvență/);
+  has(errs(withTab({ ex: null, an: "Analogie: " + w(20) }, ...base)), /punctul 1.*Tablă.*analogie/);
+  assert.deepEqual(errs(withTab({}, "- problema: a", "- ideea: b", "- punct: c")), []);
+});
+
+test("Tablă: 1–2 keywords per sequence, at most 4 words each, at most 6 on the point", () => {
+  const withTab = (...lines) => errs(doc(MAP, item(1, { tab: TAB(...lines) }), item(2), item(3)));
+  has(withTab("- problema: ", "- ideea: b", "- punct: c"), /punctul 1.*Tablă.*problema.*cel puțin 1/);
+  has(withTab("- problema: a; b; c", "- ideea: b", "- punct: c"), /punctul 1.*Tablă.*problema.*3.*maxim 2/);
+  has(withTab("- problema: a b c d e", "- ideea: b", "- punct: c"), /punctul 1.*Tablă.*„a b c d e”.*5 cuvinte.*maxim 4/);
+  const cpp = { cpp: "În C++: " + w(5), nu: "Unde nu ține: " + w(5) };
+  const seven = errs(doc(MAP, item(1, Object.assign({ tab: TAB("- problema: a; b", "- ideea: c; d", "- cpp: e", "- punct: f; g") }, cpp)), item(2), item(3)));
+  has(seven, /punctul 1.*Tablă.*7 cuvinte cheie.*maxim 6/);
+  assert.deepEqual(errs(doc(MAP, item(1, Object.assign({ tab: TAB("- problema: a; b", "- ideea: c; d", "- cpp: e", "- punct: f") }, cpp)), item(2), item(3))), []);
+});
+
+test("Tablă: the schema is at most 8 rows of 36 characters, not empty, and not together with Pas cu pas", () => {
+  const withTab = (schema, over = {}) => errs(doc(MAP, item(1, Object.assign({ tab: TAB("- problema: a", "- ideea: b", "- schemă:", schema, "- punct: c") }, over)), item(2), item(3)));
+  assert.deepEqual(withTab(fence("text", ...Array(8).fill("x".repeat(36)))), []);
+  has(withTab(fence("text", ...Array(9).fill("x"))), /punctul 1.*Tablă.*schema.*9 rânduri.*8/);
+  has(withTab(fence("text", "x".repeat(37))), /punctul 1.*Tablă.*schema.*rândul 1.*37.*36/);
+  has(withTab(fence("python", "x = 1")), /punctul 1.*Tablă.*schema.*text/);
+  has(withTab("de fapt text liber"), /punctul 1.*Tablă.*schema/);
+  has(withTab(fence("text", "x"), { pas: "Pas cu pas:\n" + fence("text", "a", "b") }), /punctul 1.*Tablă.*schema.*Pas cu pas/);
+});
+
+test("Tablă: unreadable lines are reported, not dropped", () => {
+  has(errs(doc(MAP, item(1, { tab: TAB("- problema: a", "- ideea: b", "- punct: c", "rând fără cheie") }), item(2), item(3))), /punctul 1.*Tablă.*rând fără cheie/);
+  has(errs(doc(MAP, item(1, { tab: TAB("- problema: a", "- problema: z", "- ideea: b", "- punct: c") }), item(2), item(3))), /punctul 1.*Tablă.*problema.*de două ori/);
+  has(errs(doc(MAP, item(1, { tab: TAB("- problema: a", "- ideea: b", "- punct: c", "- altceva: x") }), item(2), item(3))), /punctul 1.*Tablă.*altceva/);
+});
+
+test("Tablă: the real asyncio file has the board on point 1 and only there (for now)", () => {
+  const root = new URL("../../", import.meta.url), P = loadData(root);
+  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.asyncio.items;
+  assert.deepEqual(r.errors, []);
+  assert.ok(it[0].tab && it[0].tab.schema, "punctul 1 are tablă cu schemă");
+  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), [1]);
+  assert.equal(it[0].tabErr, undefined);
+});
+
 test("the real data passes the rules", () => {
   const root = new URL("../../", import.meta.url);
   const P = loadData(root);

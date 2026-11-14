@@ -6,11 +6,11 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Formatul fixat, cu un exemplu în README › Desfășurări; `parseDesf` / `checkDesf` / `buildDesf` îl cunosc; `validate.mjs` cere 1–2 cuvinte cheie pe secvență, ≤ 4 cuvinte fiecare, ≤ 6 pe punct, schemă ≤ 8 rânduri × 36 de caractere.
-- [ ] Teste în `tools/unit/desf.test.mjs` pentru parser și limite; la `asyncio`, un test pe fișierul real.
-- [ ] `lessonSequences` întoarce secvențe cu `continut = { cuvinte, schema?, cod? }` la punctul cu tablă și textul de azi la restul; test pe fișe reale.
-- [ ] Prompt: modelul primește cuvintele cheie și schema, nu paragraful; instrucțiunea cere să povestească în jurul lor.
-- [ ] `jvBoard` randează tabla; nicio linie de text lung; 360 px, light și dark, fără scroll orizontal.
-- [ ] `CONTEXT.md` (Tablă, Cartonaș) și `docs/imbunatatire.md` (principiul 3) corectate.
+- [x] Formatul fixat, cu un exemplu în README › Desfășurări; `parseDesf` / `checkDesf` / `buildDesf` îl cunosc; `validate.mjs` cere 1–2 cuvinte cheie pe secvență, ≤ 4 cuvinte fiecare, ≤ 6 pe punct, schemă ≤ 8 rânduri × 36 de caractere.
+- [x] Teste în `tools/unit/desf.test.mjs` pentru parser și limite; la `asyncio`, un test pe fișierul real.
+- [x] `lessonSequences` întoarce secvențe cu `continut = { cuvinte, schema?, cod? }` la punctul cu tablă și textul de azi la restul; test pe fișe reale.
+- [x] Prompt: modelul primește cuvintele cheie și schema, nu paragraful; instrucțiunea cere să povestească în jurul lor.
+- [x] `jvBoard` randează tabla; nicio linie de text lung; 360 px, light și dark, fără scroll orizontal.
+- [x] `CONTEXT.md` (Tablă, Cartonaș) și `docs/imbunatatire.md` (principiul 3) corectate.
