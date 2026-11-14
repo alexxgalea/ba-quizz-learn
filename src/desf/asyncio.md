@@ -33,8 +33,8 @@ Tablă:
 - ideea: un singur thread; await cedează bucla
 - schemă:
 ```text
-corutina A rulează
-↓ await (așteaptă I/O)
+A rulează
+↓ await
 A se suspendă
 ↓ bucla alege B
 B rulează

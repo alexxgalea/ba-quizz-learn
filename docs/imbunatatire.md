@@ -75,7 +75,7 @@ Hotărât (ADR 0005): în formele noi (adâncire, reamintire liberă, fazele de 
 - **Adâncire**: pasul scurt, supravegheat de AI, care urmează unei grile și urcă punctul pe treapta următoare. _Avoid_: întrebare de continuare (e a intervievatorului).
 - **Sesiune ghidată**: firul zilnic care leagă scadențe, grile cu adânciri, o sarcină de cod și reamintirea liberă.
 - **Secvență**: o parte a unei bucăți de lecție (problema, ideea, exemplul, pașii), spusă în 15–30 de secunde. _Avoid_: segment, pas.
-- **Cartonaș**: ce arată ecranul în timpul unei secvențe; sursa din care vorbește Jarvis. _Avoid_: card (cardul e oral).
+- **Cartonaș**: ce arată ecranul în timpul unei secvențe; la punctele cu **Tablă** e tabla (cuvinte cheie, schemă, cod), la celelalte textul din care vorbește Jarvis. _Avoid_: card (cardul e oral).
 - **Live coding supravegheat**: un kata lucrat în faze, cu intervievatorul AI care urmărește codul.
 - **Scenariu în faze**: un scenariu de design parcurs pe etape, cu verdict pe fiecare.
 - **Răsturnare**: o constrângere schimbată după ce Alex a dat soluția („acum citirile cresc de 100 de ori”).
@@ -260,9 +260,9 @@ Ecranul lecției arată `sheet.points[n - 1]`: una-două propoziții. Modelul pr
    | `recap` | cele trei propoziții de recapitulare, pe puncte |
 
 2. **Bucata se împarte în secvențe.** O secvență e un câmp al desfășurării. Aplicația le dă pe rând, modelul nu vede secvența următoare. Fiecare durează 15–30 de secunde. Ordinea: problema → ideea → exemplu sau analogie → pas → cpp → punct. Câmpurile care lipsesc se sar.
-3. **Jarvis vorbește din cartonaș.** Instrucțiunea pe secvență: spune doar ce e pe cartonaș, în ordinea de pe cartonaș. Pe modul „Cu ecran” are voie să trimită la ecran („rândul al treilea”).
+3. **Jarvis vorbește în jurul cartonașului.** Instrucțiunea pe secvență: la punctele fără tablă, spune doar ce e pe cartonaș, în ordinea lui; la cele cu tablă, povestește în jurul cuvintelor cheie și al schemei, fără să le citească (`.scratch/lectia-tabla/`). Pe modul „Cu ecran” are voie să trimită la ecran („rândul al treilea”).
 4. **Cartonașul se schimbă când începe sunetul lui.** Aplicația ține cartonașul următor în așteptare la `deliver` și îl afișează la trecerea lui `Call` în `speaking` pentru acel tur. Cel vechi rămâne până atunci.
-5. **Subtitrare vie.** Sub cartonaș, ultimele două rânduri din transcrierea modelului (`outputAudioTranscription` e deja pornită în `live.js`). Deschisă implicit; blocul „Transcriere” de azi rămâne ca istoric.
+5. **Subtitrare vie.** Sub cartonaș, ultimele două rânduri din transcrierea modelului (`outputAudioTranscription` e deja pornită în `live.js`). Era deschisă implicit; după feedbackul lui Alex din 14 noiembrie 2026 e oprită implicit (tichetul 03 din `.scratch/lectia-tabla/`). Blocul „Transcriere” rămâne ca istoric.
 6. **Două moduri declarate**, alese la pornire și ținute minte în `onapsis-jarvis-v1`:
    - **Cu ecran**: regulile de mai sus.
    - **Doar audio** (metrou, telefonul în buzunar): Jarvis povestește codul în cuvinte, nu trimite niciodată la ecran, iar ecranul arată doar comenzile mari. Secvențele rămân, ca ritmul să fie același.
