@@ -1810,3 +1810,18 @@ test("the system instructions do not ask for a minute-long chunk: length and rhy
     assert.match(sys, /bucată[^.]*secvențe[^.]*instruction/);
   }
 });
+
+test("a short keyword (up to 4 letters) matches the whole word or its plural and definite forms, not an unrelated word that starts with it", () => {
+  const said = (kw, text) => Jarvis.keywordSaid(kw, Jarvis.tokensOf(text));
+  for (const [kw, text] of [["for", "o buclă for"], ["set", "un set de valori"], ["set", "două seturi"], ["task", "un task nou"], ["task", "trei tasks"], ["task", "taskul rulează"], ["std", "std::vector"], ["Loop", "loop-ul"]])
+    assert.equal(said(kw, text), true, kw + " / " + text);
+  for (const [kw, text] of [["for", "alt format"], ["set", "o setare nouă"], ["std", "citește din stdin"], ["task", "un taskbar"], ["loop", "loophole"]])
+    assert.equal(said(kw, text), false, kw + " / " + text);
+});
+
+test("the longer forms of a longer keyword and keywords without a word of 3 letters keep working", () => {
+  const said = (kw, text) => Jarvis.keywordSaid(kw, Jarvis.tokensOf(text));
+  assert.equal(said("cedează bucla", "cedeaza controlul buclei"), true);
+  assert.equal(said("conexiuni deschise", "o conexiune deschisă"), true);
+  assert.equal(said("I/O", "orice"), false);                           // fără cuvânt de 3+ litere: apare doar la `spoken`
+});

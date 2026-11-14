@@ -109,13 +109,16 @@ const Jarvis = (() => {
         + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Nu enumera tot ce e pe tablă. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
   }
   // Cuvintele cheie ale tablei apar când sunt spuse: potrivire pe transcrierea modelului, în litere mici, fără diacritice, pe rădăcina cuvântului
-  // (fără ultimele 3 litere, cel puțin 4 rămân). Un cuvânt cheie e spus când toate cuvintele lui de cel puțin 3 litere, fără cifre, au rădăcina într-un cuvânt din transcriere.
+  // (fără ultimele 3 litere, cel puțin 4 rămân; cuvintele de cel mult 4 litere se potrivesc întregi, cu terminații de plural / articol). Un cuvânt cheie e spus când toate cuvintele lui de cel puțin 3 litere, fără cifre, au rădăcina într-un cuvânt din transcriere.
   const fold = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const tokensOf = s => fold(s).split(/[^a-z0-9]+/).filter(Boolean);
+  const SHORT_END = /^(s|es|i|e|ul|uri|ului|urile|ii|le|lui|ri)$/;       // terminațiile de plural și de articol ale cuvintelor scurte
   const rootOf = w => (w.length <= 4 ? w : w.slice(0, Math.max(4, w.length - 3)));
   function keywordSaid(kw, toks) {
     const sig = tokensOf(kw).filter(w => w.length >= 3 && !/\d/.test(w));
-    return sig.length > 0 && sig.every(w => { const r = rootOf(w); return toks.some(x => x.startsWith(r)); });
+    return sig.length > 0 && sig.every(w => w.length <= 4
+      ? toks.some(x => x === w || (x.startsWith(w) && SHORT_END.test(x.slice(w.length))))        // „for” nu e în „format”, „set” nu e în „setare”
+      : toks.some(x => x.startsWith(rootOf(w))));
   }
   const unfence = c => { const m = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(String(c)); return (m ? m[1] : String(c)).replace(/\s+$/, ""); };
   // Secvențele bucății n (1..total) a unei fișe { points, desf? }; `audio` schimbă doar instrucțiunile (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
@@ -648,6 +651,6 @@ const Jarvis = (() => {
     };
   }
 
-  return { create, buildSystem, buildLessonSystem, lessonSequences, SEQ_GAP_MS };
+  return { create, buildSystem, buildLessonSystem, lessonSequences, keywordSaid, tokensOf, SEQ_GAP_MS };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Jarvis;
