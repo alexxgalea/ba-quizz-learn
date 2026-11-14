@@ -6,9 +6,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Test cu ceas fals: următoarea secvență se cere după `SEQ_GAP_MS`, nu imediat; fereastra de ascultare de la finalul bucății rămâne ca azi.
-- [ ] Repetă, Pauză, Sari, Vorbește și o întrebare în timpul așteptării o anulează, fără secvență cerută de două ori.
-- [ ] Instrucțiunile cer ritm lent și o singură idee; testul „Doar audio” (fără cuvinte care trimit la ecran) rămâne verde.
-- [ ] `SEQ_GAP_MS` e o constantă într-un singur loc, ușor de schimbat după probă.
+- [x] Test cu ceas fals: următoarea secvență se cere după `SEQ_GAP_MS`, nu imediat; fereastra de ascultare de la finalul bucății rămâne ca azi.
+- [x] Repetă, Pauză, Sari, Vorbește și o întrebare în timpul așteptării o anulează, fără secvență cerută de două ori.
+- [x] Instrucțiunile cer ritm lent și o singură idee; testul „Doar audio” (fără cuvinte care trimit la ecran) rămâne verde.
+- [x] `SEQ_GAP_MS` e o constantă într-un singur loc, ușor de schimbat după probă.

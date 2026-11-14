@@ -10,6 +10,7 @@ const Call = require("../../src/call.js");
 const Jarvis = require("../../src/jarvis.js");
 
 const MIN = 60000;
+const GAP = Jarvis.SEQ_GAP_MS;
 
 function setup(over = {}) {
   const t = { live: fakeLive(), audio: fakeAudio(), clock: fakeClock(), app: stubApp(), storage: memoryStorage({ "onapsis-gemini-v1": "KEY" }), changes: 0 };
@@ -30,7 +31,7 @@ async function deliver(t, tool = "next_chunk") { const r = await t.tool(tool); s
 // O bucată întreagă, pe secvențe: toate se spun până la capăt; întoarce ultimul rezultat, cu `.seqs` = toate rezultatele.
 async function play(t, tool = "next_chunk") { const all = [await deliver(t, tool)]; while (all.at(-1).k < all.at(-1).of) all.push(await deliver(t)); return Object.assign({}, all.at(-1), { seqs: all }); }
 // La fel, dar ultima secvență a bucății nu se spune încă (testele o spun ele, ca să vadă fereastra).
-async function chunk(t, tool = "next_chunk") { const all = [await t.tool(tool)]; while (all.at(-1).k < all.at(-1).of) { speak(t); all.push(await t.tool("next_chunk")); } return Object.assign({}, all.at(-1), { seqs: all }); }
+async function chunk(t, tool = "next_chunk") { const all = [await t.tool(tool)]; while (all.at(-1).k < all.at(-1).of) { speak(t); t.clock.advance(GAP); all.push(await t.tool("next_chunk")); } return Object.assign({}, all.at(-1), { seqs: all }); }
 // Mesajele aplicației către model, fără cererea de secvență următoare din mijlocul unei bucăți.
 const moves = t => t.texts().filter(x => !/^Continuă:/.test(x));
 async function begin(t, module = "django") { await t.jarvis.start({ mode: "lesson", module }); return t; }
@@ -933,7 +934,7 @@ test("next_chunk on asyncio gives one sequence with its place in the chunk and t
 
 test("after a sequence is spoken the app asks for the next one and does not open the window", async () => {
   const t = await begin(setup(), "asyncio");
-  await t.tool("next_chunk"); speak(t);
+  await t.tool("next_chunk"); speak(t); t.clock.advance(GAP);
   assert.deepEqual([t.audio.beeps, /next_chunk/.test(t.texts().at(-1)), t.app.pos.asyncio || 0], [[], true, 0]);
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.n, r.k, r.tip], [1, 2, "problema"]);
@@ -952,7 +953,7 @@ test("the listening window opens only after the last sequence, which also writes
 test("on Mut the sequences and then the next chunk follow without a window", async () => {
   const t = setup(); t.jarvis.settings.set({ muted: true });
   await begin(t, "asyncio");
-  for (let k = 1; k <= 6; k++) await deliver(t);
+  for (let k = 1; k <= 6; k++) { await deliver(t); t.clock.advance(GAP); }
   assert.deepEqual([t.audio.beeps, t.app.pos.asyncio, /next_chunk/.test(t.texts().at(-1))], [[], 1, true]);
 });
 
@@ -1039,6 +1040,97 @@ test("a question between sequences restarts the chunk from its first sequence", 
   assert.match(t.texts().at(-1), /repeat_chunk/);
   const r = await t.tool("repeat_chunk");
   assert.deepEqual([r.n, r.k], [1, 1]);
+});
+
+// ---------- ritmul: pauza dintre secvențe (tichetul 04) ----------
+
+const seqAsks = t => t.texts().filter(x => /^Continuă:/.test(x)).length;
+
+test("SEQ_GAP_MS is a single constant of about two seconds", () => {
+  assert.deepEqual([typeof GAP, GAP >= 1000 && GAP <= 4000], ["number", true]);
+});
+
+test("the next sequence is asked for only after SEQ_GAP_MS, not right after the model finishes", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  assert.equal(seqAsks(t), 0);
+  t.clock.advance(GAP - 1);
+  assert.equal(seqAsks(t), 0);
+  t.clock.advance(1);
+  assert.equal(seqAsks(t), 1);
+  t.clock.advance(10 * GAP);
+  assert.equal(seqAsks(t), 1);
+});
+
+test("the gap also applies on Mut and in audio mode", async () => {
+  for (const over of [{ muted: true }, { mode: "audio" }]) {
+    const t = setup(); t.jarvis.settings.set(over);
+    await begin(t, "asyncio");
+    await t.tool("next_chunk"); speak(t);
+    assert.equal(seqAsks(t), 0);
+    t.clock.advance(GAP);
+    assert.equal(seqAsks(t), 1);
+  }
+});
+
+test("the listening window after the last sequence is unchanged, with no extra gap", async () => {
+  const t = await begin(setup(), "asyncio");
+  for (let k = 1; k <= 5; k++) { await deliver(t); t.clock.advance(GAP); }
+  await deliver(t);
+  assert.deepEqual([t.audio.beeps, seqAsks(t)], [["window"], 5]);
+  t.clock.advance(3100);
+  assert.match(t.texts().at(-1), /next_chunk/);
+});
+
+test("the model asking for the next sequence on its own during the gap does not get a second request", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  const r = await t.tool("next_chunk");
+  assert.equal(r.k, 2);
+  t.clock.advance(5 * GAP);
+  assert.equal(seqAsks(t), 0);
+});
+
+test("Pauză during the gap cancels it, and Reia restarts the chunk without a sequence asked twice", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.jarvis.pause();
+  t.clock.advance(5 * GAP);
+  assert.equal(seqAsks(t), 0);
+  await t.jarvis.resume();
+  t.clock.advance(5 * GAP);
+  assert.deepEqual([seqAsks(t), /repeat_chunk/.test(t.texts().at(-1))], [0, true]);
+});
+
+test("Repetă and Sari during the gap cancel it", async () => {
+  for (const [act, re] of [["repeat", /repeat_chunk/], ["skip", /next_chunk/]]) {
+    const t = await begin(setup(), "asyncio");
+    await deliver(t);
+    t.jarvis[act]();
+    t.clock.advance(5 * GAP);
+    assert.deepEqual([seqAsks(t), re.test(t.texts().at(-1))], [0, true]);
+  }
+});
+
+test("Vorbește during the gap cancels it, and the answer is followed by the chunk restarted once", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.jarvis.talk(true);
+  t.clock.advance(GAP);
+  assert.equal(seqAsks(t), 0);
+  t.jarvis.talk(false);
+  speak(t);
+  t.clock.advance(5 * GAP);
+  assert.deepEqual([seqAsks(t), t.texts().filter(x => /repeat_chunk/.test(x)).length], [0, 1]);
+});
+
+test("losing the connection during the gap cancels it", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
+  assert.equal(t.state().phase, "paused");
+  t.clock.advance(5 * GAP);
+  assert.equal(seqAsks(t), 0);
 });
 
 // ---------- toate modulele pe secvențe (tichetul 08) ----------

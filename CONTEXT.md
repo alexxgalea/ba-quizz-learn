@@ -63,7 +63,7 @@ Unitatea unei lecții: un punct din fișă, dezvoltat de Jarvis cu un exemplu, f
 _Avoid_: segment, chunk, pas
 
 **Secvență**:
-O parte a unei bucăți: problema, ideea, exemplul, pașii sau comparația cu C++, spusă în 15–30 de secunde. Aplicația o dă modelului singură, cu `next_chunk`, și cere următoarea după ce s-a auzit; fereastra de ascultare vine doar după ultima.
+O parte a unei bucăți: problema, ideea, exemplul, pașii sau comparația cu C++, spusă în 10–15 secunde, cu o singură idee. Aplicația o dă modelului singură, cu `next_chunk`, și cere următoarea după ce s-a auzit și după o pauză scurtă (`SEQ_GAP_MS`); fereastra de ascultare vine doar după ultima.
 _Avoid_: segment, pas
 
 **Cartonaș**:

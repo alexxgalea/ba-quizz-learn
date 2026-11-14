@@ -33,6 +33,8 @@ const Jarvis = (() => {
   // Lecția: cât durează fereastra de ascultare, cât așteaptă o întrebare fără răspuns, cât rămâne valabilă o pauză (după ea bucata se reia de la început)
   // și pauzele dintre încercările de reconectare (în total ~60 s; celelalte moduri păstrează cele trei încercări din GeminiLive).
   const WINDOW_MS = 3000, ASK_WAIT_MS = 12000, PAUSE_KEEP_MS = 10 * 60000;
+  // Ritmul lecției: pauza dintre două secvențe ale aceleiași bucăți (după `spoken`, înainte să se ceară următoarea). Se ajustează după proba lui Alex.
+  const SEQ_GAP_MS = 2000;
   const RETRY_LESSON = [500, 1000, 2000, 3000, 4000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000];
   // Ce îi spune aplicația modelului ca să ducă lecția mai departe.
   const MSG = {
@@ -52,7 +54,7 @@ const Jarvis = (() => {
   // Un singur șablon pentru ambele moduri: cu ecran sursa e „de pe cartonaș”, doar audio e „din material” și nu există nicio trimitere vizuală (codul se povestește în cuvinte).
   const seqKit = audio => {
     const src = audio ? "din material" : "de pe cartonaș";
-    const rule = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș") + ", în 15–30 de secunde, cu vorbele tale."
+    const rule = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș") + ", în 10–15 secunde, cu o singură idee, cu vorbele tale. Vorbește rar, în propoziții scurte, cu pauze, și nu enumera tot ce ai în față."
       + (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale." : "")
       + " Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
     const instr = {
@@ -318,7 +320,7 @@ const Jarvis = (() => {
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
       return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
-    function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } }
+    function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } if (lz.gapTimer) { lz.gapTimer(); lz.gapTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
     function quiet() {
       if (!lz) return;
@@ -358,7 +360,12 @@ const Jarvis = (() => {
       if (c && c.delivering) {
         c.delivering = false;
         // Mijlocul unei bucăți pe secvențe: se cere secvența următoare; fereastra și poziția așteaptă ultima.
-        if (c.seqs && c.k < c.seqs.length) { c.advance = true; sess.call.say(MSG.seq); sync(); return; }
+        // Între ele e o pauză (SEQ_GAP_MS), anulată de orice întrerupere (cancelTimers).
+        if (c.seqs && c.k < c.seqs.length) {
+          c.advance = true;
+          lz.gapTimer = env.clock.after(SEQ_GAP_MS, () => { lz.gapTimer = null; if (lz.cur === c && c.advance && !lz.paused && !lz.lost) sess.call.say(MSG.seq); });
+          sync(); return;
+        }
         if (c.n <= lz.total) { lz.heard.add(c.n); env.app.lessonHeard(lz.module, c.n); }
         else { lz.closingHeard = true; env.app.lessonDone(lz.module); sess.call.end(); return; }
         afterChunk();
@@ -495,7 +502,7 @@ const Jarvis = (() => {
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
         muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
-        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
+        winTimer: null, askTimer: null, gapTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
       // deci primul `getToken` din sesiune îl întoarce pe acesta, iar următoarele (reconectări, redeschidere) cer altul.
@@ -579,6 +586,6 @@ const Jarvis = (() => {
     };
   }
 
-  return { create, buildSystem, buildLessonSystem, lessonSequences };
+  return { create, buildSystem, buildLessonSystem, lessonSequences, SEQ_GAP_MS };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Jarvis;
