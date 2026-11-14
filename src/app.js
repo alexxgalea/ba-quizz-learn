@@ -2828,7 +2828,7 @@
   function jvChanged() {
     if (ui.tab !== "jarvis") return;
     const st = jv.getState(), L = st.lesson;
-    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost", L.mode, L.mode === "audio" ? "" : [L.k, L.card && L.card.tip, L.card && L.card.eticheta, L.card && (typeof L.card.continut === "object" ? JSON.stringify(L.card.continut) : L.card.continut)].join(",")].join(",")].join("|");
+    const sig = [st.phase, st.card && st.card.id, st.error && st.error.code, st.warn, st.needKey, st.results.length, ui.jv.typing, L && [L.n, L.muted, L.closing, L.heard, L.status === "lost", L.mode, L.mode === "audio" ? "" : [L.k, L.card && L.card.tip, L.card && L.card.eticheta, L.card && (Jarvis.isBoardCard(L.card) ? JSON.stringify(L.card.continut) : L.card.continut)].join(",")].join(",")].join("|");
     // Cât ține apăsat Vorbește, butonul nu se înlocuiește: ridicarea degetului ar ajunge pe un element dispărut.
     if (sig !== jvSig && !ui.jv.holding) { jvSig = sig; render(); } else jvPaint(st);
   }
@@ -2920,11 +2920,11 @@
     const c = L.card;
     if (!c) return '<div id="jv-chunk" class="jv-chunk jv-empty"></div>';
     const lab = c.tip === "capcane" ? "" : '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + (L.of > 1 && c.tip !== "intrebare" ? " · " + L.k + "/" + L.of : "") + (c.eticheta ? ' · <b class="jv-mark">' + esc(c.eticheta) + "</b>" : "") + "</div>";
-    const body = c.continut && typeof c.continut === "object" ? jvBoard(c.continut, L)
+    const body = Jarvis.isBoardCard(c) ? jvBoard(c.continut, L)
       : c.tip === "exemplu" ? codeBlock(c.continut, isFE(L.module), true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
       : c.tip === "capcane" ? "<b>Capcane la interviu</b>" + c.continut.split("\n").map(x => "<p>" + fmt(x) + "</p>").join("")
       : c.tip === "harta" || c.tip === "recap" ? jvRows(c.continut) : c.tip === "intrebare" ? (c.continut ? '<p class="jv-q">' + esc(c.continut) + "</p>" : "") : inlineRich(c.continut);
-    return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + (c.continut && typeof c.continut === "object" ? " jv-board" : "") + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
+    return '<div id="jv-chunk" class="jv-chunk jv-t-' + esc(c.tip) + (Jarvis.isBoardCard(c) ? " jv-board" : "") + '" data-tip="' + esc(c.tip) + '">' + lab + body + "</div>";
   }
   // În lecție: textul bucății curente, n/total, comenzile mari pentru o singură mână, transcrierea restrânsă.
   function vLessonActive(st) {

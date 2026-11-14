@@ -1835,3 +1835,9 @@ test("only the ideea board instruction talks about a scheme; the analogie one do
     assert.match(withScheme.ideea.instruction, /schem/i, "ideea " + audio);
   }
 });
+
+test("isBoardCard is the one test for a board card: an object as the content, not text, null or a missing card", () => {
+  assert.equal(typeof Jarvis.isBoardCard, "function");
+  assert.deepEqual([{ tip: "ideea", continut: { cuvinte: [] } }, { tip: "exemplu", continut: { cuvinte: [], cod: "x" } }].map(Jarvis.isBoardCard), [true, true]);
+  assert.deepEqual([{ tip: "punct", continut: "text" }, { tip: "punct", continut: null }, { tip: "punct" }, null, undefined].map(Jarvis.isBoardCard), [false, false, false, false, false]);
+});

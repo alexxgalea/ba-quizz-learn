@@ -120,6 +120,8 @@ const Jarvis = (() => {
       ? toks.some(x => x === w || (x.startsWith(w) && SHORT_END.test(x.slice(w.length))))        // „for” nu e în „format”, „set” nu e în „setare”
       : toks.some(x => x.startsWith(rootOf(w))));
   }
+  // Cartonaș de tablă: conținutul e un obiect ({ cuvinte, schema?, cod? }), nu text. Singurul loc al testului (și app.js îl folosește).
+  const isBoardCard = c => !!(c && c.continut && typeof c.continut === "object");
   const unfence = c => { const m = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(String(c)); return (m ? m[1] : String(c)).replace(/\s+$/, ""); };
   // Secvențele bucății n (1..total) a unei fișe { points, desf? }; `audio` schimbă doar instrucțiunile (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
   // Câmpurile care lipsesc se sar; „Legătură” nu are secvență. Fără desfășurare rămâne doar `punct`. Cartonașul codului (exemplu, pas) vine fără gardurile ```.
@@ -339,7 +341,7 @@ const Jarvis = (() => {
     }
     // Tabla: cuvintele cheie arătate (`seen`, indexuri) cresc pe măsură ce modelul le spune; la `spoken` apar toate cele rămase.
     // Contează doar replicile turei curente (id mai mare decât `oldMax`, fixat la ultimul apel de funcție): din tura veche nu rămâne nimic, nici întârziat.
-    const isBoard = sh => lz.mode !== "audio" && sh && sh.card && sh.card.continut && typeof sh.card.continut === "object" && Array.isArray(sh.card.continut.cuvinte);
+    const isBoard = sh => lz.mode !== "audio" && !!sh && isBoardCard(sh.card) && Array.isArray(sh.card.continut.cuvinte);
     function revealWords(all) {
       const sh = lz.shown;
       if (!isBoard(sh) || !sh.seen || (!all && sh.epoch !== lz.epoch)) return;
@@ -651,6 +653,6 @@ const Jarvis = (() => {
     };
   }
 
-  return { create, buildSystem, buildLessonSystem, lessonSequences, keywordSaid, tokensOf, SEQ_GAP_MS };
+  return { create, buildSystem, buildLessonSystem, lessonSequences, keywordSaid, tokensOf, isBoardCard, SEQ_GAP_MS };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Jarvis;
