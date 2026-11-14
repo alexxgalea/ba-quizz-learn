@@ -1093,7 +1093,7 @@ test("the model asking for the next sequence on its own during the gap does not 
   assert.equal(seqAsks(t), 0);
 });
 
-test("Pauză during the gap cancels it, and Reia restarts the chunk without a sequence asked twice", async () => {
+test("Pauză during the gap cancels it, and Reia asks for the next sequence once, not the chunk again", async () => {
   const t = await begin(setup(), "asyncio");
   await deliver(t);
   t.jarvis.pause();
@@ -1101,7 +1101,7 @@ test("Pauză during the gap cancels it, and Reia restarts the chunk without a se
   assert.equal(seqAsks(t), 0);
   await t.jarvis.resume();
   t.clock.advance(5 * GAP);
-  assert.deepEqual([seqAsks(t), /repeat_chunk/.test(t.texts().at(-1))], [0, true]);
+  assert.deepEqual([seqAsks(t), t.texts().some(x => /repeat_chunk/.test(x))], [1, false]);
 });
 
 test("Repetă and Sari during the gap cancel it", async () => {
@@ -1778,5 +1778,27 @@ test("the answer to a free question does not reveal keywords of the board, neith
   assert.deepEqual(words(t), []);
   speak(t);
   assert.deepEqual(words(t), []);                                       // nici la `spoken` nu apar toate
+  assert.match(t.texts().at(-1), /repeat_chunk/);
+});
+
+test("Pause in the gap between two sequences and Resume go on with the next sequence, not with the chunk from its start", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);                                 // harta spusă; urmează pauza dintre secvențe
+  t.clock.advance(GAP - 500);
+  t.jarvis.pause();
+  t.clock.advance(5000);                                                // pauză scurtă: conexiunea rămâne
+  await t.jarvis.resume();
+  assert.match(t.texts().at(-1), /^Continuă: apelează next_chunk pentru secvența următoare/);
+  assert.equal(t.texts().some(x => /repeat_chunk/.test(x)), false);
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.k, r.tip], [2, "problema"]);
+});
+
+test("a long pause in the gap still restarts the chunk from its first sequence", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  t.jarvis.pause();
+  t.clock.advance(11 * MIN);
+  await t.jarvis.resume();
   assert.match(t.texts().at(-1), /repeat_chunk/);
 });

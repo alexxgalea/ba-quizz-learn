@@ -430,8 +430,11 @@ const Jarvis = (() => {
     // Continuarea după o întrerupere: bucata neauzită se reia, una auzită trece la următoarea (sau își redeschide fereastra).
     function continueLesson(prefix, windowOk) {
       const c = lz.cur, cut = lz.redo || (c && (c.delivering || c.advance));      // `redo`: bucata a fost tăiată de o întrebare; între secvențe, bucata se reia de la prima
+      // Excepție: pauză scurtă (`windowOk`, nimic pierdut) în pauza dintre secvențe; secvența spusă s-a auzit toată, deci merge mai departe cu următoarea.
+      const gap = windowOk && c && c.advance && !c.delivering && !lz.redo;
       lz.redo = false;
       if (!c) sess.call.say(prefix + MSG.next);
+      else if (gap) sess.call.say(prefix + MSG.seq);
       else if (cut) sess.call.say(prefix + MSG.repeat);
       else if (windowOk && !lz.muted) openWindow();
       else sess.call.say(prefix + MSG.next);
