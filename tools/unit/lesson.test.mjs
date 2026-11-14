@@ -88,7 +88,7 @@ test("the system instructions ask for no examples from outside the material, no 
   const t = await begin(setup());
   const s = t.live.cfg.system;
   assert.match(s, /Jarvis/);
-  assert.match(s, /1.{1,3}1,5 minute/);
+  assert.match(s, /secvențe scurte/);
   assert.match(s, /fără exemple din afara materialului/);
   assert.match(s, /fără fapte noi/i);
   assert.match(s, /fără liste și fără markdown/);
@@ -1801,4 +1801,12 @@ test("a long pause in the gap still restarts the chunk from its first sequence",
   t.clock.advance(11 * MIN);
   await t.jarvis.resume();
   assert.match(t.texts().at(-1), /repeat_chunk/);
+});
+
+test("the system instructions do not ask for a minute-long chunk: length and rhythm come from each sequence's instruction", () => {
+  for (const audio of [false, true]) {
+    const sys = Jarvis.buildLessonSystem({ name: "asyncio", muted: false, audio, summary: {} });
+    assert.equal(/1–1,5 minute|1,5 minute/.test(sys), false);
+    assert.match(sys, /bucată[^.]*secvențe[^.]*instruction/);
+  }
 });
