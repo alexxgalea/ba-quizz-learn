@@ -28,6 +28,21 @@ aio.run(main())
 În C++: Un event loop de mână e o buclă `while` în jurul lui `epoll_wait` sau `select` (API-uri POSIX, nu C++): așteaptă mai mulți descriptori, apoi cheamă handlerul celui pregătit.
 Unde nu ține: Handlerul C++ e un callback, deci păstrezi tu starea între apeluri, într-o structură. O corutină își păstrează variabilele locale între `await`-uri.
 Legătură: AIO-01 și GIL-14. În JavaScript, event loop-ul rulează tot pe un singur thread, iar un job se termină înainte să înceapă altul.
+Tablă:
+- problema: 1.000 de conexiuni; un thread pe conexiune
+- ideea: un singur thread; await cedează bucla
+- schemă:
+```text
+A rulează
+↓ await
+A se suspendă
+↓ bucla alege B
+B rulează
+↓ I/O gata
+bucla reia A
+```
+- cpp: epoll_wait
+- punct: concurență cooperativă
 
 ### 2
 Greu: da
@@ -46,6 +61,19 @@ aio.run(main())
 În C++: `std::async(std::launch::async, f)` rulează `f` pe alt thread, ca `to_thread`. `future.get()` ia rezultatul, ca `await`.
 Unde nu ține: `get()` blochează thread-ul apelant până termină funcția. `await` suspendă doar corutina, iar bucla rulează altceva. Fără `launch::async`, `std::async` poate amâna apelul până la `get()`.
 Legătură: AIO-02, AIO-03 și GIL-11. În Django, o view async care apelează direct ORM-ul primește `SynchronousOnlyOperation`; `sync_to_async` mută apelul într-un thread.
+Tablă:
+- problema: apel blocant; fără await
+- ideea: to_thread; executor implicit
+- schemă:
+```text
+await to_thread(f)
+↓ f pleacă într-un thread
+bucla rulează alte task-uri
+↓ f termină
+corutina își reia locul
+```
+- cpp: std::async
+- punct: bucla înghețată
 
 ### 3
 Greu: da
@@ -64,6 +92,19 @@ async def main():
 aio.run(main())
 ```
 Legătură: AIO-04. `f` ține locul unui apel încă în curs. În JavaScript, `Promise.all` respinge la prima respingere și nu anulează restul, iar `Promise.allSettled` e ca `return_exceptions=True`.
+Tablă:
+- problema: gather; 500 la un API
+- ideea: prima excepție; restul merg
+- schemă:
+```text
+gather(a, b, c)
+↓ b ridică KeyError
+await gather → KeyError
+a și c rulează mai departe
+↓ nimeni nu le mai așteaptă
+rezultatele se pierd
+```
+- punct: gather nu anulează
 
 ### 4
 Greu: da
@@ -80,6 +121,19 @@ async def main():
 aio.run(main())  # ! ExceptionGroup
 ```
 Legătură: AIO-05 și GIL-12. `ExceptionGroup` și `except*` apar la fișa python, punctul 9.
+Tablă:
+- problema: gather fără anulare
+- ideea: TaskGroup 3.11+; ExceptionGroup
+- schemă:
+```text
+async with TaskGroup() as tg
+↓ tg.create_task × 3
+task 2 ridică KeyError
+↓ grupul anulează 1 și 3
+ExceptionGroup
+↓ except*
+```
+- punct: anulare la prima eroare
 
 ### 5
 Greu: da
@@ -96,6 +150,19 @@ aio.run(main())  # ! TimeoutError
 În C++: La un future de la `std::async(std::launch::async, ...)`, `wait_for(durată)` întoarce `future_status::timeout` dacă rezultatul nu e gata la timp.
 Unde nu ține: `wait_for` doar încetează să aștepte. Funcția continuă să ruleze, iar destructorul unui future de la `std::async` poate bloca până termină. În Python, expirarea anulează task-ul.
 Legătură: AIO-06. În JavaScript, `AbortSignal.timeout(ms)` oprește un `fetch` cu un `TimeoutError`.
+Tablă:
+- problema: API terț blocat
+- ideea: asyncio.timeout; wait_for
+- schemă:
+```text
+timeout(5): bloc
+↓ trec 5 s
+bucla anulează task-ul
+↓ CancelledError în bloc
+la ieșire: TimeoutError
+```
+- cpp: future.wait_for
+- punct: CancelledError → TimeoutError
 
 ### 6
 Greu: da
@@ -113,6 +180,21 @@ r  # → 1
 În C++: `except Exception` seamănă cu `catch (const std::exception&)`, iar `except BaseException` cu `catch (...)`, care prinde orice.
 Unde nu ține: În C++ ierarhia e doar convenție: `throw 42;` trece de `catch (const std::exception&)`. În Python ridici doar obiecte care moștenesc `BaseException`. Iar C++17 n-are anulare cooperativă de thread-uri.
 Legătură: AIO-07. Anularea e mecanismul din punctele 4 și 5.
+Tablă:
+- problema: worker care ignoră cancel
+- ideea: CancelledError; BaseException
+- schemă:
+```text
+task.cancel()
+↓ la următorul await
+CancelledError în task
+↓ except BaseException
+return 1: anulare înghițită
+↓
+wait_for întoarce 1
+```
+- cpp: catch (...)
+- punct: raise după curățenie
 
 ### 7
 Greu: da
@@ -129,6 +211,19 @@ async def main():
 aio.run(main())  # ! TimeoutError
 ```
 Legătură: GIL-07 și punctul 6 din fișa gil. În Celery, `--concurrency` limitează tot câte task-uri rulează odată.
+Tablă:
+- problema: 50.000 de apeluri; limită 20
+- ideea: Semaphore; Queue + workeri
+- schemă:
+```text
+Semaphore(2): contor 2
+↓ A intră: contor 1
+↓ B intră: contor 0
+C așteaptă la async with
+↓ A iese: contor 1
+C intră: contor 0
+```
+- punct: contor intern
 
 ### 8
 Problema: Trimiți o alertă cu `asyncio.create_task(send_alert(e))` și nu păstrezi task-ul. Uneori alerta nu pleacă, iar codul nu ridică nicio eroare.
@@ -145,6 +240,20 @@ async def main():
 aio.run(main())
 ```
 Legătură: AIO-08. În JavaScript, o promisiune respinsă fără handler declanșează evenimentul `unhandledrejection`.
+Tablă:
+- problema: task uitat
+- ideea: referință slabă; GC
+- schemă:
+```text
+create_task(f())
+↓ fără altă referință
+bucla ține doar una slabă
+↓ GC
+task dispărut, eroare mută
+↓ cu set + discard
+task ținut în viață
+```
+- punct: set + add_done_callback
 
 ### 9
 Greu: da
@@ -154,6 +263,21 @@ Analogie: Un birou cu un singur funcționar care ține dosarele. Alții nu umbl�
 În C++: `std::queue` nu e thread-safe. O protejezi cu `std::mutex` și o semnalizezi cu `std::condition_variable`. `asyncio.Queue` seamănă cu un `std::queue` fără mutex: e sigură doar pe thread-ul buclei.
 Unde nu ține: `std::mutex` blochează thread-ul care așteaptă. `asyncio.Lock` suspendă doar corutina și nu apără datele de alte thread-uri. Echivalentul unui mutex între thread-uri e `threading.Lock`.
 Legătură: AIO-09 și GIL-15 (coada dintre thread-uri).
+Tablă:
+- problema: thread străin
+- ideea: call_soon_threadsafe; run_coroutine_threadsafe
+- schemă:
+```text
+thread străin
+↓ run_coroutine_threadsafe
+bucla primește corutina
+↓ o rulează pe thread-ul ei
+concurrent Future
+↓ .result() în thread străin
+```
+- cpp: mutex + condition_variable
+- analogie: bilet în tăviță
+- punct: nu e thread-safe
 
 ### 10
 Greu: da
@@ -170,6 +294,10 @@ async def main():
 aio.run(main())
 ```
 Legătură: GIL-02 și punctul 3 din fișa gil, aceeași alegere văzută din partea GIL-ului.
+Tablă:
+- problema: trei sarcini diferite
+- ideea: ce așteaptă codul; sincron → thread
+- punct: I/O → asyncio; calcul → procese
 
 ### 11
 Greu: da
@@ -185,3 +313,7 @@ f(a)  # → True
 f(b)  # → False
 ```
 Legătură: ASGI-02 și ASGI-03. În Django, un view async care apelează ORM-ul direct are aceeași problemă (punctul 2).
+Tablă:
+- problema: def sau async def
+- ideea: iscoroutinefunction; threadpool AnyIO
+- punct: async def pe buclă

@@ -10,6 +10,7 @@ const Call = require("../../src/call.js");
 const Jarvis = require("../../src/jarvis.js");
 
 const MIN = 60000;
+const GAP = Jarvis.SEQ_GAP_MS;
 
 function setup(over = {}) {
   const t = { live: fakeLive(), audio: fakeAudio(), clock: fakeClock(), app: stubApp(), storage: memoryStorage({ "onapsis-gemini-v1": "KEY" }), changes: 0 };
@@ -30,7 +31,7 @@ async function deliver(t, tool = "next_chunk") { const r = await t.tool(tool); s
 // O bucată întreagă, pe secvențe: toate se spun până la capăt; întoarce ultimul rezultat, cu `.seqs` = toate rezultatele.
 async function play(t, tool = "next_chunk") { const all = [await deliver(t, tool)]; while (all.at(-1).k < all.at(-1).of) all.push(await deliver(t)); return Object.assign({}, all.at(-1), { seqs: all }); }
 // La fel, dar ultima secvență a bucății nu se spune încă (testele o spun ele, ca să vadă fereastra).
-async function chunk(t, tool = "next_chunk") { const all = [await t.tool(tool)]; while (all.at(-1).k < all.at(-1).of) { speak(t); all.push(await t.tool("next_chunk")); } return Object.assign({}, all.at(-1), { seqs: all }); }
+async function chunk(t, tool = "next_chunk") { const all = [await t.tool(tool)]; while (all.at(-1).k < all.at(-1).of) { speak(t); t.clock.advance(GAP); all.push(await t.tool("next_chunk")); } return Object.assign({}, all.at(-1), { seqs: all }); }
 // Mesajele aplicației către model, fără cererea de secvență următoare din mijlocul unei bucăți.
 const moves = t => t.texts().filter(x => !/^Continuă:/.test(x));
 async function begin(t, module = "django") { await t.jarvis.start({ mode: "lesson", module }); return t; }
@@ -87,7 +88,7 @@ test("the system instructions ask for no examples from outside the material, no 
   const t = await begin(setup());
   const s = t.live.cfg.system;
   assert.match(s, /Jarvis/);
-  assert.match(s, /1.{1,3}1,5 minute/);
+  assert.match(s, /secvențe scurte/);
   assert.match(s, /fără exemple din afara materialului/);
   assert.match(s, /fără fapte noi/i);
   assert.match(s, /fără liste și fără markdown/);
@@ -933,7 +934,7 @@ test("next_chunk on asyncio gives one sequence with its place in the chunk and t
 
 test("after a sequence is spoken the app asks for the next one and does not open the window", async () => {
   const t = await begin(setup(), "asyncio");
-  await t.tool("next_chunk"); speak(t);
+  await t.tool("next_chunk"); speak(t); t.clock.advance(GAP);
   assert.deepEqual([t.audio.beeps, /next_chunk/.test(t.texts().at(-1)), t.app.pos.asyncio || 0], [[], true, 0]);
   const r = await t.tool("next_chunk");
   assert.deepEqual([r.n, r.k, r.tip], [1, 2, "problema"]);
@@ -952,7 +953,7 @@ test("the listening window opens only after the last sequence, which also writes
 test("on Mut the sequences and then the next chunk follow without a window", async () => {
   const t = setup(); t.jarvis.settings.set({ muted: true });
   await begin(t, "asyncio");
-  for (let k = 1; k <= 6; k++) await deliver(t);
+  for (let k = 1; k <= 6; k++) { await deliver(t); t.clock.advance(GAP); }
   assert.deepEqual([t.audio.beeps, t.app.pos.asyncio, /next_chunk/.test(t.texts().at(-1))], [[], 1, true]);
 });
 
@@ -1002,8 +1003,10 @@ test("a pause or Vorbește before the sound leaves no unheard card on screen", a
   assert.equal(u.state().lesson.card.tip, "harta");
 });
 
+const SUBS = () => memoryStorage({ "onapsis-gemini-v1": "KEY", "onapsis-jarvis-v1": JSON.stringify({ subs: true }) });
+
 test("the subtitle shows the last two lines the model spoke since the card changed, and empties on the next card", async () => {
-  const t = await begin(setup(), "asyncio");
+  const t = await begin(setup({ storage: SUBS() }), "asyncio");
   await t.tool("next_chunk"); sound(t);
   say(t, "Prima propoziție. A doua. A treia!");
   assert.deepEqual(t.state().lesson.sub, ["A doua.", "A treia!"]);
@@ -1039,6 +1042,97 @@ test("a question between sequences restarts the chunk from its first sequence", 
   assert.match(t.texts().at(-1), /repeat_chunk/);
   const r = await t.tool("repeat_chunk");
   assert.deepEqual([r.n, r.k], [1, 1]);
+});
+
+// ---------- ritmul: pauza dintre secvențe (tichetul 04) ----------
+
+const seqAsks = t => t.texts().filter(x => /^Continuă:/.test(x)).length;
+
+test("SEQ_GAP_MS is a single constant of about two seconds", () => {
+  assert.deepEqual([typeof GAP, GAP >= 1000 && GAP <= 4000], ["number", true]);
+});
+
+test("the next sequence is asked for only after SEQ_GAP_MS, not right after the model finishes", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  assert.equal(seqAsks(t), 0);
+  t.clock.advance(GAP - 1);
+  assert.equal(seqAsks(t), 0);
+  t.clock.advance(1);
+  assert.equal(seqAsks(t), 1);
+  t.clock.advance(10 * GAP);
+  assert.equal(seqAsks(t), 1);
+});
+
+test("the gap also applies on Mut and in audio mode", async () => {
+  for (const over of [{ muted: true }, { mode: "audio" }]) {
+    const t = setup(); t.jarvis.settings.set(over);
+    await begin(t, "asyncio");
+    await t.tool("next_chunk"); speak(t);
+    assert.equal(seqAsks(t), 0);
+    t.clock.advance(GAP);
+    assert.equal(seqAsks(t), 1);
+  }
+});
+
+test("the listening window after the last sequence is unchanged, with no extra gap", async () => {
+  const t = await begin(setup(), "asyncio");
+  for (let k = 1; k <= 5; k++) { await deliver(t); t.clock.advance(GAP); }
+  await deliver(t);
+  assert.deepEqual([t.audio.beeps, seqAsks(t)], [["window"], 5]);
+  t.clock.advance(3100);
+  assert.match(t.texts().at(-1), /next_chunk/);
+});
+
+test("the model asking for the next sequence on its own during the gap does not get a second request", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  const r = await t.tool("next_chunk");
+  assert.equal(r.k, 2);
+  t.clock.advance(5 * GAP);
+  assert.equal(seqAsks(t), 0);
+});
+
+test("Pauză during the gap cancels it, and Reia asks for the next sequence once, not the chunk again", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.jarvis.pause();
+  t.clock.advance(5 * GAP);
+  assert.equal(seqAsks(t), 0);
+  await t.jarvis.resume();
+  t.clock.advance(5 * GAP);
+  assert.deepEqual([seqAsks(t), t.texts().some(x => /repeat_chunk/.test(x))], [1, false]);
+});
+
+test("Repetă and Sari during the gap cancel it", async () => {
+  for (const [act, re] of [["repeat", /repeat_chunk/], ["skip", /next_chunk/]]) {
+    const t = await begin(setup(), "asyncio");
+    await deliver(t);
+    t.jarvis[act]();
+    t.clock.advance(5 * GAP);
+    assert.deepEqual([seqAsks(t), re.test(t.texts().at(-1))], [0, true]);
+  }
+});
+
+test("Vorbește during the gap cancels it, and the answer is followed by the chunk restarted once", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.jarvis.talk(true);
+  t.clock.advance(GAP);
+  assert.equal(seqAsks(t), 0);
+  t.jarvis.talk(false);
+  speak(t);
+  t.clock.advance(5 * GAP);
+  assert.deepEqual([seqAsks(t), t.texts().filter(x => /repeat_chunk/.test(x)).length], [0, 1]);
+});
+
+test("losing the connection during the gap cancels it", async () => {
+  const t = await begin(setup(), "asyncio");
+  await deliver(t);
+  t.live.emit({ type: "closed", reason: "network", code: 1006, detail: "" });
+  assert.equal(t.state().phase, "paused");
+  t.clock.advance(5 * GAP);
+  assert.equal(seqAsks(t), 0);
 });
 
 // ---------- toate modulele pe secvențe (tichetul 08) ----------
@@ -1144,7 +1238,7 @@ test("every module of the real data has sequences ending in the point, with cont
       assert.ok(q.length > 0, m.id + " " + n);
       assert.equal(q.at(-1).tip, "punct", m.id + " " + n);
       for (const x of q) {
-        assert.ok(x.continut && x.continut.trim(), m.id + " " + n + " " + x.tip + ": empty continut");
+        assert.ok(typeof x.continut === "object" ? x.continut.cuvinte.length || x.continut.cod || x.continut.schema : x.continut && x.continut.trim(), m.id + " " + n + " " + x.tip + ": empty continut");
         assert.ok(x.instruction, m.id + " " + n + " " + x.tip);
         if (audio) assert.equal(SCREEN_WORDS.test(x.instruction), false, m.id + " " + x.tip + ": " + x.instruction);
       }
@@ -1153,6 +1247,231 @@ test("every module of the real data has sequences ending in the point, with cont
   }
   assert.ok(seen > 200, "points checked: " + seen);
 });
+
+// ---------- tabla: cuvinte cheie și schemă în loc de paragrafe ----------
+
+const TABLA = { problema: ["cuvânt problemă"], ideea: ["cuvânt idee", "alt cuvânt"], schema: "A rulează\n↓ await\nB rulează", cpp: ["epoll_wait"], punct: ["cuvânt punct"] };
+const boardSheet = () => seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab: TABLA }), ...SHEET_AS.desf.slice(1)] });
+const byTip = (sh, n, audio) => Object.fromEntries(Jarvis.lessonSequences(sh, n, audio).map(x => [x.tip, x]));
+
+test("a point with a board gives sequences with { cuvinte, schema?, cod? } and the other points stay text", () => {
+  const sh = boardSheet(), by = byTip(sh, 1);
+  assert.deepEqual(tips(sh, 1), ["problema", "ideea", "exemplu", "cpp", "punct"]);
+  assert.deepEqual(by.problema.continut, { cuvinte: ["cuvânt problemă"] });
+  assert.deepEqual(by.ideea.continut, { cuvinte: ["cuvânt idee", "alt cuvânt"], schema: TABLA.schema });
+  assert.deepEqual(by.exemplu.continut, { cuvinte: [], cod: SHEET_AS.desf[0].ex.replace(/^```python\n|\n```$/g, "") });
+  assert.deepEqual(by.cpp.continut, { cuvinte: ["epoll_wait"] });
+  assert.deepEqual(by.punct.continut, { cuvinte: ["cuvânt punct"] });
+  assert.equal(by.exemplu.continut.cod.includes("```"), false);
+  // punctele fără tablă: textul de azi
+  assert.equal(typeof byTip(sh, 2).problema.continut, "string");
+  assert.equal(typeof byTip(sh, 3).punct.continut, "string");
+});
+
+test("a point with a board does not hand the unfolding paragraphs to the model, in either mode", () => {
+  for (const audio of [false, true]) {
+    const all = JSON.stringify(Jarvis.lessonSequences(boardSheet(), 1, audio).map(x => x.continut));
+    for (const text of [SHEET_AS.desf[0].p, SHEET_AS.desf[0].i, SHEET_AS.desf[0].cpp, SHEET_AS.points[0]]) assert.equal(all.includes(text), false, text);
+  }
+});
+
+test("a board with Pas cu pas gives the steps as the schema of the pas sequence", () => {
+  const tab = { problema: ["a"], ideea: ["b"], analogie: ["d"], punct: ["c"] };
+  const sh = seqSheet({ desf: [SHEET_AS.desf[0], Object.assign({}, SHEET_AS.desf[1], { tab }), SHEET_AS.desf[2]] }), by = byTip(sh, 2);
+  assert.deepEqual(tips(sh, 2), ["problema", "ideea", "analogie", "pas", "punct"]);
+  assert.deepEqual(by.pas.continut, { cuvinte: [], schema: SHEET_AS.desf[1].pas.replace(/^```text\n|\n```$/g, "") });
+  assert.deepEqual(by.analogie.continut, { cuvinte: ["d"] });
+});
+
+test("the board instructions ask to tell around the keywords, slowly, and do not read them out", () => {
+  const by = byTip(boardSheet(), 1);
+  for (const tip of ["problema", "ideea", "cpp", "punct"]) {
+    const i = by[tip].instruction;
+    assert.match(i, /cuvinte(le)? cheie/, tip);
+    assert.match(i, /în jurul/, tip);
+    assert.match(i, /nu (le )?(citi|enumera)/i, tip);
+    assert.match(i, /rar/, tip);
+    assert.match(i, /fără fapte noi/i, tip);
+  }
+  assert.match(by.ideea.instruction, /schema/);
+  // codul rămâne ca azi
+  assert.equal(by.exemplu.instruction, byTip(seqSheet(), 1).exemplu.instruction);
+});
+
+test("the audio-only board instructions have no screen words and ask for the scheme told in words", () => {
+  const by = byTip(boardSheet(), 1, true);
+  for (const x of Object.values(by)) assert.equal(SCREEN_WORDS.test(x.instruction), false, x.tip + ": " + x.instruction);
+  assert.match(by.ideea.instruction, /în cuvinte/);
+});
+
+test("next_chunk hands over the board as the content and the card carries the same board", async () => {
+  const t = setup(); t.app.sheet0 = t.app.sheet;
+  t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = boardSheet().desf; return r; };
+  await begin(t, "asyncio");
+  await deliver(t);                                       // harta
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.tip, r.continut], ["problema", { cuvinte: ["cuvânt problemă"] }]);
+  assert.match(r.instruction, /cuvinte(le)? cheie/);
+  speak(t); sound(t);
+  assert.deepEqual(t.state().lesson.card, { tip: "problema", continut: { cuvinte: ["cuvânt problemă"] } });
+});
+
+test("every real asyncio point has board sequences, and the real modules without a board keep their text", () => {
+  const root = new URL("../../", import.meta.url), P = loadData(root), { desf } = buildDesf(P, readDesfFiles(root));
+  const as = { points: P.sheets.asyncio.points, desf: desf.asyncio.items };
+  const q = Jarvis.lessonSequences(as, 1);
+  assert.deepEqual(q.map(x => x.tip), ["problema", "ideea", "exemplu", "cpp", "punct"]);
+  for (const x of q) assert.equal(typeof x.continut, "object", x.tip);
+  assert.ok(q.find(x => x.tip === "ideea").continut.schema.includes("await"));
+  assert.ok(q.find(x => x.tip === "exemplu").continut.cod.startsWith("import asyncio"));
+  for (const x of q) if (x.continut.cuvinte.length) assert.ok(x.continut.cuvinte.length <= 2);
+  for (let n = 2; n <= as.points.length; n++) for (const x of Jarvis.lessonSequences(as, n)) {
+    assert.equal(typeof x.continut, "object", n + " " + x.tip);
+    if (x.tip !== "exemplu") assert.ok(x.continut.cuvinte.length >= 1 && x.continut.cuvinte.length <= 2, n + " " + x.tip);
+  }
+});
+
+// ---------- tichetul 03: cuvintele cheie apar când sunt spuse; subtitrarea e oprită ----------
+
+const TAB3 = { problema: ["conexiuni deschise", "un thread pe conexiune"], ideea: ["event loop", "cedează bucla"], schema: "A rulează\n↓ await\nB rulează", cpp: ["epoll_wait"], punct: ["concurență cooperativă"] };
+async function boardLesson(over = {}, module = "asyncio") {
+  const t = setup(over); t.app.sheet0 = t.app.sheet;
+  t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab: TAB3 }), ...SHEET_AS.desf.slice(1)] }).desf; return r; };
+  await begin(t, module);
+  await deliver(t);                                       // harta, auzită
+  return t;
+}
+const words = t => t.state().lesson.card.continut.cuvinte;
+// Cere secvența următoare (modelul, după ce aplicația i-a cerut-o) și începe sunetul ei.
+async function nextSeq(t) { const r = await t.tool("next_chunk"); sound(t); return r; }
+
+test("a keyword appears on the board when its root is in the model's transcript, lowercase and without diacritics", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  assert.deepEqual(words(t), []);                                       // nimic nespus încă
+  say(t, "Avem multe CONEXIUNI");
+  assert.deepEqual(words(t), []);                                       // „deschise” nu s-a spus
+  say(t, " deschise, care așteaptă.");
+  assert.deepEqual(words(t), ["conexiuni deschise"]);
+  say(t, " Un thread pe conexiune ar fi prea mult.");
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);
+});
+
+test("the root matches other forms of the word and a keyword with a diacritic matches the plain spelling", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); speak(t); t.clock.advance(GAP);
+  await nextSeq(t);                                                     // ideea
+  say(t, "Bucla de evenimente, adică event loop-ul, ");
+  assert.deepEqual(words(t), ["event loop"]);
+  say(t, "iar await cedeaza controlul buclei.");
+  assert.deepEqual(words(t), ["event loop", "cedează bucla"]);
+});
+
+test("the keywords not said yet appear when the sequence is spoken to the end", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  say(t, "Multe conexiuni deschise.");
+  assert.deepEqual(words(t), ["conexiuni deschise"]);
+  speak(t);
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);
+});
+
+test("the keywords keep their order on the board, whatever order they were said in", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  say(t, "Un thread pe conexiune e scump. Sunt conexiuni deschise.");
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);
+});
+
+test("nothing of the old sequence stays on the next board, not even a late transcript of the old turn", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  say(t, "Conexiuni deschise."); speak(t);                              // tura problemei s-a încheiat
+  say(t, " Un thread pe conexiune.");                                   // transcriere întârziată: replică nouă, dar tot a turei vechi
+  t.clock.advance(GAP);
+  await t.tool("next_chunk"); sound(t);                                 // ideea, cartonașul nou
+  assert.deepEqual(words(t), []);
+  say(t, " Încă o frază, cedează bucla.");                              // cade în replica veche (nu a venit turnComplete)
+  assert.deepEqual(words(t), []);
+  speak(t);
+  assert.deepEqual(words(t), ["event loop", "cedează bucla"]);          // la spoken apar toate ale secvenței noi
+});
+
+test("words said before the new card started to sound do not show on the new board", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); say(t, "Conexiuni deschise."); speak(t); t.clock.advance(GAP);
+  await t.tool("next_chunk");
+  say(t, "Bucla, event loop.");                                         // transcrierea vine înaintea sunetului
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);   // încă pe ecran: cartonașul vechi
+  sound(t);
+  assert.deepEqual(words(t), ["event loop"]);                           // cele spuse deja din tura nouă contează
+});
+
+test("the scheme shows whole with its sequence, and the code of the example comes without keywords", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); speak(t); t.clock.advance(GAP);
+  await nextSeq(t);
+  const c = t.state().lesson.card;
+  assert.deepEqual([c.tip, c.continut.schema, c.continut.cuvinte], ["ideea", TAB3.schema, []]);
+  speak(t); t.clock.advance(GAP);
+  await nextSeq(t);
+  assert.deepEqual([t.state().lesson.card.tip, typeof t.state().lesson.card.continut.cod, words(t)], ["exemplu", "string", []]);
+});
+
+test("repeating the chunk starts its boards again from nothing", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); say(t, "Conexiuni deschise."); speak(t);
+  await t.tool("repeat_chunk"); sound(t);
+  assert.deepEqual(t.state().lesson.card.tip, "harta");                 // repetarea pornește de la prima secvență
+  speak(t); t.clock.advance(GAP);
+  await nextSeq(t);
+  assert.deepEqual(words(t), []);
+});
+
+test("a point without a board is not affected: the card stays the text", async () => {
+  const t = await boardLesson();
+  for (let i = 0; i < 5; i++) { const r = await t.tool("next_chunk"); speak(t); if (r.k === r.of) break; t.clock.advance(GAP); }
+  await t.tool("next_chunk"); sound(t);                                 // bucata 2: fără tablă
+  assert.equal(typeof t.state().lesson.card.continut, "string");
+  say(t, "Orice. Altceva.");
+  assert.equal(typeof t.state().lesson.card.continut, "string");
+});
+
+test("audio only keeps the card as it was: no board matching and no subtitle", async () => {
+  const t = await boardLesson({ storage: memoryStorage({ "onapsis-gemini-v1": "KEY", "onapsis-jarvis-v1": JSON.stringify({ mode: "audio", subs: true }) }) });
+  await nextSeq(t); say(t, "Conexiuni deschise.");
+  const l = t.state().lesson;
+  assert.deepEqual([l.mode, l.sub], ["audio", []]);
+  assert.deepEqual(words(t), TAB3.problema);
+});
+
+test("the subtitle is off by default and a transcript does not show on it", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); sound(t);
+  say(t, "Prima propoziție. A doua. A treia!");
+  const l = t.state().lesson;
+  assert.deepEqual([l.sub, l.subs], [[], false]);
+  assert.equal(t.state().transcript.at(-1).text, "Prima propoziție. A doua. A treia!");     // istoricul rămâne
+});
+
+test("the Subtitrare setting is kept in onapsis-jarvis-v1 and read at the start of the lesson", async () => {
+  const t = setup();
+  assert.equal(t.jarvis.settings.get().subs, false);
+  t.jarvis.settings.set({ subs: true });
+  assert.equal(JSON.parse(t.storage.data["onapsis-jarvis-v1"]).subs, true);
+  await begin(t, "asyncio");
+  await t.tool("next_chunk"); sound(t); say(t, "Una. Două.");
+  assert.deepEqual([t.state().lesson.subs, t.state().lesson.sub], [true, ["Una.", "Două."]]);
+});
+
+test("with the subtitle off a free question shows only Alex's question, never the answer", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "De ce anulează TaskGroup grupul?");
+  sound(t); say(t, "Pentru că un task a eșuat. Restul se anulează.");
+  const l = t.state().lesson;
+  assert.deepEqual([l.card, l.sub], [{ tip: "intrebare", continut: "De ce anulează TaskGroup grupul?" }, []]);
+});
+
 
 // ---------- module fără desfășurări: fără improvizație ----------
 
@@ -1350,8 +1669,8 @@ async function askMid(t, q) {
   t.live.emit({ type: "interrupted" });                          // întrebarea taie bucata în curs
 }
 
-test("a free question switches the screen to the question card, with Alex's words and the answer as subtitle", async () => {
-  const t = await begin(setup(), "asyncio");
+test("a free question switches the screen to the question card, with Alex's words and, with subtitles on, the answer as subtitle", async () => {
+  const t = await begin(setup({ storage: SUBS() }), "asyncio");
   await askMid(t, "De ce anulează TaskGroup grupul?");
   assert.equal(t.state().lesson.card.tip, "problema");
   sound(t); say(t, "Pentru că un task a eșuat. Restul se anulează.");
@@ -1427,4 +1746,98 @@ test("a question on a module without sequences also gets the question card", asy
   const t = await begin(setup(), "django");
   await deliver(t); t.jarvis.talk(true); heard(t, "Cum?"); t.jarvis.talk(false); t.live.emit({ type: "interrupted" }); sound(t);
   assert.deepEqual(t.state().lesson.card, { tip: "intrebare", continut: "Cum?" });
+});
+
+// ---------- reparații după code-review (PR 11) ----------
+
+const ONE_IDEA = /o singură idee|nu enumera|10–15/;
+
+test("the sequences that enumerate (map, traps, recap) and a plain paragraph point do not ask for one idea or for not enumerating", async () => {
+  const t = setup(); await begin(t, "asyncio");
+  const harta = await t.tool("next_chunk"); speak(t);
+  const slow = { harta: harta.instruction };
+  const u = setup(); await toAsyncClosing(u);
+  slow.capcane = (await u.tool("next_chunk")).instruction; speak(u); u.clock.advance(GAP);
+  slow.recap = (await u.tool("next_chunk")).instruction;
+  slow.punctPlain = Jarvis.lessonSequences({ points: SHEET.points, avoid: [] }, 1)[0].instruction;
+  for (const [k, i] of Object.entries(slow)) { assert.equal(ONE_IDEA.test(i), false, k + ": " + i); assert.match(i, /rar|propoziții scurte/, k); }
+  for (const audio of [false, true]) {
+    const by = byTip(seqSheet(), 1, audio);
+    for (const tip of ["problema", "ideea", "exemplu", "cpp", "punct"]) assert.match(by[tip].instruction, /o singură idee/, tip);
+    for (const tip of ["problema", "ideea", "punct"]) assert.match(byTip(boardSheet(), 1, audio)[tip].instruction, /o singură idee/, "tablă " + tip);
+  }
+});
+
+test("the answer to a free question does not reveal keywords of the board, neither while it is spoken nor when it ends", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);                                                     // problema, cu tablă
+  t.jarvis.talk(true); heard(t, "Mai simplu"); t.jarvis.talk(false);
+  t.live.emit({ type: "interrupted" }); sound(t);                       // răspunsul începe; cartonașul rămâne al bucății, cu etichetă
+  assert.equal(t.state().lesson.card.eticheta, "Mai simplu");
+  say(t, "Sunt multe conexiuni deschise.", "m2");
+  assert.deepEqual(words(t), []);
+  speak(t);
+  assert.deepEqual(words(t), []);                                       // nici la `spoken` nu apar toate
+  assert.match(t.texts().at(-1), /repeat_chunk/);
+});
+
+test("Pause in the gap between two sequences and Resume go on with the next sequence, not with the chunk from its start", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);                                 // harta spusă; urmează pauza dintre secvențe
+  t.clock.advance(GAP - 500);
+  t.jarvis.pause();
+  t.clock.advance(5000);                                                // pauză scurtă: conexiunea rămâne
+  await t.jarvis.resume();
+  assert.match(t.texts().at(-1), /^Continuă: apelează next_chunk pentru secvența următoare/);
+  assert.equal(t.texts().some(x => /repeat_chunk/.test(x)), false);
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.k, r.tip], [2, "problema"]);
+});
+
+test("a long pause in the gap still restarts the chunk from its first sequence", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); speak(t);
+  t.jarvis.pause();
+  t.clock.advance(11 * MIN);
+  await t.jarvis.resume();
+  assert.match(t.texts().at(-1), /repeat_chunk/);
+});
+
+test("the system instructions do not ask for a minute-long chunk: length and rhythm come from each sequence's instruction", () => {
+  for (const audio of [false, true]) {
+    const sys = Jarvis.buildLessonSystem({ name: "asyncio", muted: false, audio, summary: {} });
+    assert.equal(/1–1,5 minute|1,5 minute/.test(sys), false);
+    assert.match(sys, /bucată[^.]*secvențe[^.]*instruction/);
+  }
+});
+
+test("a short keyword (up to 4 letters) matches the whole word or its plural and definite forms, not an unrelated word that starts with it", () => {
+  const said = (kw, text) => Jarvis.keywordSaid(kw, Jarvis.tokensOf(text));
+  for (const [kw, text] of [["for", "o buclă for"], ["set", "un set de valori"], ["set", "două seturi"], ["task", "un task nou"], ["task", "trei tasks"], ["task", "taskul rulează"], ["std", "std::vector"], ["Loop", "loop-ul"]])
+    assert.equal(said(kw, text), true, kw + " / " + text);
+  for (const [kw, text] of [["for", "alt format"], ["set", "o setare nouă"], ["std", "citește din stdin"], ["task", "un taskbar"], ["loop", "loophole"]])
+    assert.equal(said(kw, text), false, kw + " / " + text);
+});
+
+test("the longer forms of a longer keyword and keywords without a word of 3 letters keep working", () => {
+  const said = (kw, text) => Jarvis.keywordSaid(kw, Jarvis.tokensOf(text));
+  assert.equal(said("cedează bucla", "cedeaza controlul buclei"), true);
+  assert.equal(said("conexiuni deschise", "o conexiune deschisă"), true);
+  assert.equal(said("I/O", "orice"), false);                           // fără cuvânt de 3+ litere: apare doar la `spoken`
+});
+
+test("only the ideea board instruction talks about a scheme; the analogie one does not, as the scheme belongs to the ideea sequence", () => {
+  const sh = seqSheet({ desf: [SHEET_AS.desf[0], Object.assign({}, SHEET_AS.desf[1], { tab: { problema: ["a"], ideea: ["b"], analogie: ["d"], punct: ["c"] } }), SHEET_AS.desf[2]] });
+  for (const audio of [false, true]) {
+    const by = byTip(sh, 2, audio);
+    assert.equal(/schem/i.test(by.analogie.instruction), false, "analogie " + audio);
+    const withScheme = byTip(boardSheet(), 1, audio);
+    assert.match(withScheme.ideea.instruction, /schem/i, "ideea " + audio);
+  }
+});
+
+test("isBoardCard is the one test for a board card: an object as the content, not text, null or a missing card", () => {
+  assert.equal(typeof Jarvis.isBoardCard, "function");
+  assert.deepEqual([{ tip: "ideea", continut: { cuvinte: [] } }, { tip: "exemplu", continut: { cuvinte: [], cod: "x" } }].map(Jarvis.isBoardCard), [true, true]);
+  assert.deepEqual([{ tip: "punct", continut: "text" }, { tip: "punct", continut: null }, { tip: "punct" }, null, undefined].map(Jarvis.isBoardCard), [false, false, false, false, false]);
 });

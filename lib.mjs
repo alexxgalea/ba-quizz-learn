@@ -188,13 +188,14 @@ export function buildExplanations(root, P) {
 //   ### harta                       ### 1   (numărul punctului, în ordine)
 //   Problema: …                     Problema: …   Ideea: …   Exemplu: …   Analogie: …
 //   Grupuri:                        În C++: …   Unde nu ține: …   Legătură: …   Greu: da
+//   Tablă (opțional, lecția): rânduri „- problema: cuvânt; cuvânt”, „- schemă:” + bloc ```text; vezi parseTab
 //   - 1–2: ce au în comun
 // Modul complet sau absent: câte o desfășurare pentru fiecare punct, plus harta.
-export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "Analogie": "an", "Pas cu pas": "pas", "În C++": "cpp", "Unde nu ține": "nu", "Legătură": "leg", "Grupuri": "g", "Greu": "hard" };
+export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "Analogie": "an", "Pas cu pas": "pas", "Tablă": "tab", "În C++": "cpp", "Unde nu ține": "nu", "Legătură": "leg", "Grupuri": "g", "Greu": "hard" };
 // Cuvinte (fără blocurile de cod): erori în afara [min, max] (≤ hard la punctele marcate grele), avertisment în afara benzii 60–90.
-export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, stepLines: 8, cols: 36 };
+export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, stepLines: 8, cols: 36, tabPer: 2, tabWords: 4, tabTotal: 6, schemaLines: 8 };
 // Modulele frontend sunt teritoriu nou pentru Alex: desfășurări mai lungi, exemplu cu ✗ / ✓ alături. Pragul de jos rămâne 50, ca fișele scrise înainte să rămână valide.
-export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandMax: 140, exLines: 14, stepLines: 8, cols: 36 };
+export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandMax: 140, exLines: 14, stepLines: 8, cols: 36, tabPer: 2, tabWords: 4, tabTotal: 6, schemaLines: 8 };
 // Aceeași listă ca modulele cu `fe: true` din date (validate.mjs și un test unit verifică egalitatea); aplicația citește câmpul `fe`, nu lista.
 export const DESF_FE_MODULES = ["js", "ts", "react", "frontend", "fedebug"];
 export const desfLimits = id => (DESF_FE_MODULES.includes(id) ? DESF_LIMITS_FE : DESF_LIMITS);
@@ -202,9 +203,44 @@ export const desfLimits = id => (DESF_FE_MODULES.includes(id) ? DESF_LIMITS_FE :
 export const DESF_ASK_BUDGET = 28500;
 export const DESF_LANGS = ["python", "py", "cpp", "ts", "tsx", "js", "jsx", "text"];
 const DESF_TEXT = ["p", "i", "ex", "an", "cpp", "nu", "leg"];
-export const DESF_LABEL = { p: "Problema", i: "Ideea", ex: "Exemplu", an: "Analogie", pas: "Pas cu pas", cpp: "În C++", nu: "Unde nu ține", leg: "Legătură" };
+export const DESF_LABEL = { p: "Problema", i: "Ideea", ex: "Exemplu", an: "Analogie", pas: "Pas cu pas", tab: "Tablă", cpp: "În C++", nu: "Unde nu ține", leg: "Legătură" };
 const FENCE_RE = /```(\w*)[^\n]*\n([\s\S]*?)```/g;
 const GROUP_RE = /^[-*]\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*:\s*(\S.*)$/;
+
+// Tabla unui punct (câmpul `Tablă`): ce scrie Alex vede pe ecran în lecție, nu paragraful. Rânduri `- cheie: cuvânt; cuvânt` (cheile = secvențele: problema, ideea, analogie, cpp, punct) și `- schemă:` urmat de un bloc ```text.
+// Întoarce { tab: { problema: [..], …, schema: "text fără garduri" }, err: [mesaje] }; mesajele ajung la checkDesf, care le prefixează cu fișierul și punctul.
+export const TAB_KEYS = ["problema", "ideea", "analogie", "cpp", "punct"];
+export function parseTab(raw) {
+  const tab = {}, err = [], seen = new Set();
+  let key = null, buf = [], fence = false;
+  const flush = () => {
+    if (key === "schema") {
+      const text = buf.join("\n"), blocks = codeBlocks(text), rest = text.replace(FENCE_RE, "").trim();
+      if (blocks.length !== 1 || rest) err.push("schema se scrie într-un singur bloc ```text, fără alt text");
+      else if (blocks[0].lang !== "text") err.push("schema se scrie în bloc ```text (nu „" + (blocks[0].lang || "(fără)") + "”)");
+      else tab.schema = blocks[0].code;
+    }
+    key = null; buf = [];
+  };
+  for (const line of String(raw || "").split("\n")) {
+    const m = !fence && line.match(/^-\s*([\p{L}]+)\s*:\s*(.*)$/u);
+    if (m) {
+      flush();
+      const k = m[1] === "schemă" ? "schema" : m[1];
+      if (k !== "schema" && !TAB_KEYS.includes(k)) { err.push("„" + m[1] + "” nu e o cheie de tablă (" + TAB_KEYS.join(", ") + ", schemă)"); continue; }
+      if (seen.has(k)) { err.push("„" + k + "” apare de două ori"); continue; }
+      seen.add(k);
+      if (k === "schema") { key = k; if (m[2].trim()) err.push("după „schemă:” urmează blocul ```text pe rândurile următoare"); }
+      else tab[k] = m[2].split(";").map(x => x.trim()).filter(Boolean);
+      continue;
+    }
+    if (/^\s*```/.test(line)) fence = !fence;
+    if (key === "schema") buf.push(line);
+    else if (line.trim()) err.push("rând necitibil (aștept „- cheie: cuvânt; cuvânt”): " + line.trim().slice(0, 40));
+  }
+  flush();
+  return { tab, err };
+}
 
 export function parseDesf(md, file) {
   let seq = 0;
@@ -222,6 +258,7 @@ export function parseDesf(md, file) {
     const out = { n: +x.id };
     for (const k of Object.keys(x)) if (k !== "id" && k !== "seq" && k !== "hard") out[k] = x[k];
     if (x.hard !== undefined) out.hard = /^da$/i.test(x.hard) ? true : x.hard;
+    if (x.tab !== undefined) { const t = parseTab(x.tab); out.tab = t.tab; if (t.err.length) out.tabErr = t.err; }
     return out;
   });
   return { map, items };
@@ -229,6 +266,31 @@ export function parseDesf(md, file) {
 
 export const codeBlocks = text => [...String(text || "").matchAll(FENCE_RE)].map(m => ({ lang: m[1], code: m[2].replace(/\s+$/, "") }));
 const wordCount = text => String(text || "").replace(FENCE_RE, " ").split(/\s+/).filter(Boolean).length;
+
+// Tabla (în afara numărului de cuvinte): cuvinte cheie pentru fiecare secvență a punctului, schemă opțională.
+function checkTab(it, L, at, E) {
+  const T = it.tab, p = at + "în Tablă, ";
+  (it.tabErr || []).forEach(m => E(p + m));
+  const need = ["problema", "ideea", ...(it.cpp ? ["cpp"] : []), ...(!it.ex && it.an ? ["analogie"] : []), "punct"];
+  let total = 0;
+  for (const k of need) {
+    const list = T[k];
+    if (list === undefined) { E(p + "lipsește „" + k + "” (cuvintele cheie ale secvenței)"); continue; }
+    if (!list.length) E(p + "„" + k + "” cere cel puțin 1 cuvânt cheie");
+    if (list.length > L.tabPer) E(p + "„" + k + "” are " + list.length + " cuvinte cheie (maxim " + L.tabPer + ")");
+    for (const w of list) { const n = w.split(/\s+/).length; if (n > L.tabWords) E(p + "„" + w + "” are " + n + " cuvinte (maxim " + L.tabWords + ")"); }
+    total += list.length;
+  }
+  for (const k of TAB_KEYS) if (T[k] !== undefined && !need.includes(k)) E(p + "„" + k + "” nu are secvență la acest punct");
+  if (total > L.tabTotal) E(p + "punctul are " + total + " cuvinte cheie (maxim " + L.tabTotal + ")");
+  if (T.schema !== undefined) {
+    const rows = T.schema.split("\n");
+    if (!T.schema.trim()) E(p + "schema e goală");
+    if (rows.length > L.schemaLines) E(p + "schema are " + rows.length + " rânduri (maxim " + L.schemaLines + ")");
+    rows.forEach((l, j) => { if ([...l].length > L.cols) E(p + "schema, rândul " + (j + 1) + " are " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
+    if (it.pas !== undefined) E(p + "schema nu merge cu Pas cu pas (Pas cu pas e deja schema punctului)");
+  }
+}
 
 // Regulile de conținut. Întoarce { errors, warnings }, fiecare mesaj cu numele fișierului.
 export function checkDesf(parsed, sheet, file) {
@@ -264,6 +326,7 @@ export function checkDesf(parsed, sheet, file) {
       if (rows.length > L.stepLines) E(at + "Pas cu pas are " + rows.length + " rânduri (maxim " + L.stepLines + " rânduri)");
       rows.forEach((l, j) => { if ([...l].length > L.cols) E(at + "în Pas cu pas, rândul " + (j + 1) + " are " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
     }
+    if (it.tab !== undefined) checkTab(it, L, at, E);
     const max = it.hard === true ? L.hard : L.max;
     if (words < L.min) E(at + "prea scurt (" + words + " cuvinte, minim " + L.min + ")");
     else if (words > max) E(at + "prea lung (" + words + " cuvinte, maxim " + max + (it.hard === true ? " la un punct greu" : "") + ")");
@@ -294,7 +357,7 @@ export function readDesfFiles(root) {
   return out;
 }
 
-// files: { "<modul>.md": text }. Întoarce { desf, errors, warnings }; desf[modul] = { map: { p, g: [{ a, b, t }] }, items: [{ p, i, ex?, an?, cpp?, nu?, leg?, hard? }] } indexat ca punctele fișei.
+// files: { "<modul>.md": text }. Întoarce { desf, errors, warnings }; desf[modul] = { map: { p, g: [{ a, b, t }] }, items: [{ p, i, ex?, an?, pas?, tab?, cpp?, nu?, leg?, hard? }] } indexat ca punctele fișei.
 export function buildDesf(P, files) {
   const desf = {}, errors = [], warnings = [];
   for (const [f, md] of Object.entries(files)) {

@@ -1303,6 +1303,21 @@ Surse: handbook-ul TypeScript (Utility Types, Enums, Conditional Types, Mapped T
 - ✅ **`readonly string[]`**: `xs.sort()` → TS2339 (metoda nu există pe tipul readonly).
 - ✅ **C++** (punctele 12 și 13): `enum class` (C++11) e scoped și fără conversie implicită la `int`; `std::conditional<B, T, F>` (C++11, `<type_traits>`) alege un tip după un `bool` constant. Surse: https://en.cppreference.com/w/cpp/language/enum și https://en.cppreference.com/w/cpp/types/conditional
 
+## 50. Tabla pentru `asyncio` (lecția pe tablă, tichetul 02; verificat 14 noiembrie 2026)
+
+Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate faptele sunt pe docs.python.org/3.14 (citite local pe pagină, nu din memorie).
+
+- ✅ **`to_thread`** (schema punctului 2): rulează funcția într-un thread separat; bucla rămâne liberă. Vezi și secțiunea 1.
+- ✅ **`gather`** (punctul 3): cu `return_exceptions=False`, prima excepție ajunge imediat la task-ul care face `await gather()`, iar celelalte awaitable-uri „won't be cancelled and will continue to run”. Sursă: https://docs.python.org/3.14/library/asyncio-task.html#asyncio.gather
+- ✅ **`TaskGroup`** (punctul 4): prima eroare (alta decât `CancelledError`) anulează task-urile rămase; excepțiile se adună într-un `ExceptionGroup`, prins cu `except*`. Secțiunea 1.
+- ✅ **`timeout()`** (punctul 5): la expirare anulează task-ul curent, iar `CancelledError` e transformat în `TimeoutError` de context manager, deci `TimeoutError` se prinde doar în afara blocului. Sursă: https://docs.python.org/3.14/library/asyncio-task.html#timeouts
+- ✅ **`CancelledError`** (punctul 6): `cancel()` îl aruncă în task la următorul `await`; `BaseException` îl înghite. Secțiunea 1.
+- ✅ **`Semaphore`** (punctul 7): contor intern, scăzut la `acquire()` și crescut la `release()`, nu coboară sub zero; la zero `acquire()` așteaptă. Nu e thread-safe. Sursă: https://docs.python.org/3.14/library/asyncio-sync.html#semaphore
+- ✅ **Task ținut în viață** (punctul 8): „The event loop only keeps weak references to tasks. A task that isn't referenced elsewhere may get garbage collected at any time”. Sursă: https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task
+- ✅ **`run_coroutine_threadsafe(coro, loop)`** (punctul 9): trimite corutina buclei, thread-safe, și întoarce un `concurrent.futures.Future` pe care îl aștepți dintr-un alt thread. `loop.call_soon_threadsafe` e varianta thread-safe a lui `call_soon`. Surse: https://docs.python.org/3.14/library/asyncio-task.html#asyncio.run_coroutine_threadsafe și https://docs.python.org/3.14/library/asyncio-eventloop.html#asyncio.loop.call_soon_threadsafe
+- ✅ **Cuvinte cheie C++** (puncte 2, 5, 6, 9): `std::async`, `future::wait_for`, `catch (...)`, `std::mutex` + `std::condition_variable`, aceleași ca în textul desfășurărilor, deja verificate acolo.
+- Punctele 10 și 11 n-au schemă; cuvintele lor cheie repetă doar fapte din text.
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.

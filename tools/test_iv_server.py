@@ -179,7 +179,7 @@ async def main():
         await leave_card(pg)
 
         # 502 on the question, then no AI: manual ticks, the card saves like any card
-        card = await start_gil(pg); pg.log.clear()
+        card = await start_gil(pg); pg.log.clear(); n = card["n"]
         pg.q["turn"] = [{"status": 502}]
         await go_iv(pg); await pg.wait_for_selector('.iv .ai-err', timeout=4000)
         check("502 on the question: retry and no-AI are offered", await pg.locator('[data-a="iv-retry"]').count() == 1 and await pg.locator('[data-a="iv-manual"]').count() == 1)

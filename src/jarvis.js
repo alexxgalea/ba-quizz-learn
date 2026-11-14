@@ -29,10 +29,12 @@ const Jarvis = (() => {
   const MAX_TRANSCRIPT = 8;
   const SETTINGS_ITEM = "onapsis-jarvis-v1";
   const SILENCE = { short: 800, normal: 1200, long: 2000 };          // „Răbdare”: cât tace Alex până consideră Jarvis că a terminat
-  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false, mode: "ecran" };
+  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false, mode: "ecran", subs: false };
   // Lecția: cât durează fereastra de ascultare, cât așteaptă o întrebare fără răspuns, cât rămâne valabilă o pauză (după ea bucata se reia de la început)
   // și pauzele dintre încercările de reconectare (în total ~60 s; celelalte moduri păstrează cele trei încercări din GeminiLive).
   const WINDOW_MS = 3000, ASK_WAIT_MS = 12000, PAUSE_KEEP_MS = 10 * 60000;
+  // Ritmul lecției: pauza dintre două secvențe ale aceleiași bucăți (după `spoken`, înainte să se ceară următoarea). Se ajustează după proba lui Alex.
+  const SEQ_GAP_MS = 2000;
   const RETRY_LESSON = [500, 1000, 2000, 3000, 4000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000];
   // Ce îi spune aplicația modelului ca să ducă lecția mai departe.
   const MSG = {
@@ -52,9 +54,12 @@ const Jarvis = (() => {
   // Un singur șablon pentru ambele moduri: cu ecran sursa e „de pe cartonaș”, doar audio e „din material” și nu există nicio trimitere vizuală (codul se povestește în cuvinte).
   const seqKit = audio => {
     const src = audio ? "din material" : "de pe cartonaș";
-    const rule = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș") + ", în 15–30 de secunde, cu vorbele tale."
-      + (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale." : "")
+    const tail = (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale." : "")
       + " Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+    const said = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș");
+    // `rule`: secvențele cu o singură idee. `slow`: cele care enumeră (harta, capcanele, recapitularea, un punct-paragraf): ritm lent, dar fără limită de timp și fără „o idee”.
+    const rule = said + ", în 10–15 secunde, cu o singură idee, cu vorbele tale. Vorbește rar, în propoziții scurte, cu pauze, și nu enumera tot ce ai în față." + tail;
+    const slow = said + ", cu vorbele tale. Vorbește rar, în propoziții scurte, cu pauze." + tail;
     const instr = {
       problema: "Spune problema " + src + "." + rule,
       ideea: "Spune ideea " + src + "." + rule,
@@ -64,10 +69,11 @@ const Jarvis = (() => {
       pas: "Spune pașii " + src + ", în ordine, ca o poveste în timp" + (audio ? ", în cuvinte, fără să citești codul." : ".") + rule,
       cpp: "Spune comparația cu C++ " + src + " și unde nu ține." + rule,
       punct: "Spune punctul din fișă " + src + " ca încheiere a bucății." + rule,
-      capcane: "Spune formulările de evitat " + src + ", ca „capcane la interviu”." + rule,
-      recap: "Recapitulează " + (audio ? "din material" : "din cartonaș") + ": spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+      punctPlain: "Spune punctul din fișă " + src + ", tot, cu vorbele tale." + slow,
+      capcane: "Spune formulările de evitat " + src + ", ca „capcane la interviu”." + slow,
+      recap: "Recapitulează " + (audio ? "din material" : "din cartonaș") + ": spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Vorbește rar, în propoziții scurte, cu pauze. Fără fapte noi. După asta nu mai apela nicio funcție."
     };
-    return { src, rule, instr };
+    return { src, rule, slow, instr };
   };
   const KIT = { ecran: seqKit(false), audio: seqKit(true) };
   const kitOf = audio => audio ? KIT.audio : KIT.ecran;
@@ -75,10 +81,10 @@ const Jarvis = (() => {
   // Cartonașele de deschidere și de încheiere (text scris de aplicație, nu de model): harta modulului (fără hartă, ideea principală), capcanele, recapitularea.
   const mapText = sh => sh.map ? sh.map.g.map(rng).join("\n") : sh.lead;
   function openSeq(sh, total, name, audio) {
-    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", { rule, src } = kitOf(audio);
+    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", { slow, src } = kitOf(audio);
     return sh.map
-      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + rule }
-      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + rule };
+      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + slow }
+      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + slow };
   }
   // La reluarea dintr-o poziție: propoziția de amintire are cartonașul punctului amintit.
   function recallSeq(sh, from, resumed, audio) {
@@ -92,17 +98,56 @@ const Jarvis = (() => {
     out.push({ tip: "recap", continut: mapText(sh), instruction: I.recap });
     return out;
   }
+  // Tabla (câmpul `Tablă` al punctului): pentru fiecare secvență, cuvinte cheie (și schemă); modelul povestește în jurul lor, nu primește paragraful.
+  const BOARD_LEAD = { problema: "problema", ideea: "ideea", analogie: "analogia", cpp: "comparația cu C++ și unde nu ține", punct: "punctul din fișă, ca încheiere a bucății" };
+  function boardInstr(tip, audio) {
+    const lead = BOARD_LEAD[tip], schema = tip === "ideea";                      // schema e doar la `ideea` (boardSequences, checkTab)
+    return audio
+      ? "Spune " + lead + " din material. Materialul are doar cuvintele cheie: povestește în jurul lor, cu vorbele tale, nu le citi ca pe o listă." + (schema ? " Dacă are și schemă, povestește-o în cuvinte, pas cu pas, fără s-o citești." : "")
+        + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Nu enumera tot ce e în material. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare. Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz."
+      : "Spune " + lead + " pe baza tablei. Pe tablă sunt doar cuvintele cheie" + (schema ? " și, dacă există, schema" : "") + ": povestește în jurul lor, cu vorbele tale, nu le citi ca pe o listă."
+        + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Nu enumera tot ce e pe tablă. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+  }
+  // Cuvintele cheie ale tablei apar când sunt spuse: potrivire pe transcrierea modelului, în litere mici, fără diacritice, pe rădăcina cuvântului
+  // (fără ultimele 3 litere, cel puțin 4 rămân; cuvintele de cel mult 4 litere se potrivesc întregi, cu terminații de plural / articol). Un cuvânt cheie e spus când toate cuvintele lui de cel puțin 3 litere, fără cifre, au rădăcina într-un cuvânt din transcriere.
+  const fold = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const tokensOf = s => fold(s).split(/[^a-z0-9]+/).filter(Boolean);
+  const SHORT_END = /^(s|es|i|e|ul|uri|ului|urile|ii|le|lui|ri)$/;       // terminațiile de plural și de articol ale cuvintelor scurte
+  const rootOf = w => (w.length <= 4 ? w : w.slice(0, Math.max(4, w.length - 3)));
+  function keywordSaid(kw, toks) {
+    const sig = tokensOf(kw).filter(w => w.length >= 3 && !/\d/.test(w));
+    return sig.length > 0 && sig.every(w => w.length <= 4
+      ? toks.some(x => x === w || (x.startsWith(w) && SHORT_END.test(x.slice(w.length))))        // „for” nu e în „format”, „set” nu e în „setare”
+      : toks.some(x => x.startsWith(rootOf(w))));
+  }
+  // Cartonaș de tablă: conținutul e un obiect ({ cuvinte, schema?, cod? }), nu text. Singurul loc al testului (și app.js îl folosește).
+  const isBoardCard = c => !!(c && c.continut && typeof c.continut === "object");
   const unfence = c => { const m = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(String(c)); return (m ? m[1] : String(c)).replace(/\s+$/, ""); };
   // Secvențele bucății n (1..total) a unei fișe { points, desf? }; `audio` schimbă doar instrucțiunile (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
   // Câmpurile care lipsesc se sar; „Legătură” nu are secvență. Fără desfășurare rămâne doar `punct`. Cartonașul codului (exemplu, pas) vine fără gardurile ```.
+  // Un punct cu `tab` (cuvinte cheie pe secvență, schemă) are `continut = { cuvinte, schema?, cod? }`: exemplul e doar `cod`, pas cu pas e doar `schema`; textul desfășurării nu mai e material.
   function lessonSequences(sheet, n, audio) {
     const x = (sheet.desf && sheet.desf[n - 1]) || {}, out = [];
+    if (x.tab) return boardSequences(sheet, n, x, audio);
     const add = (tip, continut) => { if (continut) out.push({ tip, continut, instruction: kitOf(audio).instr[tip] }); };
     add("problema", x.p); add("ideea", x.i);
     if (x.ex) add("exemplu", unfence(x.ex)); else add("analogie", x.an);
     add("pas", x.pas && unfence(x.pas));
     add("cpp", x.cpp || x.nu ? [x.cpp, x.nu && "Unde nu ține: " + x.nu].filter(Boolean).join("\n") : "");
-    add("punct", sheet.points[n - 1]);
+    const plain = !out.length;                            // fără desfășurare: punctul e un paragraf întreg, nu o idee
+    if (sheet.points[n - 1]) out.push({ tip: "punct", continut: sheet.points[n - 1], instruction: kitOf(audio).instr[plain ? "punctPlain" : "punct"] });
+    return out;
+  }
+
+  function boardSequences(sheet, n, x, audio) {
+    const T = x.tab, out = [], I = kitOf(audio).instr;
+    const words = tip => (T[tip] || []).slice();
+    const board = (tip, extra) => { const c = Object.assign({ cuvinte: words(tip) }, extra); if (c.cuvinte.length || c.cod || c.schema) out.push({ tip, continut: c, instruction: boardInstr(tip, audio) }); };
+    board("problema"); board("ideea", T.schema ? { schema: T.schema } : null);
+    if (x.ex) out.push({ tip: "exemplu", continut: { cuvinte: [], cod: unfence(x.ex) }, instruction: I.exemplu }); else board("analogie");
+    if (x.pas) out.push({ tip: "pas", continut: { cuvinte: [], schema: unfence(x.pas) }, instruction: I.pas });
+    if (x.cpp || x.nu) board("cpp");
+    board("punct");
     return out;
   }
 
@@ -170,14 +215,14 @@ const Jarvis = (() => {
       "Ton: politicos și sec, cu umor discret, ca Jarvis pentru Tony Stark. Îi spui „Alex”. Vorbești ca într-o conversație, în propoziții scurte, ușor de urmărit pe ureche, fără liste și fără markdown.",
       o.audio
         ? "Alex ascultă doar, fără să urmărească nimic în față: tot ce spui trebuie să se înțeleagă din auz. Nu face trimiteri vizuale. Codul îl povestești în cuvinte: ce face fiecare parte și ce iese, fără să-l citești, fără simboluri rostite și fără numere de linie."
-        : "Alex poate urmări pe ecran textul secvenței curente. Poți trimite scurt la el („rândul al treilea”), dar spune tot și cu vorbele tale: ecranul doar ajută.",
+        : "Alex poate urmări pe ecran cartonașul secvenței curente. La punctele cu tablă, cartonașul e tabla: doar cuvinte cheie, o schemă, cod; nu e text de citit, deci povestești în jurul ei. Poți trimite scurt la cartonaș („rândul al treilea”), dar spune tot și cu vorbele tale: ecranul doar ajută.",
       "",
       "Cum conduci lecția:",
       "1. Primești bucățile prin funcția next_chunk, una câte una. Nu merge înainte singur: apelezi next_chunk doar când aplicația sau Alex cer bucata următoare.",
-      "2. O bucată este un punct din fișă. Dezvoltă-l în 1–1,5 minute, cu vorbele tale. Rămâi la ce ai primit: fără exemple din afara materialului, fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
+      "2. O bucată este un punct din fișă, dat pe secvențe scurte: lungimea și ritmul fiecărei secvențe le spune „instruction”, nu le lungi. Spune-o cu vorbele tale. Rămâi la ce ai primit: fără exemple din afara materialului, fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
       "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare e singurul exemplu: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
       "3. Dacă răspunsul are „tip”: „harta”, e deschiderea lecției: spui problema modulului și grupurile de puncte " + (o.audio ? "din material" : "de pe cartonaș") + ", după „instruction”. Dacă are „tip”: „punct” la începutul bucății și „instruction” cere amintirea poziției, spui doar acea propoziție. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
-      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (" + (o.audio ? "materialul pe care îl spui" : "cartonașul pe care îl vede Alex") + ") și „instruction”. Spui doar " + (o.audio ? "materialul" : "cartonașul") + ", în ordinea lui, și te oprești; aplicația cere secvența următoare.",
+      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (" + (o.audio ? "materialul pe care îl spui" : "cartonașul pe care îl vede Alex") + "; la punctele cu tablă e un obiect cu „cuvinte” (cuvintele cheie), opțional „schema” și „cod”, nu paragraf) și „instruction”. Spui doar " + (o.audio ? "materialul" : "cartonașul") + ", în ordinea lui, și te oprești; aplicația cere secvența următoare.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
       "5. Când next_chunk dă „closing” cu „k” și „of”, finalul vine pe secvențe: „capcane” (formulările de evitat) și „recap” (recapitularea din " + (o.audio ? "material" : "cartonaș") + ", scrisă de aplicație: n-o alcătuiești tu), iar la „recap” închei cu un rămas-bun scurt. Când „closing” nu are „k”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",
@@ -291,7 +336,24 @@ const Jarvis = (() => {
     function showPending() {
       if (!lz.pend) return;
       lz.shown = lz.pend; lz.pend = null;
+      if (isBoard(lz.shown)) { lz.shown.seen = new Set(); lz.shown.epoch = lz.epoch; revealWords(false); }
       markSub();
+    }
+    // Tabla: cuvintele cheie arătate (`seen`, indexuri) cresc pe măsură ce modelul le spune; la `spoken` apar toate cele rămase.
+    // Contează doar replicile turei curente (id mai mare decât `oldMax`, fixat la ultimul apel de funcție): din tura veche nu rămâne nimic, nici întârziat.
+    const isBoard = sh => lz.mode !== "audio" && !!sh && isBoardCard(sh.card) && Array.isArray(sh.card.continut.cuvinte);
+    function revealWords(all) {
+      const sh = lz.shown;
+      if (!isBoard(sh) || !sh.seen || (!all && sh.epoch !== lz.epoch)) return;
+      const toks = tokensOf(Object.keys(lz.said).sort((a, b) => a - b).map(id => lz.said[id]).join(" ")), before = sh.seen.size;
+      sh.card.continut.cuvinte.forEach((w, i) => { if (all || keywordSaid(w, toks)) sh.seen.add(i); });
+      if (sh.seen.size !== before) sync();
+    }
+    // Ce vede ecranul din cartonaș: la o tablă, doar cuvintele cheie deja spuse (schema și codul vin întregi).
+    function cardView(sh) {
+      const c = sh.card;
+      if (!isBoard(sh) || !sh.seen) return c;
+      return Object.assign({}, c, { continut: Object.assign({}, c.continut, { cuvinte: c.continut.cuvinte.filter((_, i) => sh.seen.has(i)) }) });
     }
     // Răspunsul la o întrebare liberă: „mai simplu” și „exemplu” (cerere scurtă) lasă cartonașul bucății, cu etichetă; orice altceva trece pe cartonașul `intrebare`.
     // Întrebarea apare doar dacă transcrierea intrării a adus-o (altfel cartonașul are doar eticheta). Nu se salvează nicăieri.
@@ -316,9 +378,9 @@ const Jarvis = (() => {
       const c = lz.cur, sh = lz.shown;
       const status = lz.lost ? "lost" : lz.paused ? "paused" : lz.window ? "window" : lz.asking || lz.talking ? "asking"
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
-      return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
+      return { card: sh ? cardView(sh) : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" && lz.subs ? subtitle() : [], subs: lz.subs, module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
-    function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } }
+    function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } if (lz.gapTimer) { lz.gapTimer(); lz.gapTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
     function quiet() {
       if (!lz) return;
@@ -358,7 +420,12 @@ const Jarvis = (() => {
       if (c && c.delivering) {
         c.delivering = false;
         // Mijlocul unei bucăți pe secvențe: se cere secvența următoare; fereastra și poziția așteaptă ultima.
-        if (c.seqs && c.k < c.seqs.length) { c.advance = true; sess.call.say(MSG.seq); sync(); return; }
+        // Între ele e o pauză (SEQ_GAP_MS), anulată de orice întrerupere (cancelTimers).
+        if (c.seqs && c.k < c.seqs.length) {
+          c.advance = true;
+          lz.gapTimer = env.clock.after(SEQ_GAP_MS, () => { lz.gapTimer = null; if (lz.cur === c && c.advance && !lz.paused && !lz.lost) sess.call.say(MSG.seq); });
+          sync(); return;
+        }
         if (c.n <= lz.total) { lz.heard.add(c.n); env.app.lessonHeard(lz.module, c.n); }
         else { lz.closingHeard = true; env.app.lessonDone(lz.module); sess.call.end(); return; }
         afterChunk();
@@ -368,8 +435,11 @@ const Jarvis = (() => {
     // Continuarea după o întrerupere: bucata neauzită se reia, una auzită trece la următoarea (sau își redeschide fereastra).
     function continueLesson(prefix, windowOk) {
       const c = lz.cur, cut = lz.redo || (c && (c.delivering || c.advance));      // `redo`: bucata a fost tăiată de o întrebare; între secvențe, bucata se reia de la prima
+      // Excepție: pauză scurtă (`windowOk`, nimic pierdut) în pauza dintre secvențe; secvența spusă s-a auzit toată, deci merge mai departe cu următoarea.
+      const gap = windowOk && c && c.advance && !c.delivering && !lz.redo;
       lz.redo = false;
       if (!c) sess.call.say(prefix + MSG.next);
+      else if (gap) sess.call.say(prefix + MSG.seq);
       else if (cut) sess.call.say(prefix + MSG.repeat);
       else if (windowOk && !lz.muted) openWindow();
       else sess.call.say(prefix + MSG.next);
@@ -445,7 +515,8 @@ const Jarvis = (() => {
     // Evenimentele apelului care contează pentru lecție.
     function lessonEvent(e) {
       if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
-      else if (e.type === "spoken") onSpoken();
+      else if (e.type === "spoken") { if (!lz.answering) revealWords(true); onSpoken(); }       // după un răspuns la o întrebare, tabla bucății rămâne cum era
+      else if (e.type === "tool") { lz.oldMax = Math.max(lz.oldMax, ...Object.keys(lz.said).map(Number)); lz.said = {}; lz.epoch++; }
       else if (e.type === "voice") {
         if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; lz.qText = ""; armAsk(); sync(); }
       } else if (e.type === "state") {
@@ -453,6 +524,9 @@ const Jarvis = (() => {
         if (e.state === "speaking" && lz.asking && !lz.talking) { showAnswer(); lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
         else sync();
       } else if (e.type === "transcript") {
+        // Replicile din timpul unei întrebări libere nu sunt din lecție: nu dezvăluie cuvinte, iar id-ul lor intră în `oldMax` (nici resturile întârziate nu contează).
+        if (e.who === "model" && (lz.asking || lz.answering)) lz.oldMax = Math.max(lz.oldMax, typeof e.id === "number" ? e.id : 0, ...Object.keys(lz.said).map(Number));
+        else if (e.who === "model" && e.id > lz.oldMax) { lz.said[e.id] = e.text; revealWords(false); }
         if (e.who === "me" && (lz.asking || lz.answering)) { lz.qText = e.text; if (lz.answering) { applyQuestion(); sync(); } }
         if (lz.asking && e.who === "me") armAsk();
       }
@@ -494,8 +568,8 @@ const Jarvis = (() => {
       }
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
-        muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
-        winTimer: null, askTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
+        muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", subs: !!st.subs, said: {}, oldMax: 0, epoch: 0, window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
+        winTimer: null, askTimer: null, gapTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,
       // deci primul `getToken` din sesiune îl întoarce pe acesta, iar următoarele (reconectări, redeschidere) cer altul.
@@ -579,6 +653,6 @@ const Jarvis = (() => {
     };
   }
 
-  return { create, buildSystem, buildLessonSystem, lessonSequences };
+  return { create, buildSystem, buildLessonSystem, lessonSequences, keywordSaid, tokensOf, isBoardCard, SEQ_GAP_MS };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Jarvis;
