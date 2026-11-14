@@ -6,8 +6,8 @@
 
 **Blocked by:** 03, 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] README › Lecție și › Desfășurări, plus bullet-ul `Lecție` din `CLAUDE.md`, la zi.
-- [ ] `node validate.mjs`, `node build.mjs`, `node --check dist/bundle-check.js`, toate testele de interfață și de unitate din `CLAUDE.md`, `node tools/desf_examples.mjs`.
-- [ ] `npm run pages`; `BUILD` din `docs/app/index.html` coincide cu cel nou.
+- [x] README › Lecție și › Desfășurări, plus bullet-ul `Lecție` din `CLAUDE.md`, la zi.
+- [x] `node validate.mjs`, `node build.mjs`, `node --check dist/bundle-check.js`, toate testele de interfață și de unitate din `CLAUDE.md`, `node tools/desf_examples.mjs`.
+- [x] `npm run pages`; `BUILD` din `docs/app/index.html` coincide cu cel nou.
