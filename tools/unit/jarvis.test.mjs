@@ -338,7 +338,7 @@ test("the settings are saved in the storage, the key apart from the rest", () =>
   t.jarvis.settings.set({ voice: "Puck", key: "  K2  ", halfDuplex: true });
   assert.deepEqual(
     [t.storage.data["onapsis-gemini-v1"], JSON.parse(t.storage.data["onapsis-jarvis-v1"]), t.jarvis.settings.get()],
-    ["K2", { voice: "Puck", patience: "normal", halfDuplex: true, micId: "", muted: false, mode: "ecran", subs: false }, { voice: "Puck", patience: "normal", halfDuplex: true, micId: "", muted: false, mode: "ecran", key: "K2" }]);
+    ["K2", { voice: "Puck", patience: "normal", halfDuplex: true, micId: "", muted: false, mode: "ecran", subs: false }, { voice: "Puck", patience: "normal", halfDuplex: true, micId: "", muted: false, mode: "ecran", subs: false, key: "K2" }]);
 });
 
 test("an empty key removes the stored one", () => {
