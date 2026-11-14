@@ -67,8 +67,12 @@ O parte a unei bucăți: problema, ideea, exemplul, pașii sau comparația cu C+
 _Avoid_: segment, pas
 
 **Cartonaș**:
-Ce arată ecranul în timpul unei secvențe: exact textul sau codul din care vorbește Jarvis (tip și conținut). Același conținut ajunge la model, ca să se audă ce se vede.
+Ce arată ecranul în timpul unei secvențe (tip și conținut). La punctele cu **Tablă** e tabla; la celelalte, textul sau codul din care vorbește Jarvis. Același conținut ajunge la model.
 _Avoid_: card
+
+**Tablă**:
+Câmpul scris de noi la un punct al fișei, din care se face cartonașul: 1–2 cuvinte cheie pe secvență, o schemă opțională și codul. Fără paragrafe; Jarvis povestește în jurul ei, nu o citește. Cuvintele cheie apar când sunt spuse.
+_Avoid_: rezumat, subtitrare
 
 **Poziția lecției**:
 Prima bucată a unui modul pe care Alex n-a ascultat-o până la capăt; de acolo continuă lecția următoare, după o propoziție de recapitulare. Revine la început când fișa e ascultată toată.
