@@ -45,7 +45,7 @@ README-ul spune 264 de grile și 217 întrebări deschise; în date sunt 329. Co
 
 1. **AI-ul supraveghează, Alex produce.** Orice ecran de învățare cere un răspuns de la Alex înainte să arate ceva. AI-ul întreabă, observă, corectează și abia la urmă explică.
 2. **Un singur fir, nu multe file.** Formele folosite puțin nu se repară lustruindu-le separat. Se aduc în fluxul pe care Alex îl folosește deja: grila.
-3. **Ce se aude e ce se vede.** În lecție există mereu un cartonaș, iar cartonașul e sursa din care vorbește Jarvis, nu un rezumat al ei.
+3. **Ce se aude e ce se vede.** În lecție există mereu un cartonaș, dar cartonașul e tabla, nu transcrierea: cuvinte cheie, scheme și cod, iar Jarvis povestește în jurul lor (revizuit după feedbackul lui Alex din 14 noiembrie 2026, `.scratch/lectia-tabla/`).
 4. **AI-ul judecă față de material scris de noi.** Punctele, desfășurările, `Răspuns verificare` și referințele testate sunt cheia de corectare. Modelul nu e sursă de fapte.
 5. **Fără AI merge tot, mai simplu.** Fiecare formă supravegheată are o cale cu notare proprie, ca acum.
 6. **Conceptul e unitatea.** Progresul se citește pe punct, pe trepte, nu pe numărul de itemi văzuți.
