@@ -6,10 +6,10 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Teste peste `Call` real cu transcriere falsă: un cuvânt apare când e spus; cele nespuse apar la `spoken`; la schimbarea secvenței nu rămâne nimic din cea veche.
-- [ ] Subtitrarea e ascunsă implicit; comutatorul o arată; alegerea se ține în `onapsis-jarvis-v1`.
-- [ ] `intrebare` fără subtitrare arată doar întrebarea lui Alex.
-- [ ] `tools/test_lesson.py`: un cartonaș de tablă are cel mult ~25 de cuvinte; 360 px, light și dark.
-- [ ] „Doar audio” neschimbat (fără tablă pe ecran).
+- [x] Teste peste `Call` real cu transcriere falsă: un cuvânt apare când e spus; cele nespuse apar la `spoken`; la schimbarea secvenței nu rămâne nimic din cea veche.
+- [x] Subtitrarea e ascunsă implicit; comutatorul o arată; alegerea se ține în `onapsis-jarvis-v1`.
+- [x] `intrebare` fără subtitrare arată doar întrebarea lui Alex.
+- [x] `tools/test_lesson.py`: un cartonaș de tablă are cel mult ~25 de cuvinte; 360 px, light și dark.
+- [x] „Doar audio” neschimbat (fără tablă pe ecran).
