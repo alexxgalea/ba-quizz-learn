@@ -1747,3 +1747,23 @@ test("a question on a module without sequences also gets the question card", asy
   await deliver(t); t.jarvis.talk(true); heard(t, "Cum?"); t.jarvis.talk(false); t.live.emit({ type: "interrupted" }); sound(t);
   assert.deepEqual(t.state().lesson.card, { tip: "intrebare", continut: "Cum?" });
 });
+
+// ---------- reparații după code-review (PR 11) ----------
+
+const ONE_IDEA = /o singură idee|nu enumera|10–15/;
+
+test("the sequences that enumerate (map, traps, recap) and a plain paragraph point do not ask for one idea or for not enumerating", async () => {
+  const t = setup(); await begin(t, "asyncio");
+  const harta = await t.tool("next_chunk"); speak(t);
+  const slow = { harta: harta.instruction };
+  const u = setup(); await toAsyncClosing(u);
+  slow.capcane = (await u.tool("next_chunk")).instruction; speak(u); u.clock.advance(GAP);
+  slow.recap = (await u.tool("next_chunk")).instruction;
+  slow.punctPlain = Jarvis.lessonSequences({ points: SHEET.points, avoid: [] }, 1)[0].instruction;
+  for (const [k, i] of Object.entries(slow)) { assert.equal(ONE_IDEA.test(i), false, k + ": " + i); assert.match(i, /rar|propoziții scurte/, k); }
+  for (const audio of [false, true]) {
+    const by = byTip(seqSheet(), 1, audio);
+    for (const tip of ["problema", "ideea", "exemplu", "cpp", "punct"]) assert.match(by[tip].instruction, /o singură idee/, tip);
+    for (const tip of ["problema", "ideea", "punct"]) assert.match(byTip(boardSheet(), 1, audio)[tip].instruction, /o singură idee/, "tablă " + tip);
+  }
+});

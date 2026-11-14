@@ -54,9 +54,12 @@ const Jarvis = (() => {
   // Un singur șablon pentru ambele moduri: cu ecran sursa e „de pe cartonaș”, doar audio e „din material” și nu există nicio trimitere vizuală (codul se povestește în cuvinte).
   const seqKit = audio => {
     const src = audio ? "din material" : "de pe cartonaș";
-    const rule = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș") + ", în 10–15 secunde, cu o singură idee, cu vorbele tale. Vorbește rar, în propoziții scurte, cu pauze, și nu enumera tot ce ai în față."
-      + (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale." : "")
+    const tail = (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz, fără trimiteri vizuale." : "")
       + " Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+    const said = " Spune doar ce e " + (audio ? "în material, în ordinea lui" : "pe cartonaș, în ordinea de pe cartonaș");
+    // `rule`: secvențele cu o singură idee. `slow`: cele care enumeră (harta, capcanele, recapitularea, un punct-paragraf): ritm lent, dar fără limită de timp și fără „o idee”.
+    const rule = said + ", în 10–15 secunde, cu o singură idee, cu vorbele tale. Vorbește rar, în propoziții scurte, cu pauze, și nu enumera tot ce ai în față." + tail;
+    const slow = said + ", cu vorbele tale. Vorbește rar, în propoziții scurte, cu pauze." + tail;
     const instr = {
       problema: "Spune problema " + src + "." + rule,
       ideea: "Spune ideea " + src + "." + rule,
@@ -66,10 +69,11 @@ const Jarvis = (() => {
       pas: "Spune pașii " + src + ", în ordine, ca o poveste în timp" + (audio ? ", în cuvinte, fără să citești codul." : ".") + rule,
       cpp: "Spune comparația cu C++ " + src + " și unde nu ține." + rule,
       punct: "Spune punctul din fișă " + src + " ca încheiere a bucății." + rule,
-      capcane: "Spune formulările de evitat " + src + ", ca „capcane la interviu”." + rule,
-      recap: "Recapitulează " + (audio ? "din material" : "din cartonaș") + ": spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Fără fapte noi. După asta nu mai apela nicio funcție."
+      punctPlain: "Spune punctul din fișă " + src + ", tot, cu vorbele tale." + slow,
+      capcane: "Spune formulările de evitat " + src + ", ca „capcane la interviu”." + slow,
+      recap: "Recapitulează " + (audio ? "din material" : "din cartonaș") + ": spune grupurile de puncte, unul după altul, într-o propoziție fiecare (dacă e doar ideea principală, spune-o pe ea), apoi un rămas-bun scurt. Vorbește rar, în propoziții scurte, cu pauze. Fără fapte noi. După asta nu mai apela nicio funcție."
     };
-    return { src, rule, instr };
+    return { src, rule, slow, instr };
   };
   const KIT = { ecran: seqKit(false), audio: seqKit(true) };
   const kitOf = audio => audio ? KIT.audio : KIT.ecran;
@@ -77,10 +81,10 @@ const Jarvis = (() => {
   // Cartonașele de deschidere și de încheiere (text scris de aplicație, nu de model): harta modulului (fără hartă, ideea principală), capcanele, recapitularea.
   const mapText = sh => sh.map ? sh.map.g.map(rng).join("\n") : sh.lead;
   function openSeq(sh, total, name, audio) {
-    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", { rule, src } = kitOf(audio);
+    const say = " Începe cu numărul de idei: „" + name + ", în " + total + " idei.”", { slow, src } = kitOf(audio);
     return sh.map
-      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + rule }
-      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + rule };
+      ? { tip: "harta", continut: [sh.map.p].concat(sh.map.g.map(rng)).join("\n"), instruction: "Spune problema modulului " + src + " și cum se grupează punctele, grup cu grup, ca să se vadă firul." + say + slow }
+      : { tip: "harta", continut: sh.lead, instruction: "Spune ideea principală " + src + "." + say + slow };
   }
   // La reluarea dintr-o poziție: propoziția de amintire are cartonașul punctului amintit.
   function recallSeq(sh, from, resumed, audio) {
@@ -125,7 +129,8 @@ const Jarvis = (() => {
     if (x.ex) add("exemplu", unfence(x.ex)); else add("analogie", x.an);
     add("pas", x.pas && unfence(x.pas));
     add("cpp", x.cpp || x.nu ? [x.cpp, x.nu && "Unde nu ține: " + x.nu].filter(Boolean).join("\n") : "");
-    add("punct", sheet.points[n - 1]);
+    const plain = !out.length;                            // fără desfășurare: punctul e un paragraf întreg, nu o idee
+    if (sheet.points[n - 1]) out.push({ tip: "punct", continut: sheet.points[n - 1], instruction: kitOf(audio).instr[plain ? "punctPlain" : "punct"] });
     return out;
   }
 
