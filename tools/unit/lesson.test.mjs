@@ -1825,3 +1825,13 @@ test("the longer forms of a longer keyword and keywords without a word of 3 lett
   assert.equal(said("conexiuni deschise", "o conexiune deschisă"), true);
   assert.equal(said("I/O", "orice"), false);                           // fără cuvânt de 3+ litere: apare doar la `spoken`
 });
+
+test("only the ideea board instruction talks about a scheme; the analogie one does not, as the scheme belongs to the ideea sequence", () => {
+  const sh = seqSheet({ desf: [SHEET_AS.desf[0], Object.assign({}, SHEET_AS.desf[1], { tab: { problema: ["a"], ideea: ["b"], analogie: ["d"], punct: ["c"] } }), SHEET_AS.desf[2]] });
+  for (const audio of [false, true]) {
+    const by = byTip(sh, 2, audio);
+    assert.equal(/schem/i.test(by.analogie.instruction), false, "analogie " + audio);
+    const withScheme = byTip(boardSheet(), 1, audio);
+    assert.match(withScheme.ideea.instruction, /schem/i, "ideea " + audio);
+  }
+});

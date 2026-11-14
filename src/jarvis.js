@@ -101,7 +101,7 @@ const Jarvis = (() => {
   // Tabla (câmpul `Tablă` al punctului): pentru fiecare secvență, cuvinte cheie (și schemă); modelul povestește în jurul lor, nu primește paragraful.
   const BOARD_LEAD = { problema: "problema", ideea: "ideea", analogie: "analogia", cpp: "comparația cu C++ și unde nu ține", punct: "punctul din fișă, ca încheiere a bucății" };
   function boardInstr(tip, audio) {
-    const lead = BOARD_LEAD[tip], schema = tip === "ideea" || tip === "analogie";
+    const lead = BOARD_LEAD[tip], schema = tip === "ideea";                      // schema e doar la `ideea` (boardSequences, checkTab)
     return audio
       ? "Spune " + lead + " din material. Materialul are doar cuvintele cheie: povestește în jurul lor, cu vorbele tale, nu le citi ca pe o listă." + (schema ? " Dacă are și schemă, povestește-o în cuvinte, pas cu pas, fără s-o citești." : "")
         + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Nu enumera tot ce e în material. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare. Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz."
