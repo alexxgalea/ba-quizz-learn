@@ -1144,7 +1144,7 @@ test("every module of the real data has sequences ending in the point, with cont
       assert.ok(q.length > 0, m.id + " " + n);
       assert.equal(q.at(-1).tip, "punct", m.id + " " + n);
       for (const x of q) {
-        assert.ok(x.continut && x.continut.trim(), m.id + " " + n + " " + x.tip + ": empty continut");
+        assert.ok(typeof x.continut === "object" ? x.continut.cuvinte.length || x.continut.cod || x.continut.schema : x.continut && x.continut.trim(), m.id + " " + n + " " + x.tip + ": empty continut");
         assert.ok(x.instruction, m.id + " " + n + " " + x.tip);
         if (audio) assert.equal(SCREEN_WORDS.test(x.instruction), false, m.id + " " + x.tip + ": " + x.instruction);
       }
@@ -1152,6 +1152,86 @@ test("every module of the real data has sequences ending in the point, with cont
     }
   }
   assert.ok(seen > 200, "points checked: " + seen);
+});
+
+// ---------- tabla: cuvinte cheie și schemă în loc de paragrafe ----------
+
+const TABLA = { problema: ["cuvânt problemă"], ideea: ["cuvânt idee", "alt cuvânt"], schema: "A rulează\n↓ await\nB rulează", cpp: ["epoll_wait"], punct: ["cuvânt punct"] };
+const boardSheet = () => seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab: TABLA }), ...SHEET_AS.desf.slice(1)] });
+const byTip = (sh, n, audio) => Object.fromEntries(Jarvis.lessonSequences(sh, n, audio).map(x => [x.tip, x]));
+
+test("a point with a board gives sequences with { cuvinte, schema?, cod? } and the other points stay text", () => {
+  const sh = boardSheet(), by = byTip(sh, 1);
+  assert.deepEqual(tips(sh, 1), ["problema", "ideea", "exemplu", "cpp", "punct"]);
+  assert.deepEqual(by.problema.continut, { cuvinte: ["cuvânt problemă"] });
+  assert.deepEqual(by.ideea.continut, { cuvinte: ["cuvânt idee", "alt cuvânt"], schema: TABLA.schema });
+  assert.deepEqual(by.exemplu.continut, { cuvinte: [], cod: SHEET_AS.desf[0].ex.replace(/^```python\n|\n```$/g, "") });
+  assert.deepEqual(by.cpp.continut, { cuvinte: ["epoll_wait"] });
+  assert.deepEqual(by.punct.continut, { cuvinte: ["cuvânt punct"] });
+  assert.equal(by.exemplu.continut.cod.includes("```"), false);
+  // punctele fără tablă: textul de azi
+  assert.equal(typeof byTip(sh, 2).problema.continut, "string");
+  assert.equal(typeof byTip(sh, 3).punct.continut, "string");
+});
+
+test("a point with a board does not hand the unfolding paragraphs to the model, in either mode", () => {
+  for (const audio of [false, true]) {
+    const all = JSON.stringify(Jarvis.lessonSequences(boardSheet(), 1, audio).map(x => x.continut));
+    for (const text of [SHEET_AS.desf[0].p, SHEET_AS.desf[0].i, SHEET_AS.desf[0].cpp, SHEET_AS.points[0]]) assert.equal(all.includes(text), false, text);
+  }
+});
+
+test("a board with Pas cu pas gives the steps as the schema of the pas sequence", () => {
+  const tab = { problema: ["a"], ideea: ["b"], analogie: ["d"], punct: ["c"] };
+  const sh = seqSheet({ desf: [SHEET_AS.desf[0], Object.assign({}, SHEET_AS.desf[1], { tab }), SHEET_AS.desf[2]] }), by = byTip(sh, 2);
+  assert.deepEqual(tips(sh, 2), ["problema", "ideea", "analogie", "pas", "punct"]);
+  assert.deepEqual(by.pas.continut, { cuvinte: [], schema: SHEET_AS.desf[1].pas.replace(/^```text\n|\n```$/g, "") });
+  assert.deepEqual(by.analogie.continut, { cuvinte: ["d"] });
+});
+
+test("the board instructions ask to tell around the keywords, slowly, and do not read them out", () => {
+  const by = byTip(boardSheet(), 1);
+  for (const tip of ["problema", "ideea", "cpp", "punct"]) {
+    const i = by[tip].instruction;
+    assert.match(i, /cuvinte(le)? cheie/, tip);
+    assert.match(i, /în jurul/, tip);
+    assert.match(i, /nu (le )?(citi|enumera)/i, tip);
+    assert.match(i, /rar/, tip);
+    assert.match(i, /fără fapte noi/i, tip);
+  }
+  assert.match(by.ideea.instruction, /schema/);
+  // codul rămâne ca azi
+  assert.equal(by.exemplu.instruction, byTip(seqSheet(), 1).exemplu.instruction);
+});
+
+test("the audio-only board instructions have no screen words and ask for the scheme told in words", () => {
+  const by = byTip(boardSheet(), 1, true);
+  for (const x of Object.values(by)) assert.equal(SCREEN_WORDS.test(x.instruction), false, x.tip + ": " + x.instruction);
+  assert.match(by.ideea.instruction, /în cuvinte/);
+});
+
+test("next_chunk hands over the board as the content and the card carries the same board", async () => {
+  const t = setup(); t.app.sheet0 = t.app.sheet;
+  t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = boardSheet().desf; return r; };
+  await begin(t, "asyncio");
+  await deliver(t);                                       // harta
+  const r = await t.tool("next_chunk");
+  assert.deepEqual([r.tip, r.continut], ["problema", { cuvinte: ["cuvânt problemă"] }]);
+  assert.match(r.instruction, /cuvinte(le)? cheie/);
+  speak(t); sound(t);
+  assert.deepEqual(t.state().lesson.card, { tip: "problema", continut: { cuvinte: ["cuvânt problemă"] } });
+});
+
+test("the real asyncio point 1 has board sequences, and the real points without a board keep their text", () => {
+  const root = new URL("../../", import.meta.url), P = loadData(root), { desf } = buildDesf(P, readDesfFiles(root));
+  const as = { points: P.sheets.asyncio.points, desf: desf.asyncio.items };
+  const q = Jarvis.lessonSequences(as, 1);
+  assert.deepEqual(q.map(x => x.tip), ["problema", "ideea", "exemplu", "cpp", "punct"]);
+  for (const x of q) assert.equal(typeof x.continut, "object", x.tip);
+  assert.ok(q.find(x => x.tip === "ideea").continut.schema.includes("await"));
+  assert.ok(q.find(x => x.tip === "exemplu").continut.cod.startsWith("import asyncio"));
+  for (const x of q) if (x.continut.cuvinte.length) assert.ok(x.continut.cuvinte.length <= 2);
+  for (let n = 2; n <= as.points.length; n++) for (const x of Jarvis.lessonSequences(as, n)) assert.equal(typeof x.continut, "string", n + " " + x.tip);
 });
 
 // ---------- module fără desfășurări: fără improvizație ----------
