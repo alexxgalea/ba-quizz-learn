@@ -507,7 +507,7 @@ const Jarvis = (() => {
     // Evenimentele apelului care contează pentru lecție.
     function lessonEvent(e) {
       if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
-      else if (e.type === "spoken") { revealWords(true); onSpoken(); }
+      else if (e.type === "spoken") { if (!lz.answering) revealWords(true); onSpoken(); }       // după un răspuns la o întrebare, tabla bucății rămâne cum era
       else if (e.type === "tool") { lz.oldMax = Math.max(lz.oldMax, ...Object.keys(lz.said).map(Number)); lz.said = {}; lz.epoch++; }
       else if (e.type === "voice") {
         if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; lz.qText = ""; armAsk(); sync(); }
@@ -516,7 +516,9 @@ const Jarvis = (() => {
         if (e.state === "speaking" && lz.asking && !lz.talking) { showAnswer(); lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
         else sync();
       } else if (e.type === "transcript") {
-        if (e.who === "model" && e.id > lz.oldMax) { lz.said[e.id] = e.text; revealWords(false); }
+        // Replicile din timpul unei întrebări libere nu sunt din lecție: nu dezvăluie cuvinte, iar id-ul lor intră în `oldMax` (nici resturile întârziate nu contează).
+        if (e.who === "model" && (lz.asking || lz.answering)) lz.oldMax = Math.max(lz.oldMax, typeof e.id === "number" ? e.id : 0, ...Object.keys(lz.said).map(Number));
+        else if (e.who === "model" && e.id > lz.oldMax) { lz.said[e.id] = e.text; revealWords(false); }
         if (e.who === "me" && (lz.asking || lz.answering)) { lz.qText = e.text; if (lz.answering) { applyQuestion(); sync(); } }
         if (lz.asking && e.who === "me") armAsk();
       }

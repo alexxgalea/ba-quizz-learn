@@ -1767,3 +1767,16 @@ test("the sequences that enumerate (map, traps, recap) and a plain paragraph poi
     for (const tip of ["problema", "ideea", "punct"]) assert.match(byTip(boardSheet(), 1, audio)[tip].instruction, /o singură idee/, "tablă " + tip);
   }
 });
+
+test("the answer to a free question does not reveal keywords of the board, neither while it is spoken nor when it ends", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);                                                     // problema, cu tablă
+  t.jarvis.talk(true); heard(t, "Mai simplu"); t.jarvis.talk(false);
+  t.live.emit({ type: "interrupted" }); sound(t);                       // răspunsul începe; cartonașul rămâne al bucății, cu etichetă
+  assert.equal(t.state().lesson.card.eticheta, "Mai simplu");
+  say(t, "Sunt multe conexiuni deschise.", "m2");
+  assert.deepEqual(words(t), []);
+  speak(t);
+  assert.deepEqual(words(t), []);                                       // nici la `spoken` nu apar toate
+  assert.match(t.texts().at(-1), /repeat_chunk/);
+});
