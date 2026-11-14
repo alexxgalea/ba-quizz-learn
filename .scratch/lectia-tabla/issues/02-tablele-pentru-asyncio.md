@@ -6,9 +6,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `asyncio` au `Tablă`; `node validate.mjs` trece cu „OK”.
-- [ ] Schemele se citesc fără aliniere cu spații; rânduri ≤ 36 de caractere (`node tools/fencew.mjs 36`).
-- [ ] Cuvintele cheie nu repetă propoziții din `Problema` / `Ideea`: sunt etichete (de ex. „event loop · un singur thread”).
-- [ ] Faptele verificate sunt în `research/interview-facts.md`.
+- [x] Toate punctele din `asyncio` au `Tablă`; `node validate.mjs` trece cu „OK”.
+- [x] Schemele se citesc fără aliniere cu spații; rânduri ≤ 36 de caractere (`node tools/fencew.mjs 36`).
+- [x] Cuvintele cheie nu repetă propoziții din `Problema` / `Ideea`: sunt etichete (de ex. „event loop · un singur thread”).
+- [x] Faptele verificate sunt în `research/interview-facts.md`.

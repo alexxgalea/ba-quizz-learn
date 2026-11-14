@@ -1314,7 +1314,7 @@ test("next_chunk hands over the board as the content and the card carries the sa
   assert.deepEqual(t.state().lesson.card, { tip: "problema", continut: { cuvinte: ["cuvânt problemă"] } });
 });
 
-test("the real asyncio point 1 has board sequences, and the real points without a board keep their text", () => {
+test("every real asyncio point has board sequences, and the real modules without a board keep their text", () => {
   const root = new URL("../../", import.meta.url), P = loadData(root), { desf } = buildDesf(P, readDesfFiles(root));
   const as = { points: P.sheets.asyncio.points, desf: desf.asyncio.items };
   const q = Jarvis.lessonSequences(as, 1);
@@ -1323,7 +1323,10 @@ test("the real asyncio point 1 has board sequences, and the real points without 
   assert.ok(q.find(x => x.tip === "ideea").continut.schema.includes("await"));
   assert.ok(q.find(x => x.tip === "exemplu").continut.cod.startsWith("import asyncio"));
   for (const x of q) if (x.continut.cuvinte.length) assert.ok(x.continut.cuvinte.length <= 2);
-  for (let n = 2; n <= as.points.length; n++) for (const x of Jarvis.lessonSequences(as, n)) assert.equal(typeof x.continut, "string", n + " " + x.tip);
+  for (let n = 2; n <= as.points.length; n++) for (const x of Jarvis.lessonSequences(as, n)) {
+    assert.equal(typeof x.continut, "object", n + " " + x.tip);
+    if (x.tip !== "exemplu") assert.ok(x.continut.cuvinte.length >= 1 && x.continut.cuvinte.length <= 2, n + " " + x.tip);
+  }
 });
 
 // ---------- module fără desfășurări: fără improvizație ----------

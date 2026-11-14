@@ -284,12 +284,13 @@ test("Tablă: unreadable lines are reported, not dropped", () => {
   has(errs(doc(MAP, item(1, { tab: TAB("- problema: a", "- ideea: b", "- punct: c", "- altceva: x") }), item(2), item(3))), /punctul 1.*Tablă.*altceva/);
 });
 
-test("Tablă: the real asyncio file has the board on point 1 and only there (for now)", () => {
+test("Tablă: the real asyncio file has a board on every point (tickets 01 and 02)", () => {
   const root = new URL("../../", import.meta.url), P = loadData(root);
   const r = buildDesf(P, readDesfFiles(root)), it = r.desf.asyncio.items;
   assert.deepEqual(r.errors, []);
   assert.ok(it[0].tab && it[0].tab.schema, "punctul 1 are tablă cu schemă");
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), [1]);
+  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
+  for (const x of it) assert.equal(x.tabErr, undefined);
   assert.equal(it[0].tabErr, undefined);
 });
 
