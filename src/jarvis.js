@@ -29,7 +29,7 @@ const Jarvis = (() => {
   const MAX_TRANSCRIPT = 8;
   const SETTINGS_ITEM = "onapsis-jarvis-v1";
   const SILENCE = { short: 800, normal: 1200, long: 2000 };          // „Răbdare”: cât tace Alex până consideră Jarvis că a terminat
-  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false, mode: "ecran" };
+  const DEFAULTS = { voice: "Charon", patience: "normal", halfDuplex: false, micId: "", muted: false, mode: "ecran", subs: false };
   // Lecția: cât durează fereastra de ascultare, cât așteaptă o întrebare fără răspuns, cât rămâne valabilă o pauză (după ea bucata se reia de la început)
   // și pauzele dintre încercările de reconectare (în total ~60 s; celelalte moduri păstrează cele trei încercări din GeminiLive).
   const WINDOW_MS = 3000, ASK_WAIT_MS = 12000, PAUSE_KEEP_MS = 10 * 60000;
@@ -103,6 +103,15 @@ const Jarvis = (() => {
         + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Nu enumera tot ce e în material. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare. Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz."
       : "Spune " + lead + " pe baza tablei. Pe tablă sunt doar cuvintele cheie" + (schema ? " și, dacă există, schema" : "") + ": povestește în jurul lor, cu vorbele tale, nu le citi ca pe o listă."
         + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Nu enumera tot ce e pe tablă. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare.";
+  }
+  // Cuvintele cheie ale tablei apar când sunt spuse: potrivire pe transcrierea modelului, în litere mici, fără diacritice, pe rădăcina cuvântului
+  // (fără ultimele 3 litere, cel puțin 4 rămân). Un cuvânt cheie e spus când toate cuvintele lui de cel puțin 3 litere, fără cifre, au rădăcina într-un cuvânt din transcriere.
+  const fold = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const tokensOf = s => fold(s).split(/[^a-z0-9]+/).filter(Boolean);
+  const rootOf = w => (w.length <= 4 ? w : w.slice(0, Math.max(4, w.length - 3)));
+  function keywordSaid(kw, toks) {
+    const sig = tokensOf(kw).filter(w => w.length >= 3 && !/\d/.test(w));
+    return sig.length > 0 && sig.every(w => { const r = rootOf(w); return toks.some(x => x.startsWith(r)); });
   }
   const unfence = c => { const m = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(String(c)); return (m ? m[1] : String(c)).replace(/\s+$/, ""); };
   // Secvențele bucății n (1..total) a unei fișe { points, desf? }; `audio` schimbă doar instrucțiunile (funcție pură): problema → ideea → exemplu | analogie → pas → cpp (cu „Unde nu ține”) → punct.
@@ -317,7 +326,24 @@ const Jarvis = (() => {
     function showPending() {
       if (!lz.pend) return;
       lz.shown = lz.pend; lz.pend = null;
+      if (isBoard(lz.shown)) { lz.shown.seen = new Set(); lz.shown.epoch = lz.epoch; revealWords(false); }
       markSub();
+    }
+    // Tabla: cuvintele cheie arătate (`seen`, indexuri) cresc pe măsură ce modelul le spune; la `spoken` apar toate cele rămase.
+    // Contează doar replicile turei curente (id mai mare decât `oldMax`, fixat la ultimul apel de funcție): din tura veche nu rămâne nimic, nici întârziat.
+    const isBoard = sh => lz.mode !== "audio" && sh && sh.card && sh.card.continut && typeof sh.card.continut === "object" && Array.isArray(sh.card.continut.cuvinte);
+    function revealWords(all) {
+      const sh = lz.shown;
+      if (!isBoard(sh) || !sh.seen || (!all && sh.epoch !== lz.epoch)) return;
+      const toks = tokensOf(Object.keys(lz.said).sort((a, b) => a - b).map(id => lz.said[id]).join(" ")), before = sh.seen.size;
+      sh.card.continut.cuvinte.forEach((w, i) => { if (all || keywordSaid(w, toks)) sh.seen.add(i); });
+      if (sh.seen.size !== before) sync();
+    }
+    // Ce vede ecranul din cartonaș: la o tablă, doar cuvintele cheie deja spuse (schema și codul vin întregi).
+    function cardView(sh) {
+      const c = sh.card;
+      if (!isBoard(sh) || !sh.seen) return c;
+      return Object.assign({}, c, { continut: Object.assign({}, c.continut, { cuvinte: c.continut.cuvinte.filter((_, i) => sh.seen.has(i)) }) });
     }
     // Răspunsul la o întrebare liberă: „mai simplu” și „exemplu” (cerere scurtă) lasă cartonașul bucății, cu etichetă; orice altceva trece pe cartonașul `intrebare`.
     // Întrebarea apare doar dacă transcrierea intrării a adus-o (altfel cartonașul are doar eticheta). Nu se salvează nicăieri.
@@ -342,7 +368,7 @@ const Jarvis = (() => {
       const c = lz.cur, sh = lz.shown;
       const status = lz.lost ? "lost" : lz.paused ? "paused" : lz.window ? "window" : lz.asking || lz.talking ? "asking"
         : state.phase === "speaking" || state.phase === "thinking" || state.phase === "connecting" ? "explaining" : "idle";
-      return { card: sh ? sh.card : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" ? subtitle() : [], module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
+      return { card: sh ? cardView(sh) : null, k: sh ? sh.k : 1, of: sh ? sh.of : 1, sub: sh && lz.mode !== "audio" && lz.subs ? subtitle() : [], subs: lz.subs, module: lz.module, name: lz.name, n: sh ? sh.n : 0, total: lz.total, pos: lz.pos0, closing: !!sh && sh.closing, heard: lz.heard.size, muted: lz.muted, mode: lz.mode, talking: lz.talking, status };
     }
     function cancelTimers() { if (lz.winTimer) { lz.winTimer(); lz.winTimer = null; } if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } if (lz.gapTimer) { lz.gapTimer(); lz.gapTimer = null; } }
     // Închide fereastra (sau așteptarea unei întrebări) fără să mai ceară nimic.
@@ -476,7 +502,8 @@ const Jarvis = (() => {
     // Evenimentele apelului care contează pentru lecție.
     function lessonEvent(e) {
       if (e.type === "restarted" || e.type === "reopened") lessonRecontext();
-      else if (e.type === "spoken") onSpoken();
+      else if (e.type === "spoken") { revealWords(true); onSpoken(); }
+      else if (e.type === "tool") { lz.oldMax = Math.max(lz.oldMax, ...Object.keys(lz.said).map(Number)); lz.said = {}; lz.epoch++; }
       else if (e.type === "voice") {
         if (lz.window) { cancelTimers(); lz.window = false; lz.asking = true; lz.qText = ""; armAsk(); sync(); }
       } else if (e.type === "state") {
@@ -484,6 +511,7 @@ const Jarvis = (() => {
         if (e.state === "speaking" && lz.asking && !lz.talking) { showAnswer(); lz.asking = false; if (lz.askTimer) { lz.askTimer(); lz.askTimer = null; } sess.call.mic(false); sync(); }
         else sync();
       } else if (e.type === "transcript") {
+        if (e.who === "model" && e.id > lz.oldMax) { lz.said[e.id] = e.text; revealWords(false); }
         if (e.who === "me" && (lz.asking || lz.answering)) { lz.qText = e.text; if (lz.answering) { applyQuestion(); sync(); } }
         if (lz.asking && e.who === "me") armAsk();
       }
@@ -525,7 +553,7 @@ const Jarvis = (() => {
       }
       sess = { mode: opts.mode, module: opts.module, done: [], card: null, failures: 0, t0: env.clock.now(), finished: false, endRequested: false, viaServer };
       lz = lesson ? { module: opts.module, name: sheet.name, sheet, total: sheet.total, pos0: sheet.pos || 0, idx: sheet.pos || 0, cur: null, started: false, heard: new Set(), closingHeard: false, redo: false,
-        muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
+        muted: !!st.muted, mode: st.mode === "audio" ? "audio" : "ecran", subs: !!st.subs, said: {}, oldMax: 0, epoch: 0, window: false, asking: false, talking: false, paused: false, lost: false, reconnecting: false, cutOff: false, wasBusy: false, endRequested: false,
         winTimer: null, askTimer: null, gapTimer: null, pausedAt: 0, pausedMs: 0, recapN: null, lead: null, shown: null, pend: null, subId: null, subLen: 0 } : null;
       change(Object.assign({ needKey: false, phase: "connecting" }, FRESH, { startedAt: env.clock.now(), mode: opts.mode, module: opts.module || null }));
       // Jetonul se cere ÎNAINTE de microfon: fără semnal, Alex vede mesajul și nu apare nicio cerere de permisiune. Jetonul ține o singură sesiune nouă,

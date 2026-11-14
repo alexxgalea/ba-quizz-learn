@@ -2879,6 +2879,7 @@
       '<label>Voce<select class="keyin" data-jv="voice">' + JV_VOICES.map(v => '<option' + (v === set.voice ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>" +
       '<label>Răbdare (cât aștepți până crede că ai terminat)<select class="keyin" data-jv="patience">' + JV_PATIENCE.map(([v, l]) => '<option value="' + v + '"' + (v === set.patience ? " selected" : "") + ">" + l + "</option>").join("") + "</select></label>" +
       '<label class="chk"><input type="checkbox" data-jv="halfDuplex"' + (set.halfDuplex ? " checked" : "") + '><span>Întrerupere doar cu căști (microfonul tace cât vorbește Jarvis)</span></label>' +
+      '<label class="chk"><input type="checkbox" data-jv="subs"' + (set.subs ? " checked" : "") + '><span>Subtitrare în lecție (sub tablă, ce spune Jarvis; implicit oprită)</span></label>' +
       '<label>Microfon<select class="keyin" data-jv="micId"><option value="">Implicit</option>' + ui.jv.mics.map(m => '<option value="' + esc(m.id) + '"' + (m.id === set.micId ? " selected" : "") + ">" + esc(m.label || "Microfon") + "</option>").join("") + "</select></label>" +
       '<button class="btn sm" data-a="jv-mics">Arată microfoanele</button></div></section>';
     const lesson = vLessonHome();
@@ -2934,7 +2935,7 @@
     else if (st.warn === "reconnecting") h += '<div class="jv-warn" role="status">Reconectare…</div>';
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
-    if (L.mode !== "audio") h += jvCard(L) + jvSub(L);        // doar audio: fără cartonaș, doar comenzile mari
+    if (L.mode !== "audio") h += jvCard(L) + (L.subs ? jvSub(L) : "");        // doar audio: fără cartonaș, doar comenzile mari
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +

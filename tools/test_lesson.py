@@ -324,7 +324,10 @@ async def sequences(b, scheme):
             # punctul 1 de la asyncio are tablă: cuvinte cheie, nu paragraful (tichetul 01, lectia-tabla)
             kw = r["continut"]["cuvinte"]
             shown = [x for x in (await text(pg, "#jv-chunk")).split("\n") if x.strip()]
-            check(tag + "the problem card is a board: only the keywords, no paragraph", isinstance(r["continut"], dict) and await pg.locator("#jv-chunk.jv-board .jv-kw li").count() == len(kw) and all(k in shown for k in kw) and it["p"].replace("`", "")[:30] not in " ".join(shown), shown)
+            check(tag + "the problem card is a board with no keyword before it is said, and no paragraph", isinstance(r["continut"], dict) and await pg.locator("#jv-chunk.jv-board").count() == 1 and await pg.locator("#jv-chunk .jv-kw li").count() == 0 and it["p"].replace("`", "")[:30] not in " ".join(shown), shown)
+            await emit(pg, {"type": "transcript", "who": "model", "text": "Spunem despre " + kw[0].replace("1.000 de ", "") + "."})
+            one = [x for x in (await text(pg, "#jv-chunk")).split("\n") if x.strip()]
+            check(tag + "a keyword appears on the board when Jarvis says it, the others wait", await pg.locator("#jv-chunk .jv-kw li").count() == 1 and kw[0] in one and (len(kw) < 2 or kw[1] not in one), one)
         if r["tip"] == "exemplu":
             check(tag + "the example card shows the whole code block, coloured", await pg.locator("#jv-chunk pre.code").count() == 1 and await pg.locator("#jv-chunk pre.code .ln").count() == len(r["continut"]["cod"].split("\n")) and "```" not in await text(pg, "#jv-chunk"), await text(pg, "#jv-chunk"))
             box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
@@ -339,6 +342,8 @@ async def sequences(b, scheme):
             check(tag + "the steps card shows rows of plain text", await pg.locator("#jv-chunk pre.code").count() == 1)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_pas_{scheme}.png"))
         if r["tip"] == "ideea":
+            check(tag + "the idea board shows the whole scheme at once, before any keyword is said", await pg.locator("#jv-chunk .jv-kw li").count() == 0 and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(r["continut"]["schema"].split("\n")), await text(pg, "#jv-chunk"))
+            await emit(pg, {"type": "transcript", "who": "model", "text": " ".join(r["continut"]["cuvinte"])})
             words = [w for w in (await text(pg, "#jv-chunk")).split()[3:] if w != "↓"]      # fără eticheta „Ideea · 3/6” și săgeți
             check(tag + "the idea board has its keywords and the whole scheme, in about 25 words at most", await pg.locator("#jv-chunk .jv-kw li").count() == len(r["continut"]["cuvinte"]) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(r["continut"]["schema"].split("\n")) and len(words) <= 25, words)
             box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
@@ -347,14 +352,20 @@ async def sequences(b, scheme):
             await pg.locator("#jv-chunk").screenshot(path=str(SHOTS / f"lesson_board_{scheme}.png"))
         if r["k"] == r["of"]: break
         await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
+        if r["tip"] == "problema":
+            kw = r["continut"]["cuvinte"]
+            rest = [x for x in (await text(pg, "#jv-chunk")).split("\n") if x.strip()]
+            check(tag + "the rest of the keywords appear when the sequence has been spoken", await pg.locator("#jv-chunk .jv-kw li").count() == len(kw) and all(k in rest for k in kw), rest)
+            words = (await text(pg, "#jv-chunk")).split()[3:]
+            check(tag + "the problem board has at most about 25 words", len(words) <= 25, words)
+            await pg.screenshot(path=str(SHOTS / f"lesson_board_problema_{scheme}.png"))
         check(tag + "after a sequence the app asks for the next one, with no window", "next_chunk" in (await texts(pg))[-1] and await ev(pg, f"{CTL}.audio.beeps") == [], await ev(pg, f"{CTL}.audio.beeps"))
         prev = await pg.locator("#jv-chunk").get_attribute("data-tip")
         r = await tool(pg, "next_chunk")
         check(tag + "the old card stays until the new sound starts", await pg.locator("#jv-chunk").get_attribute("data-tip") == prev, prev)
         await sound(pg)
-        await emit(pg, {"type": "transcript", "id": "s" + str(r["k"]), "who": "model", "text": "Prima frază. A doua frază. A treia frază."})
-        sub = (await text(pg, "#jv-sub")).split("\n")
-        check(tag + "the subtitle shows the last two lines under the card", [x for x in sub if x] == ["A doua frază.", "A treia frază."] or r["tip"] != "ideea", sub)
+        await emit(pg, {"type": "transcript", "who": "model", "text": "Prima frază. A doua frază. A treia frază."})
+        check(tag + "no subtitle by default: the transcript does not show under the board", await pg.locator("#jv-sub").count() == 0 and "A doua frază." not in await text(pg, "#jv-lesson .jv-chunk-card"), await text(pg, "#jv-lesson .jv-chunk-card"))
     check(tag + "the first chunk went harta, problema, ideea, exemplu, cpp, punct in order", [x[0] for x in seen][:4] == ["harta", "problema", "ideea", "exemplu"] and seen[-1][0] == "punct", seen)
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(100)
     check(tag + "the window opens only after the last sequence", await ev(pg, f"{CTL}.audio.beeps") == ["window"])
@@ -370,7 +381,7 @@ async def sequences(b, scheme):
     await emit(pg, {"type": "transcript", "who": "me", "text": "De ce nu merge await în afara unui async def?"})
     await sound(pg)
     await emit(pg, {"type": "transcript", "who": "model", "text": "Pentru că await are nevoie de o corutină. Altfel nu are ce suspenda."})
-    check(tag + "a free question shows the question card with the question and the answer subtitle", await pg.locator('#jv-chunk[data-tip="intrebare"]').count() == 1 and "De ce nu merge await" in await text(pg, "#jv-chunk") and "Întrebarea ta" in await text(pg, "#jv-chunk") and "Altfel nu are ce suspenda." in await text(pg, "#jv-sub"), await text(pg, "#jv-chunk"))
+    check(tag + "a free question shows the question card with only the question, no answer without the subtitle", await pg.locator('#jv-chunk[data-tip="intrebare"]').count() == 1 and "De ce nu merge await" in await text(pg, "#jv-chunk") and "Întrebarea ta" in await text(pg, "#jv-chunk") and "Altfel nu are ce suspenda." not in await text(pg, "#jv-lesson .jv-chunk-card") and await pg.locator("#jv-sub").count() == 0, await text(pg, "#jv-chunk"))
     check(tag + "the question card fits at 360 px", await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"))
     await pg.screenshot(path=str(SHOTS / f"lesson_intrebare_{scheme}.png"))
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
@@ -436,6 +447,36 @@ async def modes(b, scheme):
     await tool(pg, "next_chunk")
     check(tag + "Cu ecran: the card is there, as before", await pg.locator("#jv-chunk").count() == 1)
     await pg.screenshot(path=str(SHOTS / f"lesson_mode_ecran_{scheme}.png"))
+    check(tag + "no page errors", not errs, errs)
+    await ctx.close()
+
+
+async def subtitles(b, scheme):
+    """Tichet 03 (lectia-tabla): subtitrarea e oprită implicit; comutatorul „Subtitrare” din setările Jarvis o pornește și stă în onapsis-jarvis-v1."""
+    tag = scheme + " subs: "
+    ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
+    await pin(ctx)
+    await ctx.add_init_script(path=FAKES)
+    pg = await ctx.new_page(); errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "fonts" not in m.text and "Failed to load resource" not in m.text else None)
+    await pg.route("**/fonts.*", lambda r: r.abort())
+    await fresh(pg)
+    await ev(pg, "localStorage.setItem('onapsis-gemini-v1', 'TESTKEY1234')"); await pg.reload(); await pg.wait_for_timeout(400)
+    await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)
+    box = pg.locator('input[data-jv="subs"]')
+    check(tag + "the Subtitrare switch is in the Jarvis settings, off at first", await box.count() == 1 and not await box.is_checked())
+    await box.check(); await pg.wait_for_timeout(150)
+    saved = await ev(pg, "JSON.parse(localStorage.getItem('onapsis-jarvis-v1') || '{}')")
+    check(tag + "the choice is kept in onapsis-jarvis-v1", saved.get("subs") is True, saved)
+    await pg.click("#jv-rec"); await pg.wait_for_timeout(250)
+    await tool(pg, "next_chunk"); await sound(pg)
+    await emit(pg, {"type": "transcript", "who": "model", "text": "Prima frază. A doua frază. A treia frază."})
+    sub = [x for x in (await text(pg, "#jv-sub")).split("\n") if x]
+    check(tag + "with the switch on the subtitle shows the last two lines under the board", sub == ["A doua frază.", "A treia frază."], sub)
+    check(tag + "the transcript block stays as history", await pg.locator("#jv-trd").count() == 1 and "A treia frază." in await ev(pg, "document.getElementById('jv-tr').textContent"))
+    check(tag + "no sideways scroll at 360 px", await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"))
+    await pg.screenshot(path=str(SHOTS / f"lesson_subs_{scheme}.png"))
     check(tag + "no page errors", not errs, errs)
     await ctx.close()
 
@@ -531,6 +572,7 @@ async def main():
             await screens(b, scheme)
             await sequences(b, scheme)
             await modes(b, scheme)
+            await subtitles(b, scheme)
         await unfoldings(b)
         await artifact(b)
         await b.close()

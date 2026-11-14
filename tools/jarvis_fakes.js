@@ -40,7 +40,8 @@
   ctl.frame = n => audioOpts.onFrame(new Int16Array(n || 4));
   ctl.level = v => audioOpts.onLevel(v);
   ctl.drain = () => { if (playing) { playing = false; audioOpts.onPlaying(false); } };
-  ctl.tool = (name, args) => ctl.live.cfg.tools.find(t => t.name === name).run(args || {});
+  // Ca GeminiLive: rulează funcția, apoi anunță `tool` (lecția știe că a început o tură nouă a modelului).
+  ctl.tool = async (name, args) => { const result = await ctl.live.cfg.tools.find(t => t.name === name).run(args || {}); onEvent({ type: "tool", name, args: args || {}, result }); return result; };
   ctl.advance = ms => {
     const end = ctl.clock.t + ms;
     for (;;) {

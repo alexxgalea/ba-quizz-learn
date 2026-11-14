@@ -1003,8 +1003,10 @@ test("a pause or Vorbește before the sound leaves no unheard card on screen", a
   assert.equal(u.state().lesson.card.tip, "harta");
 });
 
+const SUBS = () => memoryStorage({ "onapsis-gemini-v1": "KEY", "onapsis-jarvis-v1": JSON.stringify({ subs: true }) });
+
 test("the subtitle shows the last two lines the model spoke since the card changed, and empties on the next card", async () => {
-  const t = await begin(setup(), "asyncio");
+  const t = await begin(setup({ storage: SUBS() }), "asyncio");
   await t.tool("next_chunk"); sound(t);
   say(t, "Prima propoziție. A doua. A treia!");
   assert.deepEqual(t.state().lesson.sub, ["A doua.", "A treia!"]);
@@ -1329,6 +1331,148 @@ test("every real asyncio point has board sequences, and the real modules without
   }
 });
 
+// ---------- tichetul 03: cuvintele cheie apar când sunt spuse; subtitrarea e oprită ----------
+
+const TAB3 = { problema: ["conexiuni deschise", "un thread pe conexiune"], ideea: ["event loop", "cedează bucla"], schema: "A rulează\n↓ await\nB rulează", cpp: ["epoll_wait"], punct: ["concurență cooperativă"] };
+async function boardLesson(over = {}, module = "asyncio") {
+  const t = setup(over); t.app.sheet0 = t.app.sheet;
+  t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab: TAB3 }), ...SHEET_AS.desf.slice(1)] }).desf; return r; };
+  await begin(t, module);
+  await deliver(t);                                       // harta, auzită
+  return t;
+}
+const words = t => t.state().lesson.card.continut.cuvinte;
+// Cere secvența următoare (modelul, după ce aplicația i-a cerut-o) și începe sunetul ei.
+async function nextSeq(t) { const r = await t.tool("next_chunk"); sound(t); return r; }
+
+test("a keyword appears on the board when its root is in the model's transcript, lowercase and without diacritics", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  assert.deepEqual(words(t), []);                                       // nimic nespus încă
+  say(t, "Avem multe CONEXIUNI");
+  assert.deepEqual(words(t), []);                                       // „deschise” nu s-a spus
+  say(t, " deschise, care așteaptă.");
+  assert.deepEqual(words(t), ["conexiuni deschise"]);
+  say(t, " Un thread pe conexiune ar fi prea mult.");
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);
+});
+
+test("the root matches other forms of the word and a keyword with a diacritic matches the plain spelling", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); speak(t); t.clock.advance(GAP);
+  await nextSeq(t);                                                     // ideea
+  say(t, "Bucla de evenimente, adică event loop-ul, ");
+  assert.deepEqual(words(t), ["event loop"]);
+  say(t, "iar await cedeaza controlul buclei.");
+  assert.deepEqual(words(t), ["event loop", "cedează bucla"]);
+});
+
+test("the keywords not said yet appear when the sequence is spoken to the end", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  say(t, "Multe conexiuni deschise.");
+  assert.deepEqual(words(t), ["conexiuni deschise"]);
+  speak(t);
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);
+});
+
+test("the keywords keep their order on the board, whatever order they were said in", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  say(t, "Un thread pe conexiune e scump. Sunt conexiuni deschise.");
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);
+});
+
+test("nothing of the old sequence stays on the next board, not even a late transcript of the old turn", async () => {
+  const t = await boardLesson();
+  await nextSeq(t);
+  say(t, "Conexiuni deschise."); speak(t);                              // tura problemei s-a încheiat
+  say(t, " Un thread pe conexiune.");                                   // transcriere întârziată: replică nouă, dar tot a turei vechi
+  t.clock.advance(GAP);
+  await t.tool("next_chunk"); sound(t);                                 // ideea, cartonașul nou
+  assert.deepEqual(words(t), []);
+  say(t, " Încă o frază, cedează bucla.");                              // cade în replica veche (nu a venit turnComplete)
+  assert.deepEqual(words(t), []);
+  speak(t);
+  assert.deepEqual(words(t), ["event loop", "cedează bucla"]);          // la spoken apar toate ale secvenței noi
+});
+
+test("words said before the new card started to sound do not show on the new board", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); say(t, "Conexiuni deschise."); speak(t); t.clock.advance(GAP);
+  await t.tool("next_chunk");
+  say(t, "Bucla, event loop.");                                         // transcrierea vine înaintea sunetului
+  assert.deepEqual(words(t), ["conexiuni deschise", "un thread pe conexiune"]);   // încă pe ecran: cartonașul vechi
+  sound(t);
+  assert.deepEqual(words(t), ["event loop"]);                           // cele spuse deja din tura nouă contează
+});
+
+test("the scheme shows whole with its sequence, and the code of the example comes without keywords", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); speak(t); t.clock.advance(GAP);
+  await nextSeq(t);
+  const c = t.state().lesson.card;
+  assert.deepEqual([c.tip, c.continut.schema, c.continut.cuvinte], ["ideea", TAB3.schema, []]);
+  speak(t); t.clock.advance(GAP);
+  await nextSeq(t);
+  assert.deepEqual([t.state().lesson.card.tip, typeof t.state().lesson.card.continut.cod, words(t)], ["exemplu", "string", []]);
+});
+
+test("repeating the chunk starts its boards again from nothing", async () => {
+  const t = await boardLesson();
+  await nextSeq(t); say(t, "Conexiuni deschise."); speak(t);
+  await t.tool("repeat_chunk"); sound(t);
+  assert.deepEqual(t.state().lesson.card.tip, "harta");                 // repetarea pornește de la prima secvență
+  speak(t); t.clock.advance(GAP);
+  await nextSeq(t);
+  assert.deepEqual(words(t), []);
+});
+
+test("a point without a board is not affected: the card stays the text", async () => {
+  const t = await boardLesson();
+  for (let i = 0; i < 5; i++) { const r = await t.tool("next_chunk"); speak(t); if (r.k === r.of) break; t.clock.advance(GAP); }
+  await t.tool("next_chunk"); sound(t);                                 // bucata 2: fără tablă
+  assert.equal(typeof t.state().lesson.card.continut, "string");
+  say(t, "Orice. Altceva.");
+  assert.equal(typeof t.state().lesson.card.continut, "string");
+});
+
+test("audio only keeps the card as it was: no board matching and no subtitle", async () => {
+  const t = await boardLesson({ storage: memoryStorage({ "onapsis-gemini-v1": "KEY", "onapsis-jarvis-v1": JSON.stringify({ mode: "audio", subs: true }) }) });
+  await nextSeq(t); say(t, "Conexiuni deschise.");
+  const l = t.state().lesson;
+  assert.deepEqual([l.mode, l.sub], ["audio", []]);
+  assert.deepEqual(words(t), TAB3.problema);
+});
+
+test("the subtitle is off by default and a transcript does not show on it", async () => {
+  const t = await begin(setup(), "asyncio");
+  await t.tool("next_chunk"); sound(t);
+  say(t, "Prima propoziție. A doua. A treia!");
+  const l = t.state().lesson;
+  assert.deepEqual([l.sub, l.subs], [[], false]);
+  assert.equal(t.state().transcript.at(-1).text, "Prima propoziție. A doua. A treia!");     // istoricul rămâne
+});
+
+test("the Subtitrare setting is kept in onapsis-jarvis-v1 and read at the start of the lesson", async () => {
+  const t = setup();
+  assert.equal(t.jarvis.settings.get().subs, false);
+  t.jarvis.settings.set({ subs: true });
+  assert.equal(JSON.parse(t.storage.data["onapsis-jarvis-v1"]).subs, true);
+  await begin(t, "asyncio");
+  await t.tool("next_chunk"); sound(t); say(t, "Una. Două.");
+  assert.deepEqual([t.state().lesson.subs, t.state().lesson.sub], [true, ["Una.", "Două."]]);
+});
+
+test("with the subtitle off a free question shows only Alex's question, never the answer", async () => {
+  const t = await begin(setup(), "asyncio");
+  await askMid(t, "De ce anulează TaskGroup grupul?");
+  sound(t); say(t, "Pentru că un task a eșuat. Restul se anulează.");
+  const l = t.state().lesson;
+  assert.deepEqual([l.card, l.sub], [{ tip: "intrebare", continut: "De ce anulează TaskGroup grupul?" }, []]);
+});
+
+
 // ---------- module fără desfășurări: fără improvizație ----------
 
 test("no lesson instruction asks for an example from outside the material", async () => {
@@ -1525,8 +1669,8 @@ async function askMid(t, q) {
   t.live.emit({ type: "interrupted" });                          // întrebarea taie bucata în curs
 }
 
-test("a free question switches the screen to the question card, with Alex's words and the answer as subtitle", async () => {
-  const t = await begin(setup(), "asyncio");
+test("a free question switches the screen to the question card, with Alex's words and, with subtitles on, the answer as subtitle", async () => {
+  const t = await begin(setup({ storage: SUBS() }), "asyncio");
   await askMid(t, "De ce anulează TaskGroup grupul?");
   assert.equal(t.state().lesson.card.tip, "problema");
   sound(t); say(t, "Pentru că un task a eșuat. Restul se anulează.");
