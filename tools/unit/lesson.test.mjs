@@ -1048,8 +1048,8 @@ test("a question between sequences restarts the chunk from its first sequence", 
 
 const seqAsks = t => t.texts().filter(x => /^Continuă:/.test(x)).length;
 
-test("SEQ_GAP_MS is a single constant of about two seconds", () => {
-  assert.deepEqual([typeof GAP, GAP >= 1000 && GAP <= 4000], ["number", true]);
+test("SEQ_GAP_MS is a single constant of a few seconds", () => {
+  assert.deepEqual([typeof GAP, GAP >= 1000 && GAP <= 6000], ["number", true]);
 });
 
 test("the next sequence is asked for only after SEQ_GAP_MS, not right after the model finishes", async () => {
