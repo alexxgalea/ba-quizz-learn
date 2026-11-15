@@ -368,8 +368,18 @@ const Jarvis = (() => {
     }
     function showPending() {
       if (!lz.pend) return;
+      const prev = lz.shown && lz.shown.card.tip === "intrebare" ? lz.qBase : lz.shown;      // după un răspuns la o întrebare, treapta continuă tabla bucății
       lz.shown = lz.pend; lz.pend = null;
-      if (isBoard(lz.shown)) { lz.shown.seen = new Set(); lz.shown.epoch = lz.epoch; revealWords(false); }
+      if (isBoard(lz.shown)) {
+        lz.shown.seen = new Set(); lz.shown.epoch = lz.epoch; lz.shown.cur = -1;
+        // O treaptă după prima nu poartă cuvintele ideii, dar ele rămân pe tablă: se mută de la treapta dinainte (aceeași schemă), ca deja arătate.
+        if (isStep(lz.shown.card) && prev && prev.card && prev.card.tip === "ideea" && isBoardCard(prev.card) && prev.card.continut.schema === lz.shown.card.continut.schema && prev.seen) {
+          const words = prev.card.continut.cuvinte;
+          lz.shown.card = { tip: lz.shown.card.tip, continut: Object.assign({}, lz.shown.card.continut, { cuvinte: words.slice() }) };
+          words.forEach((_, i) => { if (prev.seen.has(i)) lz.shown.seen.add(i); });
+        }
+        revealWords(false);
+      }
       markSub();
     }
     // Tabla: cuvintele cheie arătate (`seen`, indexuri) cresc pe măsură ce modelul le spune; la `spoken` apar toate cele rămase.
@@ -379,14 +389,17 @@ const Jarvis = (() => {
       const sh = lz.shown;
       if (!isBoard(sh) || !sh.seen || (!all && sh.epoch !== lz.epoch)) return;
       const toks = tokensOf(Object.keys(lz.said).sort((a, b) => a - b).map(id => lz.said[id]).join(" ")), before = sh.seen.size;
-      sh.card.continut.cuvinte.forEach((w, i) => { if (all || keywordSaid(w, toks)) sh.seen.add(i); });
-      if (sh.seen.size !== before) sync();
+      let last = -1;
+      sh.card.continut.cuvinte.forEach((w, i) => { if (!sh.seen.has(i) && (all || keywordSaid(w, toks))) { sh.seen.add(i); last = i; } });
+      sh.cur = all ? -1 : last >= 0 ? last : sh.cur;                 // cuvântul spus acum; la `spoken` niciunul nu e curent
+      if (sh.seen.size !== before || all) sync();
     }
     // Ce vede ecranul din cartonaș: la o tablă, doar cuvintele cheie deja spuse (schema și codul vin întregi).
     function cardView(sh) {
       const c = sh.card;
       if (!isBoard(sh) || !sh.seen) return c;
-      return Object.assign({}, c, { continut: Object.assign({}, c.continut, { cuvinte: c.continut.cuvinte.filter((_, i) => sh.seen.has(i)) }) });
+      const shown = c.continut.cuvinte.map((_, i) => i).filter(i => sh.seen.has(i));
+      return Object.assign({}, c, { continut: Object.assign({}, c.continut, { cuvinte: shown.map(i => c.continut.cuvinte[i]) }, sh.cur >= 0 ? { curent: shown.indexOf(sh.cur) } : null) });
     }
     // Răspunsul la o întrebare liberă: „mai simplu” și „exemplu” (cerere scurtă) lasă cartonașul bucății, cu etichetă; orice altceva trece pe cartonașul `intrebare`.
     // Întrebarea apare doar dacă transcrierea intrării a adus-o (altfel cartonașul are doar eticheta). Nu se salvează nicăieri.

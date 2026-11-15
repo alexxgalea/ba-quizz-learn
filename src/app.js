@@ -2911,9 +2911,20 @@
   // Harta și recapitularea: rândurile „1–3: text” cu intervalul îngroșat; prima linie a hărții e problema modulului.
   const jvRows = t => t.split("\n").map(x => { const m = /^(\d+(?:–\d+)?): (.*)$/.exec(x); return "<p>" + (m ? "<b>" + m[1] + "</b> " + inlineRich(m[2]) : inlineRich(x)) + "</p>"; }).join("");
   // Tabla: cuvinte cheie ca rânduri scurte, schema în bloc monospace, codul ca la cartonașul de azi; niciun paragraf.
+  // O treaptă a schemei: rândul cu săgeată are săgeata în accent și cauza în `--muted`.
+  const jvStepRows = t => '<pre class="code wrap"><code>' + t.split("\n").map(l => {
+    const m = /^(\s*)↓\s*(.*)$/.exec(l);
+    return m ? '<span class="ln ar"><b>↓</b>' + esc(m[2]) + "</span>" : '<span class="ln">' + esc(l || " ") + "</span>";
+  }).join("") + "</code></pre>";
   function jvBoard(c, L) {
-    return (c.cuvinte && c.cuvinte.length ? '<ul class="jv-kw">' + c.cuvinte.map(w => "<li>" + esc(w) + "</li>").join("") + "</ul>" : "")
-      + (c.schema ? '<div class="jv-schema">' + codeBlock(c.schema, true, true) + "</div>" : "")
+    const cur = c.curent;
+    // Schema cu trepte (cartonașul are `treapta`): treapta curentă evidențiată, cele trecute normale, cele care urmează estompate.
+    const steps = c.schema && typeof c.treapta === "number" ? Jarvis.trepte(c.schema) : null;
+    const schema = !c.schema ? "" : steps
+      ? steps.map((t, i) => '<div class="jv-step ' + (i < c.treapta ? "past" : i === c.treapta ? "cur" : "fut") + '" data-i="' + i + '">' + jvStepRows(t) + "</div>").join("")
+      : codeBlock(c.schema, true, true);
+    return (c.cuvinte && c.cuvinte.length ? '<ul class="jv-kw">' + c.cuvinte.map((w, i) => '<li class="' + (cur >= 0 ? (i === cur ? "cur" : "old") : steps ? "old" : "") + '">' + esc(w) + "</li>").join("") + "</ul>" : "")
+      + (c.schema ? '<div class="jv-schema' + (steps ? " jv-steps" : "") + '">' + schema + "</div>" : "")
       + (c.cod ? codeBlock(c.cod, isFE(L.module), true) : "");
   }
   function jvCard(L) {

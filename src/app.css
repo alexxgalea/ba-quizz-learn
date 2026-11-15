@@ -577,6 +577,16 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-kw { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .jv-kw li { font-size: 20px; font-weight: 600; line-height: 1.3; padding-left: 10px; border-left: 3px solid var(--accent, currentColor); overflow-wrap: anywhere; }
 .jv-schema { margin-top: 10px; }
+.jv-kw li { transition: opacity .35s, background .35s; border-radius: 0 8px 8px 0; padding-right: 8px; }
+.jv-kw li.cur { background: var(--accent-soft); }
+.jv-kw li.old { opacity: .5; }
+.jv-steps { display: flex; flex-direction: column; gap: 2px; }
+.jv-step { border-left: 3px solid transparent; border-radius: 8px; padding: 4px 0; transition: opacity .4s, background .4s, border-color .4s; }
+.jv-step pre.code { background: none; border: 0; padding: 0 8px; border-radius: 0; font-size: 13px; }
+.jv-step.cur { background: var(--accent-soft); border-left-color: var(--accent); }
+.jv-step.fut { opacity: .4; }
+.jv-step .ln.ar { color: var(--muted); }
+.jv-step .ln.ar b { color: var(--accent); font-weight: 700; margin-right: 4px; }
 #jv-lesson .jv-ctl { grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 6px; }
 #jv-lesson .jv-ctl .btn { padding-inline: 2px; font-size: 15px; }
 #jv-lesson .jv-ctl .btn, #jv-lesson .jv-mutes .btn { min-height: 56px; font-size: 16px; }

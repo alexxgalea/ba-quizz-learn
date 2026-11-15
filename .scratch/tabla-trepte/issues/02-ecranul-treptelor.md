@@ -10,6 +10,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] `tools/test_lesson.py`: clasele treptelor (curentă / trecute / viitoare) urmează `k`; cuvântul curent are clasa lui; fără trepte, schema arată ca azi.
-- [ ] Fără scroll orizontal la 360 px; captură light și dark cu o schemă de 4 trepte.
-- [ ] Toate testele de interfață și de unitate din `CLAUDE.md` trec.
+- [x] `tools/test_lesson.py`: clasele treptelor (curentă / trecute / viitoare) urmează `k`; cuvântul curent are clasa lui; fără trepte, schema arată ca azi.
+- [x] Fără scroll orizontal la 360 px; captură light și dark cu o schemă de 4 trepte.
+- [x] Toate testele de interfață și de unitate din `CLAUDE.md` trec.

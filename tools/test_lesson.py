@@ -340,13 +340,25 @@ async def sequences(b, scheme):
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_exemplu_mut_{scheme}.png"))
             await ev(pg, "document.getElementById('jv-lesson').classList.remove('is-mut')")
         if r["tip"] == "pas":
-            check(tag + "the steps card shows rows of plain text", await pg.locator("#jv-chunk pre.code").count() == 1)
+            check(tag + "the steps card shows rows of plain text, without scheme steps", await pg.locator("#jv-chunk pre.code").count() == 1 and await pg.locator("#jv-chunk .jv-step").count() == 0)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_pas_{scheme}.png"))
         if r["tip"] == "ideea":
-            check(tag + "the idea board shows the whole scheme at once, before any keyword is said", await pg.locator("#jv-chunk .jv-kw li").count() == 0 and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(whole.split("\n")), await text(pg, "#jv-chunk"))
-            await emit(pg, {"type": "transcript", "who": "model", "text": " ".join(r["continut"]["cuvinte"])})
+            check(tag + "the idea board shows the whole scheme at once, before any keyword is said", (r["continut"]["treapta"] > 0 or await pg.locator("#jv-chunk .jv-kw li").count() == 0) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(whole.split("\n")), await text(pg, "#jv-chunk"))
+            t = r["continut"]["treapta"]
+            nst = len(whole.split("\n↓")) if whole else 0
+            states = await ev(pg, "() => [...document.querySelectorAll('#jv-chunk .jv-step')].map(e => e.classList.contains('cur') ? 'cur' : e.classList.contains('past') ? 'past' : e.classList.contains('fut') ? 'fut' : '?')")
+            check(tag + "step " + str(t) + ": the steps follow k (past before, one current, the rest ahead)", states == ["past"] * t + ["cur"] + ["fut"] * (nst - t - 1), states)
+            if t == 0:
+                kw0 = r["continut"]["cuvinte"]
+                for i, w in enumerate(kw0):
+                    await emit(pg, {"type": "transcript", "who": "model", "text": w + "."})
+                    cl = await ev(pg, "() => [...document.querySelectorAll('#jv-chunk .jv-kw li')].map(e => e.className)")
+                    check(tag + "the keyword being said is current, the earlier ones fade", len(cl) == i + 1 and "cur" in cl[i] and all("old" in c and "cur" not in c for c in cl[:i]), cl)
+            else:
+                cl = await ev(pg, "() => [...document.querySelectorAll('#jv-chunk .jv-kw li')].map(e => e.className)")
+                check(tag + "step " + str(t) + ": the idea keywords stay visible, none of them current", len(cl) == len(kw0) and all("old" in c and "cur" not in c for c in cl), cl)
             words = [w for w in (await text(pg, "#jv-chunk")).split()[3:] if w != "↓"]      # fără eticheta „Ideea · 3/6” și săgeți
-            check(tag + "the idea board has its keywords and the whole scheme, in about 25 words at most", await pg.locator("#jv-chunk .jv-kw li").count() == len(r["continut"]["cuvinte"]) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(whole.split("\n")) and len(words) <= 25, words)
+            check(tag + "the idea board has its keywords and the whole scheme, in about 25 words at most", await pg.locator("#jv-chunk .jv-kw li").count() == len(kw0) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(whole.split("\n")) and len(words) <= 25, words)
             box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
             check(tag + "the whole board is visible at 360 px, no scroll inside the card or sideways", box["h"] <= box["c"] + 1 and box["w"] <= box["cw"] + 1 and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"), box)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_ideea_{scheme}.png"))
@@ -360,6 +372,9 @@ async def sequences(b, scheme):
             words = (await text(pg, "#jv-chunk")).split()[3:]
             check(tag + "the problem board has at most about 25 words", len(words) <= 25, words)
             await pg.screenshot(path=str(SHOTS / f"lesson_board_problema_{scheme}.png"))
+        if r["tip"] == "ideea" and r["continut"]["treapta"] == 0:
+            cl = await ev(pg, "() => [...document.querySelectorAll('#jv-chunk .jv-kw li')].map(e => e.className)")
+            check(tag + "once the sequence is spoken no keyword is current", len(cl) == len(kw0) and all("cur" not in c for c in cl), cl)
         check(tag + "after a sequence the app asks for the next one, with no window", "next_chunk" in (await texts(pg))[-1] and await ev(pg, f"{CTL}.audio.beeps") == [], await ev(pg, f"{CTL}.audio.beeps"))
         prev = await pg.locator("#jv-chunk").get_attribute("data-tip")
         r = await tool(pg, "next_chunk")
