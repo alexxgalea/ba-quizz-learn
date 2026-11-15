@@ -450,6 +450,7 @@ async def modes(b, scheme):
         await pg.click("#jv-rec"); await pg.wait_for_timeout(250)
         await tool(pg, "next_chunk")
         check(tag + "audio" + (" + Mut" if mute else "") + ": no card with the text, only the controls", await pg.locator("#jv-chunk").count() == 0 and await pg.locator('[data-a="jv-pause"]').count() == 1 and await pg.locator('[data-a="jv-repeat"]').count() == 1 and await pg.locator('[data-a="jv-skip"]').count() == 1 and await pg.locator("#jv-talk").count() == (1 if mute else 0), await text(pg, "main"))
+        check(tag + "audio keeps the orb, with no robot", await pg.locator("#jv-orb").count() == 1 and await pg.locator("#jv-bot").count() == 0)
         check(tag + "the screen state says audio and the page does not scroll sideways", await ev(pg, "window.__prep && true") and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"))
         await pg.screenshot(path=str(SHOTS / f"lesson_mode_audio{'_mut' if mute else ''}_{scheme}.png"))
         await pg.click('[data-a="jv-stop"]'); await pg.wait_for_timeout(200)
@@ -462,6 +463,7 @@ async def modes(b, scheme):
     await pg.click("#jv-rec"); await pg.wait_for_timeout(250)
     await tool(pg, "next_chunk")
     check(tag + "Cu ecran: the card is there, as before", await pg.locator("#jv-chunk").count() == 1)
+    check(tag + "Cu ecran: the robot, not the orb", await pg.locator("#jv-bot").count() == 1 and await pg.locator("#jv-orb").count() == 0)
     await pg.screenshot(path=str(SHOTS / f"lesson_mode_ecran_{scheme}.png"))
     check(tag + "no page errors", not errs, errs)
     await ctx.close()
@@ -563,6 +565,74 @@ async def unfoldings(b):
     await ctx.close()
 
 
+async def robot(b, scheme):
+    """Tichet 03 (tabla-trepte): robotul ia locul bulei în lecția cu ecran (fața urmează faza), iar laserul stă la mijlocul treptei curente."""
+    tag = scheme + " robot: "
+    ctx = await b.new_context(viewport={"width": 360, "height": 740}, device_scale_factor=2, color_scheme=scheme)
+    await pin(ctx)
+    await ctx.add_init_script(path=FAKES)
+    pg = await ctx.new_page(); errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "fonts" not in m.text and "Failed to load resource" not in m.text else None)
+    await pg.route("**/fonts.*", lambda r: r.abort())
+    await fresh(pg)
+    await ev(pg, "localStorage.setItem('onapsis-gemini-v1', 'TESTKEY1234')"); await pg.reload(); await pg.wait_for_timeout(400)
+    await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-asyncio summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)
+    cls = lambda: pg.locator("#jv-bot").get_attribute("class")
+    check(tag + "the robot takes the place of the orb in the lesson with the screen", await pg.locator("#jv-bot svg").count() == 1 and await pg.locator("#jv-orb").count() == 0 and await pg.locator("#jv-bot .mb").count() == 3)
+    r = await tool(pg, "next_chunk")
+    check(tag + "waiting for the model the robot is thinking, with the eyes up", "thinking" in await cls() and await ev(pg, "getComputedStyle(document.querySelector('#jv-bot .eye')).transform") != "none", await cls())
+    await pg.wait_for_timeout(400)
+    await pg.screenshot(path=str(SHOTS / f"robot_thinking_{scheme}.png"))
+    await sound(pg)
+    check(tag + "while the model speaks the robot speaks (face green, mouth moving)", "speaking" in await cls() and await ev(pg, "getComputedStyle(document.querySelector('#jv-bot .mb')).animationName") != "none", await cls())
+    await ev(pg, f"{CTL}.level(0.2)"); await pg.wait_for_timeout(100)
+    check(tag + "the voice level reaches the robot", float(await ev(pg, "document.querySelector('#jv-bot').style.getPropertyValue('--lv')")) > 0)
+    await pg.wait_for_timeout(400)
+    await pg.screenshot(path=str(SHOTS / f"robot_speaking_{scheme}.png"))
+    face = lambda: ev(pg, "getComputedStyle(document.querySelector('#jv-bot .face')).fill")
+    f_speak = await face()
+    # laserul: la fiecare treaptă stă la mijlocul ei; materialul „ideea” are o secvență pe treaptă
+    seen = 0
+    for _ in range(12):
+        if r["tip"] == "ideea":
+            await pg.wait_for_timeout(750)
+            geo = await ev(pg, "() => { const l = document.querySelector('#jv-laser').getBoundingClientRect(), c = document.querySelector('#jv-chunk .jv-step.cur').getBoundingClientRect(), s = document.querySelector('#jv-chunk .jv-schema').getBoundingClientRect(); return { l: l.top + l.height / 2, c: c.top + c.height / 2, lr: l.right, sr: s.right } }")
+            check(tag + "step " + str(r["continut"]["treapta"]) + ": the laser is at the middle of the current step (±4 px), at the right edge of the scheme", abs(geo["l"] - geo["c"]) <= 4 and abs(geo["lr"] - geo["sr"]) <= 2, geo)
+            check(tag + "step " + str(r["continut"]["treapta"]) + ": the laser does not cover the text", await ev(pg, "() => { const l = document.querySelector('#jv-laser').getBoundingClientRect(); return [...document.querySelectorAll('#jv-chunk .jv-step.cur .ln')].every(e => { const r = document.createRange(); r.selectNodeContents(e); return [...r.getClientRects()].every(x => x.right <= l.left + 1); }); }"))
+            seen += 1
+            if seen == 2: await pg.screenshot(path=str(SHOTS / f"robot_laser_{scheme}.png"))
+        else:
+            check(tag + "no laser on a card without scheme steps (" + r["tip"] + ")", await pg.locator("#jv-laser").count() == 0)
+        if r["k"] == r["of"] or seen >= 3: break
+        await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(80)
+        r = await tool(pg, "next_chunk"); await sound(pg)
+    check(tag + "the laser was seen on at least 3 steps", seen >= 3, seen)
+    # laserul se estompează la pauză; fața pauzei e cenușie, ochii închiși
+    lz = lambda: ev(pg, "parseFloat(getComputedStyle(document.querySelector('#jv-laser')).opacity)")
+    check(tag + "while speaking the laser is fully visible", await lz() > 0.9, await lz())
+    await pg.click('[data-a="jv-pause"]'); await pg.wait_for_timeout(700)
+    check(tag + "on pause the face is grey, the eyes closed, the laser faded", "paused" in await cls() and await face() != f_speak and await ev(pg, "getComputedStyle(document.querySelector('#jv-bot .eye')).transform") != "none" and await lz() < 0.5, [await cls(), await lz()])
+    await pg.screenshot(path=str(SHOTS / f"robot_paused_{scheme}.png"))
+    await pg.click('[data-a="jv-resume"]'); await pg.wait_for_timeout(200)
+    await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(700)
+    check(tag + "in the listening window the antenna is green and the laser faded", "listening" in await cls() and await ev(pg, "getComputedStyle(document.querySelector('#jv-bot .ant')).fill") != await ev(pg, "getComputedStyle(document.querySelector('#jv-bot .eye')).fill") and await lz() < 0.5, [await cls(), await lz()])
+    await pg.screenshot(path=str(SHOTS / f"robot_listening_{scheme}.png"))
+    check(tag + "no horizontal scroll at 360 px", await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"))
+    await pg.click('[data-a="jv-stop"]'); await pg.wait_for_timeout(200)
+    # un modul fără tablă: robotul e acolo, laserul nu
+    await pg.click('[data-a="jv-again"]'); await pg.wait_for_timeout(150)
+    await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-gil summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-gil [data-a="listen"]'); await pg.wait_for_timeout(250)
+    await tool(pg, "next_chunk"); await sound(pg)
+    check(tag + "a module without a board has the robot but no laser", await pg.locator("#jv-bot").count() == 1 and await pg.locator("#jv-laser").count() == 0)
+    check(tag + "no page errors", not errs, errs)
+    await ctx.close()
+
+
 async def artifact(b):
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
     await pin(ctx)
@@ -588,6 +658,7 @@ async def main():
             await screens(b, scheme)
             await sequences(b, scheme)
             await modes(b, scheme)
+            await robot(b, scheme)
             await subtitles(b, scheme)
         await unfoldings(b)
         await artifact(b)

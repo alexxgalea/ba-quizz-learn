@@ -577,6 +577,7 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-kw { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .jv-kw li { font-size: 20px; font-weight: 600; line-height: 1.3; padding-left: 10px; border-left: 3px solid var(--accent, currentColor); overflow-wrap: anywhere; }
 .jv-schema { margin-top: 10px; }
+.jv-steps { position: relative; padding-right: 26px; }
 .jv-kw li { transition: opacity .35s, background .35s; border-radius: 0 8px 8px 0; padding-right: 8px; }
 .jv-kw li.cur { background: var(--accent-soft); }
 .jv-kw li.old { opacity: .5; }
@@ -585,6 +586,33 @@ details.gap .nm { font-weight: 600; font-size: 15px; min-width: 0; line-height: 
 .jv-step pre.code { background: none; border: 0; padding: 0 8px; border-radius: 0; font-size: 13px; }
 .jv-step.cur { background: var(--accent-soft); border-left-color: var(--accent); }
 .jv-step.fut { opacity: .4; }
+/* Robotul (în locul bulei, doar cu ecran): culoarea feței urmează faza; gura se mișcă la vorbit, antena e verde la ascultat, ochii privesc în sus la gândit și se închid la pauză. */
+.jv-bot { --lv: 0; --c: var(--accent); width: 52px; height: 52px; flex: none; filter: drop-shadow(0 0 calc(1px + var(--lv) * 14px) color-mix(in srgb, var(--c) 55%, transparent)); transition: filter .12s linear; }
+.jv-bot svg { width: 100%; height: 100%; display: block; }
+.jv-bot.speaking { --c: var(--ok); }
+.jv-bot.thinking { --c: var(--warn); }
+.jv-bot.paused, .jv-bot.connecting { --c: var(--line-strong); }
+.jv-bot .face { fill: var(--c); transition: fill .3s; }
+.jv-bot .visor { fill: var(--surface); }
+.jv-bot .eye { fill: var(--ink); transition: transform .3s; transform-box: fill-box; transform-origin: center; }
+.jv-bot.thinking .eye { transform: translate(2px, -3px); }
+.jv-bot.paused .eye, .jv-bot.connecting .eye { transform: scaleY(.15); }
+.jv-bot .mb { fill: var(--ink); transform-box: fill-box; transform-origin: center; }
+.jv-bot.speaking .mb { animation: jv-eq .5s ease-in-out infinite alternate; }
+.jv-bot.speaking .mb:nth-of-type(2) { animation-delay: .15s; }
+.jv-bot.speaking .mb:nth-of-type(3) { animation-delay: .3s; }
+.jv-bot .ant { fill: var(--ink); transition: fill .3s; }
+.jv-bot.listening .ant { fill: var(--ok); }
+@keyframes jv-eq { from { transform: scaleY(.3); } to { transform: scaleY(1.6); } }
+/* Laserul: punctul de la marginea dreaptă a schemei, la mijlocul treptei curente. */
+.jv-laser { position: absolute; right: 0; top: 0; width: 22px; height: 22px; transition: top .5s cubic-bezier(.3,.9,.3,1), opacity .3s; }
+.jv-laser .c { fill: var(--accent); }
+.jv-laser .r { fill: none; stroke: var(--accent); stroke-width: 2; opacity: .5; transform-box: fill-box; transform-origin: center; animation: jv-ring 1.2s ease-out infinite; }
+.jv-laser.speaking .c { fill: var(--ok); }
+.jv-laser.speaking .r { stroke: var(--ok); }
+.jv-laser.paused, .jv-laser.listening { opacity: .35; }
+.jv-laser.paused .r { animation: none; }
+@keyframes jv-ring { from { transform: scale(.6); opacity: .7; } to { transform: scale(1.4); opacity: 0; } }
 .jv-step .ln.ar { color: var(--muted); }
 .jv-step .ln.ar b { color: var(--accent); font-weight: 700; margin-right: 4px; }
 #jv-lesson .jv-ctl { grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 6px; }
