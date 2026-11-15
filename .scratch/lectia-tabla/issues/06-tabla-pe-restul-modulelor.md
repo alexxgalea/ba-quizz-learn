@@ -6,4 +6,8 @@
 
 **Blocked by:** 05
 
-**Status:** needs-triage
+**Status:** done
+
+## Comments
+
+**15 noiembrie 2026:** înlocuit de `.scratch/tabla-trepte/` (spec nou, după proba lui Alex și interviul despre trepte). Tichetele pe module sunt acolo: 06–16 pentru P1 (cu `design`, care lipsea din lista de mai sus), 17 pentru P2 și P3.
