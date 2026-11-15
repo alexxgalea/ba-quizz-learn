@@ -6,9 +6,13 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/python.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
-- [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+- [x] Toate punctele din `src/desf/python.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+## Comments
+
+**15 nov. 2026:** Tablă pe toate cele 10 puncte din `python` (toate cu schemă, în 2–4 trepte; punctele 8 și 10, fără `În C++`, n-au cheia `cpp`). Test nou în `tools/unit/desf.test.mjs` (fișierul real: tablă pe fiecare punct, `cpp` doar unde există `În C++`, 2–5 trepte). Rândurile schemelor sunt sub ~30 de caractere, ca să nu se rupă la 360 px (verificat pe punctele 4 și 6, light și dark, fără scroll lateral). Nicio eroare de fapt găsită; textul punctelor n-a fost atins.
