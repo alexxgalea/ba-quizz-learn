@@ -1,6 +1,10 @@
 // Shared by build.mjs and validate.mjs: loads the app data and parses the explanation/glossary markdown.
 import fs from "node:fs";
 import vm from "node:vm";
+import { createRequire } from "node:module";
+
+// Aceeași tăiere în trepte ca în lecție (src/jarvis.js, `trepte`): validarea și aplicația nu pot diferi.
+const { trepte } = createRequire(import.meta.url)("./src/jarvis.js");
 
 export const DATA_FILES = ["data_core.js", "data_tech.js", "data_diagrams.js", "data_mcq1.js", "data_mcq2.js", "data_mcq3.js", "data_mcq4.js", "data_mcq5.js", "data_mcq6.js", "data_ctx.js", "data_oral.js", "data_oral2.js", "data_fe.js", "data_katas.js", "data_skel.js", "data_patterns.js"];
 
@@ -193,9 +197,9 @@ export function buildExplanations(root, P) {
 // Modul complet sau absent: câte o desfășurare pentru fiecare punct, plus harta.
 export const DESF_FIELDS = { "Problema": "p", "Ideea": "i", "Exemplu": "ex", "Analogie": "an", "Pas cu pas": "pas", "Tablă": "tab", "În C++": "cpp", "Unde nu ține": "nu", "Legătură": "leg", "Grupuri": "g", "Greu": "hard" };
 // Cuvinte (fără blocurile de cod): erori în afara [min, max] (≤ hard la punctele marcate grele), avertisment în afara benzii 60–90.
-export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, stepLines: 8, cols: 36, tabPer: 2, tabWords: 4, tabTotal: 6, schemaLines: 8 };
+export const DESF_LIMITS = { min: 50, max: 100, hard: 180, bandMin: 60, bandMax: 90, exLines: 8, stepLines: 8, cols: 36, tabPer: 2, tabWords: 4, tabTotal: 6, schemaLines: 8, schemaSteps: 5 };
 // Modulele frontend sunt teritoriu nou pentru Alex: desfășurări mai lungi, exemplu cu ✗ / ✓ alături. Pragul de jos rămâne 50, ca fișele scrise înainte să rămână valide.
-export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandMax: 140, exLines: 14, stepLines: 8, cols: 36, tabPer: 2, tabWords: 4, tabTotal: 6, schemaLines: 8 };
+export const DESF_LIMITS_FE = { min: 50, max: 160, hard: 250, bandMin: 90, bandMax: 140, exLines: 14, stepLines: 8, cols: 36, tabPer: 2, tabWords: 4, tabTotal: 6, schemaLines: 8, schemaSteps: 5 };
 // Aceeași listă ca modulele cu `fe: true` din date (validate.mjs și un test unit verifică egalitatea); aplicația citește câmpul `fe`, nu lista.
 export const DESF_FE_MODULES = ["js", "ts", "react", "frontend", "fedebug"];
 export const desfLimits = id => (DESF_FE_MODULES.includes(id) ? DESF_LIMITS_FE : DESF_LIMITS);
@@ -288,6 +292,9 @@ function checkTab(it, L, at, E) {
     if (!T.schema.trim()) E(p + "schema e goală");
     if (rows.length > L.schemaLines) E(p + "schema are " + rows.length + " rânduri (maxim " + L.schemaLines + ")");
     rows.forEach((l, j) => { if ([...l].length > L.cols) E(p + "schema, rândul " + (j + 1) + " are " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
+    // Schema se spune în trepte (lecția, .scratch/tabla-trepte): cel puțin o săgeată `↓` și cel mult `schemaSteps` trepte.
+    if (!rows.some(l => /^\s*↓/.test(l))) E(p + "schema are nevoie de cel puțin o săgeată ↓ (se spune în trepte)");
+    else if (trepte(T.schema).length > L.schemaSteps) E(p + "schema are " + trepte(T.schema).length + " trepte (maxim " + L.schemaSteps + ")");
     if (it.pas !== undefined) E(p + "schema nu merge cu Pas cu pas (Pas cu pas e deja schema punctului)");
   }
 }

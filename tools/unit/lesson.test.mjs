@@ -1250,7 +1250,8 @@ test("every module of the real data has sequences ending in the point, with cont
 
 // ---------- tabla: cuvinte cheie și schemă în loc de paragrafe ----------
 
-const TABLA = { problema: ["cuvânt problemă"], ideea: ["cuvânt idee", "alt cuvânt"], schema: "A rulează\n↓ await\nB rulează", cpp: ["epoll_wait"], punct: ["cuvânt punct"] };
+// Schema fără săgeți rămâne o singură secvență; treptele (schema cu săgeți) au secțiunea lor, mai jos.
+const TABLA = { problema: ["cuvânt problemă"], ideea: ["cuvânt idee", "alt cuvânt"], schema: "A rulează\nB rulează", cpp: ["epoll_wait"], punct: ["cuvânt punct"] };
 const boardSheet = () => seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab: TABLA }), ...SHEET_AS.desf.slice(1)] });
 const byTip = (sh, n, audio) => Object.fromEntries(Jarvis.lessonSequences(sh, n, audio).map(x => [x.tip, x]));
 
@@ -1320,20 +1321,20 @@ test("every real asyncio point has board sequences, and the real modules without
   const root = new URL("../../", import.meta.url), P = loadData(root), { desf } = buildDesf(P, readDesfFiles(root));
   const as = { points: P.sheets.asyncio.points, desf: desf.asyncio.items };
   const q = Jarvis.lessonSequences(as, 1);
-  assert.deepEqual(q.map(x => x.tip), ["problema", "ideea", "exemplu", "cpp", "punct"]);
+  assert.deepEqual(q.map(x => x.tip), ["problema", "ideea", "ideea", "ideea", "ideea", "exemplu", "cpp", "punct"]);   // schema punctului 1 are 4 trepte
   for (const x of q) assert.equal(typeof x.continut, "object", x.tip);
   assert.ok(q.find(x => x.tip === "ideea").continut.schema.includes("await"));
   assert.ok(q.find(x => x.tip === "exemplu").continut.cod.startsWith("import asyncio"));
   for (const x of q) if (x.continut.cuvinte.length) assert.ok(x.continut.cuvinte.length <= 2);
   for (let n = 2; n <= as.points.length; n++) for (const x of Jarvis.lessonSequences(as, n)) {
     assert.equal(typeof x.continut, "object", n + " " + x.tip);
-    if (x.tip !== "exemplu") assert.ok(x.continut.cuvinte.length >= 1 && x.continut.cuvinte.length <= 2, n + " " + x.tip);
+    if (x.tip !== "exemplu" && !(x.continut.treapta > 0)) assert.ok(x.continut.cuvinte.length >= 1 && x.continut.cuvinte.length <= 2, n + " " + x.tip);
   }
 });
 
 // ---------- tichetul 03: cuvintele cheie apar când sunt spuse; subtitrarea e oprită ----------
 
-const TAB3 = { problema: ["conexiuni deschise", "un thread pe conexiune"], ideea: ["event loop", "cedează bucla"], schema: "A rulează\n↓ await\nB rulează", cpp: ["epoll_wait"], punct: ["concurență cooperativă"] };
+const TAB3 = { problema: ["conexiuni deschise", "un thread pe conexiune"], ideea: ["event loop", "cedează bucla"], schema: "A rulează\nB rulează", cpp: ["epoll_wait"], punct: ["concurență cooperativă"] };
 async function boardLesson(over = {}, module = "asyncio") {
   const t = setup(over); t.app.sheet0 = t.app.sheet;
   t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab: TAB3 }), ...SHEET_AS.desf.slice(1)] }).desf; return r; };
@@ -1840,4 +1841,219 @@ test("isBoardCard is the one test for a board card: an object as the content, no
   assert.equal(typeof Jarvis.isBoardCard, "function");
   assert.deepEqual([{ tip: "ideea", continut: { cuvinte: [] } }, { tip: "exemplu", continut: { cuvinte: [], cod: "x" } }].map(Jarvis.isBoardCard), [true, true]);
   assert.deepEqual([{ tip: "punct", continut: "text" }, { tip: "punct", continut: null }, { tip: "punct" }, null, undefined].map(Jarvis.isBoardCard), [false, false, false, false, false]);
+});
+
+// ---------- tabla cu trepte: schema se spune treaptă cu treaptă (.scratch/tabla-trepte, tichetul 01) ----------
+
+const STEP_GAP = Jarvis.STEP_GAP_MS;
+const SCHEMA3 = "A rulează\n↓ await\nA se suspendă\n↓ bucla alege B\nB rulează\n↓ I/O gata\nbucla reia A";
+const TABT = { problema: ["conexiuni deschise"], ideea: ["event loop", "cedează bucla"], schema: SCHEMA3, punct: ["concurență cooperativă"] };
+const stepSheet = (tab = TABT) => seqSheet({ desf: [Object.assign({}, SHEET_AS.desf[0], { tab, cpp: undefined, nu: undefined }), ...SHEET_AS.desf.slice(1)] });
+async function stepLesson(over = {}, tab = TABT) {
+  const t = setup(over); t.app.sheet0 = t.app.sheet;
+  t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = stepSheet(tab).desf; return r; };
+  await begin(t, "asyncio");
+  await deliver(t);                                       // harta, auzită
+  t.clock.advance(GAP);
+  await deliver(t);                                       // problema, auzită
+  t.clock.advance(GAP);
+  return t;
+}
+
+test("STEP_GAP_MS is shorter than SEQ_GAP_MS and both are exported", () => {
+  assert.deepEqual([STEP_GAP, STEP_GAP < GAP, STEP_GAP >= 500], [2000, true, true]);
+});
+
+test("trepte: the rows before the first arrow are the first step, each arrow row opens a step and takes the rows after it", () => {
+  assert.deepEqual(Jarvis.trepte(SCHEMA3), ["A rulează", "↓ await\nA se suspendă", "↓ bucla alege B\nB rulează", "↓ I/O gata\nbucla reia A"]);
+  assert.deepEqual(Jarvis.trepte("x\n↓ a\ny\nz\n↓ b"), ["x", "↓ a\ny\nz", "↓ b"]);
+});
+
+test("trepte: an empty arrow, two arrows in a row and an arrow at the end each make a step", () => {
+  assert.deepEqual(Jarvis.trepte("a\n↓\nb"), ["a", "↓\nb"]);
+  assert.deepEqual(Jarvis.trepte("a\n↓ b\n↓ c\nd"), ["a", "↓ b", "↓ c\nd"]);
+  assert.deepEqual(Jarvis.trepte("a\n↓ b\n↓ except*"), ["a", "↓ b", "↓ except*"]);
+});
+
+test("trepte: a scheme without arrows stays whole, and a scheme starting with an arrow has no empty first step", () => {
+  assert.deepEqual(Jarvis.trepte("a\nb\nc"), ["a\nb\nc"]);
+  assert.deepEqual(Jarvis.trepte("↓ a\nb\n↓ c"), ["↓ a\nb", "↓ c"]);
+  assert.deepEqual([Jarvis.trepte(""), Jarvis.trepte(undefined)], [[], []]);
+});
+
+test("trepte: the real asyncio schemes are cut in 3–4 steps and the steps put back give the scheme", () => {
+  const root = new URL("../../", import.meta.url), P = loadData(root), { desf } = buildDesf(P, readDesfFiles(root));
+  const schemes = desf.asyncio.items.filter(x => x.tab && x.tab.schema).map(x => x.tab.schema);
+  assert.equal(schemes.length, 9);
+  assert.deepEqual(schemes.map(s => Jarvis.trepte(s).length), [4, 3, 3, 4, 3, 4, 4, 4, 4]);
+  for (const s of schemes) {
+    const st = Jarvis.trepte(s);
+    assert.equal(st.join("\n"), s);
+    assert.equal(st[0].startsWith("↓"), false);
+    for (const x of st.slice(1)) assert.equal(x.startsWith("↓"), true);
+  }
+  assert.ok(schemes[5].split("\n").includes("↓"), "the empty arrow is in the real data");
+});
+
+test("the ideea of a point with a scheme is one sequence per step, with the whole scheme and the step index on the card", () => {
+  const sh = stepSheet(), q = Jarvis.lessonSequences(sh, 1);
+  assert.deepEqual(q.map(x => x.tip), ["problema", "ideea", "ideea", "ideea", "ideea", "exemplu", "punct"]);
+  const st = q.filter(x => x.tip === "ideea");
+  assert.deepEqual(st.map(x => x.continut.treapta), [0, 1, 2, 3]);
+  for (const x of st) assert.equal(x.continut.schema, SCHEMA3);
+});
+
+test("only the first step carries the keywords of the ideea", () => {
+  const st = Jarvis.lessonSequences(stepSheet(), 1).filter(x => x.tip === "ideea");
+  assert.deepEqual(st.map(x => x.continut.cuvinte), [["event loop", "cedează bucla"], [], [], []]);
+  assert.deepEqual(st.map(x => x.material.cuvinte), [["event loop", "cedează bucla"], [], [], []]);
+});
+
+test("the material of a step has the earlier steps as context (deja) and the current one in acum, never the next one, nor the whole scheme", () => {
+  for (const audio of [false, true]) {
+    const st = Jarvis.lessonSequences(stepSheet(), 1, audio).filter(x => x.tip === "ideea"), steps = Jarvis.trepte(SCHEMA3);
+    st.forEach((x, i) => {
+      assert.equal(x.material.acum, steps[i], "acum " + i);
+      assert.equal(x.material.deja, i ? steps.slice(0, i).join("\n") : undefined, "deja " + i);
+      assert.equal("schema" in x.material, false, "the model does not get the whole scheme");
+      if (i + 1 < steps.length) assert.equal(JSON.stringify(x.material).includes(steps[i + 1].split("\n")[0]), false, "next step in step " + i);
+    });
+  }
+});
+
+test("a scheme without arrows stays one ideea sequence with the whole scheme, as before", () => {
+  const sh = stepSheet(Object.assign({}, TABT, { schema: "A\nB" })), q = Jarvis.lessonSequences(sh, 1).filter(x => x.tip === "ideea");
+  assert.equal(q.length, 1);
+  assert.deepEqual(q[0].continut, { cuvinte: ["event loop", "cedează bucla"], schema: "A\nB" });
+  assert.equal(q[0].material, undefined);
+});
+
+test("the step instruction: tell this step only, do not repeat the earlier ones, say nothing of the next, slowly; the audio one has no screen words", () => {
+  for (const audio of [false, true]) {
+    const st = Jarvis.lessonSequences(stepSheet(), 1, audio).filter(x => x.tip === "ideea");
+    for (const x of st) {
+      assert.match(x.instruction, /o singură idee/);
+      assert.match(x.instruction, /rar/);
+      assert.match(x.instruction, /treapta/i);
+      assert.match(x.instruction, /nu (o )?anun/i);
+      if (audio) assert.equal(SCREEN_WORDS.test(x.instruction), false, x.instruction);
+    }
+    assert.match(st[0].instruction, /cuvinte(le)? cheie/);
+    assert.match(st[1].instruction, /nu repeta/i);
+  }
+  assert.match(Jarvis.lessonSequences(stepSheet(), 1, true)[1].instruction, /din material/);
+  assert.match(Jarvis.lessonSequences(stepSheet(), 1, false)[1].instruction, /tabl/);
+});
+
+test("next_chunk gives one step at a time: the material has the steps so far and no later one, and k / of count the steps", async () => {
+  const t = await stepLesson();
+  const steps = Jarvis.trepte(SCHEMA3), seen = [];
+  for (let i = 0; i < steps.length; i++) {
+    const r = await t.tool("next_chunk");
+    assert.deepEqual([r.tip, r.k, r.of, r.continut.treapta, r.continut.acum], ["ideea", 3 + i, 8, i, steps[i]], "step " + i);
+    if (i + 1 < steps.length) assert.equal(JSON.stringify(r.continut).includes(steps[i + 1].split("\n")[0]), false, "later step in " + i);
+    assert.equal(r.continut.deja, i ? steps.slice(0, i).join("\n") : undefined);
+    seen.push(r);
+    speak(t); t.clock.advance(i + 1 < steps.length ? STEP_GAP : GAP);
+  }
+  assert.equal(seen.length, 4);
+});
+
+test("the card of a step carries the whole scheme and the step index, once the sound starts", async () => {
+  const t = await stepLesson();
+  await t.tool("next_chunk"); sound(t);
+  assert.deepEqual([t.state().lesson.card.continut.treapta, t.state().lesson.card.continut.schema], [0, SCHEMA3]);
+  speak(t); t.clock.advance(STEP_GAP);
+  await t.tool("next_chunk"); sound(t);
+  assert.deepEqual([t.state().lesson.card.continut.treapta, t.state().lesson.card.continut.schema, t.state().lesson.k], [1, SCHEMA3, 4]);
+});
+
+test("between two steps the next one is asked for after STEP_GAP_MS; after the last step, after SEQ_GAP_MS", async () => {
+  const t = await stepLesson();
+  const n0 = seqAsks(t);
+  await t.tool("next_chunk"); speak(t);                    // step 1 of 4
+  t.clock.advance(STEP_GAP - 1);
+  assert.equal(seqAsks(t), n0);
+  t.clock.advance(1);
+  assert.equal(seqAsks(t), n0 + 1);
+  await t.tool("next_chunk"); speak(t); t.clock.advance(STEP_GAP);   // step 2
+  await t.tool("next_chunk"); speak(t); t.clock.advance(STEP_GAP);   // step 3
+  await t.tool("next_chunk"); speak(t);                              // step 4, the last
+  t.clock.advance(STEP_GAP);
+  assert.equal(seqAsks(t), n0 + 3, "after the last step the shorter gap is not enough");
+  t.clock.advance(GAP - STEP_GAP);
+  assert.equal(seqAsks(t), n0 + 4);
+});
+
+test("between the problema and the first step, and after the last step, the gap stays SEQ_GAP_MS", async () => {
+  const t = setup(); t.app.sheet0 = t.app.sheet;
+  t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = stepSheet().desf; return r; };
+  await begin(t, "asyncio");
+  await deliver(t); t.clock.advance(GAP);
+  await t.tool("next_chunk"); speak(t);                    // problema
+  const n0 = seqAsks(t);
+  t.clock.advance(STEP_GAP);
+  assert.equal(seqAsks(t), n0);
+  t.clock.advance(GAP - STEP_GAP);
+  assert.equal(seqAsks(t), n0 + 1);
+});
+
+test("the gap between steps also applies on Mut and in audio mode", async () => {
+  for (const over of [{ muted: true }, { mode: "audio" }]) {
+    const t = setup(); t.jarvis.settings.set(over);
+    t.app.sheet0 = t.app.sheet;
+    t.app.sheet = id => { const r = t.app.sheet0(id); if (id === "asyncio") r.desf = stepSheet().desf; return r; };
+    await begin(t, "asyncio");
+    await deliver(t); t.clock.advance(GAP); await deliver(t); t.clock.advance(GAP);
+    await t.tool("next_chunk"); speak(t);
+    const n0 = seqAsks(t);
+    t.clock.advance(STEP_GAP);
+    assert.equal(seqAsks(t), n0 + 1, JSON.stringify(over));
+  }
+});
+
+test("audio mode gives the same steps, with the material and the audio instruction", async () => {
+  const t = await stepLesson({ storage: memoryStorage({ "onapsis-gemini-v1": "KEY", "onapsis-jarvis-v1": JSON.stringify({ mode: "audio" }) }) });
+  const steps = Jarvis.trepte(SCHEMA3), r = [];
+  for (let i = 0; i < steps.length; i++) { r.push(await t.tool("next_chunk")); speak(t); t.clock.advance(i + 1 < steps.length ? STEP_GAP : GAP); }
+  assert.deepEqual(r.map(x => [x.k, x.continut.treapta, x.continut.acum]), steps.map((s, i) => [3 + i, i, s]));
+  for (const x of r) assert.equal(SCREEN_WORDS.test(x.instruction), false, x.instruction);
+  assert.match(r[0].instruction, /din material/);
+});
+
+test("Repetă, Pauză, Sari, Vorbește and a question during the gap between steps cancel it", async () => {
+  const acts = [
+    t => t.jarvis.repeat(),
+    t => t.jarvis.pause(),
+    t => t.jarvis.skip(),
+    t => t.jarvis.talk(true)
+  ];
+  for (const act of acts) {
+    const t = await stepLesson();
+    await t.tool("next_chunk"); speak(t);
+    const n0 = seqAsks(t);
+    act(t);
+    t.clock.advance(5 * GAP);
+    assert.equal(seqAsks(t), n0, String(act));
+  }
+});
+
+test("a question during the gap between steps cancels it", async () => {
+  const t = await stepLesson();
+  await t.tool("next_chunk"); speak(t);
+  const n0 = seqAsks(t);
+  t.live.emit({ type: "transcript", id: "q1", who: "user", text: "ce e event loop?" });
+  t.jarvis.talk(true);
+  t.clock.advance(STEP_GAP);
+  assert.equal(seqAsks(t), n0);
+});
+
+test("a chunk interrupted in the middle of the steps starts again from its first sequence", async () => {
+  const t = await stepLesson();
+  await t.tool("next_chunk"); speak(t); t.clock.advance(STEP_GAP);
+  await t.tool("next_chunk"); sound(t);                    // step 2 playing
+  t.jarvis.repeat();
+  const r = await t.tool("repeat_chunk");
+  assert.deepEqual([r.n, r.k, r.tip, r.repeat], [1, 1, "harta", true]);
+  assert.equal((await (async () => { speak(t); t.clock.advance(GAP); return t.tool("next_chunk"); })()).tip, "problema");
 });

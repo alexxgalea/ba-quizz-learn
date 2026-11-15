@@ -560,7 +560,7 @@
     les: {}, chk: {},
     prog: { exp: false, imp: false, reset: false, jmsg: "", jmsgBad: false, smsg: "", smsgBad: false, purge: false, pw: "", busy: false },
     srv: { url: "", secret: "" },
-    jv: { module: "", typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
+    jv: { module: "", laser: null, typing: false, draft: "", keyDraft: "", keyTest: "", mics: [], holding: false, rst: false },
     ask: {},
     dz: {},                                          // desfășurările deschise, pe modul: { map: bool, p: { <index punct>: true } } (doar în interfață, nu în S)
     cert: null, certQuit: false                      // certificarea în curs sau ultima terminată pe dispozitivul ăsta (vezi Cert), nu în S
@@ -620,6 +620,7 @@
     }
     main.innerHTML = h;
     paintTabs(); paintHeader();
+    if (ui.tab === "jarvis") jvLaser();
   }
   function softRender() { if (!ui.run) render(); else paintHeader(); }
   // Evenimente aduse de la server (alt dispozitiv): S s-a schimbat în jurnal. Ecranul se redesenează ca la vechea sincronizare (`softRender`: o sesiune în curs primește doar antetul),
@@ -2837,7 +2838,7 @@
   const jvSub = L => '<div id="jv-sub" class="jv-sub small muted" aria-live="off" data-h="' + esc(subKey(L)) + '">' + subRows(L) + "</div>";
   function jvPaint(st) {
     const sb = $("#jv-sub"); if (sb && st.lesson) { const h = subKey(st.lesson); if (sb.dataset.h !== h) { sb.dataset.h = h; sb.innerHTML = subRows(st.lesson); } }
-    const orb = $("#jv-orb"); if (orb) orb.style.setProperty("--lv", Math.min(1, st.level * 4).toFixed(2));
+    const orb = $("#jv-orb") || $("#jv-bot"); if (orb) orb.style.setProperty("--lv", Math.min(1, st.level * 4).toFixed(2));
     const ls = $("#jv-state"); if (ls && st.lesson && st.phase !== "ended") { const t = JV_LSTATE[st.lesson.status] || ""; if (ls.textContent !== t) ls.textContent = t; }
     const tr = $("#jv-tr"); if (tr) { const html = jvTranscript(st); if (tr.dataset.h !== html) { tr.dataset.h = html; tr.innerHTML = html; } }
   }
@@ -2911,16 +2912,42 @@
   // Harta și recapitularea: rândurile „1–3: text” cu intervalul îngroșat; prima linie a hărții e problema modulului.
   const jvRows = t => t.split("\n").map(x => { const m = /^(\d+(?:–\d+)?): (.*)$/.exec(x); return "<p>" + (m ? "<b>" + m[1] + "</b> " + inlineRich(m[2]) : inlineRich(x)) + "</p>"; }).join("");
   // Tabla: cuvinte cheie ca rânduri scurte, schema în bloc monospace, codul ca la cartonașul de azi; niciun paragraf.
-  function jvBoard(c, L) {
-    return (c.cuvinte && c.cuvinte.length ? '<ul class="jv-kw">' + c.cuvinte.map(w => "<li>" + esc(w) + "</li>").join("") + "</ul>" : "")
-      + (c.schema ? '<div class="jv-schema">' + codeBlock(c.schema, true, true) + "</div>" : "")
+  // O treaptă a schemei: rândul cu săgeată are săgeata în accent și cauza în `--muted`.
+  const jvStepRows = t => '<pre class="code wrap"><code>' + t.split("\n").map(l => {
+    const m = /^(\s*)↓\s*(.*)$/.exec(l);
+    return m ? '<span class="ln ar"><b>↓</b>' + esc(m[2]) + "</span>" : '<span class="ln">' + esc(l || " ") + "</span>";
+  }).join("") + "</code></pre>";
+  // Robotul din lecție (varianta B din prototip): fața urmează faza (culoarea din CSS, gura, ochii, antena); nivelul vocii intră prin `--lv`.
+  const jvRobot = (ph, lv) => '<div class="jv-bot ' + ph + '" id="jv-bot" style="--lv:' + lv + '"><svg viewBox="0 0 64 64" aria-hidden="true"><rect class="ant" x="30" y="2" width="4" height="9" rx="2"/><circle class="ant" cx="32" cy="4" r="4"/>' +
+    '<circle class="face" cx="32" cy="36" r="26"/><rect class="visor" x="14" y="24" width="36" height="16" rx="8"/><circle class="eye" cx="24" cy="32" r="3.6"/><circle class="eye" cx="40" cy="32" r="3.6"/>' +
+    '<rect class="mb" x="25" y="46" width="3" height="6" rx="1.5"/><rect class="mb" x="30.5" y="46" width="3" height="6" rx="1.5"/><rect class="mb" x="36" y="46" width="3" height="6" rx="1.5"/></svg></div>';
+  // Laserul: punct pe marginea dreaptă a schemei, la mijlocul treptei curente. Redesenarea îl pune întâi unde a fost (`ui.jv.laser`), iar `jvLaser` îl mută, ca tranziția să se vadă.
+  const jvLaserEl = ph => '<svg class="jv-laser ' + ph + '" id="jv-laser" viewBox="0 0 22 22" aria-hidden="true"' + (typeof ui.jv.laser === "number" ? ' style="top:' + ui.jv.laser + 'px"' : "") + '><circle class="r" cx="11" cy="11" r="8"/><circle class="c" cx="11" cy="11" r="5"/></svg>';
+  function jvLaser() {
+    const lz = $("#jv-laser"), cur = $("#jv-chunk .jv-step.cur");
+    if (!lz || !cur) { ui.jv.laser = null; return; }
+    const top = Math.round(cur.offsetTop + cur.offsetHeight / 2 - 11);
+    ui.jv.laser = top;
+    if (lz.style.top === top + "px") return;
+    lz.getBoundingClientRect();                                                 // fixează poziția veche înainte de mutare
+    lz.style.top = top + "px";
+  }
+  function jvBoard(c, L, ph) {
+    const cur = c.curent;
+    // Schema cu trepte (cartonașul are `treapta`): treapta curentă evidențiată, cele trecute normale, cele care urmează estompate.
+    const steps = c.schema && typeof c.treapta === "number" ? Jarvis.trepte(c.schema) : null;
+    const schema = !c.schema ? "" : steps
+      ? steps.map((t, i) => '<div class="jv-step ' + (i < c.treapta ? "past" : i === c.treapta ? "cur" : "fut") + '" data-i="' + i + '">' + jvStepRows(t) + "</div>").join("")
+      : codeBlock(c.schema, true, true);
+    return (c.cuvinte && c.cuvinte.length ? '<ul class="jv-kw">' + c.cuvinte.map((w, i) => '<li class="' + (cur >= 0 ? (i === cur ? "cur" : "old") : steps ? "old" : "") + '">' + esc(w) + "</li>").join("") + "</ul>" : "")
+      + (c.schema ? '<div class="jv-schema' + (steps ? " jv-steps" : "") + '">' + (steps ? jvLaserEl(ph) : "") + schema + "</div>" : "")
       + (c.cod ? codeBlock(c.cod, isFE(L.module), true) : "");
   }
-  function jvCard(L) {
+  function jvCard(L, ph) {
     const c = L.card;
     if (!c) return '<div id="jv-chunk" class="jv-chunk jv-empty"></div>';
     const lab = c.tip === "capcane" ? "" : '<div class="jv-tip small muted">' + esc(JV_TIP[c.tip] || "") + (L.of > 1 && c.tip !== "intrebare" ? " · " + L.k + "/" + L.of : "") + (c.eticheta ? ' · <b class="jv-mark">' + esc(c.eticheta) + "</b>" : "") + "</div>";
-    const body = Jarvis.isBoardCard(c) ? jvBoard(c.continut, L)
+    const body = Jarvis.isBoardCard(c) ? jvBoard(c.continut, L, ph)
       : c.tip === "exemplu" ? codeBlock(c.continut, isFE(L.module), true) : c.tip === "pas" ? codeBlock(c.continut, true, true)
       : c.tip === "capcane" ? "<b>Capcane la interviu</b>" + c.continut.split("\n").map(x => "<p>" + fmt(x) + "</p>").join("")
       : c.tip === "harta" || c.tip === "recap" ? jvRows(c.continut) : c.tip === "intrebare" ? (c.continut ? '<p class="jv-q">' + esc(c.continut) + "</p>" : "") : inlineRich(c.continut);
@@ -2930,12 +2957,13 @@
   function vLessonActive(st) {
     const L = st.lesson, pct = L.total ? Math.round(L.n / L.total * 100) : 0;
     let h = '<div id="jv-lesson"' + (L.muted ? ' class="is-mut"' : "") + '><div class="spread"><div class="eyebrow">Jarvis · Lecție · ' + esc(L.name) + '</div><span class="timer" data-timer="jv">' + mmss(now() - st.startedAt) + "</span></div>";
-    h += '<section class="card jv-stage"><div class="jv-orb ' + st.phase + '" id="jv-orb" style="--lv:' + Math.min(1, st.level * 4).toFixed(2) + '"></div><div class="jv-state" id="jv-state" role="status" aria-live="polite">' + (JV_LSTATE[L.status] || "") + "</div>";
+    const lv = Math.min(1, st.level * 4).toFixed(2);
+    h += '<section class="card jv-stage">' + (L.mode === "audio" ? '<div class="jv-orb ' + st.phase + '" id="jv-orb" style="--lv:' + lv + '"></div>' : jvRobot(st.phase, lv)) + '<div class="jv-state" id="jv-state" role="status" aria-live="polite">' + (JV_LSTATE[L.status] || "") + "</div>";
     if (L.status === "lost") h += '<div class="jv-warn" role="alert"><b>Semnalul a căzut.</b> Lecția e pe pauză. Când ai semnal, apasă Reia.</div>';
     else if (st.warn === "reconnecting") h += '<div class="jv-warn" role="status">Reconectare…</div>';
     h += "</section>";
     h += '<article class="card stack-s jv-chunk-card"><div class="spread"><span class="chip acc">' + esc(L.name) + '</span><span class="mono jv-pos" id="jv-pos">' + L.n + "/" + L.total + '</span></div><div class="jv-bar"><span style="width:' + pct + '%"></span></div>';
-    if (L.mode !== "audio") h += jvCard(L) + (L.subs ? jvSub(L) : "");        // doar audio: fără cartonaș, doar comenzile mari
+    if (L.mode !== "audio") h += jvCard(L, st.phase) + (L.subs ? jvSub(L) : "");        // doar audio: fără cartonaș, doar comenzile mari
     h += "</article>";
     const paused = st.phase === "paused";
     h += '<div class="jv-ctl">' + (paused ? '<button class="btn primary" data-a="jv-resume">Reia</button>' : '<button class="btn primary" data-a="jv-pause">Pauză</button>') +
