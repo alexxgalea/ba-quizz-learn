@@ -71,8 +71,12 @@ Ce arată ecranul în timpul unei secvențe (tip și conținut). La punctele cu 
 _Avoid_: card
 
 **Tablă**:
-Câmpul scris de noi la un punct al fișei, din care se face cartonașul: 1–2 cuvinte cheie pe secvență, o schemă opțională și codul. Fără paragrafe; Jarvis povestește în jurul ei, nu o citește. Cuvintele cheie apar când sunt spuse.
+Câmpul scris de noi la un punct al fișei, din care se face cartonașul: 1–2 cuvinte cheie pe secvență, o schemă opțională și codul. Fără paragrafe; Jarvis povestește în jurul ei, nu o citește. Cuvintele cheie apar când sunt spuse; cel spus acum e evidențiat, cele de dinainte se estompează. Schema are cel puțin o săgeată și se împarte în **trepte**.
 _Avoid_: rezumat, subtitrare
+
+**Treaptă**:
+O bucată a schemei de pe tablă: o săgeată (`↓ cauză`) plus starea la care duce; prima treaptă e ce stă înainte de prima săgeată. Aplicația i le dă lui Jarvis pe rând (cu treptele de dinainte drept context, niciodată pe următoarea), evidențiază treapta curentă și estompează ce urmează; între trepte e o pauză scurtă (`STEP_GAP_MS`). O schemă fără săgeți se arată întreagă, fără trepte.
+_Avoid_: pas (e „Pas cu pas”), rând, etapă
 
 **Poziția lecției**:
 Prima bucată a unui modul pe care Alex n-a ascultat-o până la capăt; de acolo continuă lecția următoare, după o propoziție de recapitulare. Revine la început când fișa e ascultată toată.
