@@ -126,10 +126,9 @@ const Jarvis = (() => {
   function stepInstr(i, audio) {
     const src = audio ? "din material" : "pe baza tablei";
     const lead = i === 0
-      ? "Spune ideea, începând cu prima treaptă a schemei, cea marcată „acum”, împreună cu cuvintele cheie ale ideii: povestește-le în jurul schemei, cu vorbele tale, nu le citi ca pe o listă."
-      : "Spune doar treapta marcată „acum” din schema " + (audio ? "din material" : "de pe tablă") + ". Treptele de dinainte sunt context: nu repeta ce ai spus la ele.";
-    return lead + " " + (i === 0 ? "" : "Povestește treapta cu vorbele tale, în cuvinte, nu o citi. ")
-      + "Rămâi la ce e " + src + ": nu vorbi despre treapta următoare, nu o ghici."
+      ? "Spune ideea, începând cu prima treaptă a schemei, cea din „acum”, împreună cu cuvintele cheie ale ideii: povestește-le în jurul schemei, cu vorbele tale, nu le citi ca pe o listă."
+      : "Spune doar treapta din „acum”, cu vorbele tale, nu o citi. Treptele din „deja” sunt context: nu repeta ce ai spus la ele.";
+    return lead + " Rămâi la ce e " + src + ": nu vorbi despre treapta următoare, nu o ghici."
       + " Vorbește rar, în propoziții scurte, în 10–15 secunde, cu o singură idee. Fără fapte noi, fără exemple inventate; nu anunța ce urmează și nu încheia cu o întrebare."
       + (audio ? " Alex doar ascultă: tot ce spui trebuie să se înțeleagă din auz." : "");
   }
@@ -171,11 +170,11 @@ const Jarvis = (() => {
     const words = tip => (T[tip] || []).slice();
     const board = (tip, extra) => { const c = Object.assign({ cuvinte: words(tip) }, extra); if (c.cuvinte.length || c.cod || c.schema) out.push({ tip, continut: c, instruction: boardInstr(tip, audio) }); };
     board("problema");
-    // Schema cu săgeți se spune în trepte: o secvență pe treaptă. Cartonașul are schema întreagă și indexul treptei; materialul pentru model, doar treptele de până acum, cu cea curentă în „acum”.
+    // Schema cu săgeți se spune în trepte: o secvență pe treaptă. Cartonașul are schema întreagă și indexul treptei; materialul pentru model, treptele de până acum în „deja” (context) și cea curentă în „acum”.
     const st = trepte(T.schema);
     if (st.length > 1) st.forEach((cur, i) => {
       const cuvinte = i === 0 ? words("ideea") : [];
-      out.push({ tip: "ideea", continut: { cuvinte, schema: T.schema, treapta: i }, material: { cuvinte, schema: st.slice(0, i + 1).join("\n"), acum: cur, treapta: i }, instruction: stepInstr(i, audio) });
+      out.push({ tip: "ideea", continut: { cuvinte, schema: T.schema, treapta: i }, material: Object.assign({ cuvinte }, i ? { deja: st.slice(0, i).join("\n") } : null, { acum: cur, treapta: i }), instruction: stepInstr(i, audio) });
     });
     else board("ideea", T.schema ? { schema: T.schema } : null);
     if (x.ex) out.push({ tip: "exemplu", continut: { cuvinte: [], cod: unfence(x.ex) }, instruction: I.exemplu }); else board("analogie");
@@ -256,7 +255,7 @@ const Jarvis = (() => {
       "2. O bucată este un punct din fișă, dat pe secvențe scurte: lungimea și ritmul fiecărei secvențe le spune „instruction”, nu le lungi. Spune-o cu vorbele tale. Rămâi la ce ai primit: fără exemple din afara materialului, fără fapte noi, fără cifre sau nume de API care nu sunt în bucată.",
       "   Dacă bucata are „desf” (desfășurarea punctului), e materialul tău verificat: pornești de la problemă, spui ideea, apoi exemplul sau analogia, apoi pașii din „pas_cu_pas” (dacă există), spuși în ordine, ca o poveste în timp, și, dacă există, comparația cu C++ și unde nu ține. Exemplul din desfășurare e singurul exemplu: folosește-l pe el, nu inventa altul. Codul nu-l citi caracter cu caracter: povestește ce face și ce iese. Fără fapte noi nici față de desfășurare.",
       "3. Dacă răspunsul are „tip”: „harta”, e deschiderea lecției: spui problema modulului și grupurile de puncte " + (o.audio ? "din material" : "de pe cartonaș") + ", după „instruction”. Dacă are „tip”: „punct” la începutul bucății și „instruction” cere amintirea poziției, spui doar acea propoziție. Dacă răspunsul are „intro”, începe cu numărul de idei, ca în „Asyncio, în 10 idei. Prima: …”. Dacă „intro” are „harta”, spune întâi problema modulului și cum se grupează punctele (grupurile), ca să se vadă firul; altfel spune ideea principală. Apoi explică prima bucată. Dacă are „recap”, începe cu o propoziție care amintește ultima bucată ascultată („Data trecută am ajuns la …”), apoi explică bucata primită. Dacă „recap” are „continuare”: true, sesiunea s-a reluat în aceeași lecție: nu spune „data trecută”, ci „Reiau de unde am rămas, la …”.",
-      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (" + (o.audio ? "materialul pe care îl spui" : "cartonașul pe care îl vede Alex") + "; la punctele cu tablă e un obiect cu „cuvinte” (cuvintele cheie), opțional „schema” și „cod”, nu paragraf; la o schemă cu trepte, „acum” e treapta pe care o spui, iar „schema” are treptele de până acum, doar ca context) și „instruction”. Spui doar " + (o.audio ? "materialul" : "cartonașul") + ", în ordinea lui, și te oprești; aplicația cere secvența următoare.",
+      "   Dacă răspunsul next_chunk are „k” și „of” (secvența k din of), nu e toată bucata: primești o singură secvență, cu „tip”, „continut” (" + (o.audio ? "materialul pe care îl spui" : "cartonașul pe care îl vede Alex") + "; la punctele cu tablă e un obiect cu „cuvinte” (cuvintele cheie), opțional „schema” și „cod”, nu paragraf; la o schemă cu trepte, „acum” e treapta pe care o spui, iar „deja” are treptele de până acum, doar ca context) și „instruction”. Spui doar " + (o.audio ? "materialul" : "cartonașul") + ", în ordinea lui, și te oprești; aplicația cere secvența următoare.",
       "4. Nu anunța ce urmează și nu încheia bucata cu o întrebare: aplicația îi lasă lui Alex câteva secunde să intervină.",
       "5. Când next_chunk dă „closing” cu „k” și „of”, finalul vine pe secvențe: „capcane” (formulările de evitat) și „recap” (recapitularea din " + (o.audio ? "material" : "cartonaș") + ", scrisă de aplicație: n-o alcătuiești tu), iar la „recap” închei cu un rămas-bun scurt. Când „closing” nu are „k”, spune formulările de evitat ca „capcane la interviu” (dacă există), apoi o recapitulare în trei propoziții, pe baza lui recap_from, și un rămas-bun scurt. După asta nu mai apelezi nicio funcție.",
       "",

@@ -67,7 +67,7 @@ O parte a unei bucăți: problema, ideea, exemplul, pașii sau comparația cu C+
 _Avoid_: segment, pas
 
 **Cartonaș**:
-Ce arată ecranul în timpul unei secvențe (tip și conținut). La punctele cu **Tablă** e tabla; la celelalte, textul sau codul din care vorbește Jarvis. Același conținut ajunge la model, cu o excepție: la o schemă cu **trepte** cartonașul are schema întreagă și indexul treptei curente, iar modelul primește doar treptele de până acum, cu cea curentă marcată („acum”).
+Ce arată ecranul în timpul unei secvențe (tip și conținut). La punctele cu **Tablă** e tabla; la celelalte, textul sau codul din care vorbește Jarvis. Același conținut ajunge la model, cu o excepție: la o schemă cu **trepte** cartonașul are schema întreagă și indexul treptei curente, iar modelul primește treptele de până acum („deja”) și pe cea curentă („acum”).
 _Avoid_: card
 
 **Tablă**:

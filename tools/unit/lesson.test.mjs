@@ -1909,12 +1909,13 @@ test("only the first step carries the keywords of the ideea", () => {
   assert.deepEqual(st.map(x => x.material.cuvinte), [["event loop", "cedează bucla"], [], [], []]);
 });
 
-test("the material of a step has the steps so far and the current one marked, never the next one", () => {
+test("the material of a step has the earlier steps as context ("deja") and the current one in "acum", never the next one, nor the whole scheme", () => {
   for (const audio of [false, true]) {
     const st = Jarvis.lessonSequences(stepSheet(), 1, audio).filter(x => x.tip === "ideea"), steps = Jarvis.trepte(SCHEMA3);
     st.forEach((x, i) => {
       assert.equal(x.material.acum, steps[i], "acum " + i);
-      assert.equal(x.material.schema, steps.slice(0, i + 1).join("\n"), "schema " + i);
+      assert.equal(x.material.deja, i ? steps.slice(0, i).join("\n") : undefined, "deja " + i);
+      assert.equal("schema" in x.material, false, "the model does not get the whole scheme");
       if (i + 1 < steps.length) assert.equal(JSON.stringify(x.material).includes(steps[i + 1].split("\n")[0]), false, "next step in step " + i);
     });
   }
@@ -1951,7 +1952,7 @@ test("next_chunk gives one step at a time: the material has the steps so far and
     const r = await t.tool("next_chunk");
     assert.deepEqual([r.tip, r.k, r.of, r.continut.treapta, r.continut.acum], ["ideea", 3 + i, 8, i, steps[i]], "step " + i);
     if (i + 1 < steps.length) assert.equal(JSON.stringify(r.continut).includes(steps[i + 1].split("\n")[0]), false, "later step in " + i);
-    assert.equal(r.continut.schema, steps.slice(0, i + 1).join("\n"));
+    assert.equal(r.continut.deja, i ? steps.slice(0, i).join("\n") : undefined);
     seen.push(r);
     speak(t); t.clock.advance(i + 1 < steps.length ? STEP_GAP : GAP);
   }
