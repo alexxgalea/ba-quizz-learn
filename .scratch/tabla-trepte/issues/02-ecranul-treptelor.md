@@ -6,6 +6,8 @@
 
 **Blocked by:** 01
 
+**De la tichetul 01 (hotărât cu Alex, 15 noiembrie 2026):** cartonașul de treaptă are `treapta` (indexul de la 0) și schema întreagă, dar `cuvinte: []` după prima treaptă (spec: doar prima treaptă poartă cuvintele ideii). Cuvintele cheie ale ideii rămân vizibile pe toate treptele: la schimbarea cartonașului de la o treaptă la alta se păstrează cuvintele deja arătate (de ex. `seen` și cuvintele se mută pe treapta nouă, în `showPending`), fără să se deschidă un cartonaș nou gol. Schema cu singura săgeată pe primul rând (o singură treaptă) rămâne acceptată de validare.
+
 **Status:** ready-for-agent
 
 - [ ] `tools/test_lesson.py`: clasele treptelor (curentă / trecute / viitoare) urmează `k`; cuvântul curent are clasa lui; fără trepte, schema arată ca azi.
