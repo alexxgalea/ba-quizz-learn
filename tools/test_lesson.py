@@ -310,7 +310,8 @@ async def sequences(b, scheme):
     await pg.click('#sheet-asyncio [data-a="listen"]'); await pg.wait_for_timeout(250)
     seen = []
     r = await tool(pg, "next_chunk"); await sound(pg)
-    for _ in range(8):
+    whole = (it.get("tab") or {}).get("schema") or ""        # schema întreagă a punctului 1: cartonașul o arată la fiecare treaptă, materialul modelului doar treptele de până acum
+    for _ in range(12):
         seen.append((r["tip"], r["k"], r["of"]))
         tip = await pg.locator("#jv-chunk").get_attribute("data-tip")
         check(tag + "the card on screen has the type of the sequence " + r["tip"], tip == r["tip"], tip)
@@ -342,10 +343,10 @@ async def sequences(b, scheme):
             check(tag + "the steps card shows rows of plain text", await pg.locator("#jv-chunk pre.code").count() == 1)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_pas_{scheme}.png"))
         if r["tip"] == "ideea":
-            check(tag + "the idea board shows the whole scheme at once, before any keyword is said", await pg.locator("#jv-chunk .jv-kw li").count() == 0 and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(r["continut"]["schema"].split("\n")), await text(pg, "#jv-chunk"))
+            check(tag + "the idea board shows the whole scheme at once, before any keyword is said", await pg.locator("#jv-chunk .jv-kw li").count() == 0 and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(whole.split("\n")), await text(pg, "#jv-chunk"))
             await emit(pg, {"type": "transcript", "who": "model", "text": " ".join(r["continut"]["cuvinte"])})
             words = [w for w in (await text(pg, "#jv-chunk")).split()[3:] if w != "↓"]      # fără eticheta „Ideea · 3/6” și săgeți
-            check(tag + "the idea board has its keywords and the whole scheme, in about 25 words at most", await pg.locator("#jv-chunk .jv-kw li").count() == len(r["continut"]["cuvinte"]) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(r["continut"]["schema"].split("\n")) and len(words) <= 25, words)
+            check(tag + "the idea board has its keywords and the whole scheme, in about 25 words at most", await pg.locator("#jv-chunk .jv-kw li").count() == len(r["continut"]["cuvinte"]) and await pg.locator("#jv-chunk .jv-schema pre.code .ln").count() == len(whole.split("\n")) and len(words) <= 25, words)
             box = await pg.locator("#jv-chunk").evaluate("e => ({ h: e.scrollHeight, c: e.clientHeight, w: e.scrollWidth, cw: e.clientWidth })")
             check(tag + "the whole board is visible at 360 px, no scroll inside the card or sideways", box["h"] <= box["c"] + 1 and box["w"] <= box["cw"] + 1 and await ev(pg, "document.documentElement.scrollWidth <= window.innerWidth"), box)
             await pg.screenshot(path=str(SHOTS / f"lesson_seq_ideea_{scheme}.png"))
@@ -366,7 +367,7 @@ async def sequences(b, scheme):
         await sound(pg)
         await emit(pg, {"type": "transcript", "who": "model", "text": "Prima frază. A doua frază. A treia frază."})
         check(tag + "no subtitle by default: the transcript does not show under the board", await pg.locator("#jv-sub").count() == 0 and "A doua frază." not in await text(pg, "#jv-lesson .jv-chunk-card"), await text(pg, "#jv-lesson .jv-chunk-card"))
-    check(tag + "the first chunk went harta, problema, ideea, exemplu, cpp, punct in order", [x[0] for x in seen][:4] == ["harta", "problema", "ideea", "exemplu"] and seen[-1][0] == "punct", seen)
+    check(tag + "the first chunk went harta, problema, ideea (one per step), exemplu, cpp, punct in order", [x[0] for x in seen][:3] == ["harta", "problema", "ideea"] and [x[0] for x in seen if x[0] != "ideea"] == ["harta", "problema", "exemplu", "cpp", "punct"] and seen[-1][0] == "punct", seen)
     await ev(pg, f"{CTL}.speak()"); await pg.wait_for_timeout(100)
     check(tag + "the window opens only after the last sequence", await ev(pg, f"{CTL}.audio.beeps") == ["window"])
     check(tag + "the position moves only then", (await ev(pg, "window.PrepApp.sheet('asyncio')"))["pos"] == 1)

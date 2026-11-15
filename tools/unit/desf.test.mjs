@@ -270,12 +270,21 @@ test("Tablă: 1–2 keywords per sequence, at most 4 words each, at most 6 on th
 
 test("Tablă: the schema is at most 8 rows of 36 characters, not empty, and not together with Pas cu pas", () => {
   const withTab = (schema, over = {}) => errs(doc(MAP, item(1, Object.assign({ tab: TAB("- problema: a", "- ideea: b", "- schemă:", schema, "- punct: c") }, over)), item(2), item(3)));
-  assert.deepEqual(withTab(fence("text", ...Array(8).fill("x".repeat(36)))), []);
-  has(withTab(fence("text", ...Array(9).fill("x"))), /punctul 1.*Tablă.*schema.*9 rânduri.*8/);
-  has(withTab(fence("text", "x".repeat(37))), /punctul 1.*Tablă.*schema.*rândul 1.*37.*36/);
-  has(withTab(fence("python", "x = 1")), /punctul 1.*Tablă.*schema.*text/);
+  assert.deepEqual(withTab(fence("text", "a", "↓ " + "x".repeat(34), ...Array(6).fill("x".repeat(36)))), []);
+  has(withTab(fence("text", "a", "↓ b", ...Array(7).fill("x"))), /punctul 1.*Tablă.*schema.*9 rânduri.*8/);
+  has(withTab(fence("text", "a", "↓ " + "x".repeat(35))), /punctul 1.*Tablă.*schema.*rândul 2.*37.*36/);
+  has(withTab(fence("python", "x = 1\n↓ y")), /punctul 1.*Tablă.*schema.*text/);
   has(withTab("de fapt text liber"), /punctul 1.*Tablă.*schema/);
-  has(withTab(fence("text", "x"), { pas: "Pas cu pas:\n" + fence("text", "a", "b") }), /punctul 1.*Tablă.*schema.*Pas cu pas/);
+  has(withTab(fence("text", "a", "↓ b"), { pas: "Pas cu pas:\n" + fence("text", "a", "b") }), /punctul 1.*Tablă.*schema.*Pas cu pas/);
+});
+
+test("Tablă: the schema has at least one arrow and at most 5 steps (.scratch/tabla-trepte, tichetul 01)", () => {
+  const withTab = (...rows) => errs(doc(MAP, item(1, { tab: TAB("- problema: a", "- ideea: b", "- schemă:", fence("text", ...rows), "- punct: c") }), item(2), item(3)));
+  has(withTab("a", "b"), /punctul 1.*Tablă.*schema.*săgeată/);
+  has(withTab("a", "↓ b", "↓ c", "↓ d", "↓ e", "↓ f"), /punctul 1.*Tablă.*schema.*6 trepte.*maxim 5/);
+  assert.deepEqual(withTab("a", "↓ b", "↓ c", "↓ d", "↓ e"), []);                // 5 trepte
+  assert.deepEqual(withTab("↓", "a"), []);                                          // o singură săgeată, prima treaptă e săgeata
+  assert.deepEqual(withTab("a", "↓", "↓ except*"), []);                              // săgeată goală și săgeată la final
 });
 
 test("Tablă: unreadable lines are reported, not dropped", () => {
