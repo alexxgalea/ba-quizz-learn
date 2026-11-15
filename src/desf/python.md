@@ -127,10 +127,10 @@ Tablă:
 - schemă:
 ```text
 e = errs(lines)
-↓ nimic nu rulează încă
-next(e)
-↓ rulează până la yield
-pauză la yield "E1"
+↓ creezi generatorul
+corpul nu rulează încă
+↓ next(e)
+rulează, pauză la yield "E1"
 ↓ următorul next(e)
 reia cu variabilele păstrate
 ```
@@ -194,13 +194,13 @@ Tablă:
 - ideea: __enter__; __exit__
 - schemă:
 ```text
-with Q() as q
-↓ __enter__ intră în bloc
-corpul rulează, poate ridica
-↓ ieșire normală sau excepție
+with Q():
+↓ __enter__, apoi blocul
 __exit__ rulează mereu
-↓ returnează True: o înghite
-altfel excepția urcă
+↓ întoarce True
+excepția e înghițită
+↓ altfel
+excepția urcă mai departe
 ```
 - cpp: destructor RAII
 - punct: cleanup garantat
@@ -229,10 +229,10 @@ Tablă:
 x in list
 ↓ parcurge elementele
 O(n) la fiecare căutare
-↓ set: tabelă hash
+↓ pui IP-urile într-un set
 in: O(1) în medie
-↓ list.pop(0) mută tot restul
-deque.popleft(): O(1)
+↓ scoți de la început
+list.pop(0): O(n); deque: O(1)
 ```
 - cpp: std::set: arbore ordonat
 - punct: alegi după operație
