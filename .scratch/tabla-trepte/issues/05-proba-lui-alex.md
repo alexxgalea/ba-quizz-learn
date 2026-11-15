@@ -9,3 +9,11 @@
 **Status:** ready-for-human
 
 - [ ] Răspunsurile sunt notate aici, sub „Comments”.
+
+## Comments
+
+**15 nov. 2026, Alex (versiunea `c16a575`, `asyncio`):** „E bun ritmul, merge bine.”
+
+- 2) Pauza de 2 s dintre trepte: potrivită (acoperită de verdictul pe ritm).
+- 3) Ritmul general: bun, nu mai e prea alert. Nu se lungesc secvențele și nu se adaugă „Mai departe”; durata rămâne 10–15 s (Out of Scope din spec).
+- 1) Evidențierea treptei și 4) robotul și laserul: nespecificate; rămân de întrebat înainte să se scrie tablele pe celelalte module.
