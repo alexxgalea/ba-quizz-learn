@@ -6,7 +6,7 @@
 
 **Blocked by:** none
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] TDD în `tools/unit/lesson.test.mjs`: tăierea pe toate cele 9 scheme din `asyncio` (săgeată goală, două săgeți la rând, săgeată la final); o schemă fără săgeți rămâne o singură secvență.
 - [ ] `next_chunk` dă o treaptă pe rând; materialul nu conține treapta următoare; `k / of` numără treptele.

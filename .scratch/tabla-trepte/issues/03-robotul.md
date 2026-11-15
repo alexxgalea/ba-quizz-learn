@@ -8,7 +8,7 @@ Prototipul (sursa primară, de citit înainte): ramura `prototype/tabla-pasi`, f
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `tools/test_lesson.py`: robotul apare în locul bulei doar cu ecran; clasa de stare urmează faza; laserul e la înălțimea treptei curente (±4 px) și lipsește fără trepte.
 - [x] Capturi la 360 px, light și dark, în cele patru stări.

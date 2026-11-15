@@ -6,8 +6,9 @@
 
 **Blocked by:** 01, 02, 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Documentația la zi.
-- [ ] Toate testele din `CLAUDE.md`; `npm run pages`; `BUILD` de pe adresa live coincide.
-- [ ] `docs/prototip-tabla.html` șters din `main`.
+- [x] Documentația la zi.
+- [x] Toate testele din `CLAUDE.md` (24 de interfață, 632 de unitate, `desf_examples`); `npm run pages`.
+- [ ] `BUILD` de pe adresa live coincide (după îmbinarea PR-ului în `main`).
+- [x] `docs/prototip-tabla.html` șters (rămâne pe `prototype/tabla-pasi`).
