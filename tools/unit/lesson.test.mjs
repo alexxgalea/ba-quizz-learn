@@ -1909,7 +1909,7 @@ test("only the first step carries the keywords of the ideea", () => {
   assert.deepEqual(st.map(x => x.material.cuvinte), [["event loop", "cedează bucla"], [], [], []]);
 });
 
-test("the material of a step has the earlier steps as context ("deja") and the current one in "acum", never the next one, nor the whole scheme", () => {
+test("the material of a step has the earlier steps as context (deja) and the current one in acum, never the next one, nor the whole scheme", () => {
   for (const audio of [false, true]) {
     const st = Jarvis.lessonSequences(stepSheet(), 1, audio).filter(x => x.tip === "ideea"), steps = Jarvis.trepte(SCHEMA3);
     st.forEach((x, i) => {
