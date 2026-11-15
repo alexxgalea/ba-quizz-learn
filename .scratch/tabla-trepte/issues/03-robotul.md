@@ -10,6 +10,6 @@ Prototipul (sursa primară, de citit înainte): ramura `prototype/tabla-pasi`, f
 
 **Status:** ready-for-agent
 
-- [ ] `tools/test_lesson.py`: robotul apare în locul bulei doar cu ecran; clasa de stare urmează faza; laserul e la înălțimea treptei curente (±4 px) și lipsește fără trepte.
-- [ ] Capturi la 360 px, light și dark, în cele patru stări.
-- [ ] Toate testele din `CLAUDE.md` trec.
+- [x] `tools/test_lesson.py`: robotul apare în locul bulei doar cu ecran; clasa de stare urmează faza; laserul e la înălțimea treptei curente (±4 px) și lipsește fără trepte.
+- [x] Capturi la 360 px, light și dark, în cele patru stări.
+- [x] Toate testele din `CLAUDE.md` trec.
