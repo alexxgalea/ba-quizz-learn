@@ -6,6 +6,16 @@
 
 **Blocked by:** 02, 03, 04
 
-**Status:** ready-for-human
+**Status:** done
 
-- [ ] Alex a ascultat cel puțin patru bucăți și a răspuns la cele trei întrebări; răspunsurile sunt notate aici, sub „Comments”.
+- [x] Alex a ascultat cel puțin patru bucăți și a răspuns la cele trei întrebări; răspunsurile sunt notate aici, sub „Comments”.
+
+## Comments
+
+**15 noiembrie 2026, verdictul lui Alex:**
+
+1. Ecranul: „mai ok”, se citește. Vrea ceva mai mult timp pe fiecare secvență și un ritm mai lent.
+2. Ritmul: pauza dintre secvențe trece de la 2 s la 4 s (`SEQ_GAP_MS` = 4000).
+3. Schemele: „bune”. Formatul `Tablă` de pe `asyncio` rămâne referința pentru restul modulelor.
+
+Cereri noi, care trec într-un val separat (interviu pornit pe 15 noiembrie): rândul explicat evidențiat pe tablă și, eventual, un personaj cu un băț care arată ideea și „de ce”. Tichetul 06 așteaptă decizia despre evidențiere, fiindcă ea poate schimba formatul schemelor.

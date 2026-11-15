@@ -34,7 +34,7 @@ const Jarvis = (() => {
   // și pauzele dintre încercările de reconectare (în total ~60 s; celelalte moduri păstrează cele trei încercări din GeminiLive).
   const WINDOW_MS = 3000, ASK_WAIT_MS = 12000, PAUSE_KEEP_MS = 10 * 60000;
   // Ritmul lecției: pauza dintre două secvențe ale aceleiași bucăți (după `spoken`, înainte să se ceară următoarea). Se ajustează după proba lui Alex.
-  const SEQ_GAP_MS = 2000;
+  const SEQ_GAP_MS = 4000;
   const RETRY_LESSON = [500, 1000, 2000, 3000, 4000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000];
   // Ce îi spune aplicația modelului ca să ducă lecția mai departe.
   const MSG = {
