@@ -17,6 +17,20 @@ Analogie: Patru casieri, o singură casă de marcat. Toate stau la ghișeu, dar 
 În C++: Patru `std::thread` care fac același calcul pe 4 core-uri rulează deodată și termină de câteva ori mai repede decât patru rulări una după alta.
 Unde nu ține: În C++ nu există GIL: două thread-uri care scriu aceeași variabilă fără sincronizare sunt un data race, adică comportament nedefinit. Python își păstrează structurile interne întregi; riști doar un rezultat greșit (punctul 7).
 Legătură: GIL-01. Celery rulează implicit task-urile în procese (`prefork`), model recomandat pentru task-uri CPU-bound.
+Tablă:
+- problema: 4 thread-uri; fără câștig
+- ideea: GIL: un thread rulează
+- schemă:
+```text
+4 thread-uri cer GIL-ul
+↓ unul îl ia
+unul execută bytecode
+↓ 5 ms (getswitchinterval)
+GIL-ul trece la alt thread
+```
+- analogie: 4 casieri, o casă
+- cpp: std::thread, fără GIL
+- punct: limita CPython
 
 ### 2
 Greu: da
@@ -34,6 +48,18 @@ d = time.perf_counter() - s
 print(d < .6)  # → True
 ```
 Legătură: GIL-05. Binding-urile generate ale OpenCV (computer vision) își învelesc apelul în `PyAllowThreads`, deci thread-uri diferite pot procesa imagini în paralel.
+Tablă:
+- problema: 8 thread-uri; descărcări rapide
+- ideea: I/O eliberează GIL; cod nativ
+- schemă:
+```text
+thread A așteaptă I/O
+↓ eliberează GIL-ul
+thread B rulează Python
+↓ I/O gata
+A cere GIL-ul înapoi
+```
+- punct: GIL liber în I/O
 
 ### 3
 Greu: da
@@ -41,6 +67,19 @@ Problema: Ai de descărcat 500 de fișiere prin HTTP și apoi de parsat milioane
 Ideea: Alegi după unde se duce timpul. Dacă el se duce în așteptare (I/O-bound), folosești `ThreadPoolExecutor`, sau asyncio pentru mii de conexiuni. Dacă se duce în calcul Python (CPU-bound), folosești `ProcessPoolExecutor` sau `multiprocessing`: fiecare proces are GIL-ul lui. Altă ieșire e codul nativ vectorizat, care mută calculul din Python.
 Analogie: Un bucătar poate pune mai multe oale la fiert și le supraveghează pe rând, fiindcă apa fierbe singură (I/O). Dar tăiatul de legume îl face doar el: pentru mai mult, ai nevoie de mai mulți bucătari (procese).
 Legătură: GIL-02. Gunicorn are aceeași alegere: `--workers` sunt procese, iar `--threads` (worker `gthread`) ajută la cereri cu I/O.
+Tablă:
+- problema: 500 de fișiere; parsare Python
+- ideea: unealta după tipul sarcinii
+- schemă:
+```text
+unde se duce timpul?
+↓ așteptare (I/O)
+thread-uri sau asyncio
+↓ calcul Python
+procese: un GIL fiecare
+```
+- analogie: bucătar; oale și legume
+- punct: I/O față de CPU
 
 ### 4
 Greu: da
@@ -59,6 +98,19 @@ p.dumps(f)  # ! PicklingError
 În C++: Biblioteca standard C++17 nu are procese (doar `std::system`); folosești `fork` (POSIX) sau o bibliotecă. Memoria e separată și acolo.
 Unde nu ține: În C++ trimiți tu octeții (pipe, memorie partajată), pe când pickle serializează în locul tău. Iar pentru CPU-bound ajung de obicei thread-urile (punctul 1); în Python procesele sunt calea obișnuită.
 Legătură: GIL-06. Celery trimite argumentele unui task prin broker, serializate (JSON implicit din 4.0), din același motiv: task-ul rulează în alt proces.
+Tablă:
+- problema: task-uri mici; lambda
+- ideea: pickle; memorie separată
+- schemă:
+```text
+argument în procesul tău
+↓ pickle.dumps
+octeți prin canal (IPC)
+↓ pickle.loads
+o copie în procesul worker
+```
+- cpp: fork (POSIX)
+- punct: serializarea costă
 
 ### 5
 Greu: da
@@ -76,6 +128,18 @@ async def main():
 aio.run(main())
 ```
 Legătură: GIL-04 și GIL-11. În FastAPI, un endpoint `def` rulează într-un threadpool, iar un `async def` rulează direct pe loop (fișa asgi).
+Tablă:
+- problema: async def cu time.sleep
+- ideea: un thread; cedezi doar la await
+- schemă:
+```text
+corutina apelează time.sleep
+↓ fără await
+bucla nu primește controlul
+↓ 2 s
+nicio altă cerere nu răspunde
+```
+- punct: apel blocant; to_thread
 
 ### 6
 Greu: da
@@ -93,6 +157,18 @@ async def main():
 aio.run(main())  # ! ExceptionGroup
 ```
 Legătură: GIL-07 și GIL-12. În Celery, `--concurrency` limitează tot câte task-uri rulează odată.
+Tablă:
+- problema: 10.000 de cereri odată
+- ideea: Semaphore(N); TaskGroup
+- schemă:
+```text
+async with sem
+↓ N corutine înăuntru
+corutina N+1 așteaptă
+↓ una iese
+corutina N+1 intră
+```
+- punct: concurență limitată
 
 ### 7
 Greu: da
@@ -111,6 +187,19 @@ print(n)   # → 1
 În C++: `std::mutex` cu `std::lock_guard` fac ce fac `threading.Lock` cu `with lock:`: intri în secțiunea critică, iar ieșirea o eliberează chiar dacă apare o excepție.
 Unde nu ține: C++ are `std::atomic<int>`, unde `++` e atomic. Python n-are echivalent: `+=` pe `int` nu e atomic nici cu GIL. Un `Lock` poate fi eliberat de alt thread; `unlock` pe un `std::mutex` ținut de alt thread e comportament nedefinit.
 Legătură: GIL-03. În Django, `F("count") + 1` mută incrementul în baza de date, ca să nu se piardă între citire și scriere.
+Tablă:
+- problema: contor pierdut
+- ideea: += nu e atomic; Lock
+- schemă:
+```text
+A citește 0; B citește 0
+↓ A scrie 1
+B scrie tot 1, peste el
+↓ rezultatul
+n = 1, nu 2
+```
+- cpp: std::mutex; std::atomic
+- punct: GIL nu dă thread-safety
 
 ### 8
 Greu: da
@@ -122,3 +211,7 @@ import sys
 sys._is_gil_enabled()  # → True
 ```
 Legătură: GIL-10.
+Tablă:
+- problema: 3.13; nimic nu se schimbă
+- ideea: build free-threaded; opțional
+- punct: python3.13t; PEP 703

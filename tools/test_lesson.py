@@ -32,6 +32,14 @@ async def to_last(pg, r):
         await ev(pg, f"{CTL}.speak()"); r = await tool(pg, "next_chunk"); await sound(pg)
     return r
 
+async def point_on_screen(pg, mod, i, point, shown, r):
+    """Ultima secvență a unui punct arată textul lui; dacă punctul are Tablă, cartonașul are cuvintele cheie `punct` (nu paragraful), iar ele apar pe ecran pe măsură ce sunt spuse."""
+    words = await ev(pg, f"((window.PREP.desf[{mod!r}] || {{}}).items || [])[{i}]?.tab?.punct || null")
+    if words:
+        c = r["continut"]
+        return isinstance(c, dict) and c.get("cuvinte") == words
+    return point.replace("`", "")[:40] in shown
+
 MODS = "() => window.PREP.modules.map(m => ({ id: m.id, p: m.p, short: m.short, n: (window.PREP.sheets[m.id].points || []).length }))"
 
 async def app_logic(b):
@@ -199,10 +207,10 @@ async def screens(b, scheme):
     r = await tool(pg, "next_chunk")
     check(tag + "the requested card is not on screen before its sound starts", await pg.locator("#jv-chunk.jv-empty").count() == 1, await text(pg, "#jv-chunk"))
     await sound(pg)
-    await to_last(pg, r)          # toate modulele merg pe secvențe: amintirea punctului 4, desfășurarea, apoi punctul 5
+    r = await to_last(pg, r)          # toate modulele merg pe secvențe: amintirea punctului 4, desfășurarea, apoi punctul 5
     pts = await ev(pg, "window.PREP.sheets.gil.points")
     shown = (await text(pg, "#jv-chunk")).replace("\n", " ")
-    check(tag + "the current chunk's text from the sheet is on screen", pts[4].replace("`", "")[:40] in shown, shown)
+    check(tag + "the current chunk's text from the sheet is on screen", await point_on_screen(pg, "gil", 4, pts[4], shown, r), shown)
     check(tag + "n/total is shown", f"5/{n}" in (await text(pg, "#jv-pos")).replace(" ", ""), await text(pg, "#jv-pos"))
     check(tag + "the transcript is collapsed behind a button", await pg.locator("details#jv-trd").count() == 1 and await pg.locator("details#jv-trd[open]").count() == 0)
     await pg.screenshot(path=str(SHOTS / f"lesson_active_{scheme}.png"))
@@ -237,8 +245,8 @@ async def screens(b, scheme):
     last = (await texts(pg))[-1]
     check(tag + "the second tap restarts the lesson from the beginning", (await ev(pg, "window.PrepApp.sheet('gil')"))["pos"] == 0 and "next_chunk" in last and "început" in last, last)
     r = await tool(pg, "next_chunk"); await sound(pg)
-    await to_last(pg, r)      # harta, desfășurarea, apoi punctul 1
-    check(tag + "after the restart the screen shows the first chunk again", "1/" in (await text(pg, "#jv-pos")).replace(" ", "") and (await ev(pg, "window.PREP.sheets.gil.points[0]")).replace("`", "")[:30] in (await text(pg, "#jv-chunk")).replace("\n", " "), await text(pg, "#jv-pos"))
+    r = await to_last(pg, r)      # harta, desfășurarea, apoi punctul 1
+    check(tag + "after the restart the screen shows the first chunk again", "1/" in (await text(pg, "#jv-pos")).replace(" ", "") and await point_on_screen(pg, "gil", 0, await ev(pg, "window.PREP.sheets.gil.points[0]"), (await text(pg, "#jv-chunk")).replace("\n", " "), r), await text(pg, "#jv-pos"))
     await pg.click('[data-a="jv-repeat"]'); await pg.wait_for_timeout(80)       # taie sunetul, ca microfonul să rămână liber mai jos
     await ev(pg, "window.PrepApp.lessonHeard('gil', 4)")
     await pg.click('[data-a="jv-pause"]'); await pg.wait_for_timeout(80)

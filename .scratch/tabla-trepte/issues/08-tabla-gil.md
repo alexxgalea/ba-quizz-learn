@@ -6,9 +6,11 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/gil.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
-- [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+- [x] Toate punctele din `src/desf/gil.md` au `Tablă` (7 cu schemă, 21 de trepte; punctul 8, o definiție, are doar cuvinte cheie).
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs` (148 de exemple, 0 picate).
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit` (634 trecute), `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Captură a lecției pe punctul 7 (schemă cu trepte), la 360 px, light și dark: tabla încape, fără scroll.
+
+Notă: `tools/test_lesson.py` presupunea că ultima secvență a unui punct de la `gil` arată textul punctului. Cu `Tablă` arată cuvintele cheie `punct`, deci `point_on_screen` verifică `continut.cuvinte` când punctul are tablă și textul când nu.
