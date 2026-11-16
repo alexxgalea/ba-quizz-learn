@@ -6,9 +6,13 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/oop.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
-- [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+- [x] Toate punctele din `src/desf/oop.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+## Comments
+
+**16 nov. 2026:** Tablă pe toate cele 12 puncte din `oop`, toate cu schemă (3–4 trepte); `cpp` doar la punctele cu `În C++` (1–9, 11; 10 și 12 n-au), iar la punctul 12 nu există cheia `analogie`, fiindcă are și `Exemplu`. Test nou în `tools/unit/desf.test.mjs` (fișierul real, ca la `python`; scris întâi, picat, apoi verde). `tools/test_lesson.py › unfoldings` folosea `oop` drept control „modul cu desfășurări, fără tablă”; controlul e acum `graphql`, ultimul din coadă (se mută iar când primește tablă). Capturi la 360 px, light și dark, pe punctul 7 (MRO), treapta 2: fără scroll lateral. Nicio eroare de fapt găsită; textul punctelor n-a fost atins.
