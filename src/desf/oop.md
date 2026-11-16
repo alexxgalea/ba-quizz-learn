@@ -100,7 +100,7 @@ a.rules.append("r1")
 ↓ b.rules caută în clasă
 b.rules → ['r1']
 ↓ a.rules = [] creează atribut
-ascunde S.rules doar pe a
+a vede lista lui; S.rules rămâne
 ```
 - cpp: membru static
 - punct: instanță, apoi clasă
@@ -229,7 +229,7 @@ D().f()
 ↓ C3: D, B, C, A, object
 B.f cheamă super().f()
 ↓ super() = următoarea din MRO
-C.f, apoi A.f: BCA
+ordinea: B, C, A → „BCA”
 ```
 - cpp: virtual A
 - punct: mixin cooperativ
@@ -314,7 +314,7 @@ Legătură: OOP-12 arată o încălcare a lui Liskov; OOP-14 evită lanțul de `
 
 Tablă:
 - problema: lanț de if; teste pe toate ramurile
-- ideea: Open/Closed; Dependency Inversion
+- ideea: Open/Closed; Liskov, Dependency Inversion
 - schemă:
 ```text
 canal nou: încă un elif
@@ -351,8 +351,8 @@ Tablă:
 with g():
 ↓ rulează până la yield
 corpul blocului with
-↓ ieșire, chiar și cu excepție
-finally rulează: close
+↓ ieșire: with cheamă __exit__
+și la excepție: finally, close
 ```
 - cpp: RAII
 - punct: fără stare: funcție
