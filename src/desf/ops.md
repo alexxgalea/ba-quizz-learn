@@ -20,6 +20,18 @@ trace: 6,5 s în SELECT din Postgres
 log: seq scan pe alerts, 40M rânduri
 ```
 Legătură: OBS-02, cei trei piloni, și OBS-04, New Relic APM.
+Tablă:
+- problema: aplicația e lentă
+- ideea: metrică, trace, log
+- schemă:
+```text
+metrică: p99 a crescut
+↓ trace
+unde s-a pierdut timpul
+↓ log
+de ce, cu context
+```
+- punct: metrică, apoi log
 
 ### 2
 Greu: da
@@ -34,6 +46,18 @@ acum = D(2026, 11, 3, 9, 12)
 print(acum - min(m))  # → 0:12:00
 ```
 Legătură: OBS-03.
+Tablă:
+- problema: 40 de grafice
+- ideea: RED; USE
+- schemă:
+```text
+serviciu cu request-uri: RED
+↓ rate, errors, duration
+resursă: USE
+↓ utilizare, saturație, erori
+coadă: adâncime și vârstă
+```
+- punct: vârsta mesajului
 
 ### 3
 Greu: da
@@ -46,6 +70,18 @@ print(sum(t) / len(t))  # → 245.0
 print(sorted(t)[94])  # → 2000
 ```
 Legătură: OBS-01.
+Tablă:
+- problema: media de 245 ms
+- ideea: p95; histogramă
+- schemă:
+```text
+media: 245 ms
+↓ ascunde coada lentă
+unul din zece ia 2 s
+↓ p95, p99 per endpoint
+nu le mediezi între instanțe
+```
+- punct: percentile, nu media
 
 ### 4
 Greu: da
@@ -58,6 +94,18 @@ buget = minute * (1 - slo)
 print(round(buget, 1))  # → 43.2
 ```
 Legătură: OBS-09. La latență, SLI-ul poate fi o percentilă (punctul 3).
+Tablă:
+- problema: cât de disponibil?
+- ideea: SLO; error budget
+- schemă:
+```text
+SLI: fracția request-urilor reușite
+↓ ținta SLO: 99,9%
+buget de erori: 43,2 min
+↓ bugetul se golește
+oprești lansările
+```
+- punct: SLA e contract
 
 ### 5
 Greu: da
@@ -70,6 +118,18 @@ Exemplu:
   for: 10m
 ```
 Legătură: punctele 3 și 4.
+Tablă:
+- problema: alertă la 3 noaptea
+- ideea: simptom, nu cauză
+- schemă:
+```text
+CPU 85% pe worker
+↓ userii nu simt nimic
+alertă inutilă
+↓ alertezi pe simptom
+rata 5xx peste 5%, for: 10m
+```
+- punct: alerta cere acțiune
 
 ### 6
 Greu: da
@@ -85,6 +145,18 @@ def line(m):
 print(line("start"))  # → a1b2 start
 ```
 Legătură: OBS-05.
+Tablă:
+- problema: loguri fără legătură
+- ideea: request ID; contextvars
+- schemă:
+```text
+ID la intrare (X-Request-ID)
+↓ contextvars
+fiecare log îl poartă
+↓ în headerele task-ului Celery
+workerul îl pune în context
+```
+- punct: cauți ID-ul
 
 ### 7
 Greu: da
@@ -102,3 +174,15 @@ deploy:
   script: ./deploy.sh
 ```
 Legătură: OBS-06, OBS-07 și OBS-08.
+Tablă:
+- problema: pipeline de 20 minute
+- ideea: stages; needs
+- schemă:
+```text
+stage test: joburi în paralel
+↓ stage-ul următor
+pornește după toate
+↓ needs
+imediat ce dependența e gata
+```
+- punct: variabile protejate

@@ -24,6 +24,18 @@ docker run --rm alpine ls /tmp/x
 # → No such file or directory
 ```
 Legătură: DK-01. Imaginea e față de container ce e clasa față de instanțele ei.
+Tablă:
+- problema: fișier lipsă
+- ideea: layere read-only; layer de scriere
+- schemă:
+```text
+imagine: layere read-only
+↓ docker run
+container: layer de scriere
+↓ docker rm
+datele din layer dispar
+```
+- punct: imagine și container
 
 ### 2
 Greu: da
@@ -38,6 +50,18 @@ RUN pip install -r requirements.txt
 COPY . .
 ```
 Legătură: DK-02 și OBS-06, cache-ul din GitLab CI.
+Tablă:
+- problema: build de patru minute
+- ideea: cache pe layer
+- schemă:
+```text
+COPY requirements.txt
+↓ neschimbat
+pip install vine din cache
+↓ COPY . .
+doar codul se reface
+```
+- punct: ordinea instrucțiunilor
 
 ### 3
 Problema: Imaginea aplicației e cu sute de megabytes mai mare decât trebuie, fiindcă ține compilatorul și uneltele de build, necesare doar la construire. Se descarcă greu și are suprafață de atac mare.
@@ -53,6 +77,18 @@ COPY --from=build /install \
   /usr/local
 ```
 Legătură: DK-03. Despre alegerea imaginii mici, vezi punctul 9.
+Tablă:
+- problema: imagine umflată
+- ideea: multi-stage; COPY --from
+- schemă:
+```text
+build: python:3.13, compilatoare
+↓ COPY --from=build
+doar rezultatul trece
+↓ imaginea finală
+python:3.13-slim
+```
+- punct: unelte doar la build
 
 ### 4
 Greu: da
@@ -70,6 +106,18 @@ docker history --no-trunc img
 # → RUN |1 TOKEN=abc123 …
 ```
 Legătură: DK-05 și DK-06.
+Tablă:
+- problema: .env în imagine
+- ideea: .dockerignore; USER app
+- schemă:
+```text
+COPY . . ia și .env
+↓ .dockerignore
+fișierul nu mai intră
+↓ ARG sau ENV cu parola
+se vede în docker history
+```
+- punct: secrete din afara imaginii
 
 ### 5
 Greu: da
@@ -84,6 +132,18 @@ CMD ["python", "-u", "app.py"]
 # → docker stop: imediat, exit 0
 ```
 Legătură: DK-04 și LX-07.
+Tablă:
+- problema: docker stop lent
+- ideea: forma exec; PID 1
+- schemă:
+```text
+CMD python app.py (forma shell)
+↓ sh devine PID 1
+SIGTERM nu ajunge la program
+↓ 10 s, apoi SIGKILL
+exit 137
+```
+- punct: forma exec
 
 ### 6
 Greu: da
@@ -99,6 +159,18 @@ docker ps --format '{{.Status}}'
 # → Up 6 seconds (unhealthy)
 ```
 Legătură: punctul 7, `depends_on` cu `service_healthy`.
+Tablă:
+- problema: running, dar blocat
+- ideea: HEALTHCHECK; volum
+- schemă:
+```text
+running: procesul există
+↓ HEALTHCHECK, exit 0
+healthy
+↓ 3 eșecuri
+unhealthy, fără repornire
+```
+- punct: volumul ține datele
 
 ### 7
 Problema: API-ul pornește în Compose și pică cu „connection refused” la `localhost:5432`. Corectezi la `db:5432`, dar pică tot o dată, fiindcă baza încă își pregătește datele.
@@ -114,6 +186,20 @@ services:
     healthcheck: {test: pg_isready}
 ```
 Legătură: DK-08. Rețelele overlay din Swarm se bazează tot pe nume.
+Tablă:
+- problema: localhost:5432
+- ideea: nume de serviciu; service_healthy
+- schemă:
+```text
+api apelează db:5432
+↓ DNS-ul rețelei Compose
+numele serviciului ajunge la IP
+↓ depends_on simplu
+doar ordinea pornirii
+↓ service_healthy
+așteaptă baza gata
+```
+- punct: localhost e containerul
 
 ### 8
 Greu: da
@@ -130,6 +216,18 @@ docker rm -f $(docker ps -q \
 docker service ls  # → api … 3/3
 ```
 Legătură: DK-07. Swarm îl știi din practică (`--force-new-cluster`, rețeaua overlay a lui Redis).
+Tablă:
+- problema: trei servicii, cinci servere
+- ideea: starea dorită; replici
+- schemă:
+```text
+starea dorită: 3 replici
+↓ pică una
+orchestratorul vede 2
+↓ pornește alta
+din nou 3 din 3
+```
+- punct: Swarm, Kubernetes, ECS
 
 ### 9
 Problema: Treci de la `python:3.13` la `python:3.13-alpine` ca să câștigi megabytes. Apoi `pip install` nu găsește un wheel și compilează din sursă sau pică.
@@ -142,3 +240,15 @@ pip install --dry-run \
 # slim → Would install … torch
 ```
 Legătură: cardul oral O-DK-1, un Dockerfile de producție.
+Tablă:
+- problema: alpine fără wheel
+- ideea: musl; glibc
+- schemă:
+```text
+alpine: musl
+↓ pip caută wheel
+manylinux nu se potrivește
+↓ compilează din sursă
+build lent sau eșuat
+```
+- punct: slim e implicit

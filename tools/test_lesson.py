@@ -508,7 +508,7 @@ async def subtitles(b, scheme):
 
 
 async def unfoldings(b):
-    """Tichet 10: lecția pe un modul cu desfășurări, fără tablă (graphql, controlul; când primește tablă, controlul se mută pe altul), dă modelului harta și desfășurarea punctului; pe unul fără desfășurări (aws) merge ca înainte."""
+    """Tichet 10: lecția pe un modul cu desfășurări, fără tablă (behav, controlul; când primește tablă, controlul se mută pe altul), dă modelului harta și desfășurarea punctului; pe unul fără desfășurări (aws) merge ca înainte."""
     ctx = await b.new_context(viewport={"width": 360, "height": 740})
     await pin(ctx)
     await ctx.add_init_script(path=FAKES)
@@ -517,11 +517,11 @@ async def unfoldings(b):
     await pg.route("**/fonts.*", lambda r: r.abort())
     await fresh(pg)
     await ev(pg, "localStorage.setItem('onapsis-gemini-v1', 'TESTKEY1234')"); await pg.reload(); await pg.wait_for_timeout(400)
-    d = await ev(pg, "window.PREP.desf.graphql")
-    pts = await ev(pg, "window.PREP.sheets.graphql.points")
+    d = await ev(pg, "window.PREP.desf.behav")
+    pts = await ev(pg, "window.PREP.sheets.behav.points")
     await pg.click('.tab[data-tab="study"]'); await pg.wait_for_timeout(150)
-    await pg.click('#sheet-graphql summary'); await pg.wait_for_timeout(150)
-    await pg.click('#sheet-graphql [data-a="listen"]'); await pg.wait_for_timeout(250)
+    await pg.click('#sheet-behav summary'); await pg.wait_for_timeout(150)
+    await pg.click('#sheet-behav [data-a="listen"]'); await pg.wait_for_timeout(250)
     async def whole(first):
         out = [first]
         while out[-1]["k"] < out[-1]["of"]:

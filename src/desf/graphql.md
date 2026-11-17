@@ -24,6 +24,18 @@ type Query {
 }
 ```
 Legătură: GQL-03 și GQL-06.
+Tablă:
+- problema: endpoint-uri fără contract
+- ideea: schemă tipată
+- schemă:
+```text
+un endpoint: /graphql
+↓ cererea
+se validează față de schemă
+↓ Query, Mutation, Subscription
+puncte de intrare tipate
+```
+- punct: schema e contractul
 
 ### 2
 Problema: Ecranul de alerte arată titlul, severitatea și numele sistemului. `GET /alerts` întoarce toate câmpurile, iar numele sistemului cere încă un `GET /systems/7` pentru fiecare alertă.
@@ -39,6 +51,18 @@ query {
 }
 ```
 Legătură: GQL-03.
+Tablă:
+- problema: over- și under-fetching
+- ideea: clientul scrie forma
+- schemă:
+```text
+GET /alerts: câmpuri în plus
+↓ GET /systems/7 pentru fiecare
+mai multe apeluri
+↓ query GraphQL
+forma o alege clientul
+```
+- punct: un singur request
 
 ### 3
 Greu: da
@@ -54,6 +78,18 @@ print(fara, cu)  # → 5 2
 print(lot)  # → [1, 2, 3]
 ```
 Legătură: GQL-01, fișa sqlalchemy (punctul 8) și fișa django (punctul 1).
+Tablă:
+- problema: 21 de query-uri
+- ideea: resolver; DataLoader
+- schemă:
+```text
+1 query pentru listă
+↓ resolver pe fiecare alertă
++ 20 de query-uri
+↓ DataLoader
+un singur lot de chei
+```
+- punct: N+1
 
 ### 4
 Problema: Ai deja FastAPI cu type hints și Pydantic. Pentru GraphQL poți scrie schema de mână într-un fișier separat sau o poți genera din codul Python.
@@ -68,6 +104,18 @@ a = Alert.__annotations__
 print(list(a))  # → ['id', 'title']
 ```
 Legătură: GQL-07. Ca Pydantic în FastAPI, tipurile din cod devin contractul API-ului.
+Tablă:
+- problema: schemă scrisă de mână?
+- ideea: Strawberry; Ariadne
+- schemă:
+```text
+clasă Python cu type hints
+↓ Strawberry
+schema generată
+↓ GraphQLRouter
+montat în FastAPI
+```
+- punct: type hints devin schemă
 
 ### 5
 Greu: da
@@ -83,6 +131,18 @@ print(s >= 500)  # → False
 print("errors" in b)  # → True
 ```
 Legătură: OBS-03.
+Tablă:
+- problema: răspuns 200 cu erori
+- ideea: data și errors
+- schemă:
+```text
+câmpul system pică
+↓ devine null, restul vine
+răspuns 200, cu errors
+↓ dashboardul 5xx
+rămâne verde
+```
+- punct: numeri errors din corp
 
 ### 6
 Greu: da
@@ -96,6 +156,18 @@ p = 20  # pagină maximă
 print(p ** n)  # → 8000
 ```
 Legătură: GQL-02, GQL-05 și SEC-08.
+Tablă:
+- problema: query de un milion
+- ideea: limite; autorizare
+- schemă:
+```text
+clientul alege forma query-ului
+↓ limite: adâncime, cost, timeout
+cerere respinsă la prag
+↓ autorizare pe obiect și câmp
+fiecare vede doar ale lui
+```
+- punct: serverul pune limite
 
 ### 7
 Problema: Backend-ul vrea `severityLevel` (număr) în locul lui `severity` (text). Un client vechi încă cere `severity`. În REST ai scoate un `/v2`; dacă ștergi câmpul, clientul vechi pică.
@@ -109,3 +181,15 @@ type Alert {
 }
 ```
 Legătură: GQL-04. Ca la migrațiile fără downtime: întâi adaugi, apoi ștergi.
+Tablă:
+- problema: schimbi un câmp
+- ideea: @deprecated
+- schemă:
+```text
+adaugi severityLevel
+↓ marchezi severity @deprecated
+clientul vechi merge în continuare
+↓ nimeni nu-l mai cere
+ștergi câmpul
+```
+- punct: fără /v2

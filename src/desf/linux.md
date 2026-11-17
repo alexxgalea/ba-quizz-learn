@@ -24,6 +24,19 @@ signal.signal(9, h)  # ! OSError
 În C++: `std::signal(SIGTERM, on_term)` din `<csignal>` instalează un handler. Acesta doar ridică un steag (`volatile std::sig_atomic_t`), iar bucla principală îl verifică și iese curat.
 Unde nu ține: Un handler C++ întrerupe firul în orice punct, deci standardul îi interzice aproape orice apel de bibliotecă și `throw`. Handlerul Python rulează în thread-ul principal, între două instrucțiuni de bytecode, deci poți face în el aproape orice.
 Legătură: LX-01 și DK-04 (`docker stop`); schelet: `s-linux-sigterm`.
+Tablă:
+- problema: deploy oprește workerul
+- ideea: SIGTERM; SIGKILL
+- schemă:
+```text
+deploy trimite SIGTERM
+↓ handler instalat
+închizi conexiunile, termini jobul
+↓ după 10 s, SIGKILL
+nu mai poate fi prins
+```
+- cpp: std::signal
+- punct: handler la SIGTERM
 
 ### 2
 Greu: da
@@ -40,6 +53,18 @@ r = sp.check_output(c, shell=True)
 r  # → b'137\n'
 ```
 Legătură: LX-07; PF-05 (`.all()` pe 5M de rânduri) arată cum se umple memoria.
+Tablă:
+- problema: exit code 137
+- ideea: 128 + N; OOM killer
+- schemă:
+```text
+procesul trece de limita cgroup
+↓ kernelul trimite SIGKILL
+fără traceback, fără cleanup
+↓ shell: 128 + 9
+exit code 137
+```
+- punct: fără traceback
 
 ### 3
 Greu: da
@@ -55,6 +80,20 @@ $ du -sh *
 2.9M    logs
 ```
 Legătură: LX-07 (memoria din container); `py-spy top` (PF-07) e `top` pe funcții Python.
+Tablă:
+- problema: disc 95%
+- ideea: o comandă pe întrebare
+- schemă:
+```text
+serverul răspunde greu
+↓ ps, top
+procese: CPU și memorie
+↓ free -m, df -h
+memorie (available) și disc
+↓ du -sh *
+directorul care ocupă
+```
+- punct: available, nu free
 
 ### 4
 Greu: da
@@ -69,6 +108,20 @@ nc: connect to 127.0.0.1 port 8001
 (tcp) failed: Connection refused
 ```
 Legătură: LX-02. În Docker, portul poate fi ținut de un container (`docker ps`).
+Tablă:
+- problema: serviciul nu răspunde
+- ideea: ss; nc -zv
+- schemă:
+```text
+nu răspunde
+↓ ss -tlnp
+ascultă ceva pe port?
+↓ dig, nc -zv
+DNS-ul și conexiunea TCP
+↓ curl -v
+răspunsul HTTP
+```
+- punct: o comandă pe întrebare
 
 ### 5
 Greu: da
@@ -88,6 +141,19 @@ except OSError as e:
 În C++: `std::ifstream` și un `unique_ptr` cu deleter închid descriptorul în destructor (RAII), la fel ca `with open(...)`.
 Unde nu ține: Destructorul C++ rulează deterministic la ieșirea din scope. În Python un fișier uitat se închide când ajunge la zero referințe (în CPython), deci un obiect ținut într-o listă sau într-un `dict` rămâne deschis.
 Legătură: LX-04. `with` garantează închiderea (PY-08).
+Tablă:
+- problema: Too many open files
+- ideea: descriptor; ulimit -n
+- schemă:
+```text
+fiecare fișier sau socket: un fd
+↓ ulimit -n atins
+open() eșuează cu EMFILE
+↓ lsof -p PID
+numărul crește mereu: leak
+```
+- cpp: RAII
+- punct: leak, nu limită
 
 ### 6
 Greu: da
@@ -102,6 +168,18 @@ $ awk '{print $1}' access.log \
       1 10.0.0.2
 ```
 Legătură: LX-03; `uniq` are capcana lui `groupby` (PY-10): grupează doar vecinii.
+Tablă:
+- problema: access.log de 2 GB
+- ideea: grep; awk
+- schemă:
+```text
+grep filtrează liniile
+↓ awk '{print $1}'
+prima coloană: adresa IP
+↓ sort | uniq -c
+numără, sortat
+```
+- punct: sort înainte de uniq
 
 ### 7
 Greu: da
@@ -117,6 +195,18 @@ stat.filemode(m)  # → '-rw-r-----'
 oct(640)  # → '0o1200'
 ```
 Legătură: LX-05 și DK-06 (aplicația rulează ca user non-root). În Python 3, `0640` e `SyntaxError`: scrii `0o640`.
+Tablă:
+- problema: .env citibil de toți
+- ideea: chmod 640; r, w, x
+- schemă:
+```text
+r = 4, w = 2, x = 1
+↓ owner, grup, ceilalți
+640 = rw-, r--, ---
+↓ în Python
+0o640, nu 640
+```
+- punct: octal, nu zecimal
 
 ### 8
 Greu: da
@@ -133,3 +223,17 @@ Exemplu:
 demo
 ```
 Legătură: LX-06 și LX-07 (limita de memorie din cgroup). DK-04: un PID 1 fără handler pentru SIGTERM e oprit abia de SIGKILL.
+Tablă:
+- problema: container ca VM
+- ideea: namespaces; cgroups
+- schemă:
+```text
+container: proces Linux obișnuit
+↓ namespaces
+izolează ce vede
+↓ cgroups
+limitează cât consumă
+↓ kernelul e al gazdei
+ps îl arată pe gazdă
+```
+- punct: proces izolat

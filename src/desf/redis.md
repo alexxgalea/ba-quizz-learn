@@ -27,6 +27,19 @@ print(hits)  # → 1
 În C++: `fetch_add(1)` pe un `std::atomic<int>` e un `INCR`, iar `load()` urmat de `store()` e `GET` plus `SET`.
 Unde nu ține: `std::atomic` protejează o variabilă între thread-urile unui proces, printr-o instrucțiune de procesor. Redis e un server cu un singur executor de comenzi, la care vin cereri prin rețea de la mai multe procese. Atomicitatea acoperă o comandă (sau un bloc `MULTI`/script), nu două comenzi separate.
 Legătură: RD-08 și RD-10. Exemplul e o simulare în Python.
+Tablă:
+- problema: GET apoi SET
+- ideea: INCR e atomică
+- schemă:
+```text
+A și B fac GET: văd 0
+↓ amândouă fac SET 1
+contor 1, nu 2
+↓ cu INCR
+o comandă, rezultat 2
+```
+- cpp: fetch_add
+- punct: o comandă e atomică
 
 ### 2
 Problema: Vrei clasamentul primilor 100 de jucători dintr-un milion. Într-un string JSON citești tot, sortezi în Python și rescrii tot la fiecare punctaj.
@@ -41,6 +54,18 @@ cip
 40
 ```
 Legătură: RD-10, punctul 8 (ferestre glisante) și punctul 5 (Streams).
+Tablă:
+- problema: clasament dintr-un milion
+- ideea: sorted set
+- schemă:
+```text
+string, hash, list
+↓ set, sorted set
+unice, ordonate după scor
+↓ stream
+jurnal cu consumer groups
+```
+- punct: o structură pe nevoie
 
 ### 3
 Greu: da
@@ -58,6 +83,18 @@ TTL k
 -1
 ```
 Legătură: RD-07 și RD-11.
+Tablă:
+- problema: cache plin
+- ideea: TTL; maxmemory-policy
+- schemă:
+```text
+memoria atinge maxmemory
+↓ noeviction (implicit)
+scrierile primesc eroare
+↓ allkeys-lru
+șterge cele mai puțin folosite
+```
+- punct: alegi politica
 
 ### 4
 Greu: da
@@ -70,6 +107,18 @@ appendonly yes
 appendfsync everysec
 ```
 Legătură: RD-09. AOF e ca WAL-ul din Postgres, iar RDB ca un `pg_dump` periodic.
+Tablă:
+- problema: restart la 3 noaptea
+- ideea: RDB snapshot; AOF
+- schemă:
+```text
+RDB: snapshot la intervale
+↓ restart
+pierzi ce a urmat după el
+↓ AOF: jurnal de comenzi
+pierzi cel mult o secundă
+```
+- punct: RDB, AOF sau ambele
 
 ### 5
 Greu: da
@@ -87,6 +136,18 @@ publish("e2")
 print(len(late), len(log))  # → 1 2
 ```
 Legătură: RD-01 și RMQ-11. Exemplul e o simulare în Python.
+Tablă:
+- problema: evenimente pierdute
+- ideea: Pub/Sub; stream
+- schemă:
+```text
+PUBLISH, abonatul e picat
+↓ Pub/Sub
+mesajul se pierde
+↓ stream + consumer group
+rămâne în pending până la XACK
+```
+- punct: stream, nu Pub/Sub
 
 ### 6
 Greu: da
@@ -102,6 +163,18 @@ print(len(miss))  # → 5
 print(len(set(miss)))  # → 1
 ```
 Legătură: RD-03, RD-04 și punctul 7. Exemplul e o simulare: 5 cereri văd cache-ul gol deodată.
+Tablă:
+- problema: 500 de cereri ratează
+- ideea: cache-aside; single-flight
+- schemă:
+```text
+cheia expiră
+↓ 500 de cereri ratează
+toate lovesc baza
+↓ lock single-flight
+una reface, restul așteaptă
+```
+- punct: jitter pe TTL
 
 ### 7
 Greu: da
@@ -117,6 +190,18 @@ release("A")  # A termină târziu
 print(lock)  # → {'v': 'B'}
 ```
 Legătură: RD-02 și PG-05. Exemplul e o simulare în Python.
+Tablă:
+- problema: job rulat dublu
+- ideea: SET NX PX; token
+- schemă:
+```text
+SET lock token NX PX 30000
+↓ doar un client reușește
+ceilalți primesc nil
+↓ eliberezi cu token, în Lua
+nu ștergi lock-ul altuia
+```
+- punct: token la eliberare
 
 ### 8
 Greu: da
@@ -134,6 +219,18 @@ n = sum(map(allow, ts))
 print(n)  # → 10
 ```
 Legătură: RD-06 și scheletul `s-redis-ratelimit`. Exemplul e o simulare în Python.
+Tablă:
+- problema: contoare separate
+- ideea: INCR; EXPIRE
+- schemă:
+```text
+INCR rl:cheie:minut
+↓ EXPIRE 60, în același bloc
+fereastra se închide singură
+↓ peste limită
+răspunzi 429
+```
+- punct: contor comun, în Redis
 
 ### 9
 Problema: Un dev rulează `KEYS session:*` pe Redis-ul de producție, cu 20 de milioane de chei. Până termină, niciun alt client nu primește răspuns.
@@ -147,9 +244,26 @@ u:1
 SCAN 5 MATCH u:* COUNT 2
 ```
 Legătură: RD-05. E ca `search_after` din Elasticsearch.
+Tablă:
+- problema: KEYS blochează serverul
+- ideea: SCAN; cursor
+- schemă:
+```text
+KEYS session:* e O(N)
+↓ blochează toți clienții
+niciun alt răspuns
+↓ SCAN cu cursor
+o bucată pe apel, până la 0
+```
+- punct: nu KEYS în producție
 
 ### 10
 Problema: Juridicul întreabă dacă poți rula Redis 7.4 în produs. Licența nu mai e BSD, ci RSALv2 sau SSPLv1.
 Ideea: Valkey e un fork al Redis sub Linux Foundation, cu licență BSD. E compatibil cu Redis OSS 7.2, iar clienții Redis se conectează fără modificări. AWS îl oferă ca ElastiCache for Valkey. Redis a adăugat AGPLv3 la versiunea 8.0.
 Analogie: Ca un fork de repo pe GitHub: cod comun până la un punct, apoi drumuri separate.
 Legătură: RD-10. Alegerea ține de licență și de ce oferă furnizorul de cloud, nu de cod.
+Tablă:
+- problema: licență Redis 7.4
+- ideea: Valkey; BSD
+- analogie: fork de repo
+- punct: licență, nu cod

@@ -25,6 +25,19 @@ ncalls tottime cumtime  func
 În C++: `perf record -g` eșantionează un program (`-p PID` pentru unul pornit), ca `py-spy`. `valgrind --tool=callgrind` urmărește fiecare apel, ca `cProfile`.
 Unde nu ține: Pe un proces Python, `perf` vede în mod normal doar funcții ale interpretorului (`_PyEval_EvalFrameDefault`). De la Python 3.12, `python -X perf` îi dă numele funcțiilor Python. `py-spy` citește direct stack-ul Python.
 Legătură: PF-01 și PF-07; schelet: `s-perf-profile`. La query-uri, același reflex e `EXPLAIN ANALYZE` (IDX-01).
+Tablă:
+- problema: job de 40 minute
+- ideea: cProfile; py-spy
+- schemă:
+```text
+job lent, nu știi unde
+↓ cProfile sau py-spy
+tottime arată cine consumă
+↓ line_profiler
+linia lentă din funcție
+```
+- cpp: perf; callgrind
+- punct: măsori înainte
 
 ### 2
 Greu: da
@@ -40,6 +53,21 @@ x in set      0,001 s
 În C++: `std::find` pe un `std::vector` e O(n), iar `std::unordered_set::count` e O(1) în medie. `std::deque` are `pop_front()` O(1), ca `deque` din Python.
 Unde nu ține: `std::vector<int>` ține valorile una lângă alta în memorie. Lista Python ține un tablou de referințe, iar fiecare `int` e un obiect separat, deci scanarea sare prin memorie.
 Legătură: fișa sqlalchemy, punctul 8: N+1 e același reflex, un apel pe element.
+Tablă:
+- problema: x in lista
+- ideea: O(n); set O(1)
+- schemă:
+```text
+x in lista
+↓ parcurge element cu element
+O(n) pe căutare
+↓ într-o buclă
+O(n²)
+↓ x in set
+O(1) în medie
+```
+- cpp: unordered_set
+- punct: set pentru căutări
 
 ### 3
 Greu: da
@@ -53,6 +81,18 @@ commit pe rând       3,0 s
 un lot, un commit    0,004 s
 ```
 Legătură: PF-02; fișele postgres (COPY) și redis.
+Tablă:
+- problema: un commit pe rând
+- ideea: lot; pipelining
+- schemă:
+```text
+un INSERT și un commit pe rând
+↓ costul fix se repetă
+round-trip și disc, de mii de ori
+↓ un lot, o tranzacție
+costul fix se plătește o dată
+```
+- punct: costul fix
 
 ### 4
 Greu: da
@@ -66,6 +106,18 @@ buclă for în Python   0,16 s
 NumPy: (x * x).sum()  0,002 s
 ```
 Legătură: PF-03. Cache-ul pe rezultate e ca `cached_property` din fișa oop (punctul 4).
+Tablă:
+- problema: for pe 10 milioane
+- ideea: vectorizare; cod nativ
+- schemă:
+```text
+for pe 10 milioane de rânduri
+↓ bytecode pe fiecare element
+lent, un singur core
+↓ NumPy, pandas, Polars
+bucla rulează în cod nativ
+```
+- punct: lași bucla bibliotecii
 
 ### 5
 Greu: da
@@ -83,6 +135,18 @@ b = tm.get_traced_memory()[1]
 a > 100 * b  # → True
 ```
 Legătură: PF-05 și LX-07 (un `.all()` uriaș poate ajunge la OOM, exit code 137).
+Tablă:
+- problema: .all() pe 5 milioane
+- ideea: generator; yield_per
+- schemă:
+```text
+.all() aduce tot dintr-odată
+↓ memoria crește cu datele
+OOM, exit 137
+↓ generator sau yield_per
+memorie constantă
+```
+- punct: flux, nu listă
 
 ### 6
 Problema: Producătorul citește 10 000 de mesaje pe secundă, consumatorul procesează 1 000. Coada fără limită crește în memorie până la OOM, iar latența crește la nesfârșit.
@@ -97,6 +161,18 @@ q.full()  # → True
 q.put_nowait(3)  # ! Full
 ```
 Legătură: PF-04. La RabbitMQ, `prefetch` joacă de obicei un rol asemănător (fișa rabbitmq).
+Tablă:
+- problema: producătorul întrece consumatorul
+- ideea: coadă cu limită
+- schemă:
+```text
+producătorul e mai rapid
+↓ coada cu limită se umple
+put() blochează producătorul
+↓ consumatorul eliberează loc
+producătorul merge mai departe
+```
+- punct: backpressure
 
 ### 7
 Greu: da
@@ -113,6 +189,19 @@ for simplu              ~0,05 s
 În C++: Două `std::thread` văd aceeași memorie, deci nu serializezi nimic.
 Unde nu ține: În Python, thread-urile nu accelerează calculul (GIL), așa că folosești procese și plătești `pickle`. Și în C++, procesele separate (`fork`, pipe) cer serializare.
 Legătură: PF-06 și GIL-06 (de obicei, ce trece între procese e pickle).
+Tablă:
+- problema: ProcessPool mai lent
+- ideea: pickle; chunksize
+- schemă:
+```text
+map cu chunksize=1
+↓ pickle, pipe, pickle pe element
+transportul costă mai mult
+↓ chunksize mare
+un lot într-un singur mesaj
+```
+- cpp: std::thread
+- punct: costul transportului
 
 ### 8
 Greu: da
@@ -126,3 +215,15 @@ round(amdahl(.9, 8), 2)  # → 4.71
 round(amdahl(.9, 1e9), 2)  # → 10.0
 ```
 Legătură: PF-06 și punctul 1 (măsurarea).
+Tablă:
+- problema: 8 core-uri
+- ideea: legea lui Amdahl
+- schemă:
+```text
+10 s seriale din 100 s
+↓ n core-uri pe restul de 90 s
+timp: 10 + 90 / n
+↓ n foarte mare
+plafon de 10 ori
+```
+- punct: plafon de 10 ori

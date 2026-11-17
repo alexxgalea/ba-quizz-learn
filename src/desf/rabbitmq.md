@@ -25,6 +25,18 @@ print(q["facturi"])  # → ['#7']
 print(q["stoc"])  # → ['#7']
 ```
 Legătură: RMQ-10 și CEL-14. Exemplul e o simulare în Python.
+Tablă:
+- problema: producer legat de cozi
+- ideea: exchange; binding
+- schemă:
+```text
+producer publică cu routing key
+↓ exchange citește binding-urile
+copiază în cozile potrivite
+↓ consumatorul citește
+din coada lui
+```
+- punct: producerul nu vede cozile
 
 ### 2
 Problema: Alertele au chei ca `alert.critical.db` sau `alert.low.web`. Echipa web vrea toate alertele web, oricare ar fi severitatea. Cu chei exacte ai nevoie de câte un binding pentru fiecare severitate.
@@ -37,6 +49,20 @@ alert.# și alert: da
 alert.# și alert.low.web: da
 ```
 Legătură: RMQ-01 și RMQ-08.
+Tablă:
+- problema: alert.*.web
+- ideea: * un cuvânt; # zero sau multe
+- schemă:
+```text
+direct: cheia egală
+↓ fanout
+ignoră cheia, copiază peste tot
+↓ topic
+* un cuvânt, # zero sau mai multe
+↓ headers
+potrivește pe antete
+```
+- punct: patru tipuri de exchange
 
 ### 3
 Greu: da
@@ -53,6 +79,18 @@ print(run(True))   # → []
 print(run(False))  # → ['m1']
 ```
 Legătură: RMQ-02, RMQ-11, CEL-03 și DES-02.
+Tablă:
+- problema: consumatorul moare
+- ideea: ack manual; at-least-once
+- schemă:
+```text
+mesaj livrat, încă în zbor
+↓ basic.ack
+brokerul îl șterge
+↓ cădere fără ack
+revine în coadă, redelivered
+```
+- punct: consumator idempotent
 
 ### 4
 Greu: da
@@ -69,6 +107,18 @@ t2 = n / sum(1 / x for x in s)
 print(t1, round(t2))  # → 18 9
 ```
 Legătură: RMQ-03, DES-04 și punctul 3. Exemplul e o simulare.
+Tablă:
+- problema: worker lent, coadă lungă
+- ideea: prefetch_count=1
+- schemă:
+```text
+consumatorul are N neconfirmate
+↓ limita atinsă
+brokerul nu mai dă mesaje
+↓ ack
+primește următorul mesaj
+```
+- punct: backpressure
 
 ### 5
 Greu: da
@@ -84,6 +134,18 @@ ch.basic_publish("", "facturi",
     delivery_mode=2))  # pe disc
 ```
 Legătură: RMQ-04 și DES-01 (outbox, drumul dinainte de publicare).
+Tablă:
+- problema: restart, mesaje pierdute
+- ideea: durabilă; persistent
+- schemă:
+```text
+coadă durabilă
+↓ mesaj persistent
+scris pe disc
+↓ publisher confirm
+producerul știe că e preluat
+```
+- punct: trei lucruri împreună
 
 ### 6
 Greu: da
@@ -98,6 +160,18 @@ print(tolera(5))  # → 2
 print(tolera(4))  # → 1
 ```
 Legătură: RMQ-09, RMQ-04 și punctul 5.
+Tablă:
+- problema: coadă pe un nod
+- ideea: quorum queue; Raft
+- schemă:
+```text
+quorum queue pe 3 noduri
+↓ pică un nod
+majoritatea (2) trăiește
+↓ Raft alege lider nou
+coada merge mai departe
+```
+- punct: numere impare
 
 ### 7
 Greu: da
@@ -115,6 +189,18 @@ while q:
 print(tries, dlq)  # → 3 ['bad']
 ```
 Legătură: RMQ-05 și DES-07. Exemplul e o simulare ilustrativă, cu limita 3, nu cu numărătoarea reală.
+Tablă:
+- problema: nack în buclă
+- ideea: dead letter exchange
+- schemă:
+```text
+mesajul eșuează
+↓ nack fără requeue
+dead letter exchange
+↓ routing
+coada de analiză (DLQ)
+```
+- punct: mesaj mort, nu buclă
 
 ### 8
 Greu: da
@@ -130,6 +216,18 @@ done += [b, a]  # B e primul
 print(done)  # → ['edit', 'add']
 ```
 Legătură: RMQ-06 și `design`, punctul 6.
+Tablă:
+- problema: edit înaintea lui add
+- ideea: FIFO doar în coadă
+- schemă:
+```text
+FIFO: add, apoi edit
+↓ doi consumatori
+termină în orice ordine
+↓ requeue sau prioritate
+ordinea se schimbă
+```
+- punct: ordinea nu e garantată
 
 ### 9
 Greu: da
@@ -145,3 +243,15 @@ print(queue)  # → ['e2']
 print(log)  # → ['e1', 'e2']
 ```
 Legătură: RMQ-07. Exemplul e o simulare în Python.
+Tablă:
+- problema: reciti evenimentele de ieri
+- ideea: jurnal; offset
+- schemă:
+```text
+RabbitMQ: consum și ack
+↓ mesajul dispare
+nu mai poți reciti
+↓ Kafka: jurnal cu offset
+reciți de la orice punct
+```
+- punct: task-uri sau log
