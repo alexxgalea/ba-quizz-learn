@@ -39,6 +39,11 @@ render 2: n = 3
 În C++: O lambdă cu captură prin valoare, `[n]`, copiază `n` când e creată și vede în continuare valoarea veche, chiar dacă `n` se schimbă după. Handlerul unui render e la fel: ține valorile din render-ul lui.
 Unde nu ține: În C++ copia e o alegere (`[n]` față de `[&n]`). Într-o closure JavaScript prinzi variabila, nu o copie. Aici variabila e un `const` nou la fiecare render și nu se mută, deci handlerul vede mereu valoarea lui. Iar `setN` nu schimbă `n`: programează următorul render.
 Legătură: FE-05; closure-ul din fișa `js`, punctul 3. React-ul tău: același efect apare când un handler sau un interval citește state „vechi”.
+Tablă:
+- problema: setN de trei ori
+- ideea: n fix în render; updater
+- cpp: lambdă [n]
+- punct: state = snapshot
 
 ### 2
 Greu: da
@@ -70,6 +75,10 @@ render 2: user există
 → „Rendered more hooks than…”
 ```
 Legătură: punctul 3: și `useEffect` e un hook, deci are aceeași regulă. În `react`, punctul 7 (custom hooks) pornește de la ea.
+Tablă:
+- problema: hooks după return
+- ideea: ordinea apelurilor
+- punct: hooks sus, fără condiții
 
 ### 3
 Greu: da
@@ -98,6 +107,10 @@ unmount
   cleanup: oprește B
 ```
 Legătură: FE-06 și FE-07; custom hook-urile din `react` (punctul 7) ascund exact această pereche setup / cleanup.
+Tablă:
+- problema: interval la fiecare render
+- ideea: dependențe; cleanup
+- punct: setup + cleanup
 
 ### 4
 Problema: În dev, mesajul „conectat” din effect apare de două ori la mount. Crezi că ai un bug și scoți `<StrictMode>`.
@@ -124,6 +137,10 @@ fără cleanup:
   connect, connect → două conexiuni
 ```
 Legătură: FE-07. Același ciclu verifică și efectele din custom hooks.
+Tablă:
+- problema: mesaj de două ori
+- ideea: Strict Mode; cleanup
+- punct: cleanup, nu scoaterea
 
 ### 5
 Problema: Lista filtrată stă în state și se recalculează într-un `useEffect` când se schimbă `items`. La fiecare schimbare React randează de două ori, prima dată cu lista veche.
@@ -139,6 +156,20 @@ useEffect(() => {
 const f = items.filter(match);
 ```
 Legătură: FE-06 și formularea de evitat „Calculez datele derivate într-un `useEffect`”. Același principiu stă în `react`, la ridicarea state-ului (punctul 5): o singură sursă de adevăr.
+Tablă:
+- problema: filtrare în effect
+- ideea: valoare derivată în render
+- schemă:
+```text
+items se schimbă
+↓ effect: setF(filter)
+render cu lista veche
+↓ al doilea render
+lista nouă
+↓ direct în render
+un singur render
+```
+- punct: effect = sistem extern
 
 ### 6
 Greu: da
@@ -170,6 +201,10 @@ A răspunde târziu → ignorată
 fără ignore: setList(A) peste B
 ```
 Legătură: FE-08. Punctul 7 scapă de cursă și de `ignore`: TanStack Query ține cache-ul pe `queryKey`.
+Tablă:
+- problema: răspuns vechi suprascrie
+- ideea: cursă; ignore = true
+- punct: race condition
 
 ### 7
 Greu: da
@@ -198,6 +233,10 @@ t = 62 s: mount sau focus
 nefolosite 5 min → ies din cache
 ```
 Legătură: FE-04. Un singur `useQuery` ia locul punctului 6: cache, cursa și retry-urile vin gata.
+Tablă:
+- problema: fetch la fiecare mount
+- ideea: cache pe queryKey; staleTime
+- punct: TanStack Query
 
 ### 8
 Greu: da
@@ -225,6 +264,10 @@ inversezi: [B, A]
 key = id: state-ul urmează id-ul
 ```
 Legătură: FE-03 și formularea de evitat „Indexul e un `key` bun pentru orice listă.”; reconcilierea din `react` (punctul 8) explică de ce.
+Tablă:
+- problema: input pe alt rând
+- ideea: key stabil, nu index
+- punct: key = id
 
 ### 9
 Problema: O listă mare se re-randează încet. Pui `useMemo` și `useCallback` peste tot, iar codul se umple de dependențe, fără să știi dacă ajută.
@@ -243,6 +286,10 @@ const sorted = useMemo(
 );
 ```
 Legătură: FE-02 și punctul 5: Profiler-ul arată ce se re-randează, deci nu memoizezi din reflex.
+Tablă:
+- problema: useMemo peste tot
+- ideea: măsori întâi; Compiler
+- punct: Profiler înainte de memo
 
 ### 10
 Greu: da
@@ -268,6 +315,21 @@ function g(e: E) {
 În C++: O uniune discriminată seamănă cu `std::variant<A, B>` și `std::visit`: un visitor care nu acoperă un tip nu compilează.
 Unde nu ține: `std::variant` ține singur indexul tipului activ, iar compilatorul îl verifică la `visit`. În TypeScript tag-ul `k` e un câmp pus de tine în date, iar tipurile nu există la runtime: un JSON din rețea poate avea orice formă.
 Legătură: FE-10 și FE-11; fișa `ts`: narrowing (punctul 3) și `strict` (punctul 8). FastAPI generează OpenAPI din modelele Pydantic, iar `openapi-typescript` face din el tipuri TS.
+Tablă:
+- problema: res.json() e any
+- ideea: unknown; uniune + never
+- schemă:
+```text
+res.json(): any
+↓ unknown
+verifici înainte de folosire
+↓ uniune + never
+switch exhaustiv
+↓ la runtime
+validezi la graniță (zod)
+```
+- cpp: variant, visit
+- punct: tipurile dispar la runtime
 
 ### 11
 Problema: Testul caută butonul după clasa CSS `.btn-save`. Redenumești clasa și testul pică, deși pentru utilizator nimic nu s-a schimbat.
@@ -288,6 +350,10 @@ expect(screen.queryByText("Eroare"))
   .toBeNull();
 ```
 Legătură: FE-09. La Playwright, același principiu: locatori după rol (PT-17).
+Tablă:
+- problema: test legat de CSS
+- ideea: getByRole; ce vede userul
+- punct: getBy, queryBy, findBy
 
 ### 12
 Greu: da
@@ -303,6 +369,10 @@ Exemplu:
 }} />
 ```
 Legătură: FE-12 și FE-13. La Keycloak, metoda PKCE se setează pe client; fără setare, PKCE nu e cerut, doar folosit dacă clientul îl trimite.
+Tablă:
+- problema: comentariu cu script
+- ideea: JSX escapează; PKCE
+- punct: date nesigure = XSS
 
 ### 13
 Greu: da
@@ -325,3 +395,7 @@ microtask: .then → „promise”
 task: timerul → „timer”
 ```
 Legătură: FE-14; fișa `js`, punctul 7 (`await` și `Promise.all`). Din fișa asyncio, punctul 3: `gather` nu anulează restul, ca `Promise.all`. O promisiune JavaScript pornește imediat, o corutină Python abia când o aștepți sau o programezi.
+Tablă:
+- problema: timer 0 după .then
+- ideea: microtask înaintea task-ului
+- punct: event loop
