@@ -34,6 +34,19 @@ const b: P = {
 În C++: `struct UserId { int v; }` și `struct OrderId { int v; }` sunt tipuri fără legătură: al doilea nu intră într-un parametru de primul tip, deși au același conținut.
 Unde nu ține: C++ e nominal: numele tipului hotărăște, nu conținutul. În TypeScript hotărăște forma. Cel mai aproape de C++ e un template, care acceptă orice tip cu membrii folosiți. Un membru `private` face o clasă nominală, ca în C++.
 Legătură: TS-01 și TS-02. În React, un obiect trecut printr-o variabilă ca props nu declanșează verificarea de la literal.
+Tablă:
+- problema: UserId și OrderId; aceeași formă
+- ideea: tipare structurală; literal proaspăt
+- schemă:
+```text
+load(id: UserId)
+↓ primește OrderId { v }
+aceeași formă → trece
+↓ literal cu câmp în plus
+excess property → TS2353
+```
+- cpp: tipuri nominale
+- punct: formă, nu nume
 
 ### 2
 Greu: da
@@ -50,6 +63,18 @@ type T = { b: 2 };  // ! TS2300
 type Id = string | number;  // ✓
 ```
 Legătură: TS-03. Bibliotecile cer extinderea prin `interface` (de exemplu `Window` în `declare global`). În React, props se scriu de obicei ca `type Props = { … }`.
+Tablă:
+- problema: Duplicate identifier
+- ideea: interface se îmbină; type nu
+- schemă:
+```text
+interface I { a }
+↓ a doua declarație I { b }
+se îmbină: I are a și b
+↓ type T = {…} de două ori
+TS2300, nu se redeschide
+```
+- punct: declaration merging
 
 ### 3
 Greu: da
@@ -76,6 +101,10 @@ typeof x === "number"
 restul: x: string
 ```
 Legătură: TS-04 (guard care minte) și FE-10: pentru date din rețea, `unknown` plus verificări, nu `as`. Un `switch` pe un tag se restrânge la fel.
+Tablă:
+- problema: x.toFixed(); as number
+- ideea: narrowing; type guard
+- punct: verificare în cod
 
 ### 4
 Greu: da
@@ -97,6 +126,21 @@ ok([{ id: 1, name: "a" }]);
 În C++: `template<class T> T first(std::vector<T>& v)` face același lucru: `T` se deduce din argument. Fără constrângere explicită (în C++11/17), un template folosește orice operație pe `T`, iar eroarea apare la instanțiere.
 Unde nu ține: Template-ul se instanțiază: compilatorul generează cod separat pentru `first<int>` și pentru `first<User>`. În TypeScript există o singură funcție, iar `T` dispare la runtime: nu poți face `new T()`, `typeof T` sau să afli ce e `T`.
 Legătură: TS-05. Un `useQuery<User[]>` din TanStack (FE-04) e același mecanism: tipul dat se propagă până la `data`.
+Tablă:
+- problema: first(): any; xs[0].id
+- ideea: parametru de tip T; extends constrânge
+- schemă:
+```text
+first<T>(xs: T[])
+↓ apel cu User[]
+T = User, rezultat User
+↓ xs[0].id fără constrângere
+TS2339: T poate fi orice
+↓ T extends { id: number }
+id se poate citi
+```
+- cpp: template
+- punct: T se deduce
 
 ### 5
 Problema: Un PATCH acceptă doar `name` și `email`, opționale. Copiezi tipul `User` într-un tip nou. Când `User` primește un câmp, copia rămâne în urmă și nimeni nu observă.
@@ -122,6 +166,10 @@ Partial: name?, email?
 keyof User: "id" | "name" | "email"
 ```
 Legătură: TS-06 și FE-10. Un PATCH către FastAPI se tipează așa, iar tipurile generate din OpenAPI-ul lui (`openapi-typescript`) sunt tipuri obișnuite, deci `Pick`, `Omit` și `Partial` merg direct pe ele. `Omit<User, "id">` e bun pentru formularul de creare.
+Tablă:
+- problema: tip copiat; rămâne în urmă
+- ideea: Partial, Pick, Omit; keyof
+- punct: o singură sursă
 
 ### 6
 Greu: da
@@ -143,6 +191,20 @@ const pal = {
 pal.red.map((x) => x);  // ✓
 ```
 Legătură: TS-07 și FE-10 (datele din rețea). În Python, `typing.cast` face la fel: doar pentru verificator, fără nicio verificare la runtime.
+Tablă:
+- problema: as User; el!
+- ideea: as nu verifică; satisfies
+- schemă:
+```text
+JSON.parse(raw) as User
+↓ compilare
+as dispare din cod
+↓ runtime
+nicio verificare, nicio eroare
+↓ user.id.toFixed()
+crapă abia aici
+```
+- punct: se șterge la compilare
 
 ### 7
 Problema: Un `onChange` cu `e: any`, `children` netipate, iar `useState(null)` refuză un utilizator. Codul merge, dar autocomplete-ul și verificările dispar.
@@ -162,6 +224,18 @@ const onChange = (
 ) => setQ(e.target.value);
 ```
 Legătură: TS-08. Fișa `react` explică inputurile controlate (punctul 4), la care se leagă `onChange`.
+Tablă:
+- problema: e: any; useState(null)
+- ideea: ReactNode; ChangeEvent
+- schemă:
+```text
+useState(null)
+↓ tipul se deduce din valoare
+u: null, setU({ id: 1 }) respins
+↓ dai genericul
+useState<User | null>(null)
+```
+- punct: useState<User | null>
 
 ### 8
 Greu: da
@@ -182,6 +256,20 @@ try {
 }
 ```
 Legătură: TS-09. Același bug ca `Cannot read properties of undefined` din fișa `fedebug`. În Python, `names[5]` aruncă `IndexError`; în JavaScript dă `undefined`.
+Tablă:
+- problema: names[5]; JSON.parse any
+- ideea: strictNullChecks; noImplicitAny
+- schemă:
+```text
+strict pornit
+↓ s: string | undefined
+s.length → TS18048
+↓ names[5], flag-ul lipsește
+tip string, nu string | undefined
+↓ JSON.parse(raw)
+any: bug-ul trece
+```
+- punct: strict nu e totul
 
 ### 9
 Greu: da
@@ -203,6 +291,20 @@ function fail(m: string): never {
 }
 ```
 Legătură: TS-10. FE-10 pune `unknown` și `never` în practică, cu validarea la graniță. În Python, `Any` din `typing` oprește verificarea la fel, iar `object` seamănă cu `unknown`: mypy cere o restrângere înainte de folosire.
+Tablă:
+- problema: data: any
+- ideea: unknown; never
+- schemă:
+```text
+data: any
+↓ data.user.name
+compilează, nu verifică nimic
+↓ runtime: user lipsește
+Cannot read properties…
+↓ data: unknown
+restrângi întâi, apoi folosești
+```
+- punct: any oprește verificarea
 
 ### 10
 Greu: da
@@ -224,6 +326,18 @@ const lb: Labels = { // ! TS2741
 };
 ```
 Legătură: TS-11, TS-12. În DRF e aceeași idee ca un serializer cu `partial=True` pentru PATCH și `read_only_fields = ["id"]` la creare.
+Tablă:
+- problema: NewUser scris de mână
+- ideea: Partial și Pick; Omit și Record
+- schemă:
+```text
+User + NewUser scris de mână
+↓ User primește email
+NewUser rămâne în urmă
+↓ NewUser = Omit<User, "id">
+email apare și în NewUser
+```
+- punct: derivat, nu copiat
 
 ### 11
 Greu: da
@@ -254,6 +368,10 @@ Awaited<…>
 → { id: number; name: string }
 ```
 Legătură: TS-13, TS-14. Tipurile generate din OpenAPI-ul FastAPI (punctul 5) urmează aceeași regulă: o singură sursă, din care derivi restul.
+Tablă:
+- problema: tip copiat de mână
+- ideea: typeof, keyof; Awaited<ReturnType>
+- punct: derivi din cod
 
 ### 12
 Greu: da
@@ -275,6 +393,21 @@ ROLES.map((r) => r.toUpperCase());
 În C++: `enum class Dir { Up, Down };` (C++11) e un tip nou, nominal, cu valori întregi: `Dir::Up` nu se convertește implicit la `int` și nu intră unde se cere alt `enum`.
 Unde nu ține: C++ nu are un tip pentru „unul dintre aceste string-uri”. Un `enum` C++ lasă la runtime doar constante întregi; un `enum` TypeScript devine un obiect pe care îl poți parcurge, cu mapare inversă. O uniune de literale nu există deloc la runtime.
 Legătură: TS-15. În Django, `TextChoices` urmează ideea lui `as const`: o singură listă dă și valorile din baza de date, și opțiunile din formular.
+Tablă:
+- problema: enum la runtime; listă copiată
+- ideea: uniune de literale; as const
+- schemă:
+```text
+enum Dir { Up, Down }
+↓ compilare
+cod la runtime: obiectul Dir
+↓ Dir[0]
+mapare inversă: "Up"
+↓ as const + typeof ROLES[number]
+lista și tipul, o singură sursă
+```
+- cpp: enum class
+- punct: o singură sursă
 
 ### 13
 Greu: da
@@ -299,6 +432,19 @@ const b: W = [1, "x"];  // ✓
 În C++: `std::conditional<B, X, Y>` (C++11) alege un tip după o condiție la compilare, iar specializarea parțială a unui template scoate bucăți dintr-un tip, cum face `infer`.
 Unde nu ține: În C++ condiția e o valoare `bool` calculată la compilare (de obicei dintr-un trait ca `std::is_same`), nu o verificare de formă. Nu există distribuirea peste uniuni, fiindcă C++ nu are tipuri-uniune: `std::variant` e un tip obișnuit.
 Legătură: TS-17. `Partial`, `ReturnType` și `Exclude` din punctele 10–11 sunt scrise exact așa în `lib.es5.d.ts`.
+Tablă:
+- problema: [K in keyof T]; T extends U ?
+- ideea: mapped type; infer
+- schemă:
+```text
+ToArr<string | number>
+↓ T e generic, uniunea se desface
+string[] | number[]
+↓ scrii [T] extends [any]
+(string | number)[] întreg
+```
+- cpp: std::conditional
+- punct: tipuri calculate
 
 ### 14
 Greu: da
@@ -321,3 +467,17 @@ function f(xs: readonly string[]) {
 }
 ```
 Legătură: TS-16. RE-03: în React state-ul se înlocuiește, nu se sortează pe loc, iar `readonly` prinde greșeala la compilare. În Python, un `tuple` e tot o secvență fixă și imutabilă.
+Tablă:
+- problema: [on, toggle]; sort pe loc
+- ideea: tuplu; readonly
+- schemă:
+```text
+return [on, flip]
+↓ nicio indicație de tip
+(boolean | (() => void))[]
+↓ as const
+tuplu readonly, pe poziții
+↓ xs: readonly string[]
+sort() respins, [...xs].sort() ok
+```
+- punct: as const
