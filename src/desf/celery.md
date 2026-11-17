@@ -26,6 +26,18 @@ r = report.delay(42)
 print(r.state)  # → PENDING
 ```
 Legătură: CEL-01 și CEL-15. Ai făcut deja asta în Django. Starea rămâne `PENDING` până rulează un worker, dar și pentru un id necunoscut.
+Tablă:
+- problema: raport de 2 minute
+- ideea: mesaj în broker; 202
+- schemă:
+```text
+request: publică un mesaj
+↓ răspunde 202 și un id
+worker Celery ia mesajul
+↓ procesul web cade
+mesajul rămâne în broker
+```
+- punct: scoți munca din request
 
 ### 2
 Greu: da
@@ -43,6 +55,18 @@ f.apply()
 print(len(n))  # → 4
 ```
 Legătură: CEL-04. Backoff-ul cu jitter e același tipar ca retry-ul din design (punctul 4). Cu `.apply()` pauzele sunt ignorate, deci exemplul rulează instant.
+Tablă:
+- problema: API extern căzut
+- ideea: autoretry_for; retry_backoff
+- schemă:
+```text
+task: excepție tranzitorie
+↓ autoretry_for
+pauză: 1, 2, 4, 8 s, cu jitter
+↓ max_retries (3)
+reîncearcă de cel mult 3 ori
+```
+- punct: doar erori tranzitorii
 
 ### 3
 Greu: da
@@ -59,6 +83,18 @@ acks_late:
   rulează a doua oară
 ```
 Legătură: CEL-02, CEL-03 și design, punctul 2. Același compromis ca la RabbitMQ: auto-ack înseamnă at-most-once (RMQ-02). Pe Redis, re-livrarea după o cădere vine abia după `visibility_timeout` (punctul 10).
+Tablă:
+- problema: kill -9 la export
+- ideea: acks_late; idempotent
+- schemă:
+```text
+implicit: ack înainte de rulare
+↓ workerul cade
+task pierdut din coadă
+↓ acks_late=True
+brokerul retrimite, rulează iar
+```
+- punct: rulează de două ori
 
 ### 4
 Greu: da
@@ -75,6 +111,18 @@ prefetch 1 + acks_late:
   worker 2 ia a, b, c
 ```
 Legătură: RMQ-03: `basic.qos` face același lucru în RabbitMQ.
+Tablă:
+- problema: task mic, unul lung
+- ideea: prefetch 4; acks_late
+- schemă:
+```text
+worker rezervă 4 mesaje
+↓ primul rulează 30 de minute
+celelalte 3 așteaptă după el
+↓ prefetch 1 și acks_late
+rezervă altul abia după ack
+```
+- punct: task-uri lungi
 
 ### 5
 Problema: Email-urile durează o milisecundă, rapoartele zece minute, iar toate stau în aceeași coadă. Când toți workerii rulează rapoarte, un email așteaptă după ele.
@@ -90,6 +138,18 @@ q = r({}, "pdf")["queue"]
 print(q.name)  # → heavy
 ```
 Legătură: CEL-08. Workerul pentru `heavy` pornește cu `celery -A proj worker -Q heavy`. E ca în Docker Swarm: servicii separate pentru API și pentru batch.
+Tablă:
+- problema: email după raport
+- ideea: task_routes; -Q
+- schemă:
+```text
+task_routes: raport → heavy
+↓ email → coada celery
+workeri separați cu -Q
+↓ scalezi separat
+2 pe heavy, 10 pe celery
+```
+- punct: cozi separate
 
 ### 6
 Greu: da
@@ -107,6 +167,18 @@ g = group(inc.s(1), inc.s(5))
 g.apply().get()  # → [2, 6]
 ```
 Legătură: CEL-09. Seamănă cu `asyncio.gather` urmat de o funcție care primește lista rezultatelor, doar că munca e distribuită pe workeri.
+Tablă:
+- problema: .get() în task
+- ideea: chain și group; chord
+- schemă:
+```text
+chain: pas1 | pas2 | pas3
+↓ rezultatul trece mai departe
+group: pașii rulează în paralel
+↓ chord
+callback cu lista rezultatelor
+```
+- punct: nu aștepți în task
 
 ### 7
 Problema: Rulezi aceeași aplicație în trei replici, iar fiecare pornește și Beat. La 09:00 raportul zilnic pleacă de trei ori, iar clienții primesc trei email-uri.
@@ -119,6 +191,18 @@ beat 3: 09:00 → raport în coadă
 → raportul rulează de 3 ori
 ```
 Legătură: CEL-05. E ca un cron pus pe trei servere identice. Pornirea cu `-B`, în procesul workerului, nu se recomandă în producție.
+Tablă:
+- problema: Beat în trei replici
+- ideea: beat_schedule; o instanță
+- schemă:
+```text
+Beat: la 09:00
+↓ trimite un mesaj în broker
+un worker rulează task-ul
+↓ trei instanțe Beat
+trei mesaje, trei email-uri
+```
+- punct: o singură replică
 
 ### 8
 Greu: da
@@ -134,6 +218,18 @@ celery -A app worker \
   -P prefork -c 4
 ```
 Legătură: CEL-12 și GIL-02. Aceeași regulă ca la GIL: CPU-bound înseamnă procese, I/O-bound înseamnă thread-uri sau asyncio.
+Tablă:
+- problema: 200 de apeluri HTTP
+- ideea: -P pool; -c
+- schemă:
+```text
+prefork: procese, fără GIL comun
+↓ CPU
+alegi prefork
+↓ I/O
+threads, gevent, eventlet
+```
+- punct: pool după task
 
 ### 9
 Greu: da
@@ -149,6 +245,18 @@ except SoftTimeLimitExceeded:
     cleanup()  # ai 30 s
 ```
 Legătură: CEL-13. E ca `--timeout` de la Gunicorn, dar cu avertizare înainte.
+Tablă:
+- problema: task blocat pe vecie
+- ideea: soft_time_limit; time_limit
+- schemă:
+```text
+rulează peste 60 s
+↓ soft_time_limit
+SoftTimeLimitExceeded, curățenie
+↓ peste 90 s
+time_limit: procesul e ucis
+```
+- punct: soft sub hard
 
 ### 10
 Greu: da
@@ -163,6 +271,18 @@ Exemplu:
      de mai multe ori
 ```
 Legătură: CEL-10. E aceeași re-livrare ca la `acks_late` (punctul 3). RabbitMQ are o limită asemănătoare, `consumer_timeout` (implicit 30 de minute).
+Tablă:
+- problema: countdown de 2 ore
+- ideea: visibility_timeout; Redis
+- schemă:
+```text
+task cu ETA stă neconfirmat
+↓ trece 1 oră
+brokerul îl redă altui worker
+↓ rulează iar
+dublură
+```
+- punct: ETA sub visibility_timeout
 
 ### 11
 Greu: da
@@ -179,6 +299,18 @@ o = Order()
 send.delay(o)  # ! EncodeError
 ```
 Legătură: CEL-06 și CEL-07. E aceeași regulă ca la Django cu Celery: trimiți `pk`-ul, nu instanța. Un `pickle.loads` pe date din Redis are același risc.
+Tablă:
+- problema: obiect ORM în task
+- ideea: JSON cu ID-uri; on_commit
+- schemă:
+```text
+view: save(), apoi delay(id)
+↓ task-ul pornește înainte de COMMIT
+nu găsește rândul
+↓ on_commit
+publici după COMMIT
+```
+- punct: date simple, nu obiecte
 
 ### 12
 Greu: da
@@ -196,3 +328,15 @@ reface starea. Rulat de două
 ori, scrie același lucru.
 ```
 Legătură: CEL-05, CEL-02 și punctul 2. Pune valorile tale în `<N>`, `<loc>`, `<M>`.
+Tablă:
+- problema: povestea fără eșec
+- ideea: frecvență; idempotență
+- schemă:
+```text
+frecvență: Beat la N minute
+↓ eșec: retry tranzitoriu
+următoarea rulare recuperează
+↓ rulat de două ori
+același rezultat
+```
+- punct: patru lucruri de spus

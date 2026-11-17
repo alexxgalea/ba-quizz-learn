@@ -26,6 +26,19 @@ print(n)  # → 20
 În C++: `std::map` e tot un arbore ordonat: `find` e logaritmic, iar `lower_bound` dă începutul unui interval.
 Unde nu ține: Standardul cere doar complexitate logaritmică; de obicei e un arbore roșu-negru, cu o cheie pe nod. Un nod de B-tree e o pagină de disc (8 kB) cu mai multe chei.
 Legătură: IDX-01 și IDX-12.
+Tablă:
+- problema: full scan; 5 milioane
+- ideea: structură sortată; B-tree
+- schemă:
+```text
+WHERE email = $1
+↓ coboară prin B-tree
+O(log n)
+↓ pointer spre rând
+găsești rândul, fără full scan
+```
+- cpp: std::map
+- punct: O(log n), nu O(n)
 
 ### 2
 Greu: da
@@ -33,6 +46,19 @@ Problema: Importul de noapte, 10 milioane de rânduri într-o tabelă cu șase i
 Ideea: Indexul trebuie ținut sincron cu tabela. Fiecare `INSERT` adaugă câte o intrare în fiecare index, iar un `UPDATE` pe o coloană indexată mută intrarea. `VACUUM` curăță apoi din indexuri versiunile moarte de rânduri. Un `UPDATE` care nu atinge nicio coloană indexată poate sări peste indexuri (HOT update), dacă rândul nou încape în aceeași pagină. Indexezi ce citești des, nu tot.
 Analogie: Indexul alfabetic de la finalul unui manual. Cine caută un termen îl găsește imediat, dar fiecare pagină adăugată sau mutată te obligă să corectezi indexul. Cu șase indexuri corectezi șase liste, iar ele ocupă loc.
 Legătură: IDX-04. Indexurile nefolosite se șterg: costă la scriere și nu aduc nimic la citire.
+Tablă:
+- problema: import lent, șase indexuri
+- ideea: un index per scriere
+- schemă:
+```text
+INSERT
+↓ intrare în fiecare index
+șase indexuri, șase scrieri
+↓ VACUUM
+curăță versiunile moarte din index
+```
+- analogie: indexul din manual
+- punct: indexezi ce citești des
 
 ### 3
 Problema: Pagina „comenzile unui client” e rapidă în dezvoltare și lentă în producție. `orders.customer_id` e cheie străină, dar nu are index, deci fiecare cerere citește toată tabela. Costul crește odată cu ea.
@@ -49,6 +75,18 @@ CREATE INDEX ON orders
   (customer_id);
 ```
 Legătură: IDX-01. Django creează implicit un index pe fiecare `ForeignKey` (`db_index=True`); în SQL scris de mână îl adaugi tu.
+Tablă:
+- problema: cheia străină fără index
+- ideea: WHERE și JOIN; ORDER BY
+- schemă:
+```text
+orders.customer_id fără index
+↓ fiecare cerere
+Seq Scan pe toată tabela
+↓ CREATE INDEX
+Index Scan pe customer_id
+```
+- punct: FK nu primește index
 
 ### 4
 Greu: da
@@ -67,6 +105,19 @@ print(at(1, "x"))  # → [0, 2]
 În C++: `std::map<std::pair<int, std::string>, V>` se ordonează lexicografic. `lower_bound({a, ""})` începe blocul lui `a`; după doar al doilea câmp nu ai decât parcurgerea întregii hărți.
 Unde nu ține: Alegerea o face planner-ul Postgres, care compară costul. Poate parcurge tot indexul pentru `b = ?` sau poate prefera un Seq Scan. `std::map` n-are planner.
 Legătură: IDX-02.
+Tablă:
+- problema: doar a doua coloană
+- ideea: agendă: nume, apoi prenume
+- schemă:
+```text
+index (a, b)
+↓ sortat întâi după a
+în fiecare a, sortat după b
+↓ cauți doar b
+b împrăștiat: parcurgi tot
+```
+- cpp: pair și lower_bound
+- punct: ordinea coloanelor
 
 ### 5
 Greu: da
@@ -82,6 +133,18 @@ SELECT * FROM orders
   ORDER BY created_at LIMIT 20;
 ```
 Legătură: IDX-03. Un index parțial e mic și nu se actualizează pentru rândurile care nu-i satisfac predicatul.
+Tablă:
+- problema: status cu 3 valori
+- ideea: random_page_cost 4; index parțial
+- schemă:
+```text
+WHERE status = 'done'
+↓ 66% din tabel
+planner: Seq Scan costă mai puțin
+↓ WHERE status = 'pending'
+index parțial: doar rândurile rare
+```
+- punct: selectivitate
 
 ### 6
 Greu: da
@@ -95,6 +158,18 @@ lo = {k.lower(): 1 for k in u}
 print("ana@x.ro" in lo)  # → True
 ```
 Legătură: IDX-05. Django: `Index(Lower("email"), name="email_lower_idx")` în `Meta.indexes`.
+Tablă:
+- problema: lower(email) ignoră indexul
+- ideea: index pe expresie; IMMUTABLE
+- schemă:
+```text
+index pe email
+↓ query cu lower(email)
+expresie diferită: Seq Scan
+↓ index pe lower(email)
+aceeași expresie: Index Scan
+```
+- punct: aceeași expresie
 
 ### 7
 Greu: da
@@ -114,6 +189,21 @@ CREATE INDEX ON ev
 În C++: Hash seamănă cu `std::unordered_map`: doar căutare exactă, fără ordine și fără interval. B-tree seamănă cu `std::map`, care are `lower_bound`.
 Unde nu ține: `std::unordered_map` ține cheia întreagă, în memorie. Un Hash index din Postgres e pe disc și păstrează doar codul hash, nu valoarea.
 Legătură: IDX-06 și IDX-07. GIN e același index inversat ca în Elasticsearch, punctul 11.
+Tablă:
+- problema: B-tree prea mare
+- ideea: tip după operator; BRIN
+- schemă:
+```text
+alegi operatorul din query
+↓ =, interval, sortare
+B-tree
+↓ @>, cuvinte, array
+GIN
+↓ timp în ordinea tabelei
+BRIN
+```
+- cpp: unordered_map
+- punct: nu după coloană
 
 ### 8
 Greu: da
@@ -128,6 +218,18 @@ SELECT total, status FROM orders
 -- Index Only Scan, Heap Fetches: 0
 ```
 Legătură: IDX-11. Nu-l pui pe coloane mari: un tuplu prea mare pentru pagină dă eroare la inserare.
+Tablă:
+- problema: sărituri în tabel
+- ideea: INCLUDE; Index Only Scan
+- schemă:
+```text
+cauți după customer_id
+↓ total și status sunt în index
+Index Only Scan
+↓ pagină nevizibilă
+Heap Fetch în tabel
+```
+- punct: câștig la tabele stabile
 
 ### 9
 Greu: da
@@ -142,6 +244,18 @@ CREATE INDEX CONCURRENTLY
 DROP INDEX events_at_idx;
 ```
 Legătură: IDX-09. În Alembic folosești `op.get_context().autocommit_block()` și `postgresql_concurrently=True` la `op.create_index`.
+Tablă:
+- problema: CREATE INDEX blochează scrierile
+- ideea: CONCURRENTLY; INVALID
+- schemă:
+```text
+CREATE INDEX CONCURRENTLY
+↓ două scanări, scrierile merg
+index gata
+↓ dacă pică
+rămâne INVALID: DROP INDEX
+```
+- punct: nu în tranzacție
 
 ### 10
 Greu: da
@@ -156,6 +270,18 @@ SELECT * FROM orders WHERE id = 5;
 --   Buffers: shared hit=3 read=4
 ```
 Legătură: IDX-08. `Rows Removed by Filter` mare lângă un Seq Scan înseamnă că ai citit multe rânduri degeaba. Din Postgres 18, `BUFFERS` e inclus automat în `EXPLAIN ANALYZE`.
+Tablă:
+- problema: indexul nu ajută
+- ideea: EXPLAIN ANALYZE; BUFFERS
+- schemă:
+```text
+EXPLAIN ANALYZE
+↓ rulează query-ul
+plan cu timpi și rânduri reale
+↓ estimat față de real
+diferență mare: rulezi ANALYZE
+```
+- punct: ROLLBACK la UPDATE
 
 ### 11
 Greu: da
@@ -174,3 +300,17 @@ print(ix["login"])  # → [0, 1]
 În C++: `std::unordered_map<std::string, std::vector<int>>` e același index inversat, în memorie.
 Unde nu ține: Elasticsearch trece întâi textul printr-un analyzer (tokenizare, litere mici) și ține termenii sortați. `unordered_map` nu are ordine și nici analiză.
 Legătură: IDX-10. Pe Elasticsearch îl cunoști deja; GIN din Postgres (punctul 7) e tot un index inversat.
+Tablă:
+- problema: două feluri de index
+- ideea: index inversat; termeni
+- schemă:
+```text
+document: "login eșuat"
+↓ se sparge în termeni
+login → documentele 1, 7
+eșuat → documentele 7, 9
+↓ cauți "eșuat"
+lookup în dicționarul de termeni
+```
+- cpp: unordered_map
+- punct: index în Elasticsearch

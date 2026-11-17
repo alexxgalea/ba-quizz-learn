@@ -23,6 +23,18 @@ with e.connect() as c:
 print(r, r.n)  # → (7,) 7
 ```
 Legătură: SQA-12. În Django lucrezi aproape numai prin modele. Aici alegi: Core pentru bulk și ETL, ORM pentru logica pe obiecte.
+Tablă:
+- problema: 2M rânduri; un User
+- ideea: Core; ORM peste Core
+- schemă:
+```text
+ORM: clase, Session
+↓ stă peste
+Core: select(), Table
+↓ rulează pe
+Connection: rânduri simple
+```
+- punct: două straturi
 
 ### 2
 Greu: da
@@ -39,6 +51,18 @@ q = select(User).where(
 u = s.scalars(q).first()
 ```
 Legătură: În Django scrii `User.objects.filter(id=7).first()`. Aici query-ul e un obiect separat, pe care îl construiești și îl dai sesiunii.
+Tablă:
+- problema: stiluri amestecate
+- ideea: Mapped[int]; select()
+- schemă:
+```text
+select(User).where(...)
+↓ îl dai sesiunii
+s.scalars(q)
+↓ întoarce
+obiecte User, nu rânduri
+```
+- punct: stil 2.0
 
 ### 3
 Greu: da
@@ -56,6 +80,20 @@ b = e.connect()  # ok: aceeași
 e.connect()  # ! TimeoutError
 ```
 Legătură: Django ține o conexiune per thread și o închide la sfârșitul request-ului (`CONN_MAX_AGE=0`, implicit); din 5.1 poate folosi un pool psycopg. Cu mulți workeri pool-urile se adună: 20 de procese × (5 + 10) înseamnă până la 300 de conexiuni, de aceea PgBouncer (design, punctul 6).
+Tablă:
+- problema: max_connections; conexiune per request
+- ideea: pool 5 + 10; pool_pre_ping
+- schemă:
+```text
+connect()
+↓ ia din pool
+conexiunea e folosită
+↓ close()
+se întoarce în pool
+↓ pool plin: așteaptă 30 s
+TimeoutError
+```
+- punct: un singur engine
 
 ### 4
 Greu: da
@@ -73,6 +111,20 @@ s2.scalars(select(User)).all()
 s.commit()  # → s2 vede [Ana]
 ```
 Legătură: SQA-04 și SQA-14. În Django `obj.save()` trimite INSERT imediat și, în autocommit, îl comite; aici `add()` nu trimite nimic. `transaction.atomic()` seamănă cu `with session.begin()`.
+Tablă:
+- problema: add fără commit
+- ideea: flush; commit
+- schemă:
+```text
+add(obj)
+↓ doar notat, fără SQL
+flush()
+↓ INSERT în tranzacție
+commit()
+↓ COMMIT
+ceilalți văd rândul
+```
+- punct: flush ≠ commit
 
 ### 5
 Greu: da
@@ -88,6 +140,18 @@ c = s.scalar(q)  # SELECT
 print(a is b is c)  # → True
 ```
 Legătură: SQA-01. În Django, `User.objects.get(pk=7)` apelat de două ori dă două obiecte diferite.
+Tablă:
+- problema: două copii
+- ideea: identity map; get() fără SQL
+- schemă:
+```text
+get(User, 7)
+↓ nu e în map
+SELECT, obiectul intră în map
+↓ get(User, 7) din nou
+același obiect, fără SQL
+```
+- punct: map-ul e al sesiunii
 
 ### 6
 Greu: da
@@ -106,6 +170,19 @@ s.in_transaction()  # → False
 În C++: `with Session(e) as s:` seamănă cu un obiect RAII pe stivă, ca `std::lock_guard`: destructorul eliberează resursa la ieșirea din bloc, inclusiv prin excepție.
 Unde nu ține: În C++ destructorul rulează oricum, la ieșirea din scope. În Python, fără `with`, nimeni nu cheamă `close()` la ieșirea din funcție, iar conexiunea rămâne luată din pool până o găsește garbage collectorul.
 Legătură: SQA-06. În Django nu faci asta: framework-ul leagă conexiunea de request. În FastAPI sesiunea vine ca dependență.
+Tablă:
+- problema: sesiune globală
+- ideea: Session per request; engine partajat
+- schemă:
+```text
+with Session(e) as s:
+↓ lucrul într-o tranzacție
+commit sau rollback
+↓ ieșirea din bloc
+close(): conexiunea în pool
+```
+- cpp: lock_guard
+- punct: unitate de lucru
 
 ### 7
 Greu: da
@@ -120,6 +197,20 @@ s.close()
 u.name  # DetachedInstanceError
 ```
 Legătură: SQA-04 și SQA-05. Django nu expiră nimic la `save()`: valorile rămân în memorie până apelezi `refresh_from_db()`. SQLAlchemy face singur acest refresh, la următorul acces.
+Tablă:
+- problema: SELECT după commit
+- ideea: expire_on_commit
+- schemă:
+```text
+commit()
+↓ atributele expiră
+u.name, sesiune deschisă
+↓ SELECT
+valoarea proaspătă
+↓ același acces, sesiune închisă
+DetachedInstanceError
+```
+- punct: DetachedInstanceError
 
 ### 8
 Greu: da
@@ -136,6 +227,19 @@ us = s.scalars(q).all()
 # → 2 SELECT-uri în total
 ```
 Legătură: SQA-02 și SQA-03. Problema există și în Django, cu aceleași remedii: `select_related` e ca `joinedload`, `prefetch_related` ca `selectinload` (DJ-01).
+Tablă:
+- problema: N+1 query-uri
+- ideea: lazy; selectinload
+- schemă:
+```text
+select(User): 1 query
+↓ for u in users: u.orders
+câte un SELECT per user
+↓ cu selectinload
+un SELECT cu IN
+2 query-uri în total
+```
+- punct: eager loading
 
 ### 9
 Greu: da
@@ -153,6 +257,20 @@ async with Sess() as s:
     u.orders  # ok, încărcat
 ```
 Legătură: SQA-13. E aceeași regulă ca în asyncio: nimic blocant sau ascuns pe event loop. Cu FastAPI și asyncpg, fiecare acces la DB trece printr-un `await`.
+Tablă:
+- problema: MissingGreenlet
+- ideea: AsyncSession; awaitable_attrs
+- schemă:
+```text
+await s.execute(q)
+↓ lazy load: I/O ascuns
+MissingGreenlet
+↓ încarci în query
+selectinload(User.orders)
+↓ acces la atribut
+datele sunt deja în memorie
+```
+- punct: lazy loading oprit
 
 ### 10
 Greu: da
@@ -170,6 +288,18 @@ s.execute(q)  # fără eroare
 --   DO NOTHING
 ```
 Legătură: SQA-09. Un consumator idempotent din design (punctul 2) se bazează pe asta. În Django, `bulk_create(ignore_conflicts=True)` ignoră rândurile care încalcă o constrângere.
+Tablă:
+- problema: SELECT apoi INSERT
+- ideea: ON CONFLICT DO NOTHING
+- schemă:
+```text
+SELECT: nu există
+↓ al doilea worker inserează
+INSERT: duplicat sau eroare
+↓ ON CONFLICT DO NOTHING
+verifică și inserează atomic
+```
+- punct: atomic
 
 ### 11
 Greu: da
@@ -185,6 +315,18 @@ q = sa.text("n = :w")
 print(q)  # → n = :w
 ```
 Legătură: SQA-07. Django ORM parametrizează singur; la `raw()` dai valorile separat, ca listă.
+Tablă:
+- problema: f-string în SQL
+- ideea: parametri legați
+- schemă:
+```text
+text("n = :w")
+↓ SQL-ul pleacă separat
+valoarea ajunge la driver
+↓ ' OR 1=1 -- e doar date
+nicio condiție nouă
+```
+- punct: valoare separată
 
 ### 12
 Greu: da
@@ -201,3 +343,15 @@ def downgrade():
     op.drop_column("user", "tz")
 ```
 Legătură: SQA-10 și SQA-11. `makemigrations` din Django corespunde lui `revision --autogenerate`, iar `migrate` lui `upgrade head`. La o redenumire Django întreabă „Was u.name renamed to u.full_name?”; Alembic nu întreabă și generează drop + add, deci pierzi datele dacă nu corectezi draftul.
+Tablă:
+- problema: column does not exist
+- ideea: Alembic; upgrade head
+- schemă:
+```text
+revision --autogenerate
+↓ draft de migrare
+îl verifici de mână
+↓ upgrade head
+alembic_version: noua revizie
+```
+- punct: expand/contract

@@ -6,4 +6,9 @@
 
 **Blocked by:** 05, 06–16
 
-**Status:** needs-triage
+**Status:** în lucru (P2 făcut; P3 rămâne)
+
+
+## Comments
+
+**17 nov. 2026:** Tablă pe modulele P2 `sqlalchemy` (12 puncte), `postgres` (11), `index` (11), `celery` (12), `runtime` (8) și `security` (11). Cuvinte cheie din textul desfășurărilor, scheme cu 2–4 trepte, `cpp` doar unde există `În C++`, `analogie` la `postgres` 6 și `index` 2. Textul punctelor n-a fost atins. `validate`, `desf_examples` (148, 0 picate), `build`, `test:unit` (643) și `test_desf.py`, `test_lesson.py` trec. Rămân P3: `rabbitmq`, `redis`, `docker`, `domain`, `perf`, `ops`, `linux`, `graphql`.

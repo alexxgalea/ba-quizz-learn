@@ -23,6 +23,18 @@ q = "select 1 where 'a'=?"
 list(c.execute(q, [n]))  # → []
 ```
 Legătură: Fișa sqlalchemy, punctul 11: `text()` cu `:nume` face același lucru. Django ORM parametrizează singur; riscul apare la `.raw()` cu f-string.
+Tablă:
+- problema: f-string în SQL
+- ideea: placeholder; listă albă
+- schemă:
+```text
+cursor.execute(sql, (nume,))
+↓ driverul separă valoarea
+SQL-ul rămâne sintaxă
+↓ x' OR '1'='1
+doar un nume, nu o condiție
+```
+- punct: nu escapezi singur
 
 ### 2
 Problema: Sesiunile stau în Redis, serializate cu `pickle`. Cineva ajunge să scrie în cheia unei sesiuni (o instanță fără parolă, un serviciu compromis). La următorul `loads`, serverul tău rulează codul lui.
@@ -37,6 +49,18 @@ d = pickle.dumps(Evil())
 x = pickle.loads(d)  # → rulat
 ```
 Legătură: SEC-01. Celery folosește implicit JSON, nu pickle, din versiunea 4.0 (CEL-11).
+Tablă:
+- problema: pickle în Redis
+- ideea: __reduce__; safe_load
+- schemă:
+```text
+atacatorul scrie cheia sesiunii
+↓ loads(date)
+apelează funcția din date
+↓ cod pe serverul tău
+cu JSON nu se întâmplă
+```
+- punct: JSON și Pydantic
 
 ### 3
 Problema: Un endpoint rulează `ping` pe host-ul din cerere, cu `shell=True`. Cineva trimite un host urmat de `;` și altă comandă. Shell-ul le rulează pe amândouă.
@@ -54,6 +78,19 @@ r  # → b'a; echo X\n'
 În C++: `std::system(("ping " + host).c_str())` trimite șirul la un shell, ca `shell=True`. Cu `fork` și `execvp` pasezi un vector de argumente, fără shell.
 Unde nu ține: `execvp` e POSIX, nu standard C++. Standardul are doar `std::system`: lista nu are echivalent portabil.
 Legătură: SEC-05.
+Tablă:
+- problema: ping cu shell=True
+- ideea: listă de argumente
+- schemă:
+```text
+host: "x; rm -rf ."
+↓ shell=True
+shell-ul rulează ambele comenzi
+↓ subprocess.run([...])
+un singur argument, fără shell
+```
+- cpp: execvp
+- punct: fără shell
 
 ### 4
 Greu: da
@@ -71,6 +108,18 @@ ok("10.0.0.5")  # → False
 ok("::1")  # → False
 ```
 Legătură: SEC-06. În OWASP 2025, SSRF a intrat în Broken Access Control (punctul 8).
+Tablă:
+- problema: /preview?url=...
+- ideea: listă albă; verifici IP-ul
+- schemă:
+```text
+url cu 169.254.169.254
+↓ rezolvi DNS, verifici IP-ul
+privat sau link-local: refuz
+↓ te conectezi la acel IP
+fără redirect-uri
+```
+- punct: SSRF
 
 ### 5
 Greu: da
@@ -88,6 +137,18 @@ x == h(b"pw", a)  # → True
 x == h(b"pw", b)  # → False
 ```
 Legătură: SEC-02. Django folosește implicit PBKDF2 cu SHA-256 și stochează `algoritm$iterații$salt$hash`; Argon2 îl pui în `PASSWORD_HASHERS`.
+Tablă:
+- problema: sha256(parola)
+- ideea: salt; Argon2id
+- schemă:
+```text
+parola + salt aleator
+↓ algoritm lent: Argon2id
+hash cu parametri și salt
+↓ stocat într-un singur șir
+poți crește costul mai târziu
+```
+- punct: hash, nu criptare
 
 ### 6
 Greu: da
@@ -105,6 +166,18 @@ y = b.urlsafe_b64decode(x+b"==")
 y  # → b'{"sub":"7"}'
 ```
 Legătură: SEC-03. Keycloak își publică cheile publice la `/realms/{realm}/protocol/openid-connect/certs`.
+Tablă:
+- problema: rol schimbat în payload
+- ideea: semnat, nu criptat
+- schemă:
+```text
+header . payload . semnătură
+↓ payload e base64url
+oricine îl citește
+↓ semnătura îl protejează
+verifici cu cheia din JWKS
+```
+- punct: exp, iss, aud
 
 ### 7
 Greu: da
@@ -122,6 +195,18 @@ c = base64.urlsafe_b64encode(
 c[:9].decode()  # → 'E9Melhoa2'
 ```
 Legătură: SEC-04. RFC 9700 cere PKCE la clienții publici, descurajează implicit grant și interzice password grant. Punctul 12 din fișa frontend arată același flux într-un SPA.
+Tablă:
+- problema: parola ajunge la aplicație
+- ideea: OAuth2 și OIDC; PKCE
+- schemă:
+```text
+OAuth2: access token, cu scope
+↓ OIDC adaugă identitatea
+ID token (JWT) pentru client
+↓ aplicația React
+Authorization Code + PKCE
+```
+- punct: autorizare, apoi identitate
 
 ### 8
 Greu: da
@@ -138,6 +223,18 @@ get(1, 42)  # → 'factura 42'
 get(1, 43)  # ! PermissionError
 ```
 Legătură: SEC-08. Punctul 8 din fișa design pune aceeași regulă și în Postgres, cu row-level security, ca plasă de siguranță. În DRF, `has_object_permission` rulează la `get_object()`, dar nu filtrează listele: acolo filtrezi `get_queryset()`.
+Tablă:
+- problema: /invoices/42 → 43
+- ideea: autorizare pe obiect
+- schemă:
+```text
+GET /invoices/43
+↓ autentificat: da
+rolul permite endpoint-ul
+↓ al cui e rândul?
+tenant_id din token
+```
+- punct: BOLA
 
 ### 9
 Greu: da
@@ -152,6 +249,18 @@ $ git log -p | grep DB_PASS
 +DB_PASS=hunter2
 ```
 Legătură: SEC-09 și SEC-10. În Docker Swarm, un `docker secret` ajunge în container ca fișier în `/run/secrets/`, pe un sistem de fișiere din memorie, nu ca variabilă de mediu.
+Tablă:
+- problema: .env în istoric
+- ideea: secret manager; rotire
+- schemă:
+```text
+secretul ajunge în git
+↓ ștergerea nu ajunge
+rămâne în istoric și în clone
+↓ îl revoci și îl rotești
+least privilege la DB și IAM
+```
+- punct: nu în cod
 
 ### 10
 Greu: da
@@ -171,6 +280,19 @@ len(secrets.token_hex(4))  # → 8
 În C++: `std::mt19937` cu seed fix dă aceeași secvență, ca `random`. `std::random_device` e sursa de aleator nedeterminist, rolul lui `secrets`. `memcmp` sau `==` pe șiruri pot ieși la prima diferență.
 Unde nu ține: `std::random_device` poate fi implementat cu un generator pseudo-aleator, iar atunci `entropy()` întoarce 0.0. Standardul nu cere comparații în timp constant, așa că pentru ele folosești funcția din biblioteca de criptografie.
 Legătură: SEC-07.
+Tablă:
+- problema: == pe token
+- ideea: compare_digest; secrets
+- schemă:
+```text
+a == b
+↓ se oprește la prima diferență
+timpul ghicește tokenul
+↓ hmac.compare_digest
+același timp, indiferent
+```
+- cpp: random_device
+- punct: nu random pentru tokene
 
 ### 11
 Greu: da
@@ -185,3 +307,15 @@ flask 0.12 PYSEC-2019-179 1.0
 ...
 ```
 Legătură: SEC-11. Și `FROM python:3` din Dockerfile e o dependență nefixată.
+Tablă:
+- problema: requests fără versiune
+- ideea: hash-uri; pip-audit
+- schemă:
+```text
+requirements fără versiune
+↓ build-ul nu se mai repetă
+versiuni exacte, cu hash-uri
+↓ pip-audit în CI
+vulnerabilitățile se văd
+```
+- punct: lanțul de aprovizionare
