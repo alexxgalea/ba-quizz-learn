@@ -35,6 +35,10 @@ Pas cu pas:
 5 repar + test de regresie
 ```
 Legătură: FE-06 și FE-08 sunt bug-uri de efecte pe care le găsești cu acest proces. În Python, un test `pytest` scris înainte de reparație joacă același rol.
+Tablă:
+- problema: modific linii la întâmplare
+- ideea: o ipoteză pe rând; test de regresie
+- punct: proces calm
 
 ### 2
 
@@ -63,6 +67,10 @@ TypeError: … (reading 'name')
 caut primul rând din codul meu
 ```
 Legătură: FD-01 și FE-10: un `user.profile` care lipsește vine adesea dintr-un răspuns de API cu altă formă decât cea așteptată. Un traceback Python se citește invers, de jos în sus; un stack trace JavaScript, de sus în jos.
+Tablă:
+- problema: (reading 'name')
+- ideea: primul rând al tău; source maps
+- punct: stack trace
 
 ### 3
 
@@ -82,6 +90,18 @@ for (const [i, x] of xs.entries()) {
 }
 ```
 Legătură: JS-03 și JS-04: un log cu `typeof` ar fi arătat din prima ce valoare ajunge în callback. În Django, `django-debug-toolbar` joacă un rol asemănător pentru cereri și SQL.
+Tablă:
+- problema: al 4872-lea element
+- ideea: breakpoint condițional; logpoint
+- schemă:
+```text
+bucla rulează
+↓ condiția e adevărată
+execuția se oprește
+↓ inspectezi
+valoare și tip
+```
+- punct: oprești unde contează
 
 ### 4
 
@@ -104,6 +124,20 @@ void fetch("https://api.x.ro/a", {
 // Allow-Headers: content-type
 ```
 Legătură: FE-13 (`Access-Control-Allow-Origin: *` și `credentials`). În FastAPI, `CORSMiddleware` pune aceste headere, iar în dev un proxy evită problema.
+Tablă:
+- problema: CORS doar în browser
+- ideea: preflight OPTIONS; Allow-Origin
+- schemă:
+```text
+POST cu application/json
+↓ browserul trimite preflight
+OPTIONS
+↓ serverul răspunde
+Allow-Origin, Allow-Headers
+↓ browserul trimite cererea
+POST-ul real
+```
+- punct: regulă a browserului
 
 ### 5
 
@@ -131,6 +165,10 @@ render 3 …
 React: Maximum update depth exceeded
 ```
 Legătură: FE-06 (efect fără array) și FE-08 (răspunsuri vechi). RE-02: ce declanșează un re-render.
+Tablă:
+- problema: Too many re-renders
+- ideea: efect fără dependențe; dependențele corecte
+- punct: buclă de randare
 
 ### 6
 
@@ -153,3 +191,13 @@ const go = () => {
 };
 ```
 Legătură: FD-03. JS-07: o promisiune respinsă fără `.catch` ajunge la `unhandledrejection`. În Django, un middleware de erori joacă un rol asemănător pentru 500.
+Tablă:
+- problema: pagină albă
+- ideea: nu prinde event handlers; try / catch
+- schemă:
+```text
+copilul aruncă la randare
+↓ getDerivedStateFromError
+boundary arată fallback
+```
+- punct: error boundary
