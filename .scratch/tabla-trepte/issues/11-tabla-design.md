@@ -6,9 +6,13 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/design.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
-- [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+- [x] Toate punctele din `src/desf/design.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+## Comments
+
+**17 nov. 2026:** Tablă pe toate cele 9 puncte din `design`, toate cu schemă de flux (cerere, mesaj, date) în 2–4 trepte; punctul 1 (fără `Exemplu`) are cheia `analogie`; fără `cpp`, modulul n-are `În C++`. Test nou în `tools/unit/desf.test.mjs`. Textul punctelor n-a fost atins; nicio eroare de fapt găsită.

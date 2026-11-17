@@ -16,6 +16,21 @@ Ideea: Un apel sincron (HTTP, gRPC) așteaptă răspunsul, deci ambele servicii 
 Analogie: Apelul sincron e telefonul: amândoi la aparat. Coada e scrisoarea: o pui în cutie și pleci.
 Legătură: CEL-01. În Celery, request-ul doar publică task-ul.
 
+Tablă:
+- problema: notificări cad; alerta nu se salvează
+- ideea: sincron vs coadă
+- analogie: telefon vs scrisoare
+- schemă:
+```text
+client → API → notificări
+↓ notificări cad 5 minute
+apelul așteaptă; creare eșuată
+↓ cu coadă între ele
+client → API → coadă → worker
+alerta se salvează oricum
+```
+- punct: cuplare temporală
+
 ### 2
 Greu: da
 Problema: Un consumator procesează o plată și trimite confirmarea (ack). Ack-ul se pierde pe rețea. Brokerul crede că mesajul n-a ajuns și îl trimite din nou. Clientul e debitat de două ori.
@@ -32,6 +47,19 @@ for m in ("m1", "m1"):  # re-livrat
 print(sum(tot))  # → 100
 ```
 Legătură: RMQ-02 și CEL-02. Auto-ack din RabbitMQ înseamnă at-most-once, iar ack-ul după procesare înseamnă at-least-once. Celery confirmă implicit înainte de rulare; cu `acks_late` confirmă după, deci task-ul trebuie să fie idempotent.
+
+Tablă:
+- problema: ack pierdut; plată dublă
+- ideea: at-least-once; idempotent
+- schemă:
+```text
+consumator procesează plata
+↓ ack-ul se pierde pe rețea
+brokerul retrimite mesajul
+↓ id deja văzut?
+da: sare peste; debit o dată
+```
+- punct: effectively once
 
 ### 3
 Greu: da
@@ -50,6 +78,19 @@ COMMIT;  -- ambele sau niciunul
 ```
 Legătură: DES-01, CEL-07 și PG-05. Publicarea după commit închide cursa din CEL-07, dar un crash între commit și publicare pierde evenimentul; outbox-ul închide și gaura asta. Relay-ul poate prelua rândurile cu `SKIP LOCKED`, ca în PG-05.
 
+Tablă:
+- problema: dual write; comandă fără eveniment
+- ideea: tabelă outbox; relay
+- schemă:
+```text
+tranzacție: orders + outbox
+↓ COMMIT: ambele sau niciunul
+relay citește sent_at NULL
+↓ publică în broker
+marchează rândul trimis
+```
+- punct: outbox
+
 ### 4
 Greu: da
 Problema: Un serviciu cade 10 secunde. O mie de clienți reîncearcă imediat, toți deodată, iar serviciul revenit cade din nou sub val. Altă dată, un apel fără timeout ține un worker blocat minute întregi.
@@ -64,6 +105,21 @@ b = {u(0, 8) for _ in range(5)}
 print(len(a), len(b))  # → 1 5
 ```
 Legătură: DES-03, DES-07, RMQ-05 și CEL-04. Celery are `autoretry_for`, `retry_backoff` și `retry_jitter`; jitter-ul e activ implicit, backoff-ul nu. RabbitMQ trimite mesajul respins fără requeue într-un dead letter exchange.
+
+Tablă:
+- problema: retry sincron; val de clienți
+- ideea: backoff; jitter
+- schemă:
+```text
+apel eșuat
+↓ pauză 1, 2, 4, 8 s
+jitter: pauza e aleatoare
+↓ prag de eșecuri depășit
+circuit deschis; probă apoi
+↓ încercări epuizate
+mesajul merge în DLQ
+```
+- punct: retry cu plafon
 
 ### 5
 Greu: da
@@ -82,6 +138,19 @@ print(len(alerte))  # → 1
 ```
 Legătură: DES-05 și DES-08. E deduplicarea de la punctul 2, la marginea API-ului. Header-ul e încă draft IETF; Stripe îl folosește.
 
+Tablă:
+- problema: răspuns pierdut; alertă dublă
+- ideea: Idempotency-Key; rezultat salvat
+- schemă:
+```text
+POST cu Idempotency-Key: k1
+↓ serverul creează alerta
+salvează k1 cu rezultatul
+↓ retry cu aceeași cheie
+întoarce rezultatul salvat
+```
+- punct: cheia ține de operație
+
 ### 6
 Greu: da
 Problema: La 9:00 sosesc 50.000 de evenimente pe secundă. Instanța de API ajunge la 100% CPU, iar coada crește. Mărești mașina, dar a doua zi vârful e dublu.
@@ -95,6 +164,21 @@ def p(k):
 print(p("s7"), p("s8"))  # → 1 0
 ```
 Legătură: DES-04, PG-06 și RMQ-06. Ai făcut-o în Docker Swarm cu `docker service scale`. Cu 100 de workeri ai cel puțin 100 de conexiuni DB, de aceea PgBouncer. Ordinea mesajelor se strică cu mai mulți consumatori pe aceeași coadă.
+
+Tablă:
+- problema: vârf de 50.000/s
+- ideea: stateless; partiționare
+- schemă:
+```text
+cereri → load balancer
+↓ instanțe stateless
+adaugi instanțe liber
+↓ coada crește
+workeri după vârsta mesajului
+↓ cheia system_id
+aceeași partiție; ordine
+```
+- punct: scalare orizontală
 
 ### 7
 Greu: da
@@ -110,6 +194,21 @@ print(q.full())  # → True
 q.put_nowait("c")  # ! Full
 ```
 Legătură: RMQ-03 și RD-06. Prefetch-ul (`basic.qos`) e backpressure la consumator; rate limit-ul per API key merge în Redis, cu `INCR` și `EXPIRE`.
+
+Tablă:
+- problema: producătorul întrece consumatorul
+- ideea: backpressure; coadă limitată
+- schemă:
+```text
+producător 10.000/s
+↓ consumator 1.000/s
+coada crește; memorie plină
+↓ coadă limitată
+plină: producătorul așteaptă
+↓ per tenant
+excesul primește 429
+```
+- punct: partea lentă încetinește
 
 ### 8
 Greu: da
@@ -127,6 +226,21 @@ SET LOCAL app.tenant_id = '2';
 ```
 Legătură: DES-06 și SEC-09. Rolul aplicației are doar drepturile de care are nevoie (least privilege). Aceeași alegere o ai la Elasticsearch: indexuri partajate, cu un câmp `tenant`, sau un index per tenant.
 
+Tablă:
+- problema: query fără tenant_id
+- ideea: trei niveluri; RLS
+- schemă:
+```text
+tenant_id în aceeași tabelă
+↓ query fără WHERE
+A vede alertele lui B
+↓ RLS pe tabelă
+Postgres filtrează rândurile
+↓ SET LOCAL app.tenant_id
+fără tenant: eroare, nu scurgere
+```
+- punct: izolare vs cost
+
 ### 9
 Problema: Clienții se plâng că alertele vin cu 20 de minute întârziere. Dashboard-ul e verde. Coada era plină de mult, dar nu se uita nimeni la ea.
 Ideea: Măsori de la început ce simte utilizatorul și cum stau cozile. Lag-ul e câte mesaje așteaptă; vârsta celui mai vechi mesaj spune cât așteaptă un job. Latența end-to-end e timpul de la eveniment la alertă. Alertezi pe vârstă, latență și erori; CPU-ul singur nu arată cât așteaptă clientul.
@@ -139,3 +253,16 @@ print(len(a), len(b))  # → 3 3
 print(n - a[0], n - b[0])  # → 5 90
 ```
 Legătură: DES-04. Scenariul SAP din Design are metrici la pasul 5. Google SRE: latency, traffic, errors, saturation.
+
+Tablă:
+- problema: dashboard verde; alerte întârziate
+- ideea: lag; vârsta mesajului
+- schemă:
+```text
+eveniment → coadă → alertă
+↓ măsori vârsta celui mai vechi
+latență end-to-end
+↓ alertezi pe vârstă și erori
+vezi întârzierea din timp
+```
+- punct: CPU singur nu ajunge
