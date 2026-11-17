@@ -15,6 +15,19 @@ Problema: O companie mare își ține facturile, salariile și stocurile într-u
 Ideea: Onapsis vinde securitate pentru aplicații business-critical, mai ales SAP și Oracle. Research Labs caută vulnerabilități în ele și le raportează producătorului. Un comunicat din 2022 spune că a găsit și a ajutat la remedierea a peste 1.000 de zero-day-uri.
 Analogie: Paznicul unei bănci știe ce înseamnă ușa seifului deschisă noaptea. Cel dintr-un bloc de birouri vede doar o ușă.
 Legătură: Cardul oral o-dom-1 cere prezentarea.
+Tablă:
+- problema: SAP business-critical
+- ideea: Onapsis; Research Labs
+- schemă:
+```text
+firewall-ul vede rețeaua
+↓ nu vede în aplicație
+SAP rămâne neprotejat
+↓ Onapsis
+securitate la nivel de aplicație
+```
+- analogie: paznicul unei bănci
+- punct: aplicații, nu rețea
 
 ### 2
 Problema: Anunțul numește trei zone de produs: Threat Detection & Response, Vulnerability Management și Compliance Automation. Pentru cineva din afară sună la fel, iar la interviu le amesteci.
@@ -29,6 +42,18 @@ Exemplu:
   → compliance (Assess)
 ```
 Legătură: Zonele vin din anunțul RO-1186 (research/job-8805551002-gaps.md).
+Tablă:
+- problema: trei zone de produs
+- ideea: detecție; vulnerabilități
+- schemă:
+```text
+atac în desfășurare
+↓ Defend
+detecție
+↓ breșă deschisă sau audit
+Assess: vulnerabilități, compliance
+```
+- punct: trei nevoi, trei zone
 
 ### 3
 Problema: La 2 noaptea cineva își dă un rol de administrator în sistemul SAP al companiei. Nimeni nu se uită la loguri până la următorul audit.
@@ -42,6 +67,18 @@ for u, r in new.items():
         print(u)  # → ana
 ```
 Legătură: DOM-01.
+Tablă:
+- problema: admin la 2 noaptea
+- ideea: monitorizare continuă
+- schemă:
+```text
+loguri SAP, non-stop
+↓ Defend compară cu normalul
+vede rolul nou de admin
+↓ alertă
+severitate, cauză, remediere
+```
+- punct: early warning
 
 ### 4
 Greu: da
@@ -57,6 +94,18 @@ for r in (brute, adm):
         print(r.__name__)  # → brute
 ```
 Legătură: Kata k12 (motorul de reguli de detecție) și DOM-03.
+Tablă:
+- problema: evenimente fără sfârșit
+- ideea: reguli de detecție
+- schemă:
+```text
+evenimentele sistemului SAP
+↓ reguli de detecție
+condiție pe eveniment
+↓ potrivire
+alertă
+```
+- punct: cifrele diferă
 
 ### 5
 Greu: da
@@ -64,6 +113,19 @@ Problema: SAP publică un patch, dar clientul îl aplică abia după testare și
 Ideea: Defend trimite alertele în SIEM, în SOAR sau în fluxuri de AI (pagina produsului). Datasheet-ul numește Splunk, Microsoft Sentinel, IBM QRadar, ArcSight și Elasticsearch Kibana. Alte SIEM-uri merg dacă primesc LEEF, CEF sau JSON syslog. „Pre-patch protection” înseamnă că monitorizezi exploatarea cât timp patch-ul lipsește: nu există încă (zero-day) sau nu e aplicat. După Onapsis, protecția vine în medie cu patru luni înaintea patch-ului oficial.
 Analogie: Broasca ușii e defectă, iar lăcătușul vine peste două luni. Între timp pui o cameră pe ușă. Nu repari broasca, dar afli dacă cineva o încearcă.
 Legătură: DOM-05 și DOM-08.
+Tablă:
+- problema: patch aplicat târziu
+- ideea: SIEM; pre-patch protection
+- schemă:
+```text
+patch publicat, neaplicat
+↓ pre-patch protection
+Defend vede tentativele
+↓ alertă în SIEM
+SOC-ul reacționează
+```
+- analogie: cameră pe ușă
+- punct: monitorizezi, nu repari
 
 ### 6
 Greu: da
@@ -76,6 +138,18 @@ Exemplu:
  CVSS 10, în NetWeaver Java.”
 ```
 Legătură: OVERPASS (punctul 7) e al treilea caz.
+Tablă:
+- problema: „singura platformă”
+- ideea: Endorsed by SAP; RECON
+- schemă:
+```text
+afirmație mai tare decât site-ul
+↓ spui „Endorsed by SAP”
+și dai un caz concret
+↓ RECON, CVSS 10
+NetWeaver AS Java, 2020
+```
+- punct: afirmația firmei
 
 ### 7
 Greu: da
@@ -91,6 +165,18 @@ Research Labs găsește defectul
 → clientul aplică patch-ul
 ```
 Legătură: E exemplul tău pentru pre-patch protection (DOM-08).
+Tablă:
+- problema: scor maxim în kernel
+- ideea: OVERPASS; CVSS 10
+- schemă:
+```text
+Research Labs găsește defectul
+↓ raportează la SAP
+Defend detectează tentative
+↓ Patch Day, Note 3747649
+clientul aplică patch-ul
+```
+- punct: pre-patch protection
 
 ### 8
 Problema: Intervievatorul întreabă cum folosești AI în lucru. Dacă nu știi că și produsul Onapsis are straturi de AI, răspunsul rămâne generic.
@@ -103,6 +189,18 @@ Exemplu:
 4. legătura: produsul are agenți
 ```
 Legătură: Cardul o-beh-5 cere un exemplu concret cu AI în livrare.
+Tablă:
+- problema: cum folosești AI
+- ideea: Agentic AI Fabric
+- schemă:
+```text
+unealta: Cursor, Claude Code
+↓ ce ai livrat mai repede
+ce ai verificat tu
+↓ legătura cu produsul
+Onapsis are agenți
+```
+- punct: exemplu concret
 
 ### 9
 Greu: da
@@ -116,6 +214,18 @@ Exemplu:
   → nu: e ERP-ul, pe HANA
 ```
 Legătură: DOM-02 întreabă ce e SAP; explicația lui pomenește ERP, ABAP și S/4HANA.
+Tablă:
+- problema: ABAP sau HANA?
+- ideea: ABAP limbaj; HANA bază
+- schemă:
+```text
+SAP: firma
+↓ produsul de bază
+ERP: procesele companiei
+↓ ABAP și HANA
+limbajul, baza de date
+```
+- punct: S/4HANA e ERP
 
 ### 10
 Greu: da
@@ -130,6 +240,18 @@ mttd = mean(d - a for a, d in ev)
 print(mttd)  # → 2.5
 ```
 Legătură: DOM-04, DOM-05 și DOM-06.
+Tablă:
+- problema: MTTD și alert fatigue
+- ideea: SIEM; MITRE ATT&CK
+- schemă:
+```text
+prea multe fals-pozitive
+↓ analiștii le ignoră
+alert fatigue
+↓ atacul trece neobservat
+MTTD crește
+```
+- punct: ce înseamnă R
 
 ### 11
 Greu: da
@@ -147,3 +269,15 @@ print(send("A", "P1", 5))  # → False
 print(send("B", "P1", 5))  # → True
 ```
 Legătură: Kata k2 (deduplicare de alerte), DOM-07 și fișa celery, punctul 3.
+Tablă:
+- problema: alertă dublă
+- ideea: idempotență; cheie
+- schemă:
+```text
+ingestie de loguri
+↓ normalizare, reguli
+alertă pentru un sistem
+↓ retrimisă de coadă
+cheia respinge dublura
+```
+- punct: partiție după system_id
