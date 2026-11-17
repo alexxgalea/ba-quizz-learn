@@ -444,6 +444,22 @@ test("Tablă: the real design file has a board on every point, and the schemes h
   for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
 });
 
+test("Tablă: the real react file has a board on every point; schema only where there is no Pas cu pas, 2–5 steps (tichetul 14, tabla-trepte)", () => {
+  const root = new URL("../../", import.meta.url), P = loadData(root);
+  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.react.items;
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
+  for (const x of it) {
+    assert.equal(x.tabErr, undefined, "punctul " + x.n);
+    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
+    assert.equal(!!x.tab.cpp, !!x.cpp, "react n-are „În C++”, deci nici cheia cpp (punctul " + x.n + ")");
+    assert.ok(!(x.tab.schema && x.pas), "schemă și Pas cu pas împreună (punctul " + x.n + ")");
+  }
+  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
+  assert.ok(steps.length >= 4, "cel puțin 4 puncte cu schemă, are " + steps.length);
+  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
+});
+
 test("the real data passes the rules", () => {
   const root = new URL("../../", import.meta.url);
   const P = loadData(root);
