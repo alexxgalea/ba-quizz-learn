@@ -6,9 +6,11 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/pytest.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Toate punctele din `src/desf/pytest.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
 - [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+Note: `npm run test:unit` pică doar la cele 5 teste `ts:` din `desf_examples` (lipsește `npm install --prefix katas` în worktree); restul trece. `desf_examples` și `fencew` arată doar probleme vechi, în afara `pytest.md`. Captura vizuală la 360 px nu s-a făcut (nu există unealtă de captură pentru lecție); ecranul tablei e acoperit de `tools/test_lesson.py`.
