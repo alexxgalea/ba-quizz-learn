@@ -21,6 +21,18 @@ E       assert 4 == 5
 E        +  where 4 = f(2)
 ```
 Legătură: Un `TestCase` din Django folosește `self.assertEqual`; în pytest scrii doar `assert`.
+Tablă:
+- problema: pică doar AssertionError
+- ideea: assert simplu; valori în eșec
+- schemă:
+```text
+assert f(2) == 5
+↓ rescris la import
+asertul păstrează valorile
+↓ testul pică
+E  assert 4 == 5
+```
+- punct: def test_*, assert simplu
 
 ### 2
 Greu: da
@@ -40,6 +52,19 @@ for _ in g: pass  # → teardown
 În C++: GoogleTest folosește o clasă derivată din `testing::Test`, cu `SetUp()` și `TearDown()`, și `TEST_F`. Pentru fiecare test creează un obiect nou, cheamă `SetUp()`, rulează testul, cheamă `TearDown()` și șterge obiectul.
 Unde nu ține: În C++ merg și constructorul și destructorul (RAII), iar `TearDown()` e opțional. În pytest nu moștenești nimic: testul cere fixture-ul după nume, iar un fixture poate cere altul. Scope-ul mai larg ca un test apare în GoogleTest ca `SetUpTestSuite()`, static, o dată per suită.
 Legătură: PT-01 și PT-02. Un container Postgres de 5 s cere scope `session`.
+Tablă:
+- problema: 10 teste, aceeași conexiune
+- ideea: fixture; teardown după yield
+- schemă:
+```text
+testul cere fixture după nume
+↓ setup, până la yield
+valoarea intră în test
+↓ testul rulează (sau pică)
+↓ teardown, după yield
+```
+- cpp: SetUp și TearDown
+- punct: yield: setup și teardown
 
 ### 3
 Problema: Trei fișiere de test au nevoie de fixture-ul `client`. Îl copiezi în fiecare sau îl imporți, iar importul pare neutilizat, fiindcă fixture-ul apare doar ca nume de parametru.
@@ -54,6 +79,18 @@ tests/
     test_d.py   -> sub
 ```
 Legătură: PT-05. Un fixture partajat de multe fișiere (PT-02) stă de obicei aici.
+Tablă:
+- problema: fixture copiat peste tot
+- ideea: conftest.py; cel mai apropiat câștigă
+- schemă:
+```text
+test_d.py cere client
+↓ caută în sub/conftest.py
+găsit: client = sub
+↓ altfel urcă în tests/
+client = root
+```
+- punct: conftest.py, fără import
 
 ### 4
 Greu: da
@@ -74,6 +111,19 @@ test_p[3] FAILED
 În C++: GoogleTest are teste cu parametri: o clasă `testing::TestWithParam<T>`, testul `TEST_P` și `INSTANTIATE_TEST_SUITE_P(Nume, Clasa, testing::Values(1, 2, 3))`, care generează câte un test per valoare.
 Unde nu ține: Lista de valori stă într-o instanțiere separată, iar testul citește valoarea cu `GetParam()`. În pytest decoratorul stă pe funcție, iar valoarea e argument. Numele din GoogleTest sunt generate cu index (`Nume/Clasa.Test/0`), cele din pytest vin din valori (`test_p[1]`).
 Legătură: PT-04 și PT-13. Două `parametrize` pe același test (3 × 2 valori) dau 6 teste.
+Tablă:
+- problema: 12 reguli, 12 funcții
+- ideea: parametrize; un test per valoare
+- schemă:
+```text
+parametrize("n", [1, 2, 3])
+↓ un test per valoare
+test_p[1], [2], [3]
+↓ unul pică
+[3] FAILED, restul trec
+```
+- cpp: TEST_P; GetParam
+- punct: parametrize, teste separate
 
 ### 5
 Greu: da
@@ -90,6 +140,18 @@ with pt.MonkeyPatch.context() as m:
 print(os.getenv("MOD"))  # → None
 ```
 Legătură: PT-06, PT-11 și PT-14. În exemplu, `MonkeyPatch.context()` face ce face fixture-ul `monkeypatch` pe durata unui test.
+Tablă:
+- problema: env, fișiere, loguri
+- ideea: raises, monkeypatch; tmp_path, caplog
+- schemă:
+```text
+monkeypatch.setenv("MOD", "ok")
+↓ testul rulează
+os.getenv("MOD") → ok
+↓ sfârșitul testului
+valoarea veche revine
+```
+- punct: unelte care curăță singure
 
 ### 6
 Greu: da
@@ -107,6 +169,19 @@ m(1, 2)  # ! TypeError
 În C++: Fără patch la rulare, o dependență se înlocuiește prin design: o interfață cu metode `virtual`, pe care testul o implementează cu un mock (gMock: `MOCK_METHOD`, `EXPECT_CALL`).
 Unde nu ține: În Python `patch` schimbă un nume la rulare, fără să atingi codul testat. În C++ o dependență se înlocuiește de obicei prin design: interfață sau șablon. Iar `EXPECT_CALL` se setează înainte de apel, pe când mock-ul din Python notează apelurile, iar tu le verifici după.
 Legătură: PT-03, PT-07 și PT-10. PT-03 e exact cazul din Problemă: patch-ul se pune la numele din modulul care folosește funcția.
+Tablă:
+- problema: patch pe nume greșit
+- ideea: patch unde e căutat; autospec
+- schemă:
+```text
+from notify import send_email
+↓ patch("notify.send_email")
+alerts.send_email rămâne real
+↓ patch("alerts.send_email")
+apelul prinde mock-ul
+```
+- cpp: interfață virtuală; EXPECT_CALL
+- punct: patch la consumator
 
 ### 7
 Greu: da
@@ -124,6 +199,18 @@ n = c.execute("select * from t")
 print(n.fetchall())  # → []
 ```
 Legătură: PT-01 și PT-02. Exemplul folosește sqlite3 doar ca să arate rollback-ul, nu ca alternativă la Postgres. În Django, `TestCase` face același lucru: învelește fiecare test într-un `atomic()` anulat la final.
+Tablă:
+- problema: SQLite vs Postgres
+- ideea: Postgres real; rollback
+- schemă:
+```text
+fixture: deschide tranzacția
+↓ testul scrie în bază
+rândurile există doar în test
+↓ teardown: rollback
+baza e curată
+```
+- punct: Postgres real, rollback
 
 ### 8
 Problema: Testezi un task Celery care trimite un email. Cu `.delay()` testul cere broker și worker. Cu `task_always_eager` nu mai testezi nimic din ce se întâmplă prin broker.
@@ -139,6 +226,18 @@ app.conf.task_always_eager = True
 print(add.delay(2, 3).get())  # → 5
 ```
 Legătură: PT-08. Ce nu testează modul eager (broker, worker, redelivery) e exact ce prinde testul de integrare.
+Tablă:
+- problema: task Celery fără broker
+- ideea: task_always_eager; emulare worker
+- schemă:
+```text
+add.delay(2, 3)
+↓ eager = False
+mesaj la broker, apoi worker
+↓ eager = True
+rulează local, fără broker
+```
+- punct: eager pentru unit teste
 
 ### 9
 Greu: da
@@ -154,6 +253,19 @@ print(expired(0, 900))  # → True
 În C++: O funcție care cheamă direct `std::chrono::steady_clock::now()` nu se testează fără să aștepți. Cu ceasul ca parametru de șablon (`template <class Clock>`), testul pasează un ceas fals, cu un `now()` pe care îl controlezi.
 Unde nu ține: În C++ ceasul trebuie injectat prin design. În Python, freezegun și time-machine înlocuiesc ceasul global la rulare, fără să schimbi funcția. Un ceas injectat merge totuși la fel de bine în Python.
 Legătură: PT-09 și punctul 13: același principiu, `sleep` nu e sincronizare.
+Tablă:
+- problema: token expirat, sleep
+- ideea: ceas injectat; aștepți condiția
+- schemă:
+```text
+expired(t0, now, ttl)
+↓ testul dă now = 899
+False
+↓ testul dă now = 900
+True, fără sleep
+```
+- cpp: ceas ca parametru
+- punct: controlezi timpul
 
 ### 10
 Greu: da
@@ -166,6 +278,10 @@ pytest -m "not slow" -n auto
 pytest --cov=app
 ```
 Legătură: PT-16 pentru `-n`. Markerul `slow` îl înregistrezi în config; fără asta primești `PytestUnknownMarkWarning`.
+Tablă:
+- problema: suita de 8 minute
+- ideea: -x, -k, --lf; -m, -n auto
+- punct: opțiuni care scurtează suita
 
 ### 11
 Problema: Rulezi cu `-n 4`. Fixture-ul `session` care creează baza de test rulează de patru ori, iar patru procese scriu în aceeași bază și își strică datele.
@@ -178,6 +294,20 @@ print(db_name("gw0"))  # → test_gw0
 print(db_name("gw1"))  # → test_gw1
 ```
 Legătură: PT-16 și GIL-13. Procese separate, ca la `ProcessPoolExecutor`: nu împart memoria.
+Tablă:
+- problema: -n 4, baza comună
+- ideea: xdist; worker_id
+- schemă:
+```text
+pytest -n 4
+↓ pornește gw0..gw3
+fiecare colectează testele
+↓ fixture scope session
+rulează o dată pe worker
+↓ worker_id în nume
+test_gw0, test_gw1: baze separate
+```
+- punct: session per worker
 
 ### 12
 Greu: da
@@ -195,6 +325,18 @@ def base_url(request):
     return URLS[env]
 ```
 Legătură: PT-05 pentru `conftest.py`. Rolul din anunț (RO-1186) cere un framework de teste, nu doar teste.
+Tablă:
+- problema: 400 teste, login repetat
+- ideea: straturi; configurare din CLI
+- schemă:
+```text
+test: user se loghează
+↓ pas de domeniu
+login()
+↓ page object sau client API
+↓ driver: browser sau HTTP
+```
+- punct: framework, nu doar teste
 
 ### 13
 Greu: da
@@ -210,3 +352,15 @@ expect(t).to_be_visible()
 assert t.is_visible()  # NU
 ```
 Legătură: PT-17 și punctul 9: `sleep` nu e sincronizare, ci o ghicire.
+Tablă:
+- problema: sleep(2) fragil
+- ideea: get_by_role; expect reîncearcă
+- schemă:
+```text
+button.click()
+↓ așteaptă elementul gata
+acțiunea se face
+↓ expect(t).to_be_visible()
+reîncearcă până la 5 s
+```
+- punct: așteptare automată
