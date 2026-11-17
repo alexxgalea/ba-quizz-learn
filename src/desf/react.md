@@ -75,7 +75,7 @@ ref.current = x → nimic
 Legătură: RE-02. Punctul 6 explică Context-ul; efectele din `frontend` pornesc tot de la un render (FE-06).
 
 Tablă:
-- problema: count++ nu mișcă ecranul
+- problema: variabilă obișnuită; ecranul rămâne
 - ideea: state, părinte sau Context
 - punct: ref nu declanșează
 
@@ -240,7 +240,7 @@ const b = useCounter();
 Legătură: RE-07. Ca o funcție fabrică în Python: fiecare apel `Counter()` produce un obiect nou. `useQuery` din TanStack Query e tot un custom hook (FE-04).
 
 Tablă:
-- problema: contor copiat, dublat
+- problema: cod copiat în două; fiecare contorul lui
 - ideea: hook: logică, nu valori
 - schemă:
 ```text
@@ -322,7 +322,7 @@ departe în arbore → + Context
 Legătură: RE-09. RE-02: o ref nu declanșează re-render; RE-05: ce se calculează nu devine state. Seamănă cu diferența dintre un câmp de model Django, salvat și afișat, și o variabilă locală din view.
 
 Tablă:
-- problema: let id pierdut; listă dublată
+- problema: let id pierdut; lista rămâne în urmă
 - ideea: derivat sau state; ref
 - punct: ref: păstrat, fără re-render
 
@@ -358,8 +358,8 @@ Legătură: RE-10. FE-06 detaliază dependențele, iar FE-08 cursa din fetch. Î
 
 Tablă:
 - problema: tooltip sare; save pe flag
-- ideea: handler; effect
-- punct: măsori fără pâlpâire
+- ideea: useLayoutEffect; useEffectEvent
+- punct: măsori fără pâlpâire; handler
 
 ### 11
 
@@ -508,5 +508,5 @@ Legătură: RE-15, RE-16. Ca un view Django care primește `request.POST` și î
 
 Tablă:
 - problema: 3 useState și preventDefault
-- ideea: acțiune în tranziție; use
-- punct: pending doar într-un copil
+- ideea: useActionState; useFormStatus
+- punct: useOptimistic; pending în copil

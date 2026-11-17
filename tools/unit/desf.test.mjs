@@ -305,160 +305,41 @@ test("Tablă: the real asyncio file has a board on every point (tickets 01 and 0
   assert.equal(it[0].tabErr, undefined);
 });
 
-test("Tablă: the real python file has a board on every point, and the schemes have 2–5 steps (tichetul 06, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.python.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 8, "cel puțin 8 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real pytest file has a board on every point, and the schemes have 2–5 steps (tichetul 10, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.pytest.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 8, "cel puțin 8 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real asgi file has a board on every point, and the schemes have 2–5 steps (tichetul 09, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.asgi.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 8, "cel puțin 8 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real oop file has a board on every point, and the schemes have 2–5 steps (tichetul 07, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.oop.items;
-  assert.deepEqual(r.errors, []);
-  assert.equal(it.length, 12);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 10, "cel puțin 10 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real frontend file has a board on every point, and the schemes have 2–5 steps (tichetul 15, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.frontend.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-    assert.ok(!(x.tab.schema && x.pas), "schema nu merge cu Pas cu pas (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 2, "cel puțin 2 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real js file has a board on every point, and the schemes have 2–5 steps (tichetul 12, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.js.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-    assert.ok(!(x.tab.schema && x.pas), "schema nu merge cu Pas cu pas (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 2, "cel puțin 2 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real fedebug file has a board on every point, and the schemes have 2–5 steps (tichetul 16, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.fedebug.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  for (const x of it) assert.equal(!!x.tab.schema, !x.pas, "schemă doar unde nu există „Pas cu pas” (punctul " + x.n + ")");
-  assert.ok(steps.length >= 3, "cel puțin 3 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real ts file has a board on every point, and the schemes have 2–5 steps (tichetul 13, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.ts.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 8, "cel puțin 8 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real design file has a board on every point, and the schemes have 2–5 steps (tichetul 11, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.design.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.equal(steps.length, it.length, "toate punctele au schemă");
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
-
-test("Tablă: the real react file has a board on every point; schema only where there is no Pas cu pas, 2–5 steps (tichetul 14, tabla-trepte)", () => {
-  const root = new URL("../../", import.meta.url), P = loadData(root);
-  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.react.items;
-  assert.deepEqual(r.errors, []);
-  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
-  for (const x of it) {
-    assert.equal(x.tabErr, undefined, "punctul " + x.n);
-    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
-    assert.equal(!!x.tab.cpp, !!x.cpp, "react n-are „În C++”, deci nici cheia cpp (punctul " + x.n + ")");
-    assert.ok(!(x.tab.schema && x.pas), "schemă și Pas cu pas împreună (punctul " + x.n + ")");
-  }
-  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
-  assert.ok(steps.length >= 4, "cel puțin 4 puncte cu schemă, are " + steps.length);
-  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
-});
+// Helper pentru fișele reale cu tablă: tablă la fiecare punct, `cpp` doar unde există „În C++”, scheme cu 2–5 trepte.
+// Opțiuni: n (numărul de puncte), minSchema (cel puțin atâtea puncte cu schemă), allSchema (toate punctele),
+// schemaXorPas (schemă exact unde nu există „Pas cu pas”), noSchemaAt (punctele care au doar cuvinte cheie). Regula „schemă și Pas cu pas împreună” o acoperă checkTab.
+function boardTest(mod, ticket, { n, minSchema, allSchema, schemaXorPas, noCppMsg, noSchemaAt } = {}) {
+  const sch = allSchema ? "toate punctele au schemă" : "cel puțin " + minSchema + " puncte cu schemă";
+  test("Tablă: the real " + mod + " file has a board on every point, and the schemes have 2–5 steps (" + ticket + ", tabla-trepte)", () => {
+    const root = new URL("../../", import.meta.url), P = loadData(root);
+    const r = buildDesf(P, readDesfFiles(root)), it = r.desf[mod].items;
+    assert.deepEqual(r.errors, []);
+    if (n !== undefined) assert.equal(it.length, n);
+    assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
+    for (const x of it) {
+      assert.equal(x.tabErr, undefined, "punctul " + x.n);
+      assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
+      assert.equal(!!x.tab.cpp, !!x.cpp, (noCppMsg || "cpp doar unde există „În C++”") + " (punctul " + x.n + ")");
+      if (schemaXorPas) assert.equal(!!x.tab.schema, !x.pas, "schemă doar unde nu există „Pas cu pas” (punctul " + x.n + ")");
+    }
+    const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
+    if (allSchema) assert.equal(steps.length, it.length, sch);
+    else assert.ok(steps.length >= minSchema, sch + ", are " + steps.length);
+    if (noSchemaAt) assert.deepEqual(it.map((x, i) => x.tab.schema ? 0 : i + 1).filter(Boolean), noSchemaAt);
+    for (const k of steps) assert.ok(k >= 2 && k <= 5, "trepte: " + k);
+  });
+}
+boardTest("gil", "tichetul 08", { n: 8, minSchema: 7, noSchemaAt: [8] });
+boardTest("python", "tichetul 06", { minSchema: 8 });
+boardTest("pytest", "tichetul 10", { minSchema: 8 });
+boardTest("asgi", "tichetul 09", { minSchema: 8 });
+boardTest("oop", "tichetul 07", { n: 12, minSchema: 10 });
+boardTest("frontend", "tichetul 15", { minSchema: 2 });
+boardTest("js", "tichetul 12", { minSchema: 2 });
+boardTest("fedebug", "tichetul 16", { minSchema: 3, schemaXorPas: true });
+boardTest("ts", "tichetul 13", { minSchema: 8 });
+boardTest("design", "tichetul 11", { allSchema: true });
+boardTest("react", "tichetul 14", { minSchema: 4, schemaXorPas: true, noCppMsg: "react n-are „În C++”, deci nici cheia cpp" });
 
 test("the real data passes the rules", () => {
   const root = new URL("../../", import.meta.url);
