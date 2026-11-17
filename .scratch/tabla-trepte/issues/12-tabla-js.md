@@ -6,9 +6,11 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/js.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Toate punctele din `src/desf/js.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
 - [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+**Note:** Cele 8 puncte au `Tablă`; schemă au doar punctele 5 și 6, fiindcă regula din `checkTab` interzice schema împreună cu `Pas cu pas`, iar celelalte puncte îl au deja (urmărește mecanismul în timp). Captura vizuală a lecției (ultimul criteriu) a rămas nefăcută în sandbox.

@@ -382,6 +382,22 @@ test("Tablă: the real frontend file has a board on every point, and the schemes
   for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
 });
 
+test("Tablă: the real js file has a board on every point, and the schemes have 2–5 steps (tichetul 12, tabla-trepte)", () => {
+  const root = new URL("../../", import.meta.url), P = loadData(root);
+  const r = buildDesf(P, readDesfFiles(root)), it = r.desf.js.items;
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
+  for (const x of it) {
+    assert.equal(x.tabErr, undefined, "punctul " + x.n);
+    assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
+    assert.equal(!!x.tab.cpp, !!x.cpp, "cpp doar unde există „În C++” (punctul " + x.n + ")");
+    assert.ok(!(x.tab.schema && x.pas), "schema nu merge cu Pas cu pas (punctul " + x.n + ")");
+  }
+  const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
+  assert.ok(steps.length >= 2, "cel puțin 2 puncte cu schemă, are " + steps.length);
+  for (const n of steps) assert.ok(n >= 2 && n <= 5, "trepte: " + n);
+});
+
 test("Tablă: the real fedebug file has a board on every point, and the schemes have 2–5 steps (tichetul 16, tabla-trepte)", () => {
   const root = new URL("../../", import.meta.url), P = loadData(root);
   const r = buildDesf(P, readDesfFiles(root)), it = r.desf.fedebug.items;
