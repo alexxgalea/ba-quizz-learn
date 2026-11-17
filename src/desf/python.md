@@ -25,6 +25,20 @@ add.__defaults__  # → ([1, 2],)
 Unde nu ține: În C++, argumentul implicit se evaluează la fiecare apel în care îl omiți, deci primești mereu un vector nou. În Python, expresia rulează o dată, la `def`.
 Legătură: PY-01. În Django, `JSONField(default=[])` dă eroarea `fields.E010`; scrii `default=list`.
 
+Tablă:
+- problema: listă comună între apeluri
+- ideea: valoare implicită; o dată, la def
+- schemă:
+```text
+def add(x, acc=[])
+↓ Python evaluează [] o dată
+acc e un singur obiect
+↓ apelul 1 adaugă "a"
+apelul 2 vede ["a"]
+```
+- cpp: argument implicit; la fiecare apel
+- punct: None, nu []
+
 ### 2
 Greu: da
 Problema: Creezi trei callback-uri într-o buclă, fiecare cu alt `i`. Apelate mai târziu, toate întorc `2`.
@@ -40,6 +54,20 @@ gs = [lambda i=i: i for i in r]
 În C++: Un lambda cu `[i]` copiază valoarea la creare și întoarce 0, 1, 2. Cu `[&i]` ține o referință la variabilă, ca un closure Python.
 Unde nu ține: În C++, `i` moare odată cu bucla, deci apelul prin `[&i]` e comportament nedefinit. În Python variabila trăiește cât o ține closure-ul, așa că vezi doar ultima valoare.
 Legătură: PY-02. În JavaScript, `var` într-o buclă dă același rezultat (`[3, 3, 3]`), iar `let` face o legare nouă la fiecare iterație.
+
+Tablă:
+- problema: toate dau 2
+- ideea: variabila, nu valoarea; lambda i=i
+- schemă:
+```text
+3 lambda-uri din buclă
+↓ fiecare ține variabila i
+bucla se termină: i = 2
+↓ apelezi f()
+f citește i acum: 2
+```
+- cpp: [i] copiază; [&i] referință
+- punct: citit la apel
 
 ### 3
 Greu: da
@@ -57,6 +85,22 @@ a is c  # → True
 În C++: `a == b` cheamă `operator==`, iar `&a == &b` compară adresele. Asta face `is`.
 Unde nu ține: În Python n-ai pointeri expliciți: fiecare nume e o referință, iar `is` compară obiectele spre care arată. Adresa nu apare nicăieri în cod.
 Legătură: PY-07. PY-13 arată același obiect repetat: în `[[0] * 2] * 2`, ambele rânduri sunt aceeași listă.
+
+Tablă:
+- problema: liste egale, is False
+- ideea: == compară valori; is compară identitatea
+- schemă:
+```text
+a = [1]; b = [1]; c = a
+↓ a == b cheamă __eq__
+True: aceleași valori
+↓ a is b
+False: obiecte diferite
+↓ a is c
+True: același obiect
+```
+- cpp: operator==; adrese
+- punct: None: doar is
 
 ### 4
 Greu: da
@@ -77,6 +121,22 @@ print(list(e))  # → []
 Unde nu ține: Un iterator forward (`vector::begin`) se parcurge de mai multe ori; generatorul, doar o dată. În C++17 n-ai `yield`: starea o ții de mână, într-o clasă de iterator.
 Legătură: PY-03. PY-09 și PY-14 arată consumul unic, PY-17 eroarea amânată. `QuerySet.iterator()` din Django și `helpers.scan` din Elasticsearch dau rezultatele pe rând.
 
+Tablă:
+- problema: log de 50 GB; 8 GB de RAM
+- ideea: yield; un element în memorie
+- schemă:
+```text
+e = errs(lines)
+↓ creezi generatorul
+corpul nu rulează încă
+↓ next(e)
+rulează, pauză la yield "E1"
+↓ următorul next(e)
+reia cu variabilele păstrate
+```
+- cpp: istream_iterator
+- punct: parcurs o singură dată
+
 ### 5
 Greu: da
 Problema: Vrei să măsori timpul la douăzeci de funcții sau să le reîncerci la eroare. Copiezi aceleași rânduri în fiecare, iar când le schimbi, le schimbi în douăzeci de locuri.
@@ -95,6 +155,20 @@ print(one.__name__)  # → one
 În C++: O funcție care primește un `std::function<int(int)>` și întoarce un lambda ce o apelează face același lucru: `[f](int x) { return f(f(x)); }`.
 Unde nu ține: În C++ învelești explicit, la locul folosirii: `auto g = twice(f);`. În Python, `@dec` leagă numele `f` de wrapper chiar la definire, deci toți apelanții folosesc versiunea învelită.
 Legătură: PY-04. `@login_required` din Django, `@api_view(["GET"])` din DRF și `@app.task(bind=True)` din Celery sunt decoratori, ultimii doi cu parametri.
+
+Tablă:
+- problema: același cod, 20 funcții
+- ideea: decorator: f = dec(f); @wraps(f)
+- schemă:
+```text
+@dec peste def f
+↓ Python face f = dec(f)
+f e acum wrapperul
+↓ apelezi f(x)
+wrapperul cheamă f originală
+```
+- cpp: std::function
+- punct: wrapper peste funcție
 
 ### 6
 Greu: da
@@ -115,6 +189,22 @@ print("ok")  # → ok
 Unde nu ține: Un destructor nu poate opri o excepție în zbor; `__exit__` o poate înghiți. Și `__del__` nu e destructor: nu garantează când rulează, de aceea cleanup-ul stă în `with`.
 Legătură: PY-08. În Django, `transaction.atomic()` e context manager (și decorator), iar `with Session(engine) as s` din SQLAlchemy închide sesiunea la ieșire.
 
+Tablă:
+- problema: excepție înainte de close()
+- ideea: __enter__; __exit__
+- schemă:
+```text
+with Q():
+↓ __enter__, apoi blocul
+__exit__ rulează mereu
+↓ întoarce True
+excepția e înghițită
+↓ altfel
+excepția urcă mai departe
+```
+- cpp: destructor RAII
+- punct: cleanup garantat
+
 ### 7
 Greu: da
 Problema: Verifici de milioane de ori dacă un IP e printre 100.000 de IP-uri blocate, cu `ip in blocked` pe o listă, și fiecare verificare parcurge lista. Sau scoți elemente de la începutul unei liste ca dintr-o coadă, cu `pop(0)`, și fiecare scoatere mută tot restul.
@@ -131,6 +221,22 @@ print(3 in {1, 2, 3})  # → True
 Unde nu ține: Numele păcălesc. `std::set` e un arbore ordonat, iar `std::list` e o listă înlănțuită. Și `std::deque` are acces aleator în O(1); `collections.deque` doar la capete.
 Legătură: PY-05 (IP-uri blocate într-un `set`) și PY-06 (fereastră glisantă cu `deque`).
 
+Tablă:
+- problema: 100.000 de IP-uri; pop(0) pe listă
+- ideea: set și dict: hash; deque la capete
+- schemă:
+```text
+x in list
+↓ parcurge elementele
+O(n) la fiecare căutare
+↓ pui IP-urile într-un set
+in: O(1) în medie
+↓ scoți de la început
+list.pop(0): O(n); deque: O(1)
+```
+- cpp: std::set: arbore ordonat
+- punct: alegi după operație
+
 ### 8
 Greu: da
 Problema: Primești un `Finding(score="high")` dintr-un JSON greșit. Clasa îl acceptă fără o vorbă, iar eroarea apare mai târziu, la un `score + 1`, departe de cauză. Un `Finding` împărțit între module poate fi modificat de unul dintre ele, pe sub nasul celorlalte.
@@ -146,6 +252,19 @@ print(f)  # → F(score='high')
 f.score = 5  # ! FrozenInstanceError
 ```
 Legătură: PY-12. Punctul 9 din fișa OOP explică `@dataclass` din partea clasei; Pydantic, din FastAPI, validează tipurile.
+
+Tablă:
+- problema: score="high" acceptat; modificat între module
+- ideea: frozen=True; fără verificare de tip
+- schemă:
+```text
+@dataclass(frozen=True)
+↓ __init__ nu verifică tipul
+F("high") trece, fără eroare
+↓ f.score = 5
+FrozenInstanceError
+```
+- punct: validarea: Pydantic
 
 ### 9
 Greu: da
@@ -165,6 +284,20 @@ except ValueError as v:
 Unde nu ține: Python înlănțuie și arată lanțul în traceback; în C++ despachetezi tu lanțul cu `rethrow_if_nested`, iar C++17 nu are traceback standard. `ExceptionGroup` n-are echivalent.
 Legătură: PY-11. `asyncio.TaskGroup` ridică un `ExceptionGroup` când mai multe task-uri eșuează (fișa asyncio).
 
+Tablă:
+- problema: except Exception: pass; cauza reală dispare
+- ideea: raise ... from e; __cause__
+- schemă:
+```text
+KeyError în funcția de jos
+↓ except KeyError as e
+raise DomainError from e
+↓ Python pune __cause__ = e
+traceback: ambele excepții
+```
+- cpp: throw_with_nested
+- punct: tipul precis, nu Exception
+
 ### 10
 Greu: da
 Problema: Ai o listă de evenimente nesortată și vrei un grup pe utilizator. `groupby(events, key=…)` îți dă utilizatorul `a` de două ori, în două grupuri separate.
@@ -179,3 +312,16 @@ t = groupby(sorted(d))
 [k for k, g in t]  # → [1, 2]
 ```
 Legătură: PY-10.
+
+Tablă:
+- problema: utilizator în 2 grupuri
+- ideea: doar consecutive; sorted sau defaultdict
+- schemă:
+```text
+groupby([1, 1, 2, 1])
+↓ cheie nouă → grup nou
+cheile ies: 1, 2, 1
+↓ sorted(d) mai întâi
+cheile ies: 1, 2
+```
+- punct: ca uniq din Unix

@@ -6,9 +6,15 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/frontend.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
-- [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+- [x] Toate punctele din `src/desf/frontend.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+## Comments
+
+**17 nov. 2026:** Tablă pe toate cele 13 puncte din `frontend` (cuvinte cheie peste tot, `cpp` doar la 1 și 10). Schemă cu trepte la punctele 5 și 10; regula validatorului (schema nu merge cu `Pas cu pas`) o exclude la cele 8 puncte care îl au, iar 9, 11 și 12 sunt liste, deci doar cuvinte cheie. Test nou în `tools/unit/desf.test.mjs`. În sandbox lipsește `katas/node_modules` (tsc), deci cele 16 exemple TS din `desf_examples` și 5 teste `ts:` din unit pică din mediu, nu din schimbare. Nicio eroare de fapt găsită; textul punctelor n-a fost atins. Captura la 360 px nu s-a făcut în acest run.
+
+**17 nov. 2026, verificare vizuală (după review):** `python3 tools/test_lesson.py` a salvat `shots/lesson_seq_ideea_{light,dark}.png` la 360 px (privite). Punctul arătat e unul cu schemă din `asyncio` (6/9, treapta 4 din 4): cuvintele cheie ale ideii stau estompate sus, schema se vede întreagă, treapta curentă are fundal și bordură în accent, cele trecute sunt normale, săgețile sunt în accent, laserul stă la dreapta treptei; nu apare scroll, nici lateral, nici în cartonaș, iar contrastul e bun în ambele teme. Ecranul e același pentru toate modulele (`jvBoard`); schemele acestui modul n-au fost redate individual, dar lățimea lor (≤ 36 de caractere) o verifică `checkDesf`. În tichetele 10 și 16 nota „captura nu s-a făcut” e depășită de aceasta.

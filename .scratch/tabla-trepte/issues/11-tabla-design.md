@@ -6,9 +6,15 @@
 
 **Blocked by:** none (regula săgeților intră în `validate.mjs` cu tichetul 01; până atunci se respectă de mână)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Toate punctele din `src/desf/design.md` au `Tablă`.
-- [ ] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
-- [ ] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+- [x] Toate punctele din `src/desf/design.md` au `Tablă`.
+- [x] `node validate.mjs` → OK; `node tools/fencew.mjs 36`; `node tools/desf_examples.mjs`.
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, `npm run test:unit`, `tools/test_desf.py`, `tools/test_lesson.py`.
+- [x] Captură a lecției pe un punct cu schemă, la 360 px, light și dark.
+
+## Comments
+
+**17 nov. 2026:** Tablă pe toate cele 9 puncte din `design`, toate cu schemă de flux (cerere, mesaj, date) în 2–4 trepte; punctul 1 (fără `Exemplu`) are cheia `analogie`; fără `cpp`, modulul n-are `În C++`. Test nou în `tools/unit/desf.test.mjs`. Textul punctelor n-a fost atins; nicio eroare de fapt găsită.
+
+**17 nov. 2026, verificare vizuală (după review):** `python3 tools/test_lesson.py` a salvat `shots/lesson_seq_ideea_{light,dark}.png` la 360 px (privite). Punctul arătat e unul cu schemă din `asyncio` (6/9, treapta 4 din 4): cuvintele cheie ale ideii stau estompate sus, schema se vede întreagă, treapta curentă are fundal și bordură în accent, cele trecute sunt normale, săgețile sunt în accent, laserul stă la dreapta treptei; nu apare scroll, nici lateral, nici în cartonaș, iar contrastul e bun în ambele teme. Ecranul e același pentru toate modulele (`jvBoard`); schemele acestui modul n-au fost redate individual, dar lățimea lor (≤ 36 de caractere) o verifică `checkDesf`. În tichetele 10 și 16 nota „captura nu s-a făcut” e depășită de aceasta.

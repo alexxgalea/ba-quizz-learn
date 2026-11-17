@@ -2,6 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseDesf, checkDesf, buildDesf, readDesfFiles, parseExpl, loadData, DESF_LIMITS, DESF_LIMITS_FE, DESF_FE_MODULES, desfLimits } from "../../lib.mjs";
+import { createRequire } from "node:module";
+const { trepte } = createRequire(import.meta.url)("../../src/jarvis.js");
 
 const w = n => Array.from({ length: n }, (_, i) => "cuvânt" + i).join(" ");   // n cuvinte
 const fence = (lang, ...lines) => "```" + lang + "\n" + lines.join("\n") + "\n```";
@@ -302,6 +304,42 @@ test("Tablă: the real asyncio file has a board on every point (tickets 01 and 0
   for (const x of it) assert.equal(x.tabErr, undefined);
   assert.equal(it[0].tabErr, undefined);
 });
+
+// Helper pentru fișele reale cu tablă: tablă la fiecare punct, `cpp` doar unde există „În C++”, scheme cu 2–5 trepte.
+// Opțiuni: n (numărul de puncte), minSchema (cel puțin atâtea puncte cu schemă), allSchema (toate punctele),
+// schemaXorPas (schemă exact unde nu există „Pas cu pas”), noSchemaAt (punctele care au doar cuvinte cheie). Regula „schemă și Pas cu pas împreună” o acoperă checkTab.
+function boardTest(mod, ticket, { n, minSchema, allSchema, schemaXorPas, noCppMsg, noSchemaAt } = {}) {
+  const sch = allSchema ? "toate punctele au schemă" : "cel puțin " + minSchema + " puncte cu schemă";
+  test("Tablă: the real " + mod + " file has a board on every point, and the schemes have 2–5 steps (" + ticket + ", tabla-trepte)", () => {
+    const root = new URL("../../", import.meta.url), P = loadData(root);
+    const r = buildDesf(P, readDesfFiles(root)), it = r.desf[mod].items;
+    assert.deepEqual(r.errors, []);
+    if (n !== undefined) assert.equal(it.length, n);
+    assert.deepEqual(it.map((x, i) => x.tab ? i + 1 : 0).filter(Boolean), it.map((_, i) => i + 1));
+    for (const x of it) {
+      assert.equal(x.tabErr, undefined, "punctul " + x.n);
+      assert.ok(x.tab.problema.length && x.tab.ideea.length && x.tab.punct.length, "punctul " + x.n);
+      assert.equal(!!x.tab.cpp, !!x.cpp, (noCppMsg || "cpp doar unde există „În C++”") + " (punctul " + x.n + ")");
+      if (schemaXorPas) assert.equal(!!x.tab.schema, !x.pas, "schemă doar unde nu există „Pas cu pas” (punctul " + x.n + ")");
+    }
+    const steps = it.filter(x => x.tab.schema).map(x => trepte(x.tab.schema).length);
+    if (allSchema) assert.equal(steps.length, it.length, sch);
+    else assert.ok(steps.length >= minSchema, sch + ", are " + steps.length);
+    if (noSchemaAt) assert.deepEqual(it.map((x, i) => x.tab.schema ? 0 : i + 1).filter(Boolean), noSchemaAt);
+    for (const k of steps) assert.ok(k >= 2 && k <= 5, "trepte: " + k);
+  });
+}
+boardTest("gil", "tichetul 08", { n: 8, minSchema: 7, noSchemaAt: [8] });
+boardTest("python", "tichetul 06", { minSchema: 8 });
+boardTest("pytest", "tichetul 10", { minSchema: 8 });
+boardTest("asgi", "tichetul 09", { minSchema: 8 });
+boardTest("oop", "tichetul 07", { n: 12, minSchema: 10 });
+boardTest("frontend", "tichetul 15", { minSchema: 2 });
+boardTest("js", "tichetul 12", { minSchema: 2 });
+boardTest("fedebug", "tichetul 16", { minSchema: 3, schemaXorPas: true });
+boardTest("ts", "tichetul 13", { minSchema: 8 });
+boardTest("design", "tichetul 11", { allSchema: true });
+boardTest("react", "tichetul 14", { minSchema: 4, schemaXorPas: true, noCppMsg: "react n-are „În C++”, deci nici cheia cpp" });
 
 test("the real data passes the rules", () => {
   const root = new URL("../../", import.meta.url);

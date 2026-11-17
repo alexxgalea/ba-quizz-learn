@@ -25,6 +25,19 @@ print(r)  # → [b'salut']
 ```
 Legătură: ASGI-04. Django are `wsgi.py`, pe care `gunicorn proiect.wsgi` îl încarcă. Flask folosește același contract.
 
+Tablă:
+- problema: altă formă per server
+- ideea: app(environ, start_response); sincron
+- schemă:
+```text
+server primește un request
+↓ app(environ, start_response)
+app apelează start_response
+↓ întoarce iterabil de bytes
+serverul trimite corpul
+```
+- punct: un request odată
+
 ### 2
 Problema: Vrei notificări live în Django, prin WebSocket. Un apel WSGI primește o cerere, întoarce un răspuns și se termină, deci nu poate ține conexiunea deschisă.
 Ideea: ASGI e contractul async: aplicația e o corutină `app(scope, receive, send)`. `scope` descrie conexiunea și are un tip: `http`, `websocket` sau `lifespan`. Aplicația citește mesaje cu `await receive()` și trimite cu `await send(...)`. La WebSocket, scope-ul ține cât conexiunea. WSGI și ASGI sunt specificații, nu servere.
@@ -37,6 +50,21 @@ s = {"type": "http"}
 aio.run(app(s, 0, 0))
 ```
 Legătură: ASGI-04. FastAPI e ASGI de la început, iar Django are `asgi.py` lângă `wsgi.py`.
+
+Tablă:
+- problema: WebSocket în Django
+- ideea: app(scope, receive, send); corutină
+- schemă:
+```text
+conexiune nouă
+↓ server cheamă app(scope, ...)
+scope["type"]: http sau websocket
+↓ await receive()
+mesaj de la client
+↓ await send(...)
+răspuns către client
+```
+- punct: specificație, nu server
 
 ### 3
 Greu: da
@@ -57,6 +85,20 @@ print(codes)  # → [7, 8]
 Unde nu ține: Un worker nu e un `std::thread`. Thread-urile împart memoria: un segfault într-unul oprește tot procesul, iar o excepție necaptată dintr-un thread cheamă `std::terminate`. Un worker Gunicorn care pică lasă masterul și ceilalți workeri în viață.
 Legătură: ASGI-05 și ASGI-01. La Celery, `--max-tasks-per-child` reciclează la fel procesele worker.
 
+Tablă:
+- problema: workeri morți sau agățați
+- ideea: master; --timeout
+- schemă:
+```text
+master pornește N workeri cu fork
+↓ un worker moare sau tace 30 s
+master îl omoară
+↓ pornește altul în loc
+tot N workeri
+```
+- cpp: fork; waitpid
+- punct: reciclare
+
 ### 4
 Problema: Pornești un API FastAPI cu `uvicorn app:app` pe 8 core-uri. Sub încărcare, un core e la 100%, iar celelalte șapte stau libere.
 Ideea: Uvicorn e un server ASGI: parsează HTTP și apelează aplicația. Un proces rulează un singur event loop, pe un singur thread, deci folosește un singur core. Cu `uvicorn[standard]`, bucla vine din `uvloop` și parserul HTTP din `httptools`; fără ele, din `asyncio` și `h11`. Mai multe core-uri cer mai multe procese.
@@ -70,6 +112,19 @@ print(c.loop, c.http)  # → auto auto
 ```
 Legătură: ASGI-11 și punctul 1 din fișa gil: un proces Python execută bytecode pe un singur thread odată.
 
+Tablă:
+- problema: un core la 100%
+- ideea: un proces; un event loop
+- schemă:
+```text
+uvicorn app:app
+↓ un proces, un event loop
+un thread, un singur core
+↓ vrei mai multe core-uri
+mai multe procese
+```
+- punct: parsează HTTP, cheamă app
+
 ### 5
 Greu: da
 Problema: Ai pus API-ul în producție cu un singur `uvicorn`. La fiecare deploy îl oprești și îl pornești, iar clienții primesc erori. Dacă procesul pică noaptea, nimeni nu-l repornește.
@@ -82,6 +137,19 @@ uvicorn app:app --workers 4
 ```
 Legătură: ASGI-01 și ASGI-10. Cu Docker Swarm sau Kubernetes, `replicas` înlocuiește `-w`: orchestratorul ține numărul cerut de containere, cum ținea Gunicorn procesele.
 
+Tablă:
+- problema: deploy cu erori; nimeni nu repornește
+- ideea: Gunicorn peste Uvicorn; -k UvicornWorker
+- schemă:
+```text
+gunicorn -w 4 -k UvicornWorker
+↓ master pornește 4 workeri
+fiecare rulează Uvicorn
+↓ un worker pică
+master îl repornește
+```
+- punct: un proces per container
+
 ### 6
 Problema: Pornești un singur worker sync pe 4 core-uri. Cât așteaptă el după baza de date, cererile stau la coadă, deși CPU-ul e liber. Cu 100 de workeri, mașina comută între procese și se umple de memorie.
 Ideea: Un worker sync servește un request odată și așteaptă des după I/O. Cu ceva mai mulți workeri decât core-uri, cât timp unii așteaptă, alții calculează. De aici formula (2 × core) + 1 din documentația Gunicorn. E doar punct de plecare: apoi măsori sub încărcare.
@@ -92,6 +160,19 @@ def workers(cores):
 print(workers(4))  # → 9
 ```
 Legătură: ASGI-09. În Swarm, totalul e workeri × replici.
+
+Tablă:
+- problema: coadă cu CPU liber
+- ideea: 2×core+1; punct de plecare
+- schemă:
+```text
+worker sync așteaptă după I/O
+↓ CPU-ul stă liber
+alt worker calculează
+↓ de aici (2 × core) + 1
+4 core-uri → 9 workeri
+```
+- punct: măsori sub încărcare
 
 ### 7
 Problema: Expui direct un Gunicorn cu 4 workeri sync. Patru utilizatori de pe rețea mobilă încarcă încet fișiere mari, iar workerii stau ocupați să citească octeți.
@@ -106,6 +187,19 @@ location / {
 }
 ```
 Legătură: ASGI-06. Rolul ăsta îl are un Ingress în Kubernetes (load balancing, terminare SSL) sau Nginx în Docker Swarm.
+
+Tablă:
+- problema: clienți lenți
+- ideea: reverse proxy; Nginx
+- schemă:
+```text
+client lent trimite fișierul
+↓ proxy-ul citește tot request-ul
+workerul nu e ocupat
+↓ request complet
+proxy îl trimite aplicației
+```
+- punct: TLS și statice
 
 ### 8
 Greu: da
@@ -124,6 +218,19 @@ anyio.run(main)
 ```
 Legătură: ASGI-02 și ASGI-03. GIL-04 e același bug fără FastAPI. Punctele 2 și 11 din fișa asyncio arată `to_thread` și alegerea dintre `def` și `async def`.
 
+Tablă:
+- problema: /health lent
+- ideea: async def pe loop; def în threadpool
+- schemă:
+```text
+async def cu requests.get
+↓ apelul blochează event loop-ul
+nicio altă cerere nu rulează
+↓ cu def
+FastAPI îl mută în threadpool
+```
+- punct: 40 de thread-uri implicit
+
 ### 9
 Greu: da
 Problema: Scrii un endpoint `POST /alerts` și verifici de mână fiecare câmp: tipul, lungimea, intervalul. Apoi descrii aceleași reguli în documentația pentru echipa de frontend, iar cele două copii se strică una față de alta.
@@ -137,6 +244,19 @@ print(A(n="3").n)  # → 3
 A(n="x")  # ! ValidationError
 ```
 Legătură: ASGI-07, ASGI-08 și ASGI-15. Un serializer DRF cu `is_valid(raise_exception=True)` face aceeași treabă, dar răspunde 400, nu 422.
+
+Tablă:
+- problema: validare scrisă de mână
+- ideea: Starlette; Pydantic
+- schemă:
+```text
+POST /alerts cu body greșit
+↓ Pydantic validează type hint-urile
+ValidationError
+↓ FastAPI răspunde 422
+funcția ta nu e apelată
+```
+- punct: Depends; OpenAPI din hint-uri
 
 ### 10
 Greu: da
@@ -152,3 +272,16 @@ def pay(key):
 print(pay("k1"), pay("k1"))  # → 1 1
 ```
 Legătură: ASGI-17, ASGI-18 și ASGI-19. Un task Celery reîncercat trebuie să fie idempotent din același motiv.
+
+Tablă:
+- problema: timeout la POST /payments
+- ideea: idempotent; Idempotency-Key
+- schemă:
+```text
+POST /payments, apoi timeout
+↓ reîncearcă cu aceeași cheie
+serverul vede cheia în done
+↓ întoarce rezultatul primei cereri
+nu plătești de două ori
+```
+- punct: coduri de status

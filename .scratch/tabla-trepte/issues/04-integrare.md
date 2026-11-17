@@ -10,5 +10,5 @@
 
 - [x] Documentația la zi.
 - [x] Toate testele din `CLAUDE.md` (24 de interfață, 632 de unitate, `desf_examples`); `npm run pages`.
-- [ ] `BUILD` de pe adresa live coincide (după îmbinarea PR-ului în `main`).
+- [x] `BUILD` de pe adresa live coincide: `c16a575` (PR #13, 15 nov. 2026).
 - [x] `docs/prototip-tabla.html` șters (rămâne pe `prototype/tabla-pasi`).

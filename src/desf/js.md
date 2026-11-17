@@ -36,6 +36,10 @@ b.tags.push('y') → array comun
 a.tags → [ 'x', 'y' ]
 ```
 Legătură: PY-13 e aceeași idee în Python: `[[0] * 2] * 2` repetă aceeași listă interioară. În React, `items.push(x); setItems(items)` nu re-randează, fiindcă referința e aceeași (modulul `react`).
+Tablă:
+- problema: spread; push în copie
+- ideea: primitivă: valoare; obiect: referință
+- punct: structuredClone
 
 ### 2
 Greu: da
@@ -67,6 +71,10 @@ citești y acum: eroare
 let y = 2 → y devine 2
 ```
 Legătură: Python nu are scope de bloc și nici TDZ. Într-o funcție, citirea unei variabile locale înainte de atribuire aruncă `UnboundLocalError`.
+Tablă:
+- problema: var: undefined; let: eroare
+- ideea: TDZ; scope de bloc
+- punct: const: variabila, nu obiectul
 
 ### 3
 Greu: da
@@ -105,6 +113,11 @@ f(); f();   // n == 2
 ```
 Unde nu ține: În C++ referința capturată poate rămâne agățată: dacă `n` iese din scope, un apel ulterior e, de regulă, comportament nedefinit. În JavaScript variabila trăiește cât o ține un closure, deci nu există așa ceva. În schimb nu poți captura prin copie, ca la `[n]`: valoarea o fixezi cu `let` sau cu un parametru.
 Legătură: PY-02 e aceeași capcană în Python, cu `lambda` într-o listă. În React, un `setInterval` dintr-un effect cu `[]` vede state-ul din primul render (FE-05).
+Tablă:
+- problema: afișează 3 3 3
+- ideea: closure ține variabila; let: una pe iterație
+- cpp: [&n]
+- punct: let în buclă
 
 ### 4
 Greu: da
@@ -142,6 +155,11 @@ struct T {
 ```
 Unde nu ține: În C++, `this` e parametrul ascuns al unei funcții membre: `auto f = t.tick;` nici nu compilează, iar un pointer către membru cere obiectul la apel: `(t.*p)()`. În JavaScript, `const f = t.tick` e legal și pierde obiectul în tăcere. Și `[this]` poate rămâne agățat dacă `t` dispare; un closure JavaScript ține obiectul în viață.
 Legătură: În Python, `self` e parametru explicit, iar `f = obj.m` rămâne legat de obiect (bound method). Clasele React vechi legau handler-ele în constructor, cu `bind`; componentele-funcții n-au `this`.
+Tablă:
+- problema: this pierdut
+- ideea: this vine din apel; arrow, bind
+- cpp: [this]
+- punct: arrow sau bind
 
 ### 5
 Greu: da
@@ -159,6 +177,18 @@ log([] ? "da" : "nu");  // → da
 log(null?.name);  // → undefined
 ```
 Legătură: În Python, `x or 10` se comportă ca `||`, iar `x if x is not None else 10` ca `??`. Un `quantity` de `0` venit din API trebuie să rămână `0`.
+Tablă:
+- problema: || ignoră un 0
+- ideea: falsy: opt valori; ?? doar null
+- schemă:
+```text
+q = 0
+↓ q || 10
+0 e falsy → 10
+↓ q ?? 10
+0 nu e null → 0
+```
+- punct: === și ??
 
 ### 6
 Greu: da
@@ -178,6 +208,20 @@ a.sort();  // ✗ pe loc
 log(a);  // → [ 1, 10, 9 ]
 ```
 Legătură: În Python, `sorted(a)` e `toSorted`, iar `a.sort()` modifică pe loc, ca în JavaScript. În React, `setItems(items.toSorted())` dă o referință nouă și declanșează re-render-ul (FE-05).
+Tablă:
+- problema: sort: [1, 10, 9]
+- ideea: sort ca text; comparator
+- schemă:
+```text
+[10, 9, 1]
+↓ sort() fără comparator
+elemente → text
+↓ ordine de text
+[1, 10, 9]
+↓ sort((x, y) => x - y)
+[1, 9, 10]
+```
+- punct: toSorted, nu sort
 
 ### 7
 Greu: da
@@ -210,6 +254,10 @@ Promise.all pornește get(1..3)
   gata când se termină ultima
 ```
 Legătură: AIO-04 și FE-14: `Promise.all` respinge la primul eșec, dar nu oprește celelalte cereri, ca `gather` în asyncio. În Python, `await` într-o buclă e la fel de secvențial.
+Tablă:
+- problema: await în buclă
+- ideea: await oprește funcția; Promise.all
+- punct: Promise.all, nu forEach
 
 ### 8
 Greu: da
@@ -239,3 +287,7 @@ new C().hi() → pe C: nu e
   → A.prototype: găsit
 ```
 Legătură: Python are același mecanism: `A.hi = …` după `a = A()` schimbă și `a.hi()`. Diferența: Python are moștenire multiplă și MRO (fișa `oop`), iar JavaScript are un singur lanț de prototipuri.
+Tablă:
+- problema: metodă schimbată după new
+- ideea: metode pe prototype; lanț
+- punct: class peste prototipuri

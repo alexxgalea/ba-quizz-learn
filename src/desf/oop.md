@@ -26,6 +26,20 @@ print(R(1) == R(1))  # → True
 Unde nu ține: Python te lasă să scrii `__eq__` fără `__hash__`. Eroarea apare abia la rulare, când pui obiectul într-un `set`.
 Legătură: OOP-04 întreabă exact asta.
 
+Tablă:
+- problema: dublură în set
+- ideea: __repr__ pentru log; __eq__ fără __hash__
+- schemă:
+```text
+class R: def __eq__ ...
+↓ Python pune __hash__ = None
+R(1) nu mai e hashable
+↓ {R(1)}
+TypeError la rulare
+```
+- cpp: operator==; std::hash<R>
+- punct: __hash__ = None
+
 ### 2
 Greu: da
 Problema: Vrei un `Config()` care întoarce mereu aceeași instanță, sau o subclasă de `int` care ține doar valoarea absolută. `__init__` nu ajută: obiectul există deja când rulează, iar un `int` nu se mai schimbă după creare.
@@ -44,6 +58,20 @@ print(P(-3))  # → 3
 Unde nu ține: Constructorul C++ doar inițializează un obiect deja alocat și nu poate înlocui obiectul cu altul. `__new__` poate întoarce și alt obiect, chiar unul existent, iar `__init__` rulează apoi pe el, din nou.
 Legătură: OOP-09 cere să alegi între cele două.
 
+Tablă:
+- problema: Config unic; int cu abs()
+- ideea: __new__ creează; __init__ completează
+- schemă:
+```text
+Config()
+↓ __new__(cls) creează instanța
+instanța există, necompletată
+↓ dacă e de tip cls: __init__
+__init__ o completează
+```
+- cpp: new, apoi constructor
+- punct: doar __init__
+
 ### 3
 Problema: Două obiecte `Scanner` primesc fiecare câte o regulă, dar amândouă o văd pe ambele. Lista era scrisă în corpul clasei.
 Ideea: Ce scrii în corpul clasei există o singură dată, la clasă; `self.x` caută întâi în instanță, apoi în clasă. Starea fiecărui obiect o creezi în `__init__`.
@@ -60,6 +88,22 @@ print(S.rules)  # → ['r1']
 În C++: Seamănă cu un membru `static`: o singură copie, comună tuturor obiectelor.
 Unde nu ține: În Python, `a.rules = []` creează un atribut al instanței și ascunde pe cel al clasei. În C++, `a.count = 5` modifică tot membrul `static`.
 Legătură: OOP-01 și OOP-10.
+
+Tablă:
+- problema: reguli văzute de ambele
+- ideea: corp de clasă; starea în __init__
+- schemă:
+```text
+class S: rules = []
+↓ o singură listă, la clasă
+a.rules.append("r1")
+↓ b.rules caută în clasă
+b.rules → ['r1']
+↓ a.rules = [] creează atribut
+a vede lista lui; S.rules rămâne
+```
+- cpp: membru static
+- punct: instanță, apoi clasă
 
 ### 4
 Problema: Clasa ta expune `finding.score`, iar clienții îl citesc direct. Mâine scorul trebuie limitat sau calculat. Nu vrei să schimbi toate apelurile în `get_score()`.
@@ -78,6 +122,20 @@ print(F(99).score)  # → 10
 Unde nu ține: Python nu are `private`. `_s` e doar o convenție, iar property nu ascunde nimic.
 Legătură: OOP-02.
 
+Tablă:
+- problema: score citit direct
+- ideea: @property: obj.score; cached_property: o dată
+- schemă:
+```text
+finding.score
+↓ @property cheamă metoda
+min(self._s, 10)
+↓ clientul vede tot .score
+fără get_score() în apeluri
+```
+- cpp: o.x devine o.x()
+- punct: începi cu atribut simplu
+
 ### 5
 Problema: `Finding` se creează din JSON sau dintr-un dict. Un singur `__init__` nu le acoperă, iar un factory care scrie `Finding(...)` ignoră subclasele.
 Ideea: `@classmethod` primește clasa ca `cls`; cu `cls(...)` construiești exact clasa apelată, subclasele incluse. `@staticmethod` nu primește nimic: e o funcție obișnuită, pusă în clasă pentru ordine.
@@ -95,6 +153,20 @@ isinstance(G.make(1), G)  # → True
 În C++: O funcție `static` seamănă cu `@staticmethod`: n-are `this` și se apelează pe clasă.
 Unde nu ține: `@classmethod` n-are echivalent. O funcție `static` nu poate fi `virtual`, deci un factory static nu știe cu ce subclasă a fost apelat.
 Legătură: OOP-03.
+
+Tablă:
+- problema: factory ignoră subclasele
+- ideea: @classmethod: cls; @staticmethod: nimic
+- schemă:
+```text
+G.make(1)
+↓ @classmethod primește cls = G
+cls(n) construiește un G
+↓ @staticmethod nu primește nimic
+funcție simplă, pusă în clasă
+```
+- cpp: static: fără this
+- punct: cls(...) respectă subclasa
 
 ### 6
 Greu: da
@@ -115,6 +187,20 @@ print(sent)  # → ['gata']
 Unde nu ține: În Python nu ai nevoie de o clasă-interfață: `notify` poate fi orice apelabil, chiar și `sent.append`. Duck typing în locul lui `virtual`.
 Legătură: OOP-08 testează exact asta. Într-un proiect Django, clasa din `views` primește serviciile ca argumente, nu le importă direct, ca să le poți înlocui în teste.
 
+Tablă:
+- problema: ScanJob legat de EmailSender
+- ideea: notify primit în constructor; moștenire = „este un”
+- schemă:
+```text
+ScanJob(notify)
+↓ run() cheamă self.notify
+fake în test, Slack în prod
+↓ moștenirea cere „este un”
+ScanJob nu e un EmailSender
+```
+- cpp: unique_ptr<Notifier>
+- punct: compoziție, nu moștenire
+
 ### 7
 Greu: da
 Problema: `class D(B, C)`, iar `B` și `C` moștenesc amândouă `A`. Care `f()` rulează? Dacă fiecare clasă își cheamă părintele pe nume, `A` rulează de două ori sau deloc.
@@ -134,6 +220,20 @@ print(D().f())  # → BCA
 Unde nu ține: C++ nu liniarizează: alegi tu explicit `B::f()`, pe nume. `super()` din Python depinde de MRO-ul instanței, nu de clasa scrisă în cod.
 Legătură: Django cere `LoginRequiredMixin` înaintea lui `View` în lista de baze, tocmai din cauza MRO. OOP-05.
 
+Tablă:
+- problema: diamant: care f() rulează
+- ideea: MRO, algoritm C3; super(): următoarea clasă
+- schemă:
+```text
+D().f()
+↓ C3: D, B, C, A, object
+B.f cheamă super().f()
+↓ super() = următoarea din MRO
+ordinea: B, C, A → „BCA”
+```
+- cpp: virtual A
+- punct: mixin cooperativ
+
 ### 8
 Greu: da
 Problema: Ai `send(alert)` pentru Slack și email. Cineva uită metoda într-o clasă nouă și afli abia în producție. Pe de altă parte, nu poți cere unei clase dintr-o bibliotecă să moștenească din clasa ta.
@@ -150,6 +250,20 @@ Slack()  # ! TypeError
 În C++: O funcție `virtual … = 0` face clasa abstractă, iar un obiect de tip abstract nu compilează. Un template cere doar ce folosește: duck typing la compilare.
 Unde nu ține: C++ prinde greșeala la compilare; Python, la instanțiere (ABC) sau deloc la rulare (`Protocol`).
 Legătură: OOP-06 și OOP-07.
+
+Tablă:
+- problema: metodă uitată
+- ideea: ABC: contract nominal; Protocol: structural
+- schemă:
+```text
+class Slack(Sender): pass
+↓ Slack() cu ABC
+TypeError la instanțiere
+↓ Protocol: fără moștenire
+doar type checkerul, static
+```
+- cpp: virtual = 0; template
+- punct: duck typing verificat static
 
 ### 9
 Problema: La un `Finding` cu patru câmpuri scrii `__init__`, `__repr__` și `__eq__` de mână, iar o greșeală într-unul stă ascunsă luni.
@@ -168,6 +282,20 @@ print({P(1): "ok"}[P(1)])  # → ok
 Unde nu ține: Un `@dataclass` e o clasă obișnuită cu cod generat. Nu verifică tipurile: `P("a")` merge.
 Legătură: Pydantic, din FastAPI, validează tipurile; `dataclass` nu.
 
+Tablă:
+- problema: trei metode de mână
+- ideea: câmpuri adnotate; frozen=True: hashable
+- schemă:
+```text
+@dataclass pe P(x, y)
+↓ citește câmpurile adnotate
+are __init__, __repr__, __eq__
+↓ frozen=True
+imutabil, deci hashable
+```
+- cpp: operator== de mână
+- punct: nu verifică tipurile
+
 ### 10
 Greu: da
 Problema: Un `if tip == "email" … elif tip == "slack" …` crește cu fiecare client nou. Adaugi un canal, modifici codul care merge și îl poți strica. Testele clasei trebuie să acopere acum toate ramurile.
@@ -183,6 +311,19 @@ def send(k, m):
 send("slack", "hi")  # → 'slack:hi'
 ```
 Legătură: OOP-12 arată o încălcare a lui Liskov; OOP-14 evită lanțul de `if`.
+
+Tablă:
+- problema: lanț de if; teste pe toate ramurile
+- ideea: Open/Closed; Liskov, Dependency Inversion
+- schemă:
+```text
+canal nou: încă un elif
+↓ modifici cod care merge
+testele acoperă toate ramurile
+↓ strategie primită din afară
+canal nou = intrare nouă în dict
+```
+- punct: dict de funcții
 
 ### 11
 Greu: da
@@ -202,6 +343,20 @@ print(log)  # → ['work', 'close']
 În C++: `with` face ce face RAII: eliberează la ieșirea din bloc, și la excepție.
 Unde nu ține: În C++ destructorul rulează singur, pentru orice obiect. În Python `with` îl scrii la locul apelului, iar `__del__` nu e destructor: nu garantează când rulează.
 
+Tablă:
+- problema: clasă cu o metodă; close() sărit la excepție
+- ideea: with cheamă __exit__
+- schemă:
+```text
+with g():
+↓ rulează până la yield
+corpul blocului with
+↓ ieșire: with cheamă __exit__
+și la excepție: finally, close
+```
+- cpp: RAII
+- punct: fără stare: funcție
+
 ### 12
 Greu: da
 Problema: Primești alerte de la Splunk, Sentinel și QRadar, fiecare cu alt API. Restul codului nu trebuie să afle de diferențe. Iar când apare o alertă, trei module vor să afle.
@@ -218,3 +373,16 @@ print(out)  # → ['L1', 'M1']
 ```
 Analogie: Adapterul e priza de călătorie. Aparatul rămâne la fel, iar adaptorul se potrivește la fiecare țară.
 Legătură: OOP-15 până la OOP-18 le exersează pe rând.
+
+Tablă:
+- problema: trei API-uri diferite
+- ideea: Adapter; Observer
+- schemă:
+```text
+Splunk, Sentinel, QRadar
+↓ câte un Adapter per SIEM
+aceeași interfață pentru toate
+↓ apare o alertă
+Observer anunță ascultătorii
+```
+- punct: Strategy și Observer: funcții

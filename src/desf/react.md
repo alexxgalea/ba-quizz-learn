@@ -32,6 +32,19 @@ function Ok({ n }: Props) {
 ```
 Legătură: RE-01. Ca un template Django: primește un context și produce HTML, fără să scrie în baza de date. Strict Mode e și motivul din FE-07.
 
+Tablă:
+- problema: total în afara funcției
+- ideea: pură; fără scriere în exterior
+- schemă:
+```text
+Badge n=1
+↓ corpul face total += n
+variabila din afară se schimbă
+↓ Strict Mode apelează de 2 ori
+a doua oară: total = 2
+```
+- punct: props: read-only
+
 ### 2
 
 Greu: da
@@ -61,6 +74,11 @@ ref.current = x → nimic
 ```
 Legătură: RE-02. Punctul 6 explică Context-ul; efectele din `frontend` pornesc tot de la un render (FE-06).
 
+Tablă:
+- problema: variabilă obișnuită; ecranul rămâne
+- ideea: state, părinte sau Context
+- punct: ref nu declanșează
+
 ### 3
 
 Greu: da
@@ -88,6 +106,11 @@ React: neschimbat → ecran la fel
 cu [...A, 'x'] → B ≠ A → render 2
 ```
 Legătură: RE-03. JS-01: spread-ul e superficial. Un reducer urmează aceeași regulă (RE-06).
+
+Tablă:
+- problema: push, apoi setItems(items)
+- ideea: Object.is pe referință; copie
+- punct: spread: un singur nivel
 
 ### 4
 
@@ -120,6 +143,11 @@ React readuce câmpul la ''
 ```
 Legătură: RE-04. În Django, un `ModelForm` primește datele la submit, ca un câmp necontrolat; React Hook Form pornește tot de la câmpuri necontrolate.
 
+Tablă:
+- problema: input înghețat; value undefined
+- ideea: value + onChange; string mereu
+- punct: controlat sau defaultValue
+
 ### 5
 
 Problema: `Filter` și `List` au fiecare propriul `useState` pentru textul căutat. Filtrul scrie „ro”, iar lista nu află.
@@ -140,6 +168,19 @@ function Page({ all }: Props) {
 }
 ```
 Legătură: RE-05. Ca view-ul din Django: ține datele și le trimite template-urilor. La scară mare folosești Context (punctul 6) sau un store.
+
+Tablă:
+- problema: două state-uri, același q
+- ideea: state în părintele comun
+- schemă:
+```text
+Filter: onQ("ro")
+↓ setQ în părinte
+render: q = "ro", shown nou
+↓ props în jos
+Filter și List văd același q
+```
+- punct: un singur proprietar
 
 ### 6
 
@@ -172,6 +213,11 @@ reducer care întoarce același obiect
 ```
 Legătură: RE-06. FE-02 detaliază re-randarea consumatorilor. În React 19 provider-ul e `<Ctx value>`; înainte era `<Ctx.Provider value>`. Redux are același tipar: reducer plus acțiuni.
 
+Tablă:
+- problema: 7 useState; props prin 5 niveluri
+- ideea: reducer pur; Context duce valoarea
+- punct: value stabil cu useMemo
+
 ### 7
 
 Greu: da
@@ -192,6 +238,20 @@ const b = useCounter();
 // ✓ comun: state în părinte
 ```
 Legătură: RE-07. Ca o funcție fabrică în Python: fiecare apel `Counter()` produce un obiect nou. `useQuery` din TanStack Query e tot un custom hook (FE-04).
+
+Tablă:
+- problema: cod copiat în două; fiecare contorul lui
+- ideea: hook: logică, nu valori
+- schemă:
+```text
+a = useCounter()
+b = useCounter()
+↓ fiecare apel are state propriu
+a.inc() → a.n = 1
+↓ b nu se atinge
+b.n rămâne 0
+```
+- punct: state comun: în părinte
 
 ### 8
 
@@ -223,6 +283,11 @@ cu key={mode}: cheie nouă
 → text ''
 ```
 Legătură: RE-08. FE-03 aplică regula la liste (`key={index}` mută state-ul pe alt rând). Strict Mode (FE-07) montează de două ori ca să verifice cleanup-ul.
+
+Tablă:
+- problema: text rămas după schimbare
+- ideea: poziție, tip; key
+- punct: componentă imbricată: tip nou
 
 ### 9
 
@@ -256,6 +321,11 @@ departe în arbore → + Context
 ```
 Legătură: RE-09. RE-02: o ref nu declanșează re-render; RE-05: ce se calculează nu devine state. Seamănă cu diferența dintre un câmp de model Django, salvat și afișat, și o variabilă locală din view.
 
+Tablă:
+- problema: let id pierdut; lista rămâne în urmă
+- ideea: derivat sau state; ref
+- punct: ref: păstrat, fără re-render
+
 ### 10
 
 Greu: da
@@ -285,6 +355,11 @@ browserul desenează ecranul
 useEffect rulează după desenare
 ```
 Legătură: RE-10. FE-06 detaliază dependențele, iar FE-08 cursa din fetch. În Django, salvarea stă în view-ul de POST, nu într-un semnal care ghicește intenția.
+
+Tablă:
+- problema: tooltip sare; save pe flag
+- ideea: useLayoutEffect; useEffectEvent
+- punct: măsori fără pâlpâire; handler
 
 ### 11
 
@@ -318,6 +393,11 @@ Row (memo): props egale
 fără memo: Row se apelează oricum
 ```
 Legătură: RE-11. RE-02: copiii se re-randează cu părintele; RE-06: același tipar stabilizează `value` la Context. Ca `functools.lru_cache` din Python, dar cu o singură intrare: React ține minte doar ultimul rezultat.
+
+Tablă:
+- problema: useCallback peste tot, degeaba
+- ideea: memo; useMemo
+- punct: stabil, cu memo
 
 ### 12
 
@@ -353,6 +433,11 @@ tastezi „b” între timp
 ```
 Legătură: RE-12. Punctul 11 explică de ce `Slow` are nevoie de `memo`. Seamănă cu o corutină asyncio care cedează controlul la `await`: React randează în bucăți și lasă browserul să proceseze tastele între ele.
 
+Tablă:
+- problema: listă grea, tastă lentă
+- ideea: urgent; neurgent
+- punct: nu e debounce; Slow în memo
+
 ### 13
 
 Greu: da
@@ -374,6 +459,19 @@ const n = useSyncExternalStore(
   sub, store.count);
 ```
 Legătură: RE-13, RE-14. FE-03: cheile vin din date, nu din `useId`. Un SDK care își ține starea în afara React, cum e clientul Keycloak, e cazul tipic pentru `useSyncExternalStore`; TanStack Query și Zustand îl folosesc intern.
+
+Tablă:
+- problema: id fix dublat; store copiat
+- ideea: useId; useSyncExternalStore
+- schemă:
+```text
+store.on(cb) din subscribe
+↓ store se schimbă, cheamă cb
+React cere getSnapshot
+↓ valoarea diferă
+componenta se re-randează
+```
+- punct: ref doar pentru comenzi
 
 ### 14
 
@@ -407,3 +505,8 @@ return "Eroare" → err
 busy = false, pending = false
 ```
 Legătură: RE-15, RE-16. Ca un view Django care primește `request.POST` și întoarce formularul cu erori, aici `fn(prev, formData)`. `useActionState` urmează tiparul `reducer(state, action)` din punctul 6.
+
+Tablă:
+- problema: 3 useState și preventDefault
+- ideea: useActionState; useFormStatus
+- punct: useOptimistic; pending în copil
