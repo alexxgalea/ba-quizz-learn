@@ -24,6 +24,19 @@ eval(c)  # → 3
 În C++: Seamănă cu `g++ app.cpp`: sursa e analizată și tradusă înainte de prima rulare, iar linker-ul o adună într-un program.
 Unde nu ține: Rezultatul lui C++ e cod mașină, gata de rulat de procesor. Bytecode-ul Python nu rulează singur: îl citește interpretorul, iar formatul lui se schimbă între versiuni. Python compilează modul cu modul, la primul import, nu tot programul dinainte.
 Legătură: RT-01 și RT-06. În imaginile Docker se setează des `PYTHONDONTWRITEBYTECODE=1`, ca Python să nu scrie fișiere `.pyc`.
+Tablă:
+- problema: eroare la rândul 150
+- ideea: AST și bytecode; PVM
+- schemă:
+```text
+python app.py
+↓ parsează tot, în AST
+compilează în bytecode
+↓ bucla de evaluare
+execută instrucțiunile
+```
+- cpp: g++
+- punct: nu linie cu linie
 
 ### 2
 Problema: La interviu spui „Python se transformă în C++ și apoi rulează”. Intervievatorul întreabă unde e fișierul generat și ce compilator îl construiește. Nu există niciunul.
@@ -40,6 +53,18 @@ for x in [2, 3, "+"]:
 s  # → [5]
 ```
 Legătură: RT-01 și RT-07 (formularea corectă: „compilat în bytecode, rulat de VM-ul CPython”).
+Tablă:
+- problema: unde e fișierul C++?
+- ideea: CPython scris în C
+- schemă:
+```text
+instrucțiune de bytecode
+↓ bucla de evaluare (în C)
+alege cazul potrivit
+↓ execută
+trece la următoarea
+```
+- punct: nu generează cod C++
 
 ### 3
 Greu: da
@@ -59,6 +84,19 @@ add(1, "2")  # ! TypeError
 În C++: Acolo tipul aparține variabilei: `auto x = 1; x = "unu";` nu compilează. Cel mai aproape de „tipul e al obiectului” e un `Base*` spre un obiect cu `virtual`, care își știe tipul real.
 Unde nu ține: Variabila rămâne legată de `Base`, deci apelezi doar ce are `Base`, iar operatorii se verifică la compilare. În Python orice nume arată spre orice.
 Legătură: RT-02. Duck typing-ul din fișa oop (punctul 8) se sprijină pe aceeași tipizare dinamică.
+Tablă:
+- problema: "1" + 1
+- ideea: tipul e al obiectului
+- schemă:
+```text
+a + b
+↓ la execuție
+se uită la tipul obiectelor
+↓ tipuri incompatibile
+TypeError, abia atunci
+```
+- cpp: tipul e al variabilei
+- punct: plasa o faci tu
 
 ### 4
 Greu: da
@@ -74,6 +112,19 @@ int("1") + 1  # → 2
 În C++: C++ e static, dar face conversii implicite între tipurile de bază: `'a' + 1` dă `98`. Și `"1" + 1` compilează, ca aritmetică de pointeri.
 Unde nu ține: Acel `"1" + 1` nu dă `"11"`: dă un pointer spre terminatorul `'\0'`, deci un șir gol. Clasele nu se amestecă: `std::string("1") + 1` nu compilează.
 Legătură: RT-03. În React, `e.target.value` e mereu șir, deci `+` îl lipește de alt șir; convertești cu `Number(...)`.
+Tablă:
+- problema: "5" + 1
+- ideea: dinamic; puternic
+- schemă:
+```text
+"1" + 1
+↓ Python nu convertește singur
+TypeError
+↓ convertești tu
+int("1") + 1 → 2
+```
+- cpp: conversii implicite
+- punct: două axe diferite
 
 ### 5
 Greu: da
@@ -88,6 +139,18 @@ t = f.__annotations__["x"]
 t("5")  # → 5
 ```
 Legătură: RT-04. În TypeScript tipurile dispar la compilare, de aceea validezi la graniță cu zod; Python le păstrează, iar Pydantic le folosește pentru asta.
+Tablă:
+- problema: f("a") trece
+- ideea: __annotations__; mypy
+- schemă:
+```text
+def f(x: int)
+↓ interpretorul păstrează hint-ul
+nu îl verifică
+↓ mypy sau Pydantic
+verifică static sau la runtime
+```
+- punct: hint-ul îl citește altcineva
 
 ### 6
 Greu: da
@@ -104,6 +167,19 @@ f()  # ! TypeError
 În C++: `std::string s = "a"; int n = s + 1;` nu compilează (g++: `no match for 'operator+'`), deci nu rămâne nimic de rulat.
 Unde nu ține: Compilatorul prinde erorile de tip, nu toate erorile. `v[10]` pe un `std::vector` de 3 elemente compilează fără avertisment (`-Wall`) și e comportament nedefinit. Iar `std::any_cast` și `dynamic_cast` verifică tot la runtime: un `any_cast<T>(x)` greșit aruncă `bad_any_cast`.
 Legătură: RT-02 și RT-04. TypeScript are `tsc` ca verificator de build, dar după compilare rămâne JavaScript fără tipuri.
+Tablă:
+- problema: total + "0"
+- ideea: AOT; verifică la compilare
+- schemă:
+```text
+C++: g++ app.cpp
+↓ eroare de tip
+build-ul se oprește
+↓ Python
+eroarea apare la execuție
+```
+- cpp: no match for operator+
+- punct: mypy mută verificarea
 
 ### 7
 Greu: da
@@ -123,6 +199,19 @@ gc.collect() and w()  # → None
 În C++: Echivalentul e `std::shared_ptr`: ține un contor și distruge obiectul la 0. Doi `shared_ptr` care se țin reciproc nu ajung la 0, ca ciclul din Python. `std::weak_ptr` rupe ciclul, ca `weakref`.
 Unde nu ține: C++ nu are colector de cicluri: ciclul de `shared_ptr` nu se eliberează niciodată, iar destructorul nu rulează. Contorul e opțional: obiectele obișnuite le curăță scope-ul (RAII) sau `unique_ptr`, fără contor. În CPython fiecare obiect are unul.
 Legătură: RT-05. Pentru cleanup garantat folosești `with` (fișa python, punctul 6), nu `__del__`.
+Tablă:
+- problema: ciclu părinte-copil
+- ideea: contor de referințe; gc
+- schemă:
+```text
+a ține pe b, b ține pe a
+↓ del a, del b
+contoarele rămân peste 0
+↓ colectorul de cicluri
+eliberează ciclul
+```
+- cpp: shared_ptr
+- punct: del șterge doar numele
 
 ### 8
 Greu: da
@@ -142,3 +231,16 @@ print(__name__)  # → __main__
 În C++: `main()` e punctul de intrare și există doar în executabil. O bibliotecă legată nu își rulează `main`, deci nu ai nevoie de gardă.
 Unde nu ține: În C++, la nivel de fișier există doar declarații: un `puts("x");` acolo nu compilează. Inițializarea obiectelor globale rulează de obicei înainte de `main`, într-o ordine nespecificată între fișiere. Iar `#include` lipește textul de fiecare dată.
 Legătură: RT-08. `uvicorn app:app` importă modulul `app`, deci blocul de gardă nu rulează acolo.
+Tablă:
+- problema: testul pornește serverul
+- ideea: sys.modules; __name__
+- schemă:
+```text
+import app
+↓ rulează corpul o dată
+modulul intră în sys.modules
+↓ al doilea import
+îl întoarce, fără să ruleze
+```
+- cpp: main()
+- punct: garda __main__

@@ -22,6 +22,18 @@ SELECT ctid, v FROM t; -- → (0,2)
 -- versiunea (0,1) e moartă acum
 ```
 Legătură: PG-03 și PG-04. De aceea o conexiune uitată „idle in transaction”, care a scris ceva (sau lucrează la `REPEATABLE READ`), umflă tabelele. Punctul 10 o oprește cu un timeout.
+Tablă:
+- problema: raport lung; UPDATE-uri
+- ideea: versiuni de rânduri; snapshot
+- schemă:
+```text
+UPDATE
+↓ scrie o versiune nouă
+cea veche rămâne pentru cititori
+↓ nimeni n-o mai vede
+VACUUM o curăță
+```
+- punct: cititorii nu blochează
 
 ### 2
 Greu: da
@@ -37,6 +49,20 @@ SELECT v FROM t; -- → 10
 -- la READ COMMITTED ar fi fost 99
 ```
 Legătură: PG-01. Django merge implicit pe `READ COMMITTED`; nivelul se schimbă din `OPTIONS` (`isolation_level`). Retry-ul e același ca la deadlock (punctul 5).
+Tablă:
+- problema: două query-uri, alt sold
+- ideea: snapshot per statement
+- schemă:
+```text
+READ COMMITTED
+↓ poză la fiecare statement
+al doilea query vede plata
+↓ REPEATABLE READ
+o singură poză pe tranzacție
+↓ SERIALIZABLE
+conflict: 40001, reiei
+```
+- punct: izolare
 
 ### 3
 Greu: da
@@ -57,6 +83,20 @@ UPDATE stock SET qty = qty - 1;
 În C++: `x = x - 1` pe un `int` partajat e același bug (data race); `fetch_sub(1)` pe un `std::atomic<int>` e `SET qty = qty - 1`, iar `std::mutex` seamănă cu `FOR UPDATE`.
 Unde nu ține: Lock-ul de rând trăiește în bază, e văzut de toate procesele și ține până la `COMMIT` sau `ROLLBACK`, nu până la ieșirea din scope. Nu blochează `SELECT`-urile obișnuite, doar scriitorii și alte lock-uri.
 Legătură: PG-02. În Django, `F("qty") - 1` și `select_for_update()` fac asta.
+Tablă:
+- problema: stoc 5, scris 4
+- ideea: UPDATE atomic; FOR UPDATE
+- schemă:
+```text
+A citește 5, B citește 5
+↓ fiecare scrie 4
+stocul e 4, nu 3
+↓ SET qty = qty - 1
+al doilea așteaptă, apoi scade
+stocul e 3
+```
+- cpp: atomic fetch_sub
+- punct: lost update
 
 ### 4
 Greu: da
@@ -73,6 +113,18 @@ SELECT id FROM jobs
 COMMIT;
 ```
 Legătură: PG-05. E relay-ul din outbox (Design, punctul 3). Django: `select_for_update(skip_locked=True)`; SQLAlchemy: `with_for_update(skip_locked=True)`.
+Tablă:
+- problema: același job la toți
+- ideea: SKIP LOCKED
+- schemă:
+```text
+worker ia jobul cu FOR UPDATE
+↓ ceilalți îl sar
+iau joburile următoare libere
+↓ COMMIT sau cădere
+lock-ul se eliberează
+```
+- punct: tabelă-coadă
 
 ### 5
 Greu: da
@@ -89,6 +141,19 @@ B: UPDATE acc SET b=b+10 WHERE id=1
 În C++: Ciclul apare și cu doi `std::mutex`: un thread ia `m1`, apoi `m2`, altul invers. Remediul e același: ordine fixă sau `std::scoped_lock lk(m1, m2)` (C++17; `std::lock` în C++11), care le ia pe amândouă fără deadlock.
 Unde nu ține: Deadlock-ul de mutex-uri nu-l detectează nimeni: thread-urile rămân blocate. Postgres anulează o tranzacție, deci aplicația trebuie să știe să reia.
 Legătură: PG-08. Un task Celery anulat de un deadlock se reia cu `autoretry_for`.
+Tablă:
+- problema: transfer A→B și B→A
+- ideea: deadlock_timeout; ordine fixă
+- schemă:
+```text
+T1 ține contul 1, cere 2
+↓ T2 ține 2, cere 1
+ciclu: așteaptă una după alta
+↓ după deadlock_timeout
+una e anulată: 40P01
+```
+- cpp: scoped_lock
+- punct: aceeași ordine
 
 ### 6
 Greu: da
@@ -96,6 +161,19 @@ Problema: 20 de replici de API au câte 10 conexiuni la bază, plus workerii Cel
 Ideea: Fiecare conexiune e un proces backend, cu memoria lui, deci nu poți ține mii. PgBouncer stă între aplicații și Postgres și împarte câteva conexiuni reale la mulți clienți. În modul `transaction`, clientul primește o conexiune reală doar cât durează tranzacția. De aceea nu merg lucrurile de sesiune: `SET` simplu, `LISTEN`, advisory lock-uri de sesiune. `SET LOCAL` merge, fiindcă ține cât tranzacția.
 Analogie: Fără pooler, fiecare client are bucătarul lui, chiar și când stă la telefon. Cu pooler, bucătarii sunt puțini și lucrează pentru un client doar cât durează comanda lui.
 Legătură: PG-06. Django cere `DISABLE_SERVER_SIDE_CURSORS = True` în transaction pooling. `SET LOCAL` e și varianta din Design, punctul 8.
+Tablă:
+- problema: 200 peste limita 100
+- ideea: PgBouncer; mod transaction
+- schemă:
+```text
+client cere o tranzacție
+↓ PgBouncer dă o conexiune reală
+tranzacția rulează
+↓ COMMIT
+conexiunea trece la alt client
+```
+- analogie: bucătari puțini
+- punct: fără SET de sesiune
 
 ### 7
 Greu: da
@@ -113,6 +191,18 @@ ALTER TABLE ev DETACH PARTITION
   ev_08; DROP TABLE ev_08;
 ```
 Legătură: PG-07. La Elasticsearch, indexurile pe zi se șterg întregi, ca partițiile de aici.
+Tablă:
+- problema: 2 miliarde de rânduri
+- ideea: partiție pe lună
+- schemă:
+```text
+query cu filtru pe ts
+↓ partition pruning
+citește doar partițiile potrivite
+↓ retenție
+DETACH, apoi DROP, fără DELETE
+```
+- punct: creezi partițiile dinainte
 
 ### 8
 Greu: da
@@ -127,6 +217,18 @@ with cur.copy(
         cp.write_row(row)
 ```
 Legătură: PG-09. Pentru bulk idempotent, SQLAlchemy are `on_conflict_do_nothing()`. `COPY FROM` nu merge pe tabele cu row-level security (Design, punctul 8).
+Tablă:
+- problema: un INSERT per rând
+- ideea: COPY; loturi
+- schemă:
+```text
+INSERT + COMMIT pe rând
+↓ fiecare commit scrie WAL
+milioane de așteptări
+↓ COPY
+un singur flux, un singur commit
+```
+- punct: o linie greșită oprește
 
 ### 9
 Greu: da
@@ -140,6 +242,18 @@ ORDER BY total_exec_time DESC
 LIMIT 5;
 ```
 Legătură: PG-10 și PG-14. `pg_stat_statements` se încarcă din `shared_preload_libraries` (cu restart) și se activează cu `CREATE EXTENSION`. Planul îl citești ca la grilele de index.
+Tablă:
+- problema: 300 de query-uri; care?
+- ideea: pg_stat_statements; EXPLAIN
+- schemă:
+```text
+pg_stat_statements
+↓ sortezi după total_exec_time
+găsești query-ul costisitor
+↓ EXPLAIN (ANALYZE, BUFFERS)
+timpi reali, pagini citite
+```
+- punct: UPDATE în ROLLBACK
 
 ### 10
 Greu: da
@@ -156,6 +270,18 @@ ALTER TABLE t ADD COLUMN c int;
 --   due to lock timeout
 ```
 Legătură: PG-04. În Alembic pui `lock_timeout` la începutul migrației. Ultimul timeout rezolvă și conexiunea uitată de la punctul 1.
+Tablă:
+- problema: migrație blocată
+- ideea: lock_timeout; statement_timeout
+- schemă:
+```text
+migrația cere lock, așteaptă
+↓ query-urile noi se aliniază
+aplicația îngheață
+↓ lock_timeout
+migrația pică în câteva secunde
+```
+- punct: implicit sunt oprite
 
 ### 11
 Greu: da
@@ -173,3 +299,15 @@ SELECT * FROM (
 WHERE rn = 1;
 ```
 Legătură: PG-11. GIN e un index inversat, ca cel din Elasticsearch. În Django: `payload__contains` și `Window(RowNumber())`.
+Tablă:
+- problema: 40 de coloane goale
+- ideea: JSONB cu GIN; ROW_NUMBER
+- schemă:
+```text
+ROW_NUMBER() OVER (PARTITION BY s)
+↓ numără rândurile fiecărui grup
+rn = 1 e cel mai nou
+↓ fereastra nu merge în WHERE
+filtrezi într-un subquery
+```
+- punct: JSONB pentru câmpuri variabile
