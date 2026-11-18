@@ -6,7 +6,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Forma evenimentului e cea din spec; tipuri pentru răspuns, setări, bifă de plan, poziția lecției, reset.
 - [x] O funcție pură `jurnal → S`; `updQ`, `updO`, `updX`, `updS`, kata-urile, golurile și lecția adaugă evenimente.
@@ -22,3 +22,7 @@
 - `src/journal.js` (în `LIB_FILES`), testat în Node (`tools/unit/journal.test.mjs`: proiecția urmărește pas cu pas vechile reguli pe sesiuni aleatoare, `proiecție(import(S)) = S`, reset, doi dispozitive, goluri, depozit, repornire fără reluare) și în browser (`tools/test_journal.py`, pe `dist/app`: IndexedDB real, oglinda, migrarea cheii vechi, resetul; pe artifact: calea veche).
 - Două variante de build: PWA (`dist/app`) scrie jurnalul în IndexedDB și nu mai pornește sincronizarea `window.claude`; artifactul (`dist/pregatire-onapsis.html`) păstrează `S` în `onapsis-prep-v1` + sincronizarea veche, cu aceleași reguli (proiecția).
 - `test_interview.py`, `test_gaps.py` și `test_lesson.py` pică și pe baza de dinainte (data interviului din `P.cfg`, 10 nov, a trecut, deci `genPlan()` e gol); cu data mutată în viitor trec și înainte, și după.
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul era rămas de la creare; bifele și comentariile de mai sus arată lucrul făcut. Verificat acum față de istoric și suită (`npm run test:unit`, 643).

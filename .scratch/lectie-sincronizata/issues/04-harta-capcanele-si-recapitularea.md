@@ -6,11 +6,15 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Ecranul nu mai arată „Jarvis începe lecția…” cât timp Jarvis spune harta.
-- [ ] `recap` e o secvență separată de `capcane`, cu text scris de noi; modelul nu mai alcătuiește singur recapitularea.
-- [ ] Lecția se încheie tot din aplicație, după ce `recap` s-a auzit până la capăt; „Sari” pe capcane se poartă ca azi.
-- [ ] `tools/test_lesson.py` verifică `#jv-chunk` la hartă, capcane și recapitulare.
+- [x] Ecranul nu mai arată „Jarvis începe lecția…” cât timp Jarvis spune harta.
+- [x] `recap` e o secvență separată de `capcane`, cu text scris de noi; modelul nu mai alcătuiește singur recapitularea.
+- [x] Lecția se încheie tot din aplicație, după ce `recap` s-a auzit până la capăt; „Sari” pe capcane se poartă ca azi.
+- [x] `tools/test_lesson.py` verifică `#jv-chunk` la hartă, capcane și recapitulare.
 
 ## Comments
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul și bifele erau rămase de la creare: lucrul e făcut în commit-ul numit mai jos și `plan.md` îl dă ca gata. Verificat acum: commit-ul există în istoric, iar suita completă (`npm run test:unit`, 643, și `tools/test_lesson.py`) trece. Bifele nu au fost reverificate una câte una. Commit: `06bf954`.

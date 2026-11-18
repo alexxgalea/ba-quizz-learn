@@ -57,6 +57,15 @@ test("the first message tells the model to begin and says how many days are left
   assert.match(t.live.sent[0].text, /^Începem.*4 zile/s);
 });
 
+test("without an interview ahead (maintenance) the first message does not count days", async () => {
+  for (const daysLeft of [null, -8, 0]) {
+    const app = stubApp(); app.summary = () => ({ readiness: 0.4, daysLeft, gaps: [], role: "x", profile: "y" });
+    const t = setup({ app });
+    await t.jarvis.start({ mode: "train" });
+    assert.match(t.live.sent[0].text, /^Începem sesiunea\.$/, String(daysLeft));
+  }
+});
+
 test("next_card gives the model the question, the code, the key points and the card's rules", async () => {
   const t = setup();
   await t.jarvis.start({ mode: "train" });

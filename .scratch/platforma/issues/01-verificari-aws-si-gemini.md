@@ -8,7 +8,7 @@ Type: research
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Ce e gratuit fără termen pentru un cont AWS creat în noiembrie 2026: Lambda, DynamoDB (provizionat sau la cerere), adresa funcției, secretele, jurnalele.
 - [x] Ce se întâmplă exact la 6 luni pe planul gratuit și cum se trece pe cel plătit.
@@ -20,3 +20,7 @@ Type: research
 ## Comments
 
 - 2026-11-11: făcut în `research/platforma-facts.md` (patru semnalări pentru Alex în capul fișierului; nicio contradicție care răstoarnă ADR 0004). Alex hotărăște: secretele (variabile de mediu sau Secrets Manager) și Gemini gratuit vs plătit (conținutul nivelului gratuit e folosit de Google).
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul era rămas de la creare; bifele și comentariile de mai sus arată lucrul făcut. Verificat acum față de istoric și suită (`npm run test:unit`, 643).

@@ -12,7 +12,7 @@
 //          result: q { ok, assisted?, pick? } · x { g } · o { p, k?, missed?, fixed?, wrong?, keep? } · s { p } · k { s }
 //        guess   { form: "q", item }              "Am ghicit": cutia 1, fără încercare nouă
 //        gap     { op: "fix", item, point }       un gol reparat cu întrebarea țintită
-//        cfg     { d, h }                         data interviului, ore pe seară
+//        cfg     { d, h, m?, r? }                 data interviului ("" = fără dată: întreținere), ore pe seară, minute pe zi în întreținere, plafonul zilnic de repetat
 //        plan    { item, done }                   bifa unei sarcini din plan
 //        lesson  { item, n, done? }               poziția lecției pe modul; done: data terminării = t
 //        hist    { row }                          un rând din istoric
@@ -25,6 +25,7 @@
 // `events` e tot jurnalul, cu textul lui Alex; fișierul nu poartă niciodată adresa sau secretul serverului (funcția primește doar evenimente).
 const Journal = (() => {
   const MC_MAX = 9, HMAX = 80;
+  const BOX_MAX = 8;                 // cutia de sus (orarul de durată, `.scratch/fundatie-concepte/`): un răspuns bun nu mai urcă de aici, dar itemul revine (intervalele, în app.js: BOX_IV)
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
   const emptyState = () => ({ v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] });
   const clone = x => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
@@ -42,11 +43,16 @@ const Journal = (() => {
     else (e.m || []).forEach(i => { out[i] = 1; });
     return out;
   }
+  // `rd` = ziua (miezul nopții, ora locală) în care itemul a fost repetat din restanță: un răspuns peste o intrare dintr-o zi anterioară.
+  // Din el, aplicația știe cât din plafonul zilnic de repetat s-a consumat azi (`.scratch/fundatie-concepte/`, tichetul 02). Un răspuns din aceeași zi îl lasă cum e.
+  const dayOf = t => new Date(t).setHours(0, 0, 0, 0);
+  const markRd = (prev, e, t) => { if (prev && prev.t && dayOf(prev.t) < dayOf(t)) e.rd = dayOf(t); };
   // Un pas Leitner pe procentul de puncte acoperite: ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
   function leitner(map, item, p, t) {
     const e = Object.assign({ b: 0, n: 0 }, map[item]);
+    markRd(map[item], e, t);
     e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
+    if (p >= 0.8) e.b = Math.min(BOX_MAX, Math.max(1, e.b) + 1);
     else if (p >= 0.5) e.b = Math.max(1, e.b);
     else e.b = 1;
     e.t = t;
@@ -56,16 +62,18 @@ const Journal = (() => {
   // Un răspuns corect dat cu contextul deschis te duce cel mult în cutia 2.
   function stepQ(S, item, r, t) {
     const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[item]);
+    markRd(S.q[item], e, t);
     e.n++;
-    if (r.ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = r.assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    if (r.ok) { e.c++; const nb = Math.min(BOX_MAX, Math.max(1, e.b) + 1); e.b = r.assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
     e.l = r.ok ? 1 : 0; e.t = t;
     S.q[item] = e;
   }
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
   function stepX(S, item, r, t) {
     const g = r.g, e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[item]);
+    markRd(S.x[item], e, t);
     e.n++;
-    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    if (g >= 1) { e.c++; const nb = Math.min(BOX_MAX, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
     e.l = g; e.t = t;
     S.x[item] = e;
   }
@@ -104,7 +112,7 @@ const Journal = (() => {
         e.gt = t;                                                // nu mută scadența Leitner, care folosește doar `t`
         break;
       }
-      case "cfg": S.c = { d: ev.d, h: ev.h, t }; break;
+      case "cfg": S.c = Object.assign({ d: ev.d, h: ev.h }, ev.m > 0 ? { m: ev.m } : {}, ev.r > 0 ? { r: ev.r } : {}, { t }); break;     // m, r: minute pe zi și plafonul (fundatie-concepte); d: "" = fără dată
       case "plan": S.p[ev.item] = { d: ev.done ? 1 : 0, t }; break;
       case "lesson": {
         const prev = S.l[ev.item], e = { n: ev.n, t };
@@ -462,6 +470,6 @@ const Journal = (() => {
     };
   }
 
-  return { MC_MAX, HMAX, MAPS, EXPORT_FORMAT, EXPORT_VERSION, exportDoc, parseExport, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
+  return { MC_MAX, HMAX, BOX_MAX, MAPS, EXPORT_FORMAT, EXPORT_VERSION, exportDoc, parseExport, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Journal;

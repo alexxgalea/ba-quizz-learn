@@ -8279,7 +8279,7 @@ const Jarvis = (() => {
       sess.call = call;
       // Cheia veche din browser n-a mai fost nevoie: jetonul a mers, deci cheia Gemini rămâne doar pe server (spec platforma, Jarvis).
       if (viaServer && storage.getItem(KEY_ITEM)) storage.removeItem(KEY_ITEM);
-      call.say(lesson ? "Începem lecția despre " + sheet.name + ". Apelează next_chunk pentru prima bucată." : "Începem sesiunea. Mai sunt " + summary.daysLeft + " zile până la interviu.");
+      call.say(lesson ? "Începem lecția despre " + sheet.name + ". Apelează next_chunk pentru prima bucată." : (summary.daysLeft > 0 ? "Începem sesiunea. Mai sunt " + summary.daysLeft + " zile până la interviu." : "Începem sesiunea."));   // fără interviu înainte (întreținere): fără numărătoare
       return true;
     }
     // Verifică dacă Live acceptă autentificarea (jeton de la server sau cheia veche): deschide o sesiune goală și o închide.
@@ -8443,7 +8443,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
 //          result: q { ok, assisted?, pick? } · x { g } · o { p, k?, missed?, fixed?, wrong?, keep? } · s { p } · k { s }
 //        guess   { form: "q", item }              "Am ghicit": cutia 1, fără încercare nouă
 //        gap     { op: "fix", item, point }       un gol reparat cu întrebarea țintită
-//        cfg     { d, h }                         data interviului, ore pe seară
+//        cfg     { d, h, m?, r? }                 data interviului ("" = fără dată: întreținere), ore pe seară, minute pe zi în întreținere, plafonul zilnic de repetat
 //        plan    { item, done }                   bifa unei sarcini din plan
 //        lesson  { item, n, done? }               poziția lecției pe modul; done: data terminării = t
 //        hist    { row }                          un rând din istoric
@@ -8456,6 +8456,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GeminiText
 // `events` e tot jurnalul, cu textul lui Alex; fișierul nu poartă niciodată adresa sau secretul serverului (funcția primește doar evenimente).
 const Journal = (() => {
   const MC_MAX = 9, HMAX = 80;
+  const BOX_MAX = 8;                 // cutia de sus (orarul de durată, `.scratch/fundatie-concepte/`): un răspuns bun nu mai urcă de aici, dar itemul revine (intervalele, în app.js: BOX_IV)
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
   const emptyState = () => ({ v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] });
   const clone = x => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
@@ -8473,11 +8474,16 @@ const Journal = (() => {
     else (e.m || []).forEach(i => { out[i] = 1; });
     return out;
   }
+  // `rd` = ziua (miezul nopții, ora locală) în care itemul a fost repetat din restanță: un răspuns peste o intrare dintr-o zi anterioară.
+  // Din el, aplicația știe cât din plafonul zilnic de repetat s-a consumat azi (`.scratch/fundatie-concepte/`, tichetul 02). Un răspuns din aceeași zi îl lasă cum e.
+  const dayOf = t => new Date(t).setHours(0, 0, 0, 0);
+  const markRd = (prev, e, t) => { if (prev && prev.t && dayOf(prev.t) < dayOf(t)) e.rd = dayOf(t); };
   // Un pas Leitner pe procentul de puncte acoperite: ≥ 80% urcă o cutie, 50–80% rămâne, sub 50% cutia 1.
   function leitner(map, item, p, t) {
     const e = Object.assign({ b: 0, n: 0 }, map[item]);
+    markRd(map[item], e, t);
     e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
+    if (p >= 0.8) e.b = Math.min(BOX_MAX, Math.max(1, e.b) + 1);
     else if (p >= 0.5) e.b = Math.max(1, e.b);
     else e.b = 1;
     e.t = t;
@@ -8487,16 +8493,18 @@ const Journal = (() => {
   // Un răspuns corect dat cu contextul deschis te duce cel mult în cutia 2.
   function stepQ(S, item, r, t) {
     const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[item]);
+    markRd(S.q[item], e, t);
     e.n++;
-    if (r.ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = r.assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    if (r.ok) { e.c++; const nb = Math.min(BOX_MAX, Math.max(1, e.b) + 1); e.b = r.assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
     e.l = r.ok ? 1 : 0; e.t = t;
     S.q[item] = e;
   }
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
   function stepX(S, item, r, t) {
     const g = r.g, e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[item]);
+    markRd(S.x[item], e, t);
     e.n++;
-    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    if (g >= 1) { e.c++; const nb = Math.min(BOX_MAX, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
     e.l = g; e.t = t;
     S.x[item] = e;
   }
@@ -8535,7 +8543,7 @@ const Journal = (() => {
         e.gt = t;                                                // nu mută scadența Leitner, care folosește doar `t`
         break;
       }
-      case "cfg": S.c = { d: ev.d, h: ev.h, t }; break;
+      case "cfg": S.c = Object.assign({ d: ev.d, h: ev.h }, ev.m > 0 ? { m: ev.m } : {}, ev.r > 0 ? { r: ev.r } : {}, { t }); break;     // m, r: minute pe zi și plafonul (fundatie-concepte); d: "" = fără dată
       case "plan": S.p[ev.item] = { d: ev.done ? 1 : 0, t }; break;
       case "lesson": {
         const prev = S.l[ev.item], e = { n: ev.n, t };
@@ -8893,7 +8901,7 @@ const Journal = (() => {
     };
   }
 
-  return { MC_MAX, HMAX, MAPS, EXPORT_FORMAT, EXPORT_VERSION, exportDoc, parseExport, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
+  return { MC_MAX, HMAX, BOX_MAX, MAPS, EXPORT_FORMAT, EXPORT_VERSION, exportDoc, parseExport, emptyState, gapCounts, cmp, apply, union, project, projectFull, importState, create, memStore, idbStore, localMirror, memMirror };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Journal;
 
@@ -9234,9 +9242,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
 
   const PW = { 1: 3, 2: 2, 3: 1, 4: 0.3 };
   const PNAME = { 1: "P1 · critic", 2: "P2 · important", 3: "P3 · util", 4: "Bonus" };
-  const MB = [0, 0, 0.5, 0.75, 0.9, 1];          // stăpânire pe cutie Leitner
-  // Scadența pe cutie: 1 → după 20 min (aceeași seară), 2 → după 4 h, 3 → a doua zi, 4 → peste două zile, 5 → gata.
-  const GAP = [20 * 60000, 20 * 60000, 4 * 3600000];
+  // Orarul de durată (`.scratch/fundatie-concepte/`, tichetul 01): cutiile 1–8, iar cutia de sus revine. Plafonul cutiei e `Journal.BOX_MAX`, unde stau regulile.
+  const BOX_MAX = Journal.BOX_MAX;
+  // Intervalul pe cutie: 1 → 20 min, 2 → 4 h (în minute); de la 3 în sus, zile calendaristice (scadent la miezul nopții din ziua ultimului răspuns + N).
+  const BOX_IV = [{ min: 20 }, { min: 20 }, { min: 240 }, { d: 1 }, { d: 3 }, { d: 7 }, { d: 16 }, { d: 35 }, { d: 75 }];
+  // Stăpânire pe cutie: 1 de la cutia 5 în sus, ca scorul să nu se schimbe la trecerea pe orarul nou (tichetul 07 îl calculează din puncte).
+  const MB = Array.from({ length: BOX_MAX + 1 }, (_, b) => [0, 0, 0.5, 0.75, 0.9][b] ?? 1);
   const DAYS_RO = ["duminică", "luni", "marți", "miercuri", "joi", "vineri", "sâmbătă"];
   const MONTHS_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"];
   const HMAX = 80;
@@ -9333,7 +9344,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   // h istoric, c setări (data interviului, ore pe seară)
   const MAPS = ["q", "o", "x", "k", "s", "p", "l"];
   const emptyState = Journal.emptyState;
-  const validCfg = c => !!(c && typeof c === "object" && /^\d{4}-\d{2}-\d{2}$/.test(c.d || ""));
+  const validCfg = c => !!(c && typeof c === "object" && (c.d === "" || /^\d{4}-\d{2}-\d{2}$/.test(c.d || "")));      // d: "" = fără dată (întreținere)
   function normalize(x) {
     const s = emptyState();
     if (!x || typeof x !== "object") return s;
@@ -9343,7 +9354,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
       if (src && typeof src === "object" && !Array.isArray(src)) for (const id of Object.keys(src)) { const e = src[id]; if (e && typeof e === "object") s[k][id] = Object.assign({}, e); }
     }
     if (Array.isArray(x.h)) s.h = x.h.filter(e => e && e.id && e.ts).map(e => Object.assign({}, e)).slice(-HMAX);
-    if (validCfg(x.c)) s.c = { d: x.c.d, h: +x.c.h > 0 ? +x.c.h : P.cfg.hours, t: +x.c.t || 0 };
+    if (validCfg(x.c)) s.c = Object.assign({ d: x.c.d, h: +x.c.h > 0 ? +x.c.h : P.cfg.hours }, +x.c.m > 0 ? { m: +x.c.m } : {}, +x.c.r > 0 ? { r: +x.c.r } : {}, { t: +x.c.t || 0 });
     return s;
   }
   // Timestamp pentru îmbinare: `gt` = ultima modificare a golurilor (nu mută scadența Leitner, care folosește doar `t`).
@@ -9484,13 +9495,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   // Întrebări deschise: 2 = știu, 1 = parțial (urcă cel mult în cutia 2), 0 = nu.
   const updX = (id, g) => add({ type: "answer", form: "x", item: id, result: { g } });
   const mastery = e => (e ? MB[e.b] || 0 : 0);
-  // Scadența unui item: cutiile 1–2 după un interval, 3–4 după una sau două zile calendaristice, 5 niciodată.
+  // Scadența unui item: cutiile 1–2 după minute, de la 3 în sus după zile calendaristice (BOX_IV). În modul interviu, cu mai puțin de 14 zile rămase,
+  // un interval în zile e cel mult jumătate din zilele rămase (cel puțin o zi), ca tot ce ai învățat să revină înainte de dată.
   function dueAt(e) {
     if (!e || !e.t) return 0;
-    const b = e.b || 0;
-    if (b >= 5) return Infinity;
-    if (b <= 2) return e.t + GAP[b];
-    const d = new Date(e.t); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (b === 3 ? 1 : 2)).getTime();
+    const iv = BOX_IV[Math.max(0, Math.min(BOX_MAX, e.b || 0))];
+    if (iv.min) return e.t + iv.min * 60000;
+    const w = ivWindowDays(), n = w ? Math.min(iv.d, w) : iv.d;
+    const d = new Date(e.t); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime();
   }
   const isDue = e => !!e && now() >= dueAt(e);
   const dueF = e => (!e || isDue(e) ? 1 : 0.15);
@@ -9509,7 +9521,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     }
     return { ready: w ? s / w : 0, cover: w ? cv / w : 0, ans, cor };
   }
-  const needW = e => (!e ? 3 : e.b <= 1 ? 4 : ([0, 0, 2.4, 1.6, 1, 0.5][e.b] || 0.5));
+  const needW = e => (!e ? 3 : e.b <= 1 ? 4 : ([0, 0, 2.4, 1.6, 1][e.b] || 0.5));     // de la cutia 5 în sus: 0,5
   const recentF = e => (e && now() - (e.t || 0) < 20 * 60000 ? 0.2 : 1);
   const wQ = q => PW[MOD[q.m].p] * needW(S.q[q.id]) * recentF(S.q[q.id]) * dueF(S.q[q.id]);
   // Cardurile cu goluri persistente vin mai des: până la ×2 (fiecare ratare numără, cel mult 3 per punct).
@@ -9532,9 +9544,38 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   }
   // Ce e scadent acum: grile, carduri orale, întrebări deschise (cele mai slabe și cele mai vechi primele).
   const byDue = st => (a, b) => rankBox(st[a.id]) - rankBox(st[b.id]) || (st[a.id].t || 0) - (st[b.id].t || 0);
-  const dueQ = () => MCQ.filter(q => MOD[q.m].p < 4 && isDue(S.q[q.id])).sort(byDue(S.q));
-  const dueO = () => ORAL.filter(c => MOD[c.m].p < 4 && isDue(S.o[c.id])).sort(byDue(S.o));
-  const dueX = () => OPEN.filter(q => isDue(S.x[q.id])).sort(byDue(S.x));
+  // Plafonul zilnic de repetat (`.scratch/fundatie-concepte/`, tichetul 02). Restanța (scadente cu ultimul răspuns dinainte de azi) intră doar cât încape în
+  // `cfg().r` minute, în ordinea prioritate × întârziere relativă; ce nu încape rămâne scadent pe mâine, cu aceeași cutie. Ce ai greșit azi revine mereu, peste plafon.
+  // Consumul de azi vine din proiecție: `rd` = ziua în care itemul a fost repetat din restanță (src/journal.js).
+  const DUE_MIN = { q: 0.7, x: 1.5, o: 3 };                                           // minute estimate pe grilă, întrebare deschisă, card oral
+  const DUE_SRC = () => [["q", MCQ.filter(q => MOD[q.m].p < 4)], ["o", ORAL.filter(c => MOD[c.m].p < 4)], ["x", OPEN]];
+  function dueToday() {
+    const t0 = todayDate().getTime(), tn = now(), cap = cfg().r, out = { q: [], o: [], x: [], left: 0, used: 0, cap };
+    const back = [];
+    for (const [f, list] of DUE_SRC()) {
+      const st = S[f], fresh = [];
+      for (const it of list) {
+        const e = st[it.id]; if (!e) continue;
+        if (e.rd === t0) out.used += DUE_MIN[f];
+        if (!isDue(e)) continue;
+        if (e.t >= t0) fresh.push(it);
+        else { const d = dueAt(e); back.push({ f, it, w: PW[MOD[it.m].p] * (1 + (tn - d) / Math.max(60000, d - e.t)) }); }
+      }
+      out[f] = fresh.sort(byDue(st));
+    }
+    back.sort((a, b) => b.w - a.w);
+    let rem = cap - out.used, n = 0;
+    for (const x of back) {
+      if (rem <= 0 || (DUE_MIN[x.f] > rem && n)) break;
+      out[x.f].push(x.it); rem -= DUE_MIN[x.f]; n++;
+    }
+    out.left = back.length - n;
+    out.min = ["q", "o", "x"].reduce((a, f) => a + out[f].length * DUE_MIN[f], 0);
+    return out;
+  }
+  const dueQ = () => dueToday().q;
+  const dueO = () => dueToday().o;
+  const dueX = () => dueToday().x;
   const dueS = () => SKEL.filter(k => MOD[k.m].p < 4 && isDue(S.s[k.id])).sort(byDue(S.s));    // schelete scadente, cele mai slabe primele
   // Scheletele neîncepute, din modulele cu nevoia cea mai mare (egalitățile păstrează ordinea priorității, apoi a catalogului).
   function newS(n) {
@@ -9598,11 +9639,17 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   }
 
   // ---------- dates & plan (generat din setări și progres) ----------
-  const cfg = () => ({ d: (S.c && S.c.d) || P.cfg.interview, h: (S.c && S.c.h) || P.cfg.hours });
+  const CFG_DEF = { m: 45, r: 25 };               // minute pe zi în întreținere, plafonul zilnic de repetat (minute)
+  const cfg = () => ({ d: S.c && typeof S.c.d === "string" ? S.c.d : P.cfg.interview, h: (S.c && S.c.h) || P.cfg.hours, m: (S.c && +S.c.m > 0) ? +S.c.m : CFG_DEF.m, r: (S.c && +S.c.r > 0) ? +S.c.r : CFG_DEF.r });
   function parseIso(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(NaN); }
   function todayDate() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
-  function interviewDate() { const d = parseIso(cfg().d); return isNaN(d) ? parseIso(P.cfg.interview) : d; }
-  function daysLeft() { return Math.round((interviewDate() - todayDate()) / 86400000); }
+  // Data interviului, dacă e pusă (altfel null: fără dată). Zilele rămase: -1 fără dată.
+  function interviewDate() { const d = parseIso(cfg().d); return isNaN(d) ? null : d; }
+  function daysLeft() { const iv = interviewDate(); return iv ? Math.round((iv - todayDate()) / 86400000) : -1; }
+  // Modul planului (`.scratch/fundatie-concepte/`, tichetul 03): „interview” cu o dată de azi încolo, altfel „maint” (întreținere: doar ziua de azi, în minutele pe zi).
+  const planMode = () => (daysLeft() >= 0 ? "interview" : "maint");
+  // Fereastra de interviu: cu mai puțin de 14 zile rămase, intervalele în zile se plafonează la jumătate din ele; altfel 0 (fără plafon).
+  function ivWindowDays() { const left = daysLeft(); return left >= 0 && left < 14 ? Math.max(1, Math.floor(left / 2)) : 0; }
   function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   const dayName = d => DAYS_RO[d.getDay()];
   const dayLabel = d => d.getDate() + " " + MONTHS_RO[d.getMonth()];
@@ -9635,8 +9682,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     if (key === "diag") { min = 25; text = "Test diagnostic ghidat (30 de grile): harta de pornire. Nu ghici, apasă „Nu știu încă”."; go = { t: "diag" }; }
     else if (key === "due") {
       const n = c.today ? c.dq + c.dO + c.dX : 0;
-      min = c.today ? (n ? Math.min(25, Math.max(10, Math.round(n * 0.8))) : 10) : 15;
-      text = !c.today ? "Scadențe: grilele, cardurile și întrebările deschise care revin azi." : n ? "Scadențe: " + c.dq + " grile, " + c.dO + " carduri orale, " + c.dX + " întrebări deschise." : "Scadențe: nimic încă. Revin pe măsură ce răspunzi.";
+      min = c.today ? (n ? Math.max(5, Math.round(c.dmin)) : 10) : Math.min(25, cfg().r);
+      text = !c.today ? "Scadențe: grilele, cardurile și întrebările deschise care revin azi." : n ? "Scadențe: " + dueCount(c.dq, c.dO, c.dX) + "." + leftNote(c.dleft) : "Scadențe: nimic încă. Revin pe măsură ce răspunzi." + leftNote(c.dleft);
       go = { t: "due" };
     }
     else if (key.indexOf("sheet-") === 0) { const m = MOD[key.slice(6)]; if (!m) return null; min = modMinutes(m); text = "Fișa + grilele „" + m.short + "”" + (P.sheets[m.id] && P.sheets[m.id].diagram ? " (cu diagramă)" : "") + "."; go = { t: "sheet", m: m.id }; }
@@ -9664,31 +9711,64 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     else return null;
     return { id: dayId + "-" + key, key, min, text, go };
   }
+  // „3 grile, 1 card oral, 0 întrebări deschise” (singularul la 1)
+  const dueWords = (n, one, many) => n + " " + (n === 1 ? one : many);
+  const dueCount = (q, o, x, b) => [dueWords(q, "grilă", "grile"), dueWords(o, "card oral", "carduri orale"), dueWords(x, "întrebare deschisă", "întrebări deschise")].map(t => b ? t.replace(/^(\d+)/, "<b>$1</b>") : t).join(b ? " · " : ", ");
+  // Restanța care nu mai încape azi în plafon: rămâne scadentă, fără penalizare.
+  const leftNote = n => (n ? " Încă " + n + " așteaptă zilele următoare (plafonul de " + cfg().r + " min pe zi)." : "");
   const KEY_ORDER = ["diag", "due", "sheet-", "oral", "sch", "gap", "open", "smart", "mock", "kata-", "mist", "intv", "log"];
   const keyRank = k => { const i = KEY_ORDER.findIndex(o => k === o || (o.slice(-1) === "-" && k.indexOf(o) === 0)); return i < 0 ? 99 : i; };
+  // Sarcinile bifate azi rămân; modulele și exercițiile lor nu se mai propun.
+  function keepDone(id, c, queue, usedK, T) {
+    const done = Object.keys(S.p).filter(k => k.indexOf(id + "-") === 0 && S.p[k].d).map(k => k.slice(id.length + 1)).sort((a, b) => keyRank(a) - keyRank(b));
+    for (const key of done) {
+      if (key.indexOf("sheet-") === 0) { const m = MOD[key.slice(6)]; if (m) { c.mods.push(m); const qi = queue.indexOf(m); if (qi >= 0) queue.splice(qi, 1); } }
+      if (key.indexOf("kata-") === 0) usedK.add(key.slice(5));
+    }
+    for (const key of done) T(key);
+  }
+  // Planul de întreținere (fără dată de interviu sau cu data trecută): doar azi, în `cfg().m` minute. Scadențele din plafon → fișa și grilele modulului cu nevoia
+  // cea mai mare (sau mixul inteligent, când toate sunt acoperite) → o sarcină de cod (schelete, altfel un kata) → golurile, când există. Bifele merg ca în planul pe zile.
+  function genMaint() {
+    const date = todayDate(), iso = isoLocal(date), id = "g" + iso, dt = dueToday();
+    const queue = modQueue(), usedK = new Set(), hasGaps = gapList().length > 0;
+    const c = { today: true, mods: [], dq: dt.q.length, dO: dt.o.length, dX: dt.x.length, dmin: dt.min, dleft: dt.left, mist: pickMistakes().length, dS: dueS(), nS: newS(3) };
+    const tasks = [], has = new Set();
+    const T = key => { if (has.has(key)) return null; const t = mkTask(id, key, c); if (t) { tasks.push(t); has.add(key); } return t; };
+    keepDone(id, c, queue, usedK, T);
+    let budget = cfg().m - spentMin(iso);
+    { const t = T("due"); if (t && !isDone(t.id)) budget -= t.min; }
+    const schT = has.has("sch") ? null : mkTask(id, "sch", c), kata = schT ? null : nextKata(usedK);
+    const codeMin = schT ? schT.min : kata ? 20 : 0, codeKey = schT ? "sch" : kata ? "kata-" + kata : null;
+    if (!c.mods.length && budget >= 10) {
+      const m = queue[0];
+      if (m) { const t = T("sheet-" + m.id); if (t) { t.min = Math.min(modMinutes(m), Math.max(10, budget - codeMin)); budget -= t.min; c.mods.push(m); } }
+      else { const t = T("smart"); if (t) budget -= t.min; }
+    }
+    if (codeKey && budget >= 10) T(codeKey);
+    if (hasGaps && budget >= 10) T("gap");
+    tasks.sort((a, b) => keyRank(a.key) - keyRank(b.key));
+    const spent = tasks.reduce((a, t) => a + t.min, 0) + spentMin(iso);
+    return [{ id, date: iso, day: cap1(dayName(date)), label: dayLabel(date), when: "azi · ~" + spent + " min", maint: true,
+      focus: c.mods.length ? "Întreținere: scadențele, apoi „" + c.mods.map(m => m.short).join(", ") + "” și o sarcină de cod." : "Întreținere: scadențele, mixul inteligent și o sarcină de cod.",
+      tasks }];
+  }
   // Rețeta unei seri: scadențe → fișă + grile pe modulele cu nevoie mare → oral pe aceleași module → kata → greșeli.
   // În ultima seară: fără modul nou în final, formulările P1 cu voce tare și logistică.
   // Pentru azi, sarcinile deja bifate rămân în listă, iar restul se calculează din timpul rămas (orele pe seară minus sesiunile făcute).
   function genPlan() {
     const t0 = todayDate(), iv = interviewDate(), left = daysLeft(), h = cfg().h;
     const days = [];
-    if (left < 0) return days;
+    if (planMode() === "maint") return genMaint();
     const queue = modQueue(), usedK = new Set(), hasGaps = gapList().length > 0;
     const hasDiag = S.h.some(e => e.mode === "diag");
     for (let i = 0; i < left; i++) {
       const date = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + i), iso = isoLocal(date), id = "g" + iso, last = i === left - 1, today = i === 0;
-      const c = { today, mods: [], dq: today ? dueQ().length : 0, dO: today ? dueO().length : 0, dX: today ? dueX().length : 0, mist: today ? pickMistakes().length : 0, dS: today ? dueS() : [], nS: today ? newS(3) : [] };
+      const dt = today ? dueToday() : null;
+      const c = { today, mods: [], dq: dt ? dt.q.length : 0, dO: dt ? dt.o.length : 0, dX: dt ? dt.x.length : 0, dmin: dt ? dt.min : 0, dleft: dt ? dt.left : 0, mist: today ? pickMistakes().length : 0, dS: today ? dueS() : [], nS: today ? newS(3) : [] };
       const total = Math.round(h * 60), tasks = [], has = new Set();
       const T = key => { if (has.has(key)) return null; const t = mkTask(id, key, c); if (t) { tasks.push(t); has.add(key); } return t; };
-      if (today) {
-        // sarcinile bifate azi rămân; modulele și exercițiile lor nu se mai propun
-        const done = Object.keys(S.p).filter(k => k.indexOf(id + "-") === 0 && S.p[k].d).map(k => k.slice(id.length + 1)).sort((a, b) => keyRank(a) - keyRank(b));
-        for (const key of done) {
-          if (key.indexOf("sheet-") === 0) { const m = MOD[key.slice(6)]; if (m) { c.mods.push(m); const qi = queue.indexOf(m); if (qi >= 0) queue.splice(qi, 1); } }
-          if (key.indexOf("kata-") === 0) usedK.add(key.slice(5));
-        }
-        for (const key of done) T(key);
-      }
+      if (today) keepDone(id, c, queue, usedK, T);
       let budget = total - (today ? spentMin(iso) : 0);
       if (today && !hasDiag && readiness().cover < 0.2) { const t = T("diag"); if (t) budget -= t.min; }
       { const t = T("due"); if (t) budget -= t.min; }
@@ -9767,12 +9847,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     if (d > 1) return "Mai sunt " + d + " zile";
     if (d === 1) return "Mâine e interviul";
     if (d === 0) return "Azi e interviul. Succes!";
-    return "Interviul a trecut";
+    return "Întreținere";
   }
   function paintHeader() {
     const r = readiness(), iv = interviewDate();
     const t = $("#hdr-t"); if (t) t.textContent = headLabel(daysLeft());
-    const k = $("#hdr-k"); if (k) k.textContent = P.cfg.company + " · " + dayName(iv).slice(0, 3) + " " + dayLabel(iv);
+    const k = $("#hdr-k"); if (k) k.textContent = planMode() === "interview" ? P.cfg.company + " · " + dayName(iv).slice(0, 3) + " " + dayLabel(iv) : "Memorie de durată · ~" + cfg().m + " min pe zi";
     const rg = $("#ring"); if (rg) rg.innerHTML = ringSvg(r.ready);
     const rv = $("#ring-v"); if (rv) rv.textContent = pc(r.ready) + "%";
     paintStatus();
@@ -9835,36 +9915,38 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     const d = daysLeft(), r = readiness(), iv = interviewDate(), days = plan(), ti = todayIdx();
     const tasks = days.flatMap(x => x.tasks), doneN = tasks.filter(t => isDone(t.id)).length;
     const totalMin = tasks.reduce((a, t) => a + (t.min || 0), 0);
-    const big = d > 0 ? "T−" + d : d === 0 ? "Azi" : "Gata";
-    const small = d > 1 ? "zile până la interviu" : d === 1 ? "mâine e interviul" : d === 0 ? "succes!" : "interviul a trecut";
-    let h = '<section class="card hero"><div class="stack-s"><h1>Interviul tehnic ' + esc(P.cfg.company) + '</h1><p class="muted small">' + esc(P.cfg.role) + " · " + esc(dayName(iv) + ", " + dayLabel(iv)) + '</p></div><div class="tminus">' + big + "<small>" + small + "</small></div></section>";
+    const maint = planMode() === "maint";
+    const big = maint ? "Azi" : d > 0 ? "T−" + d : "Azi";
+    const small = maint ? "~" + cfg().m + " min" : d > 1 ? "zile până la interviu" : d === 1 ? "mâine e interviul" : "succes!";
+    let h = maint
+      ? '<section class="card hero"><div class="stack-s"><h1>Întreținere</h1><p class="muted small">Fără dată de interviu: doar ziua de azi. Ce știi revine tot mai rar (o zi, 3, 7, 16, 35, 75 de zile), ca să nu se piardă.</p></div><div class="tminus">' + big + "<small>" + small + "</small></div></section>"
+      : '<section class="card hero"><div class="stack-s"><h1>Interviul tehnic ' + esc(P.cfg.company) + '</h1><p class="muted small">' + esc(P.cfg.role) + " · " + esc(dayName(iv) + ", " + dayLabel(iv)) + '</p></div><div class="tminus">' + big + "<small>" + small + "</small></div></section>";
     h += '<section class="card kpis">' +
       kpi(pc(r.ready) + "%", "pregătire (stăpânire ponderată)") +
       kpi(pc(r.cover) + "%", "acoperire (întrebări văzute)") +
       kpi(doneN + "/" + tasks.length, "sarcini din plan bifate") +
       kpi(r.ans ? pc(r.cor / r.ans) + "%" : "–", r.ans ? "corecte din " + r.ans + " răspunsuri" : "încă niciun răspuns") + "</section>";
     h += vCertCard();
-    if (d < 0) {
-      h += '<section class="card stack-s"><h2>Interviul a trecut</h2><p class="small">Dacă ai altul, setează data și orele în Progres și planul se reface singur.</p><button class="btn primary" data-a="tab" data-tab="progress">Setează data</button></section>';
-      return h;
-    }
-    const dq = dueQ().length, dO = dueO().length, dX = dueX().length;
+    const dt = dueToday(), dq = dt.q.length, dO = dt.o.length, dX = dt.x.length;
     const nx = nextTask();
     if (nx) {
       h += '<section class="card next"><div class="stack-s"><div class="eyebrow">Următorul pas · ' + esc(nx.d.day) + " " + esc(nx.d.label) + "</div><div>" + fmt(nx.t.text) + ' <span class="xs muted mono">' + nx.t.min + " min</span></div></div>" +
         (nx.t.go ? '<button class="btn primary" data-a="go" data-id="' + nx.t.id + '">Start</button>' : '<button class="btn" data-a="plan-toggle" data-id="' + nx.t.id + '">Bifează</button>') + "</section>";
     }
     h += '<section class="card due"><div class="spread"><div class="stack-s"><div class="eyebrow">De repetat acum</div><div class="small">' +
-      (dq + dO + dX ? '<b>' + dq + "</b> grile · <b>" + dO + "</b> carduri orale · <b>" + dX + "</b> întrebări deschise" : "Nimic scadent. Ce greșești sau marchezi „Nu știu încă” revine aici după 20 de minute; ce știi, a doua zi.") + "</div></div>" +
+      (dq + dO + dX ? dueCount(dq, dO, dX, true) + (dt.left ? '<br><span class="xs muted">' + esc(leftNote(dt.left).trim()) + "</span>" : "") : (dt.left ? esc(leftNote(dt.left).trim()) + " " : "") + "Nimic scadent. Ce greșești sau marchezi „Nu știu încă” revine aici după 20 de minute; ce știi, după o zi, apoi după 3, 7, 16 zile și tot mai rar.") + "</div></div>" +
       '<div class="row" style="flex:none">' + (dq ? '<button class="btn sm primary" data-a="mcq" data-mode="due">Grile</button>' : "") + (dO ? '<button class="btn sm" data-a="oral" data-f="due">Orale</button>' : "") + (dX ? '<button class="btn sm" data-a="open" data-f="due">Deschise</button>' : "") + "</div></div></section>";
-    h += '<div class="sec-h"><h2>Planul pe zile</h2><span class="xs muted mono">~' + Math.round(totalMin / 60) + " h · " + hoursRo(cfg().h) + "/seară</span></div>";
+    h += maint ? '<div class="sec-h"><h2>Planul de azi</h2><span class="xs muted mono">~' + totalMin + " min · " + cfg().m + " min/zi</span></div>"
+      : '<div class="sec-h"><h2>Planul pe zile</h2><span class="xs muted mono">~' + Math.round(totalMin / 60) + " h · " + hoursRo(cfg().h) + "/seară</span></div>";
     days.forEach((day, i) => {
       const dn = day.tasks.filter(t => isDone(t.id)).length;
       h += '<details class="day' + (i === ti ? " today" : "") + '" id="day-' + day.id + '"' + (i === ti ? " open" : "") + ">" +
         '<summary><span class="day-t">' + esc(day.day) + " " + esc(day.label) + '</span><span class="day-badge">' + dn + "/" + day.tasks.length + '</span><span class="day-s">' + esc(day.when) + "</span></summary>" +
         '<div class="day-body"><p class="focus">' + fmt(day.focus) + "</p>" + day.tasks.map(taskRow).join("") + "</div></details>";
     });
-    h += '<p class="note">Planul se reface singur din progres: modulele intră în ordinea prioritate × cât mai ai de învățat, iar scadențele vin din cutiile Leitner. Bifezi sarcinile tu; data și orele pe seară le schimbi din Progres.</p>';
+    h += maint
+      ? '<p class="note">Planul de azi se reface singur din progres: scadențele (cel mult ' + cfg().r + ' min de restanță pe zi), modulul cu nevoia cea mai mare și o sarcină de cod. Pentru un interviu nou, pune data în Progres și planul se face pe zile.</p><button class="btn sm" data-a="tab" data-tab="progress">Pune o dată de interviu</button>'
+      : '<p class="note">Planul se reface singur din progres: modulele intră în ordinea prioritate × cât mai ai de învățat, iar scadențele vin din cutiile Leitner. Bifezi sarcinile tu; data și orele pe seară le schimbi din Progres.</p>';
     return h;
   }
   function kpi(v, l) { return '<div class="kpi"><div class="v">' + v + '</div><div class="l">' + esc(l) + "</div></div>"; }
@@ -9881,7 +9963,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     const r = readiness(), mist = pickMistakes().length, due = dueQ().length, fresh = r.ans === 0;
     let h = '<div class="stack-s"><h1>Grile</h1><p class="muted small">' + MCQ.length + " de grile cu context și explicații, pe trei niveluri: bază, practic, avansat. Pornești de la bază și urci pe măsură ce le știi.</p></div>";
     h += '<div class="modes">' +
-      modeCard("due", "De repetat acum", due ? due + " grile scadente: greșite acum 20 de minute, știute ieri." : "Nimic scadent. Grilele revin după 20 min, 4 h, o zi sau două, după cutie.", due ? "~" + Math.max(1, Math.round(Math.min(due, 20) * 0.7)) + " min" : "–", due > 0) +
+      modeCard("due", "De repetat acum", due ? due + " grile scadente: greșite de curând sau știute de mai mult timp." : "Nimic scadent. Grilele revin după 20 min, 4 h, apoi după 1, 3, 7, 16, 35 și 75 de zile, după cutie.", due ? "~" + Math.max(1, Math.round(Math.min(due, 20) * 0.7)) + " min" : "–", due > 0) +
       modeCard("smart", "Mix inteligent", "15 grile: întâi scadentele, apoi grile pe nivelul tău, mai multe din modulele slabe și din P1.", "~10 min", !fresh && !due) +
       modeCard("mistakes", "Greșelile mele", mist ? mist + " grile greșite la ultimul răspuns." : "Nimic de reluat încă.", mist ? "~" + Math.max(1, Math.round(mist * 0.7)) + " min" : "–", false) +
       modeCard("diag", "Test diagnostic", "30 de grile: întâi baza din fiecare modul, apoi un pas mai departe. Nu ghici: apasă „Nu știu încă”.", "~25 min", fresh) +
@@ -10292,7 +10374,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
     let h = '<div class="stack-s"><h1>Răspunsuri cu voce tare</h1><p class="muted small">Regula din documentul tău: dacă nu poți răspunde în 3–4 propoziții, cu voce tare, mai ai de lucru. Spui răspunsul, apoi bifezi ce ai acoperit. Cardul urcă o cutie la cel puțin 80% și coboară în cutia 1 sub 50%.</p></div>';
     h += '<div class="boxes" style="grid-template-columns:repeat(6,1fr)">' + ["noi", "c. 1", "c. 2", "c. 3", "c. 4", "c. 5"].map((l, i) => '<div><div class="v">' + counts[i] + '</div><div class="l">' + l + "</div></div>").join("") + "</div>";
     h += '<div class="modes">' +
-      '<button class="mode' + (due ? " hot" : "") + '" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">' + (due ? "Cardurile scadente acum, cele mai slabe primele (maximum 8)." : "Nimic scadent. Cardurile revin după 20 min, 4 h, o zi sau două, după cutie.") + '</span><span class="mm">' + (due ? due + " carduri" : "–") + "</span></button>" +
+      '<button class="mode' + (due ? " hot" : "") + '" data-a="oral" data-f="due"><span class="mt">De repetat</span><span class="md">' + (due ? "Cardurile scadente acum, cele mai slabe primele (maximum 8)." : "Nimic scadent. Cardurile revin după 20 min, 4 h, apoi după 1, 3, 7, 16, 35 și 75 de zile, după cutie.") + '</span><span class="mm">' + (due ? due + " carduri" : "–") + "</span></button>" +
       '<button class="mode' + (due ? "" : " hot") + '" data-a="oral" data-f="smart"><span class="mt">Recomandate</span><span class="md">6 carduri, mai multe din cutiile mici și din P1.</span><span class="mm">~12 min</span></button>' +
       (IV.ready() ? '<button class="mode wide" data-a="iv-mock"><span class="mt">Interviu tehnic simulat</span><span class="md">7 carduri, ca la proba tehnică cu backend și frontend: threading sau asyncio, OOP, testing sau generatori, FastAPI, frontend (JavaScript, TypeScript sau React), un snippet de cod și un scenariu de design. Fără modelul de răspuns între carduri.</span><span class="mm">7 carduri · ~35 min</span></button>' : "") +
       '<button class="mode wide' + (dX ? " hot" : "") + '" data-a="open" data-f="smart"><span class="mt">Întrebări deschise</span><span class="md">' + OPEN.length + ' întrebări scurte, fără variante: răspunzi cu voce tare, dezvălui răspunsul, te notezi. Cel mai aproape de interviu.</span><span class="mm">8 întrebări · ~10 min' + (dX ? " · " + dX + " scadente" : xSeen ? " · " + xSeen + " văzute" : "") + "</span></button>" +
@@ -11377,13 +11459,22 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
       jSay("smsg", "Jurnalul de pe server a fost șters (" + res.deleted + (res.deleted === 1 ? " eveniment" : " evenimente") + "). Copia de pe acest dispozitiv a rămas.", false);
     }, e => { ui.prog.busy = false; jSay("smsg", PURGE_ERR[e && e.kind] || "Ștergerea nu a mers.", true); });
   }
+  // Progres › Planul: data interviului (goală sau trecută = întreținere), orele pe seară (interviu), minutele pe zi (întreținere) și plafonul zilnic de repetat.
   function vCfg() {
-    const c = cfg(), iv = interviewDate();
-    const opts = [1.5, 2, 2.5, 3, 4, 5, 6].map(v => '<option value="' + v + '"' + (v === c.h ? " selected" : "") + ">" + hoursRo(v) + "</option>").join("");
-    return '<section class="card stack-s"><h3>Interviul</h3><p class="small">' + esc(cap1(dayName(iv)) + ", " + dayLabel(iv)) + " · ~" + hoursRo(c.h) + ' pe seară. Planul pe zile se reface din aceste două valori și din progres.</p>' +
-      '<div class="row"><label class="small">Data <input class="keyin" id="cfg-d" type="date" value="' + esc(c.d) + '" aria-label="Data interviului"></label>' +
-      '<label class="small">Ore/seară <select class="keyin" id="cfg-h" aria-label="Ore pe seară">' + opts + "</select></label></div>" +
-      '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button></div></section>';
+    const c = cfg(), iv = interviewDate(), maint = planMode() === "maint";
+    const sel = (id, label, aria, vals, cur, fmtV) => '<label class="small">' + label + ' <select class="keyin" id="' + id + '" aria-label="' + aria + '">' +
+      vals.map(v => '<option value="' + v + '"' + (v === cur ? " selected" : "") + ">" + fmtV(v) + "</option>").join("") + "</select></label>";
+    const minV = v => v + " min";
+    const mVals = [15, 20, 30, 45, 60, 90, 120], rVals = [10, 15, 20, 25, 30, 40, 60];
+    return '<section class="card stack-s"><h3>Planul</h3><p class="small">' +
+      (maint ? "<b>Întreținere</b>: " + (iv ? "interviul din " + esc(dayLabel(iv)) + " a trecut" : "fără dată de interviu") + ", ~" + c.m + " min pe zi, doar ziua de azi. Pune o dată ca să faci planul pe zile până la un interviu."
+        : "<b>Interviu</b>: " + esc(cap1(dayName(iv)) + ", " + dayLabel(iv)) + " · ~" + hoursRo(c.h) + " pe seară. Planul pe zile se reface din aceste valori și din progres.") +
+      " Restanța de repetat intră zilnic cel mult " + c.r + " min; ce nu încape rămâne pe zilele următoare.</p>" +
+      '<div class="row"><label class="small">Data <input class="keyin" id="cfg-d" type="date" value="' + esc(iv ? c.d : "") + '" aria-label="Data interviului"></label>' +
+      sel("cfg-h", "Ore/seară", "Ore pe seară, cu interviu", [1.5, 2, 2.5, 3, 4, 5, 6], c.h, hoursRo) + "</div>" +
+      '<div class="row">' + sel("cfg-m", "Minute/zi", "Minute pe zi, în întreținere", mVals.includes(c.m) ? mVals : mVals.concat(c.m).sort((a, b) => a - b), c.m, minV) +
+      sel("cfg-r", "Plafon de repetat", "Plafonul zilnic de repetat", rVals.includes(c.r) ? rVals : rVals.concat(c.r).sort((a, b) => a - b), c.r, minV) + "</div>" +
+      '<div class="row"><button class="btn sm primary" data-a="cfg-save">Salvează</button>' + (iv ? '<button class="btn sm" data-a="cfg-clear">Fără dată (întreținere)</button>' : "") + "</div></section>";
   }
   // Cardul „Serverul”: SINGURUL formular pentru adresa și secretul serverului (ServerConn / `Conn`). Progres îl arată direct, Jarvis îl refolosește cu `extra`
   // (butoane proprii, în același card); sincronizarea jurnalului (tichetul 05) nu are formular propriu și e anunțată de `srvChanged`. Acțiunile `srv-save` / `srv-test` / `srv-del` sunt comune.
@@ -11604,11 +11695,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
       case "open-redo": if (ui.result) startOpen({ ids: ui.result.items.filter(x => x.g < 2).map(x => x.id) }); break;
       case "redo-weak": startMcq("ids", { ids: MCQ.filter(q => MOD[q.m].p < 3 && S.q[q.id] && S.q[q.id].b <= 1).sort((a, b) => MOD[a.m].p - MOD[b.m].p || S.q[b.id].t - S.q[a.id].t).slice(0, 10).map(q => q.id), title: "Lacunele de acum" }); break;
       case "intv-f": ui.study.intv = b.dataset.f; render(); break;
-      case "cfg-save": {
-        const d = $("#cfg-d"), hs = $("#cfg-h");
-        const iso = d ? d.value.trim() : "", h = hs ? +hs.value : 0;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || isNaN(parseIso(iso))) { toast("Alege o dată validă"); break; }
-        add({ type: "cfg", d: iso, h: h > 0 ? h : P.cfg.hours }); commit(); render(); toast("Salvat: planul s-a refăcut");
+      case "cfg-save": case "cfg-clear": {
+        const d = $("#cfg-d"), num = sel => { const el = $(sel); return el ? +el.value : 0; }, cur = cfg();
+        const iso = b.dataset.a === "cfg-clear" ? "" : d ? d.value.trim() : "";
+        if (iso && (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || isNaN(parseIso(iso)))) { toast("Alege o dată validă"); break; }
+        const h = num("#cfg-h"), m = num("#cfg-m"), r = num("#cfg-r");
+        add({ type: "cfg", d: iso, h: h > 0 ? h : cur.h, m: m > 0 ? m : cur.m, r: r > 0 ? r : cur.r }); commit(); render();
+        toast(planMode() === "maint" ? "Salvat: întreținere, planul de azi s-a refăcut" : "Salvat: planul s-a refăcut");
         break;
       }
       case "seg": ui.tab = "study"; ui.study.seg = b.dataset.seg; ui.study.kata = null; ui.study.skel = null; ui.study.skelDue = false; ui.study.attempt = null; render(); window.scrollTo(0, 0); break;
@@ -11786,7 +11879,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
       });
       return parts.join("\n\n").slice(0, 900);
     },
-    summary() { return { readiness: readiness().ready, daysLeft: daysLeft(), gaps: gapList().slice(0, 3).map(x => MOD[x.c.m].short + ": " + x.c.k[x.i]), role: P.cfg.role, profile: IV_PROFILE }; },
+    summary() { return { readiness: readiness().ready, daysLeft: planMode() === "interview" ? daysLeft() : null, gaps: gapList().slice(0, 3).map(x => MOD[x.c.m].short + ": " + x.c.k[x.i]), role: P.cfg.role, profile: IV_PROFILE }; },
     log(e) { histAdd(Object.assign({ id: "h" + now(), ts: now(), kind: "jarvis", mode: "jarvis", title: e.title, n: e.n, c: e.c, dur: e.dur }, e.lesson ? { lesson: true } : {})); commit(); },
 
     // ----- Lecție: fișa unui modul, poziția lecției, recomandarea -----
@@ -11996,7 +12089,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
-  const BUILD = "552ae23";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
+  const BUILD = "8fcc42e";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };
@@ -12286,7 +12379,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   else start((hot && hot.data) || {});
 
   // expus pentru verificare locală
-  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J, sync: () => JSync };
+  window.__prep = { mergeState, normalize, prune, readiness, modStats, pickDiag, pickMock, pickSmart, pickDue, pickOpen, unlockedLvl, updQ, updO, updX, dueAt, isDue, dueToday, planMode, genPlan, modNeed, modMinutes, cfg, parseVerdict, dsBody, parseTurn, parseIvVerdict, ivScore, ivTurnPrompt, ivVerdictPrompt, IV_MAX, ivRules, pickIvMock, pickTechMock, gapCounts, gapList, relRank, gapLessonPrompt, gapAskPrompt, gapGradePrompt, parseGapGrade, skelPrompt, parseSkelVerdict, SKEL_MIN, wO, pickCert, certScore, CERT_W, ui: () => ui, state: () => S, setState: x => { J.replaceState(x); planCache = null; }, journal: () => J, sync: () => JSync };
 })();
 
 </script>

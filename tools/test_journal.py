@@ -76,7 +76,7 @@ async def main():
 
         # plan tick, settings, reset
         await pg.evaluate("window.__prep.journal().append({ type: 'cfg', d: '2026-12-05', h: 2 })")
-        check("settings come from the projection", (await pg.evaluate("window.__prep.cfg()")) == {"d": "2026-12-05", "h": 2})
+        check("settings come from the projection", (await pg.evaluate("window.__prep.cfg()")) == {"d": "2026-12-05", "h": 2, "m": 45, "r": 25})
         await pg.click('.tab[data-tab="progress"]'); await pg.wait_for_timeout(200)
         n_before = len(await events(pg))
         await pg.click('[data-a="reset"]'); await pg.click('[data-a="reset"]'); await pg.wait_for_timeout(400)

@@ -652,7 +652,7 @@ const Jarvis = (() => {
       sess.call = call;
       // Cheia veche din browser n-a mai fost nevoie: jetonul a mers, deci cheia Gemini rămâne doar pe server (spec platforma, Jarvis).
       if (viaServer && storage.getItem(KEY_ITEM)) storage.removeItem(KEY_ITEM);
-      call.say(lesson ? "Începem lecția despre " + sheet.name + ". Apelează next_chunk pentru prima bucată." : "Începem sesiunea. Mai sunt " + summary.daysLeft + " zile până la interviu.");
+      call.say(lesson ? "Începem lecția despre " + sheet.name + ". Apelează next_chunk pentru prima bucată." : (summary.daysLeft > 0 ? "Începem sesiunea. Mai sunt " + summary.daysLeft + " zile până la interviu." : "Începem sesiunea."));   // fără interviu înainte (întreținere): fără numărătoare
       return true;
     }
     // Verifică dacă Live acceptă autentificarea (jeton de la server sau cheia veche): deschide o sesiune goală și o închide.

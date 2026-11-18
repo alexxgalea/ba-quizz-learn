@@ -103,3 +103,15 @@ _Avoid_: push-to-talk (în interfață), microfon
 **Jurnal de încercări**:
 Lista tuturor răspunsurilor lui Alex, în ordinea în care au fost date; din ea se calculează cutiile, treptele și măsurătorile. Un eveniment nu se mai schimbă și are un id unic; setările, bifele din plan, poziția lecției și resetul sunt tot evenimente. Aplicația citește proiecția jurnalului (`S`), ținută în memorie și actualizată la fiecare eveniment, nu recalculată din tot jurnalul.
 _Avoid_: istoric (`S.h` e istoricul sesiunilor, un rând pe sesiune), log, stare îmbinată
+
+**Întreținere**:
+Modul planului fără dată de interviu (sau cu data trecută): Azi are doar ziua de azi, în minutele pe zi alese, cu scadențele, modulul cu nevoia cea mai mare și o sarcină de cod. Opusul e modul **interviu**, pornit de o dată, cu planul pe zile până atunci.
+_Avoid_: mod liber, pauză, după interviu
+
+**Restanță**:
+Itemii scadenți al căror ultim răspuns e dintr-o zi anterioară. Doar restanța intră în plafon; ce ai greșit azi și revine azi e învățare, nu restanță.
+_Avoid_: backlog, datorie
+
+**Plafon**:
+Câte minute de restanță intră zilnic la repetat (implicit 25). Ce nu încape rămâne scadent pe zilele următoare, cu aceeași cutie, în ordinea prioritate × cât de întârziat e.
+_Avoid_: limită (prea vag), cotă

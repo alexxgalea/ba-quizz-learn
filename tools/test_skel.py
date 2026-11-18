@@ -120,8 +120,8 @@ async def main():
         await attempt([0])                 # 25% → box 1
         e = await skel_state(pg)
         check("under 50% → box 1", e["b"] == 1 and e["s"] == 25, e)
-        await attempt(range(n)); await attempt(range(n)); await attempt(range(n)); await attempt(range(n)); await attempt(range(n))
-        check("box never goes above 5", (await skel_state(pg))["b"] == 5)
+        for _ in range(8): await attempt(range(n))      # 1 → 8 in seven steps, the eighth stays (orarul de durată: Journal.BOX_MAX)
+        check("box never goes above 8", (await skel_state(pg))["b"] == 8)
 
         # --- "Arată referința" before an attempt → 0 ---
         await pg.evaluate("id => { const s = window.__prep.state(); delete s.s[id]; window.__prep.setState(s); }", SID)
