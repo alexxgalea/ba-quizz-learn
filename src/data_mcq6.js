@@ -129,14 +129,14 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       e: "Cu o interfață comună și un registru, o regulă nouă e un fișier nou. Motorul și regulile vechi rămân neatinse, iar fiecare regulă se testează separat." }
   ]);
   Q("asyncio", [
-    { id: "aio-01", lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
+    { id: "aio-01", pt: [1], lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
       "O corutină rulează până la un `await`; abia atunci bucla poate trece la alta",
       "Corutinele rulează în paralel, pe mai multe core-uri",
       "Sistemul de operare întrerupe corutinele oricând, ca pe threaduri",
       "Fiecare corutină primește propriul thread"],
       ctx: "La threaduri, sistemul de operare decide când comută. În asyncio există un singur thread și o buclă de evenimente care rulează corutinele pe rând.",
       e: "Bucla poate comuta doar când corutina curentă cedează controlul, la un `await` pe ceva care chiar așteaptă (I/O, timer). Între două `await`-uri, corutina rulează singură." },
-    { id: "aio-02", lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
+    { id: "aio-02", pt: [2], lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
     time.sleep(2)
     return "ok"`, o: [
       "~200 s: `time.sleep` blochează bucla, cererile se servesc pe rând",
@@ -145,14 +145,14 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       "Nimic: `time.sleep` aruncă eroare într-o corutină"],
       ctx: "`time.sleep` blochează threadul care îl apelează. `asyncio.sleep` e o corutină care cedează controlul buclei cât așteaptă.",
       e: "`time.sleep` nu cedează controlul: bucla stă blocată 2 s pe fiecare cerere, deci cererile se servesc una după alta. Cu `await asyncio.sleep(2)` toate ar aștepta în paralel, ~2 s în total." },
-    { id: "aio-03", lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
+    { id: "aio-03", pt: [2], lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
       "Rulează funcția sincronă într-un thread al executorului implicit, fără să blocheze bucla",
       "Rulează funcția într-un proces separat, pe alt core",
       "Transformă funcția într-o corutină care cedează controlul la fiecare linie",
       "Rulează funcția direct pe bucla evenimentelor, cu prioritate"],
       ctx: "Uneori trebuie să apelezi dintr-o corutină cod sincron: un SDK fără variantă async, un driver blocant, o funcție de parsare.",
       e: "`asyncio.to_thread` (3.9+) trimite funcția într-un thread și întoarce o corutină pe care o aștepți. Bucla rămâne liberă cât rulează funcția." },
-    { id: "aio-04", lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
+    { id: "aio-04", pt: [3], lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
     await asyncio.gather(
         a(), b(), c())
 except ValueError:
@@ -163,14 +163,14 @@ except ValueError:
       "`gather` așteaptă să termine toate, apoi ridică excepția"],
       ctx: "`asyncio.gather` și `asyncio.TaskGroup` rulează amândouă corutine concurent, dar tratează diferit prima eroare.",
       e: "Fără `return_exceptions=True`, `gather` propagă imediat prima excepție, dar nu anulează celelalte task-uri: ele continuă în fundal. Dacă vrei anulare, folosești `TaskGroup`." },
-    { id: "aio-05", lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
+    { id: "aio-05", pt: [4], lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
       "Anulează celelalte task-uri din grup, așteaptă să se oprească și ridică `ExceptionGroup`",
       "Ignoră eroarea și continuă cu celelalte",
       "Întoarce eroarea ca valoare, ca `return_exceptions=True`",
       "Repornește task-ul care a eșuat"],
       ctx: "`async with asyncio.TaskGroup() as tg:` (3.11+) creează task-uri cu `tg.create_task(...)`; blocul se termină abia când s-au terminat toate.",
       e: "TaskGroup implementează concurența structurată: la prima eroare anulează frații, iar la ieșirea din bloc ridică toate excepțiile într-un `ExceptionGroup`, prinse cu `except*`." },
-    { id: "aio-06", lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
+    { id: "aio-06", pt: [5], lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
     data = await fetch(url)`, o: [
       "După 5 s task-ul e anulat, iar blocul ridică `TimeoutError`",
       "`fetch` continuă în fundal, iar `data` devine `None`",
@@ -178,7 +178,7 @@ except ValueError:
       "Programul așteaptă toate cele 10 s, apoi ridică `TimeoutError`"],
       ctx: "`asyncio.timeout` (3.11+) e un context manager. Intern, la expirare anulează task-ul curent și transformă anularea în altă excepție la ieșire.",
       e: "La expirare, task-ul primește `CancelledError` în `fetch`, iar la ieșirea din bloc ea devine `TimeoutError`. `fetch` e oprit, nu lăsat în fundal." },
-    { id: "aio-07", lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
+    { id: "aio-07", pt: [6], lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
     while True:
         try:
             await job()
@@ -190,14 +190,14 @@ except ValueError:
       "Bucla consumă 100% CPU"],
       ctx: "Anularea unui task (`task.cancel()`, timeout, oprirea aplicației) se face aruncând `CancelledError` în el, la următorul `await`.",
       e: "`CancelledError` e `BaseException` (din 3.8), deci `except BaseException` o înghite, iar bucla continuă. Corect: `except Exception`, iar dacă prinzi anularea pentru cleanup, o ridici din nou." },
-    { id: "aio-08", lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
+    { id: "aio-08", pt: [8], lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
       "Task-ul poate fi colectat de GC înainte să termine, iar excepțiile lui se pierd",
       "Corutina nu pornește până nu faci `await` pe ea",
       "Rulează sincron și blochează apelantul",
       "Pornește un thread nou pentru fiecare task"],
       ctx: "`create_task` programează corutina pe buclă și întoarce un obiect `Task`. Bucla ține doar o referință slabă la el.",
       e: "Documentația cere explicit să păstrezi o referință: fără ea task-ul poate dispărea la jumătate, iar o excepție rămâne doar un warning „Task exception was never retrieved”." },
-    { id: "aio-09", lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
+    { id: "aio-09", pt: [9], lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
       "`loop.call_soon_threadsafe(q.put_nowait, ev)`",
       "`q.put_nowait(ev)` direct: `asyncio.Queue` e thread-safe",
       "`await q.put(ev)` din thread",

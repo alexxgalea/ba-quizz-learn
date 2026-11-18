@@ -43,7 +43,7 @@ def transfer_2():
   ]);
 
   O("asyncio", [
-    { id: "o-snp-aio1", q: "Ce probleme are funcția când lista are 50.000 de hosturi?", code: R`async def scan_all(hosts):
+    { id: "o-snp-aio1", kp: [7, 7, 3, 4, 5], q: "Ce probleme are funcția când lista are 50.000 de hosturi?", code: R`async def scan_all(hosts):
     tasks = [check(h) for h in hosts]
     res = await asyncio.gather(*tasks)
     return res`, k: [
@@ -53,7 +53,7 @@ def transfer_2():
       "Erori: `return_exceptions=True` sau `TaskGroup` (anulează restul), după ce vrei",
       "Timeout per host (`asyncio.timeout`) și rezultate procesate pe măsură ce vin, nu ținute toate în memorie"],
       model: "Prima problemă e că pornesc 50.000 de corutine care deschid conexiuni toate deodată: rămân fără descriptori de fișiere și supraîncarc țintele. Aș limita concurența cu un `asyncio.Semaphore` în `check`, sau cu un număr fix de workeri care consumă o `asyncio.Queue`. A doua: dacă un host aruncă o excepție, `gather` o ridică imediat, dar celelalte task-uri nu sunt anulate, continuă în fundal. Aleg explicit: `return_exceptions=True` dacă vreau toate rezultatele, sau `TaskGroup` dacă la prima eroare vreau să opresc tot. Aș pune și un timeout per host cu `asyncio.timeout` și aș procesa rezultatele pe măsură ce vin, ca să nu țin totul în memorie." },
-    { id: "o-snp-aio2", q: "Ce e riscant în acest handler?", code: R`async def handle(event):
+    { id: "o-snp-aio2", kp: [8, 8, 8, 8, null], q: "Ce e riscant în acest handler?", code: R`async def handle(event):
     asyncio.create_task(
         send_alert(event))
     return {"ok": True}`, k: [
@@ -267,21 +267,21 @@ def test_notify(m):
       model: "Aș defini o interfață mică pentru o regulă, cu `matches(event)` și `alert(event)`, ca `Protocol` sau ABC. Fiecare regulă e o clasă separată, înregistrată într-un registru, de exemplu cu un decorator, iar motorul doar parcurge registrul și aplică regulile pe fiecare eveniment. Așa o regulă nouă înseamnă un fișier nou și un test nou, fără să ating motorul sau regulile existente. Regulile nu țin stare globală; ce variază per client, cum ar fi pragurile sau activarea, vine din configurare, ca date. Motorul îl testez cu o listă explicită de reguli false, ca să nu depind de registrul real." }
   ]);
   O("asyncio", [
-    { id: "o-aio-1", q: "Explică event loop-ul din asyncio și ce înseamnă „să blochezi bucla”.", k: [
+    { id: "o-aio-1", kp: [1, 1, 2, 2, 2], q: "Explică event loop-ul din asyncio și ce înseamnă „să blochezi bucla”.", k: [
       "Un singur thread rulează bucla; corutinele rulează pe rând",
       "O corutină cedează controlul doar la `await` (I/O, timer); atunci bucla trece la alta",
       "Un apel blocant (`time.sleep`, `requests`, driver sincron, calcul greu) oprește toate corutinele",
       "Soluții: biblioteci async, `asyncio.to_thread` pentru I/O sincron, procese pentru CPU",
       "Detectare: modul debug (callback-uri peste 100 ms), latență care crește pe toate rutele deodată"],
       model: "Bucla de evenimente rulează pe un singur thread și execută corutinele pe rând. O corutină rulează până la un `await` pe ceva care așteaptă, un socket sau un timer; atunci e suspendată și bucla trece la alta. Asta permite mii de conexiuni deschise într-un singur worker. „Să blochezi bucla” înseamnă să faci într-o corutină un apel care nu cedează controlul: `time.sleep`, `requests.get`, un driver de bază de date sincron sau un calcul lung. Cât durează, nicio altă cerere nu avansează. Folosesc biblioteci async, mut I/O-ul sincron în `asyncio.to_thread` și calculul greu în procese. În producție se vede ca o latență care crește pe toate rutele deodată, iar modul debug din asyncio loghează pașii mai lenți de 100 ms." },
-    { id: "o-aio-2", q: "`gather`, `TaskGroup` sau `as_completed`: când îl alegi pe fiecare?", k: [
+    { id: "o-aio-2", kp: [3, 3, 4, null, 7], q: "`gather`, `TaskGroup` sau `as_completed`: când îl alegi pe fiecare?", k: [
       "`gather`: rezultate în ordinea intrărilor; la prima eroare o propagă, dar NU anulează restul",
       "`gather(return_exceptions=True)`: vrei toate rezultatele, inclusiv erorile, ca valori",
       "`TaskGroup` (3.11+): la prima eroare anulează restul și ridică `ExceptionGroup` (concurență structurată)",
       "`as_completed`: procesezi fiecare rezultat imediat ce e gata",
       "Pentru volum mare: limită de concurență (`Semaphore`) și timeout per operație"],
       model: "`gather` rulează corutinele concurent și îmi dă rezultatele în ordinea în care le-am dat; la prima excepție o ridică, dar celelalte task-uri continuă în fundal. Dacă vreau toate rezultatele, chiar și eșecurile, pun `return_exceptions=True` și le separ după. `TaskGroup`, din 3.11, e varianta structurată: la prima eroare anulează restul și ridică un `ExceptionGroup`, deci niciun task nu rămâne orfan; îl prefer când operațiile depind una de alta. `as_completed` îl folosesc când vreau să procesez fiecare rezultat imediat, de exemplu să salvez scanările pe măsură ce se termină. La sute sau mii de operații adaug un `Semaphore` și un timeout per operație." },
-    { id: "o-aio-3", q: "Pentru un serviciu care scanează mii de hosturi și apoi analizează rezultatele: asyncio, threads sau procese?", k: [
+    { id: "o-aio-3", kp: [10, 10, 7, 10, null], q: "Pentru un serviciu care scanează mii de hosturi și apoi analizează rezultatele: asyncio, threads sau procese?", k: [
       "Partea de rețea e I/O-bound: asyncio (mii de conexiuni, un thread) sau un thread pool, dacă bibliotecile sunt sincrone",
       "Analiza grea în Python pur e CPU-bound: procese (`ProcessPoolExecutor`), din cauza GIL-ului",
       "Limită de concurență și timeout per host, ca să nu supraîncarci ținte sau propriile resurse",

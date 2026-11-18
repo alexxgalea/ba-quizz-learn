@@ -74,6 +74,12 @@ async def main():
         last = ev2[-1]
         check("answering on screen appends a q event with the chosen variant", last["type"] == "answer" and last["form"] == "q" and isinstance(last["result"]["ok"], bool) and "pick" in last["result"], last)
 
+        # every answer event carries the sheet points of its item (fundatie-concepte, ticket 04): pt on MCQs / open questions / skeletons, kp on oral cards
+        await pg.evaluate("""() => { const T = window.__prep; T.updQ('aio-04', true); T.updX('aio-04', 2); T.updO('o-aio-2', 1); window.__prep.journal().append({ type: 'answer', form: 's', item: 's-asyncio-tg', result: { p: 1 } }); T.updQ('gil-01', true); }""")
+        ev3 = (await events(pg))[-5:]
+        pts = [e["points"] for e in ev3]
+        check("answer events carry the item's points", pts[:3] == [["asyncio:3"], ["asyncio:3"], ["asyncio:3", "asyncio:4", "asyncio:7"]] and pts[4] == [], pts)
+
         # plan tick, settings, reset
         await pg.evaluate("window.__prep.journal().append({ type: 'cfg', d: '2026-12-05', h: 2 })")
         check("settings come from the projection", (await pg.evaluate("window.__prep.cfg()")) == {"d": "2026-12-05", "h": 2, "m": 45, "r": 25})
