@@ -262,6 +262,15 @@ Fiecare răspuns al lui Alex (și fiecare schimbare de setări, bifă de plan, p
 - Starea veche din `onapsis-prep-v1`, importată la prima pornire, intră în coadă (serverul nu o are); id-urile sunt deterministe, deci o copie de pe alt dispozitiv se ignoră.
 - Teste: `node --test tools/unit/sync.test.mjs` (server fals în memorie, `tools/unit/fake_server.mjs`: un răspuns apare pe celălalt dispozitiv, răspunsuri date offline pe două dispozitive, reset, același eveniment de două ori, secret greșit, cădere în mijlocul unui lot, paginare și cursor) și `python3 tools/test_sync.py` (două dispozitive reale, server fals prin rutele Playwright).
 
+### Conturile
+
+ADR 0006: un secret pe persoană, deci un cont pe secret (glosarul: `CONTEXT.md` › Conturi). Serverul alege după secret partiția (`u#<id>`): fiecare cont are jurnalul, cursorul, epoca, ștergerea și plafonul zilnic `/ai` ale lui. Contul lui Alex e cel de dinainte (`APP_SECRET`, `u#alex`); celelalte stau în `server/.accounts.json` (vezi `server/README.md` › Conturile). Clientul nu are formular nou: persoana își pune adresa și secretul ei în Progres › Serverul, pe dispozitivul ei.
+
+- `src/account.js` (`ServerAccount.create({ conn, storage, fetch })`, în `LIB_FILES`; în `app.js`: `Acct`, `acctRefresh`): `GET /me` → `{ id, name, address, profile }`, în cache în `localStorage` (`onapsis-account-v1`), legat de adresă și de o amprentă a secretului (alt secret = cont necunoscut). Nu intră în `S`, în jurnal, în export sau în brief. Se cere după „Salvează” (`srvChanged`), la pornire dacă nu e în cache și la „Testează AI”; „Șterge” îl uită. Un server fără `/me` (404, încă nerelansat) lasă totul ca înainte.
+- Fără cont cunoscut, valorile sunt ale lui Alex (`ServerAccount.DEFAULT`), deci prompturile lui rămân identice. Cardul arată „Conectat ca: <nume>”.
+- Prompturile: `ivProfile()` (`ServerAccount.profileLine`: profilul, gol = fără linie) și `addrNote()` (`addressLine`: la `f`, cere acordurile la feminin) intră în intervievator (`ivHead`, `ivTurnPrompt`, `ivVerdictPrompt`), goluri (`gapLessonPrompt`, `gapAskPrompt`) și „Întreabă” (`Ask.create({ note })`). Jarvis le primește prin `PrepApp.summary()` (`name`, `address`, `addressLine`, `profile`): `forName` înlocuiește „Alex” cu numele persoanei în instrucțiuni, în descrierile funcțiilor, în `instruction` / `message` din răspunsurile lor și în mesajele aplicației (`call.say` / `interrupt`), dar nu în conținut (punctele, desfășurările), unde „Alex” e chiar Alex.
+- Teste: `node --test tools/unit/account.test.mjs`, testele de cont din `tools/unit/jarvis.test.mjs`, `python3 tools/test_account.py` și `cd server && python3 -m pytest tests/test_accounts.py`.
+
 ### Exportul și ștergerea jurnalului
 
 Tichetul 09 (povestea 7 a specului „platforma”): datele rămân ale lui Alex. Doar în PWA (cu IndexedDB); artifactul păstrează vechiul „Exportă progresul” / „Importă” (text `S`), care merge neschimbat.

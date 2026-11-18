@@ -57,6 +57,8 @@ async def new_page(b, page_url, scheme="light"):
         if req.method == "OPTIONS":
             await route.fulfill(status=204, headers=CORS); return
         path = req.url[len(SRV):].split("?")[0]
+        if path == "/me":        # accounts (ADR 0006): a server without /me, like one not yet redeployed; the prompts stay Alex's
+            await route.fulfill(status=404, headers=CORS, content_type="application/json", body='{"detail":"Not Found"}'); return
         if path == "/events":    # the journal sync (ticket 05) shares the server: an empty, valid answer, not logged as an AI call
             if req.method == "GET":
                 await route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps({"events": [], "cursor": 0, "more": False})); return

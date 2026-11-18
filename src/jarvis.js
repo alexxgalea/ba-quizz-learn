@@ -51,6 +51,14 @@ const Jarvis = (() => {
     restarted: "Sesiunea s-a reînnoit și nu mai ții minte conversația de până acum. Spune într-o propoziție că reiei întrebarea, apoi apelează next_card."
   };
 
+  // Persoana din cont (ADR 0006): `summary.name` și `summary.addressLine` (PrepApp.summary ← ServerAccount). Textele de aici spun „Alex”;
+  // pentru alt cont, tot ce ajunge la model (instrucțiuni, descrieri de funcții, mesajele aplicației, `instruction` din răspunsuri) primește numele ei.
+  // Conținutul (punctele, desfășurările) nu se atinge: acolo „Alex” e chiar Alex. Fără nume (sau Alex), textul rămâne exact cel de dinainte.
+  const nameOf = sum => (sum && typeof sum.name === "string" && sum.name.trim()) || "Alex";
+  const forName = (text, name) => (name === "Alex" || typeof text !== "string" ? text : text.replace(/\bAlex\b/g, () => name));
+  // Prima linie a instrucțiunilor: cine e Jarvis, limba, profilul și, pentru o femeie, adresarea la feminin.
+  const introOf = sum => "Ești Jarvis, asistentul vocal al lui Alex, care se pregătește pentru un interviu tehnic" + (sum.role ? " de " + sum.role : "") + ". Vorbești doar în română; termenii tehnici (thread, worker, endpoint, commit) rămân în engleză. " + (sum.profile || "") + (sum.addressLine ? " " + sum.addressLine : "");
+
   // Secvențele (spec .scratch/lectie-sincronizata): o bucată se dă pe câmpuri ale desfășurării, fiecare cu cartonașul ei.
   // Toate modulele merg pe secvențe; fără desfășurare, bucata are doar secvența `punct`.
   // Un singur șablon pentru ambele moduri: cu ecran sursa e „de pe cartonaș”, doar audio e „din material” și nu există nicio trimitere vizuală (codul se povestește în cuvinte).
@@ -205,7 +213,7 @@ const Jarvis = (() => {
   function buildSystem(o) {
     const sum = o.summary || {}, mock = o.mode === "mock", topic = o.mode === "topic";
     const lines = [
-      "Ești Jarvis, asistentul vocal al lui Alex, care se pregătește pentru un interviu tehnic" + (sum.role ? " de " + sum.role : "") + ". Vorbești doar în română; termenii tehnici (thread, worker, endpoint, commit) rămân în engleză. " + (sum.profile || ""),
+      introOf(sum),
       mock
         ? "În această sesiune conduci un interviu tehnic simulat: ton neutru și profesionist, fără glume, fără laude, fără feedback și fără explicații între carduri."
         : "Ton: politicos și sec, cu umor discret, ca Jarvis pentru Tony Stark. Îi spui „Alex”. Ești exigent pe conținut: nu accepți răspunsuri vagi și ceri concret („cum ai face asta în producție?”). Cel mult o remarcă scurtă între carduri.",
@@ -225,7 +233,7 @@ const Jarvis = (() => {
         (mock ? "." : "; „altă temă” → next_card cu module; „mai greu” sau „mai ușor” → next_card cu difficulty; „explică ce am ratat” → explain_missed."),
       "Alex te poate întrerupe: dacă se întâmplă, taci și ascultă. Nu inventa fapte; dacă nu ești sigur, spune-o."
     ];
-    return lines.join("\n");
+    return forName(lines.join("\n"), nameOf(sum));
   }
 
 
@@ -243,7 +251,7 @@ const Jarvis = (() => {
   function buildLessonSystem(o) {
     const sum = o.summary || {};
     const lines = [
-      "Ești Jarvis, asistentul vocal al lui Alex, care se pregătește pentru un interviu tehnic" + (sum.role ? " de " + sum.role : "") + ". Vorbești doar în română; termenii tehnici (thread, worker, endpoint, commit) rămân în engleză. " + (sum.profile || ""),
+      introOf(sum),
       "În această sesiune ții o lecție: îi explici cu voce tare fișa modulului „" + o.name + "”, bucată cu bucată. Nu ești intervievator și nu-l examinezi: nu pui întrebări de verificare și nu dai scor, doar explici.",
       "Ton: politicos și sec, cu umor discret, ca Jarvis pentru Tony Stark. Îi spui „Alex”. Vorbești ca într-o conversație, în propoziții scurte, ușor de urmărit pe ureche, fără liste și fără markdown.",
       o.audio
@@ -268,7 +276,7 @@ const Jarvis = (() => {
         : "La începutul lecției, într-o propoziție, spune-i că te poate opri oricând: „pauză”, „repetă”, „mai simplu” sau o întrebare.",
       "Nu inventa fapte; dacă nu ești sigur, spune-o."
     ];
-    return lines.join("\n");
+    return forName(lines.join("\n"), nameOf(sum));
   }
 
   function create(env) {
@@ -627,10 +635,15 @@ const Jarvis = (() => {
         let spare = first;
         auth = { getToken: async () => { if (spare) { const t = spare; spare = null; return t; } return env.getToken(); } };
       }
-      const summary = env.app.summary();
+      const summary = env.app.summary(), who = nameOf(summary);
+      // Alt cont decât Alex: descrierile funcțiilor și `instruction` / `message` din răspunsurile lor primesc numele persoanei.
+      const named = tools => (who === "Alex" ? tools : tools.map(t => Object.assign({}, t, {
+        description: forName(t.description, who),
+        run: async a => { const r = await t.run(a); return r && typeof r === "object" && !Array.isArray(r) ? Object.assign({}, r, "instruction" in r ? { instruction: forName(r.instruction, who) } : null, "message" in r ? { message: forName(r.message, who) } : null) : r; }
+      })));
       const config = Object.assign(lesson
-        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, audio: lz.mode === "audio", summary }), tools: makeLessonTools(ctx), retryMs: RETRY_LESSON }
-        : { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: makeTools(ctx) }, auth);
+        ? { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildLessonSystem({ name: sheet.name, muted: lz.muted, audio: lz.mode === "audio", summary }), tools: named(makeLessonTools(ctx)), retryMs: RETRY_LESSON }
+        : { model: "gemini-3.8-live", voice: st.voice, silenceMs: SILENCE[st.patience] || SILENCE.normal, system: buildSystem({ mode: opts.mode, module: opts.module, summary }), tools: named(makeTools(ctx)) }, auth);
       const onEvent = e => {
         if (lz && !sess.finished) lessonEvent(e);
         if (e.type === "restarted" && !lz && call && !sess.finished) call.say(MSG.restarted);
@@ -649,6 +662,8 @@ const Jarvis = (() => {
       let call = null;
       try { call = await callApi.start({ live: env.live, audio: env.audio, config, micId: st.micId, halfDuplex: lesson ? true : st.halfDuplex, gate: lesson ? false : undefined, survive: lesson, clock: env.clock, onEvent }); }
       catch (err) { change({ phase: "idle", error: errorOf(err && err.reason, viaServer) }); return false; }
+      // Mesajele aplicației către model (MSG, „Începem…”) trec și ele prin nume (alt cont decât Alex).
+      if (who !== "Alex") { const say = call.say, interrupt = call.interrupt; call.say = t => say(forName(t, who)); if (interrupt) call.interrupt = t => interrupt(forName(t, who)); }
       sess.call = call;
       // Cheia veche din browser n-a mai fost nevoie: jetonul a mers, deci cheia Gemini rămâne doar pe server (spec platforma, Jarvis).
       if (viaServer && storage.getItem(KEY_ITEM)) storage.removeItem(KEY_ITEM);
