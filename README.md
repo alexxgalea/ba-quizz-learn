@@ -4,11 +4,11 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 
 ## Ce conține
 
-- **264 de grile** în 25 de module, pe trei niveluri (bază, practic, avansat). Fiecare are context înainte de întrebare, butonul „Nu știu încă” și „Am ghicit”, care trimite grila înapoi la repetat.
+- **329 de grile** în 30 de module, pe trei niveluri (bază, practic, avansat). Fiecare are context înainte de întrebare, butonul „Nu știu încă” și „Am ghicit”, care trimite grila înapoi la repetat.
 - **Explicații pe două niveluri.** Imediat după răspuns: pe scurt, de ce contează, cum funcționează și de ce e greșită varianta aleasă. La cerere („Arată-mi concret”): pas cu pas, aplicare, legătura cu ce știi deja, limite, formularea pentru interviu, o întrebare de verificare și celelalte variante.
-- **Glosar** de 46 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
-- **73 de carduri orale** (dintre care 13 snippet-uri de cod și 6 scenarii de design), **9 exerciții de live coding** cu soluții testate cu pytest și fișe pe module.
-- **Întrebări deschise**: cele 217 întrebări „Verificare” din explicații (fără modulul bonus), fără variante. Răspunzi cu voce tare, dezvălui răspunsul, te notezi (știu / parțial / nu); intră în aceleași cutii Leitner.
+- **Glosar** de 85 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
+- **106 carduri orale** (dintre care 24 de snippet-uri de cod și 6 scenarii de design), **16 exerciții de live coding** cu soluții testate cu pytest și fișe pe module.
+- **Întrebări deschise**: cele 310 întrebări „Verificare” din explicații (fără modulul bonus), fără variante. Răspunzi cu voce tare, dezvălui răspunsul, te notezi (știu / parțial / nu); intră în aceleași cutii Leitner.
 - **Schelete** (Studiu › Schelete): forma minimă a fiecărui concept, scrisă din memorie în 2–5 minute (o coadă sigură între thread-uri, un proces pornit corect, un fixture cu `yield`). Scrii codul, te notezi pe 3–5 puncte esențiale, iar scheletul intră în cutiile Leitner. Vezi „Schelete”.
 - **Formulări pentru interviu** (Studiu › Formulări): liniile „La interviu” din toate explicațiile, pe o pagină, filtrate P1 / greșite / toate.
 - **Diagnostic adaptiv** și **repetiție spațiată** cu scadențe reale: cutiile 1–8 (`Journal.BOX_MAX`): cutia 1 revine după 20 de minute, cutia 2 după 4 ore, iar cutiile 3–8 după 1, 3, 7, 16, 35 și 75 de zile calendaristice (`BOX_IV`; cutia de sus revine și ea). În modul interviu, cu mai puțin de 14 zile rămase, intervalele în zile sunt cel mult jumătate din zilele rămase (`ivWindowDays`). „De repetat acum” adună grilele, cardurile și întrebările deschise scadente; „Mix inteligent” ia întâi scadentele.
@@ -60,6 +60,7 @@ export/            generatorul brief-ului trimis la Perplexity
 node validate.mjs            # verifică tot; trebuie să se termine cu „OK”
 node build.mjs               # produce dist/pregatire-onapsis.html
 node --check dist/bundle-check.js
+node tools/tagpoints.mjs asyncio   # propune legăturile item–punct pentru un modul (doar propuneri; vezi „Legăturile cu punctele”)
 pip install -r katas/requirements-skel-ops.txt   # opțional: pachetele testelor de schelete (docker, ops, graphql, django)
 python3 -m pip install -r katas/requirements-dev.txt   # pytest, celery, PyJWT (doar pentru teste)
 python3 -m pytest -q katas   # testele exercițiilor Python (k13 și scheletele cu pachete lipsă sunt sărite)
@@ -88,6 +89,18 @@ node tools/desf_examples.mjs     # rulează blocurile Python și JS din desfăș
 Pe scurt: `npm run build`, `npm run test:katas`, `npm run test:unit`, `npm run test:ui`, iar `npm run pages` copiază PWA-ul în `docs/app`.
 
 Data implicită a interviului și orele pe seară stau în `P.cfg` (`src/data_core.js`); `P.planTpl` are sarcinile din dimineața interviului și ordinea exercițiilor în plan. Utilizatorul le poate schimba din aplicație (se salvează în progres, cheia `c`).
+
+## Legăturile cu punctele
+
+Fiecare item știe ce puncte ale fișei atinge (Val 0.1, `.scratch/fundatie-concepte/`). Id-ul unui punct e `<modul>:<n>`, cu `n` de la 1, în ordinea din `P.sheets[modul].points` (aceeași cu desfășurările; punctele nu se reordonează).
+
+- **Grile și schelete**: `pt: [n, …]`, punctele modulului lor. `pt: []` scris explicit înseamnă „nu se leagă de niciun punct” (un grup de asemenea itemi arată un punct care lipsește din fișă; la `asyncio`: `s-asyncio-agen`, generatorii async).
+- **Carduri orale**: `kp: [n | null, …]`, câte o valoare pentru fiecare punct cheie din `k`.
+- **Kata-uri**: `pt: ["modul:n", …]`, fiindcă ating mai multe module.
+- **Întrebările deschise** moștenesc `pt` de la grila lor.
+- **Etichetarea**: `node tools/tagpoints.mjs <modul>` propune punctele după cuvintele comune (ca la goluri); agentul citește fiecare item și punctul și scrie el câmpul. Propunerile greșesc tocmai unde contează (la `s-asyncio-sem` propune `gather`, nu semaforul), deci nu se acceptă orbește.
+- **Validarea** (`checkPoints` în `lib.mjs`, chemată de `validate.mjs`): eroare la un index inexistent, la un `kp` de altă lungime decât `k` și la o referință de kata greșită; avertisment, pe modul, la itemii fără câmp, iar pe modulele etichetate complet (`PT_DONE`: `asyncio`) eroare. Pentru acestea, raportul spune punctele fără nicio grilă și pe cele fără nicio formă de producție (card oral, schelet, kata).
+- **Jurnalul**: fiecare eveniment `answer` poartă `points` (`["asyncio:3", …]`), calculat în `add` din câmpul itemului (`ptsOf`); la cardul oral, punctele din `kp`.
 
 ## Formatul explicațiilor
 

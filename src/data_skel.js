@@ -908,7 +908,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-sem", m: "asyncio", lang: "py",
+    id: "s-asyncio-sem", m: "asyncio", lang: "py", pt: [7, 3],
     t: "Semaphore și gather cu return_exceptions",
     p: "`fns` e o listă de funcții async fără argumente. Scrie `run_limited(fns, limit=5)`: le rulează cu cel mult `limit` în paralel și întoarce rezultatele în ordinea lui `fns`; o excepție apare în locul rezultatului ei, fără să le oprească pe celelalte.",
     k: [
@@ -919,7 +919,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-workers", m: "asyncio", lang: "py",
+    id: "s-asyncio-workers", m: "asyncio", lang: "py", pt: [7, 6, 8],
     t: "Workeri pe asyncio.Queue, cu oprire curată",
     p: "Scrie `pipeline(items, handle, n=3)`: pui itemii pe un `asyncio.Queue` mărginit, iar `n` workeri apelează `await handle(item)`. La final workerii sunt opriți și așteptați. Întoarce lista excepțiilor aruncate de `handle`.",
     k: [
@@ -931,7 +931,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-tg", m: "asyncio", lang: "py", v: "3.11+",
+    id: "s-asyncio-tg", m: "asyncio", lang: "py", pt: [4, 5, 8], v: "3.11+",
     t: "TaskGroup și asyncio.timeout",
     p: "Python 3.11+. Scrie `run_all(fns, limit=2.0)`: rulează funcțiile async fără argumente în paralel, într-un `TaskGroup`, cu o limită totală de timp, și întoarce rezultatele în ordinea lui `fns`. Dacă una eșuează, celelalte se anulează. Fără `gather` și fără `wait_for`.",
     k: [
@@ -942,7 +942,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-thread", m: "asyncio", lang: "py",
+    id: "s-asyncio-thread", m: "asyncio", lang: "py", pt: [2, 10, 9],
     t: "to_thread și run_in_executor",
     p: "Scrie `io_many(fn, items)`, care rulează o funcție blocantă (I/O) pe fiecare item fără să blocheze event loop-ul, și `cpu_many(fn, items, pool)`, care face același lucru pentru o funcție CPU-bound, într-un `ProcessPoolExecutor` primit ca argument. Ambele întorc rezultatele în ordine.",
     k: [
@@ -953,7 +953,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-cancel", m: "asyncio", lang: "py",
+    id: "s-asyncio-cancel", m: "asyncio", lang: "py", pt: [6],
     t: "Anulare corectă: finally și CancelledError",
     p: "Scrie `worker(res)`, care rulează la nesfârșit și lasă în `res` urmele curățeniei când e anulat, și `cancel(task)`, care anulează task-ul și așteaptă să se termine. Anularea trebuie să ajungă la cine a cerut-o: `wait_for`, `timeout` și `TaskGroup` se bazează pe ea.",
     k: [
@@ -964,7 +964,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-agen", m: "asyncio", lang: "py",
+    id: "s-asyncio-agen", m: "asyncio", lang: "py", pt: [],
     t: "async with și generator async",
     p: "Scrie un context manager async `resource(log)` (cu `@asynccontextmanager`) care deschide și închide mereu o resursă, și un generator async `ticks(n, log)`. Consumă `ticks` cu `async for`, ieși devreme cu `break` și asigură închiderea lui determinist.",
     k: [

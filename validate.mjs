@@ -1,5 +1,5 @@
 // Loads the data files the way the page does and checks the schema.
-import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles, DESF_FE_MODULES } from "./lib.mjs";
+import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles, DESF_FE_MODULES, checkPoints, PT_DONE } from "./lib.mjs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);
@@ -120,5 +120,10 @@ const long = [];
 const LIM = { scurt: 220, scop: 360, mec: 420, pas: 520, apl: 560, leg: 320, lim: 380, intv: 420, ver: 280, verR: 360 };
 for (const [id, x] of Object.entries(ex.expl)) for (const [k, n] of Object.entries(LIM)) if (x[k] && x[k].replace(/```[\s\S]*?```/g, "").length > n) long.push(id + "." + k + " (" + x[k].length + ")");
 if (long.length) console.log("long fields (warning):", long.join(", "));
+// Legăturile item–punct (pt / kp; `.scratch/fundatie-concepte/`): indexuri valide, raportul pe modulele etichetate complet (PT_DONE).
+const pts = checkPoints(P, { done: PT_DONE });
+pts.errors.forEach(e => errors.push(e));
+if (pts.warnings.length) console.log(pts.warnings.map(w => w + " (warning)").join("\n"));
+for (const [m, r] of Object.entries(pts.report)) console.log("puncte " + m + " (" + r.points + "): fără grilă " + (r.noMcq.join(", ") || "–") + " · fără formă de producție " + (r.noProd.join(", ") || "–"));
 if (errors.length) { console.error("ERRORS:\n" + errors.join("\n")); process.exit(1); }
 console.log("OK");

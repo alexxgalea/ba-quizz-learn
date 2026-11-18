@@ -218,7 +218,15 @@
   // Sincronizarea jurnalului cu serverul propriu (src/sync.js; doar PWA, doar cu IndexedDB). Adresa și secretul vin de la `Conn` (ServerConn, localStorage `onapsis-server-v1`; nu în S, nu în jurnal), citite la fiecare ciclu.
   // Nu blochează nimic: fără semnal sau cu secret greșit evenimentele rămân în coadă și ecranul arată starea.
   const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => Conn.valid(), onStatus: () => paintStatus(), onMerged: () => repaintRemote() }) : null;
-  const add = e => { const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
+  // Punctele fișei atinse de item (`.scratch/fundatie-concepte/`, tichetul 04), ca id-uri `modul:n`: `pt` la grile, întrebări deschise (moștenit de la grilă) și schelete,
+  // `kp` (fără null) la cardurile orale, `pt` („modul:n”) la kata-uri. Gol cât itemul nu e încă etichetat.
+  function ptsOf(form, id) {
+    const it = form === "q" || form === "x" ? QBY[id] : form === "o" ? OBY[id] : form === "s" ? SBY[id] : form === "k" ? KBY[id] : null;
+    if (!it) return [];
+    const raw = form === "o" ? (it.kp || []).filter(n => n != null) : it.pt || [];
+    return [...new Set(raw.map(n => (form === "k" ? String(n) : it.m + ":" + n)))];
+  }
+  const add = e => { if (e.type === "answer" && !e.points) e.points = ptsOf(e.form, e.item); const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
   const histAdd = row => add({ type: "hist", row });
   function commit() { planCache = null; if (!JSTORE) saveLocal(); Sync.push(); paintHeader(); }      // fără depozit (artifact, sau PWA fără IndexedDB) S se salvează și sub cheia veche, pe lângă oglindă
 

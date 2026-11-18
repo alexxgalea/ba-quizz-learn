@@ -382,3 +382,64 @@ export function buildDesf(P, files) {
   }
   return { desf, errors, warnings };
 }
+
+// ---------- legăturile item–punct (`.scratch/fundatie-concepte/`, tichetele 04–06) ----------
+// Id-ul unui punct: `<modul>:<n>`, cu n de la 1, în ordinea din `P.sheets[modul].points` (punctele nu se reordonează).
+// Grile și schelete: `pt: [n, …]` (punctele modulului lor; `[]` scris explicit = de niciun punct). Carduri orale: `kp: [n | null, …]`, paralel cu `k`.
+// Kata-uri (ating mai multe module): `pt: ["modul:n", …]`. Întrebările deschise moștenesc `pt` de la grila lor.
+// Modulele etichetate complet: acolo, un item fără câmp e eroare, nu avertisment.
+export const PT_DONE = ["asyncio"];
+const PT_STOP = new Set(("si sau dar din pentru care este sunt prin intre cand cum unde doar fara daca poate pot are iar tot cat cel cea cei cele lui sale ale mai dupa acest aceasta acesta apoi pana alt alta deci mult mica mare fie era acel acea").split(" "));
+const ptToks = t => new Set((String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9_]{3,}/g) || []).filter(w => !PT_STOP.has(w)));
+// Punctele cu cuvinte comune cu `text`, cele mai multe primele (aceeași potrivire ca `relRank` din app.js): [{ n (de la 1), w (cuvinte comune) }].
+export function pointRank(text, points) {
+  const t = ptToks(text);
+  return points.map((p, i) => { let w = 0; ptToks(p).forEach(x => { if (t.has(x)) w++; }); return { n: i + 1, w }; }).filter(o => o.w > 0).sort((a, b) => b.w - a.w || a.n - b.n);
+}
+// Regulile și raportul de acoperire. `done`: modulele etichetate complet. Întoarce { errors, warnings, missing: { modul: câți itemi fără câmp }, report: { modul: { points, noMcq, noProd } } }
+// (raportul doar pe modulele din `done`: punctele fără nicio grilă și punctele fără nicio formă de producție: card oral, schelet, kata).
+export function checkPoints(P, { done = PT_DONE } = {}) {
+  const errors = [], warnings = [], missing = {}, report = {}, used = {};
+  const npts = m => ((P.sheets[m] && P.sheets[m].points) || []).length;
+  const okN = (m, n) => Number.isInteger(n) && n >= 1 && n <= npts(m);
+  const mark = (m, n, kind) => { const u = (used[m] = used[m] || { mcq: new Set(), prod: new Set() }); u[kind].add(n); };
+  const absent = (it, m) => { if (done.includes(m)) errors.push(it.id + ": fără legătură cu punctele (modulul " + m + " e etichetat complet)"); else missing[m] = (missing[m] || 0) + 1; };
+  const list = (it, m, kind) => {
+    if (it.pt === undefined) return absent(it, m);
+    if (!Array.isArray(it.pt)) return errors.push(it.id + ": pt trebuie să fie o listă");
+    for (const n of it.pt) { if (!okN(m, n)) errors.push(it.id + ": punctul " + JSON.stringify(n) + " nu există în fișa " + m + " (1–" + npts(m) + ")"); else mark(m, n, kind); }
+  };
+  for (const q of P.mcq || []) list(q, q.m, "mcq");
+  for (const s of P.skel || []) list(s, s.m, "prod");
+  for (const c of P.oral || []) {
+    if (c.kp === undefined) { absent(c, c.m); continue; }
+    if (!Array.isArray(c.kp) || c.kp.length !== (c.k || []).length) { errors.push(c.id + ": kp trebuie să aibă câte o valoare pentru fiecare punct cheie (" + (c.k || []).length + ")"); continue; }
+    for (const n of c.kp) { if (n === null) continue; if (!okN(c.m, n)) errors.push(c.id + ": punctul " + JSON.stringify(n) + " nu există în fișa " + c.m + " (1–" + npts(c.m) + ")"); else mark(c.m, n, "prod"); }
+  }
+  for (const k of P.katas || []) {
+    if (k.pt === undefined) { missing.katas = (missing.katas || 0) + 1; continue; }
+    if (!Array.isArray(k.pt)) { errors.push(k.id + ": pt trebuie să fie o listă"); continue; }
+    for (const r of k.pt) {
+      const mm = /^([a-z0-9_-]+):(\d+)$/.exec(typeof r === "string" ? r : "");
+      if (!mm || !P.sheets[mm[1]] || !okN(mm[1], +mm[2])) errors.push(k.id + ": referința " + JSON.stringify(r) + " nu e un punct („modul:n”)");
+      else mark(mm[1], +mm[2], "prod");
+    }
+  }
+  const miss = Object.entries(missing).filter(([, n]) => n);
+  if (miss.length) warnings.push("itemi fără legătură cu punctele: " + miss.map(([m, n]) => m + " " + n).join(", "));
+  for (const m of done) {
+    const u = used[m] || { mcq: new Set(), prod: new Set() }, all = Array.from({ length: npts(m) }, (_, i) => i + 1);
+    report[m] = { points: all.length, noMcq: all.filter(n => !u.mcq.has(n)), noProd: all.filter(n => !u.prod.has(n)) };
+  }
+  return { errors, warnings, missing, report };
+}
+// Propunerile pentru un modul (`node tools/tagpoints.mjs <modul>`): pe fiecare grilă, schelet și punct cheie al unui card oral, cele mai apropiate cel mult 3 puncte.
+// Doar propuneri: agentul citește itemul și punctul și scrie el `pt` / `kp`. `has` = ce e deja în date.
+export function proposeTags(P, m) {
+  const pts = (P.sheets[m] && P.sheets[m].points) || [], top = t => pointRank(t, pts).slice(0, 3).map(x => x.n);
+  const out = [];
+  for (const q of (P.mcq || []).filter(x => x.m === m)) out.push({ kind: "mcq", id: q.id, text: q.q, prop: top([q.q, q.o && q.o[0], q.e].join(" ")), has: q.pt });
+  for (const s of (P.skel || []).filter(x => x.m === m)) out.push({ kind: "skel", id: s.id, text: s.t, prop: top([s.t, s.p, ...(s.k || [])].join(" ")), has: s.pt });
+  for (const c of (P.oral || []).filter(x => x.m === m)) out.push({ kind: "oral", id: c.id, text: c.q, prop: (c.k || []).map(k => top(k)[0] || null), has: c.kp });
+  return out;
+}

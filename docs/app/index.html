@@ -3199,14 +3199,14 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       e: "Cu o interfață comună și un registru, o regulă nouă e un fișier nou. Motorul și regulile vechi rămân neatinse, iar fiecare regulă se testează separat." }
   ]);
   Q("asyncio", [
-    { id: "aio-01", lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
+    { id: "aio-01", pt: [1], lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
       "O corutină rulează până la un `await`; abia atunci bucla poate trece la alta",
       "Corutinele rulează în paralel, pe mai multe core-uri",
       "Sistemul de operare întrerupe corutinele oricând, ca pe threaduri",
       "Fiecare corutină primește propriul thread"],
       ctx: "La threaduri, sistemul de operare decide când comută. În asyncio există un singur thread și o buclă de evenimente care rulează corutinele pe rând.",
       e: "Bucla poate comuta doar când corutina curentă cedează controlul, la un `await` pe ceva care chiar așteaptă (I/O, timer). Între două `await`-uri, corutina rulează singură." },
-    { id: "aio-02", lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
+    { id: "aio-02", pt: [2], lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
     time.sleep(2)
     return "ok"`, o: [
       "~200 s: `time.sleep` blochează bucla, cererile se servesc pe rând",
@@ -3215,14 +3215,14 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       "Nimic: `time.sleep` aruncă eroare într-o corutină"],
       ctx: "`time.sleep` blochează threadul care îl apelează. `asyncio.sleep` e o corutină care cedează controlul buclei cât așteaptă.",
       e: "`time.sleep` nu cedează controlul: bucla stă blocată 2 s pe fiecare cerere, deci cererile se servesc una după alta. Cu `await asyncio.sleep(2)` toate ar aștepta în paralel, ~2 s în total." },
-    { id: "aio-03", lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
+    { id: "aio-03", pt: [2], lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
       "Rulează funcția sincronă într-un thread al executorului implicit, fără să blocheze bucla",
       "Rulează funcția într-un proces separat, pe alt core",
       "Transformă funcția într-o corutină care cedează controlul la fiecare linie",
       "Rulează funcția direct pe bucla evenimentelor, cu prioritate"],
       ctx: "Uneori trebuie să apelezi dintr-o corutină cod sincron: un SDK fără variantă async, un driver blocant, o funcție de parsare.",
       e: "`asyncio.to_thread` (3.9+) trimite funcția într-un thread și întoarce o corutină pe care o aștepți. Bucla rămâne liberă cât rulează funcția." },
-    { id: "aio-04", lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
+    { id: "aio-04", pt: [3], lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
     await asyncio.gather(
         a(), b(), c())
 except ValueError:
@@ -3233,14 +3233,14 @@ except ValueError:
       "`gather` așteaptă să termine toate, apoi ridică excepția"],
       ctx: "`asyncio.gather` și `asyncio.TaskGroup` rulează amândouă corutine concurent, dar tratează diferit prima eroare.",
       e: "Fără `return_exceptions=True`, `gather` propagă imediat prima excepție, dar nu anulează celelalte task-uri: ele continuă în fundal. Dacă vrei anulare, folosești `TaskGroup`." },
-    { id: "aio-05", lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
+    { id: "aio-05", pt: [4], lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
       "Anulează celelalte task-uri din grup, așteaptă să se oprească și ridică `ExceptionGroup`",
       "Ignoră eroarea și continuă cu celelalte",
       "Întoarce eroarea ca valoare, ca `return_exceptions=True`",
       "Repornește task-ul care a eșuat"],
       ctx: "`async with asyncio.TaskGroup() as tg:` (3.11+) creează task-uri cu `tg.create_task(...)`; blocul se termină abia când s-au terminat toate.",
       e: "TaskGroup implementează concurența structurată: la prima eroare anulează frații, iar la ieșirea din bloc ridică toate excepțiile într-un `ExceptionGroup`, prinse cu `except*`." },
-    { id: "aio-06", lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
+    { id: "aio-06", pt: [5], lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
     data = await fetch(url)`, o: [
       "După 5 s task-ul e anulat, iar blocul ridică `TimeoutError`",
       "`fetch` continuă în fundal, iar `data` devine `None`",
@@ -3248,7 +3248,7 @@ except ValueError:
       "Programul așteaptă toate cele 10 s, apoi ridică `TimeoutError`"],
       ctx: "`asyncio.timeout` (3.11+) e un context manager. Intern, la expirare anulează task-ul curent și transformă anularea în altă excepție la ieșire.",
       e: "La expirare, task-ul primește `CancelledError` în `fetch`, iar la ieșirea din bloc ea devine `TimeoutError`. `fetch` e oprit, nu lăsat în fundal." },
-    { id: "aio-07", lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
+    { id: "aio-07", pt: [6], lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
     while True:
         try:
             await job()
@@ -3260,14 +3260,14 @@ except ValueError:
       "Bucla consumă 100% CPU"],
       ctx: "Anularea unui task (`task.cancel()`, timeout, oprirea aplicației) se face aruncând `CancelledError` în el, la următorul `await`.",
       e: "`CancelledError` e `BaseException` (din 3.8), deci `except BaseException` o înghite, iar bucla continuă. Corect: `except Exception`, iar dacă prinzi anularea pentru cleanup, o ridici din nou." },
-    { id: "aio-08", lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
+    { id: "aio-08", pt: [8], lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
       "Task-ul poate fi colectat de GC înainte să termine, iar excepțiile lui se pierd",
       "Corutina nu pornește până nu faci `await` pe ea",
       "Rulează sincron și blochează apelantul",
       "Pornește un thread nou pentru fiecare task"],
       ctx: "`create_task` programează corutina pe buclă și întoarce un obiect `Task`. Bucla ține doar o referință slabă la el.",
       e: "Documentația cere explicit să păstrezi o referință: fără ea task-ul poate dispărea la jumătate, iar o excepție rămâne doar un warning „Task exception was never retrieved”." },
-    { id: "aio-09", lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
+    { id: "aio-09", pt: [9], lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
       "`loop.call_soon_threadsafe(q.put_nowait, ev)`",
       "`q.put_nowait(ev)` direct: `asyncio.Queue` e thread-safe",
       "`await q.put(ev)` din thread",
@@ -4357,7 +4357,7 @@ def transfer_2():
   ]);
 
   O("asyncio", [
-    { id: "o-snp-aio1", q: "Ce probleme are funcția când lista are 50.000 de hosturi?", code: R`async def scan_all(hosts):
+    { id: "o-snp-aio1", kp: [7, 7, 3, 4, 5], q: "Ce probleme are funcția când lista are 50.000 de hosturi?", code: R`async def scan_all(hosts):
     tasks = [check(h) for h in hosts]
     res = await asyncio.gather(*tasks)
     return res`, k: [
@@ -4367,7 +4367,7 @@ def transfer_2():
       "Erori: `return_exceptions=True` sau `TaskGroup` (anulează restul), după ce vrei",
       "Timeout per host (`asyncio.timeout`) și rezultate procesate pe măsură ce vin, nu ținute toate în memorie"],
       model: "Prima problemă e că pornesc 50.000 de corutine care deschid conexiuni toate deodată: rămân fără descriptori de fișiere și supraîncarc țintele. Aș limita concurența cu un `asyncio.Semaphore` în `check`, sau cu un număr fix de workeri care consumă o `asyncio.Queue`. A doua: dacă un host aruncă o excepție, `gather` o ridică imediat, dar celelalte task-uri nu sunt anulate, continuă în fundal. Aleg explicit: `return_exceptions=True` dacă vreau toate rezultatele, sau `TaskGroup` dacă la prima eroare vreau să opresc tot. Aș pune și un timeout per host cu `asyncio.timeout` și aș procesa rezultatele pe măsură ce vin, ca să nu țin totul în memorie." },
-    { id: "o-snp-aio2", q: "Ce e riscant în acest handler?", code: R`async def handle(event):
+    { id: "o-snp-aio2", kp: [8, 8, 8, 8, null], q: "Ce e riscant în acest handler?", code: R`async def handle(event):
     asyncio.create_task(
         send_alert(event))
     return {"ok": True}`, k: [
@@ -4581,21 +4581,21 @@ def test_notify(m):
       model: "Aș defini o interfață mică pentru o regulă, cu `matches(event)` și `alert(event)`, ca `Protocol` sau ABC. Fiecare regulă e o clasă separată, înregistrată într-un registru, de exemplu cu un decorator, iar motorul doar parcurge registrul și aplică regulile pe fiecare eveniment. Așa o regulă nouă înseamnă un fișier nou și un test nou, fără să ating motorul sau regulile existente. Regulile nu țin stare globală; ce variază per client, cum ar fi pragurile sau activarea, vine din configurare, ca date. Motorul îl testez cu o listă explicită de reguli false, ca să nu depind de registrul real." }
   ]);
   O("asyncio", [
-    { id: "o-aio-1", q: "Explică event loop-ul din asyncio și ce înseamnă „să blochezi bucla”.", k: [
+    { id: "o-aio-1", kp: [1, 1, 2, 2, 2], q: "Explică event loop-ul din asyncio și ce înseamnă „să blochezi bucla”.", k: [
       "Un singur thread rulează bucla; corutinele rulează pe rând",
       "O corutină cedează controlul doar la `await` (I/O, timer); atunci bucla trece la alta",
       "Un apel blocant (`time.sleep`, `requests`, driver sincron, calcul greu) oprește toate corutinele",
       "Soluții: biblioteci async, `asyncio.to_thread` pentru I/O sincron, procese pentru CPU",
       "Detectare: modul debug (callback-uri peste 100 ms), latență care crește pe toate rutele deodată"],
       model: "Bucla de evenimente rulează pe un singur thread și execută corutinele pe rând. O corutină rulează până la un `await` pe ceva care așteaptă, un socket sau un timer; atunci e suspendată și bucla trece la alta. Asta permite mii de conexiuni deschise într-un singur worker. „Să blochezi bucla” înseamnă să faci într-o corutină un apel care nu cedează controlul: `time.sleep`, `requests.get`, un driver de bază de date sincron sau un calcul lung. Cât durează, nicio altă cerere nu avansează. Folosesc biblioteci async, mut I/O-ul sincron în `asyncio.to_thread` și calculul greu în procese. În producție se vede ca o latență care crește pe toate rutele deodată, iar modul debug din asyncio loghează pașii mai lenți de 100 ms." },
-    { id: "o-aio-2", q: "`gather`, `TaskGroup` sau `as_completed`: când îl alegi pe fiecare?", k: [
+    { id: "o-aio-2", kp: [3, 3, 4, null, 7], q: "`gather`, `TaskGroup` sau `as_completed`: când îl alegi pe fiecare?", k: [
       "`gather`: rezultate în ordinea intrărilor; la prima eroare o propagă, dar NU anulează restul",
       "`gather(return_exceptions=True)`: vrei toate rezultatele, inclusiv erorile, ca valori",
       "`TaskGroup` (3.11+): la prima eroare anulează restul și ridică `ExceptionGroup` (concurență structurată)",
       "`as_completed`: procesezi fiecare rezultat imediat ce e gata",
       "Pentru volum mare: limită de concurență (`Semaphore`) și timeout per operație"],
       model: "`gather` rulează corutinele concurent și îmi dă rezultatele în ordinea în care le-am dat; la prima excepție o ridică, dar celelalte task-uri continuă în fundal. Dacă vreau toate rezultatele, chiar și eșecurile, pun `return_exceptions=True` și le separ după. `TaskGroup`, din 3.11, e varianta structurată: la prima eroare anulează restul și ridică un `ExceptionGroup`, deci niciun task nu rămâne orfan; îl prefer când operațiile depind una de alta. `as_completed` îl folosesc când vreau să procesez fiecare rezultat imediat, de exemplu să salvez scanările pe măsură ce se termină. La sute sau mii de operații adaug un `Semaphore` și un timeout per operație." },
-    { id: "o-aio-3", q: "Pentru un serviciu care scanează mii de hosturi și apoi analizează rezultatele: asyncio, threads sau procese?", k: [
+    { id: "o-aio-3", kp: [10, 10, 7, 10, null], q: "Pentru un serviciu care scanează mii de hosturi și apoi analizează rezultatele: asyncio, threads sau procese?", k: [
       "Partea de rețea e I/O-bound: asyncio (mii de conexiuni, un thread) sau un thread pool, dacă bibliotecile sunt sincrone",
       "Analiza grea în Python pur e CPU-bound: procese (`ProcessPoolExecutor`), din cauza GIL-ului",
       "Limită de concurență și timeout per host, ca să nu supraîncarci ținte sau propriile resurse",
@@ -6598,7 +6598,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-sem", m: "asyncio", lang: "py",
+    id: "s-asyncio-sem", m: "asyncio", lang: "py", pt: [7, 3],
     t: "Semaphore și gather cu return_exceptions",
     p: "`fns` e o listă de funcții async fără argumente. Scrie `run_limited(fns, limit=5)`: le rulează cu cel mult `limit` în paralel și întoarce rezultatele în ordinea lui `fns`; o excepție apare în locul rezultatului ei, fără să le oprească pe celelalte.",
     k: [
@@ -6609,7 +6609,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-workers", m: "asyncio", lang: "py",
+    id: "s-asyncio-workers", m: "asyncio", lang: "py", pt: [7, 6, 8],
     t: "Workeri pe asyncio.Queue, cu oprire curată",
     p: "Scrie `pipeline(items, handle, n=3)`: pui itemii pe un `asyncio.Queue` mărginit, iar `n` workeri apelează `await handle(item)`. La final workerii sunt opriți și așteptați. Întoarce lista excepțiilor aruncate de `handle`.",
     k: [
@@ -6621,7 +6621,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-tg", m: "asyncio", lang: "py", v: "3.11+",
+    id: "s-asyncio-tg", m: "asyncio", lang: "py", pt: [4, 5, 8], v: "3.11+",
     t: "TaskGroup și asyncio.timeout",
     p: "Python 3.11+. Scrie `run_all(fns, limit=2.0)`: rulează funcțiile async fără argumente în paralel, într-un `TaskGroup`, cu o limită totală de timp, și întoarce rezultatele în ordinea lui `fns`. Dacă una eșuează, celelalte se anulează. Fără `gather` și fără `wait_for`.",
     k: [
@@ -6632,7 +6632,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-thread", m: "asyncio", lang: "py",
+    id: "s-asyncio-thread", m: "asyncio", lang: "py", pt: [2, 10, 9],
     t: "to_thread și run_in_executor",
     p: "Scrie `io_many(fn, items)`, care rulează o funcție blocantă (I/O) pe fiecare item fără să blocheze event loop-ul, și `cpu_many(fn, items, pool)`, care face același lucru pentru o funcție CPU-bound, într-un `ProcessPoolExecutor` primit ca argument. Ambele întorc rezultatele în ordine.",
     k: [
@@ -6643,7 +6643,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-cancel", m: "asyncio", lang: "py",
+    id: "s-asyncio-cancel", m: "asyncio", lang: "py", pt: [6],
     t: "Anulare corectă: finally și CancelledError",
     p: "Scrie `worker(res)`, care rulează la nesfârșit și lasă în `res` urmele curățeniei când e anulat, și `cancel(task)`, care anulează task-ul și așteaptă să se termine. Anularea trebuie să ajungă la cine a cerut-o: `wait_for`, `timeout` și `TaskGroup` se bazează pe ea.",
     k: [
@@ -6654,7 +6654,7 @@ window.PREP.skel = [
     ]
   },
   {
-    id: "s-asyncio-agen", m: "asyncio", lang: "py",
+    id: "s-asyncio-agen", m: "asyncio", lang: "py", pt: [],
     t: "async with și generator async",
     p: "Scrie un context manager async `resource(log)` (cu `@asynccontextmanager`) care deschide și închide mereu o resursă, și un generator async `ticks(n, log)`. Consumă `ticks` cu `async for`, ieși devreme cu `break` și asigură închiderea lui determinist.",
     k: [
@@ -9415,7 +9415,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   // Sincronizarea jurnalului cu serverul propriu (src/sync.js; doar PWA, doar cu IndexedDB). Adresa și secretul vin de la `Conn` (ServerConn, localStorage `onapsis-server-v1`; nu în S, nu în jurnal), citite la fiecare ciclu.
   // Nu blochează nimic: fără semnal sau cu secret greșit evenimentele rămân în coadă și ecranul arată starea.
   const JSync = JSTORE ? JournalSync.create({ journal: J, fetch: (u, r) => window.fetch(u, r), link: () => Conn.valid(), onStatus: () => paintStatus(), onMerged: () => repaintRemote() }) : null;
-  const add = e => { const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
+  // Punctele fișei atinse de item (`.scratch/fundatie-concepte/`, tichetul 04), ca id-uri `modul:n`: `pt` la grile, întrebări deschise (moștenit de la grilă) și schelete,
+  // `kp` (fără null) la cardurile orale, `pt` („modul:n”) la kata-uri. Gol cât itemul nu e încă etichetat.
+  function ptsOf(form, id) {
+    const it = form === "q" || form === "x" ? QBY[id] : form === "o" ? OBY[id] : form === "s" ? SBY[id] : form === "k" ? KBY[id] : null;
+    if (!it) return [];
+    const raw = form === "o" ? (it.kp || []).filter(n => n != null) : it.pt || [];
+    return [...new Set(raw.map(n => (form === "k" ? String(n) : it.m + ":" + n)))];
+  }
+  const add = e => { if (e.type === "answer" && !e.points) e.points = ptsOf(e.form, e.item); const ev = J.append(e); if (JSync) JSync.poke(); return ev; };       // un eveniment nou; S se actualizează pe loc
   const histAdd = row => add({ type: "hist", row });
   function commit() { planCache = null; if (!JSTORE) saveLocal(); Sync.push(); paintHeader(); }      // fără depozit (artifact, sau PWA fără IndexedDB) S se salvează și sub cheia veche, pe lângă oglindă
 
@@ -12089,7 +12097,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = JournalSyn
   // ---------- Jarvis: ecranul vocal (spec §6) ----------
   // Ecranul doar desenează starea din Jarvis.getState(). Sesiunea, apelul și protocolul stau în src/jarvis.js, call.js, live.js și audio.js.
   const PWA_URL = "https://alexxgalea.github.io/ba-quizz-learn/docs/app/";   // GitHub Pages servește rădăcina ramurii main, deci aplicația e în /docs/app/
-  const BUILD = "8fcc42e";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
+  const BUILD = "2745ff2";                                          // înlocuit la build (build.mjs): hash scurt al codului, afișat în ecranul Jarvis
   const jvFakes = window.__jarvisFakes || {};                         // înlocuitori pentru teste (tools/jarvis_fakes.js)
   const JV_STATE = { connecting: "Se conectează…", listening: "Te ascult", thinking: "Se gândește…", speaking: "Jarvis vorbește", paused: "Pauză" };
   const JV_MODE = { train: "Antrenament", mock: "Interviu tehnic simulat", topic: "Pe o temă", lesson: "Lecție" };
