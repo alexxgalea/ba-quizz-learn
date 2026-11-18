@@ -6,7 +6,7 @@
 
 **Blocked by:** 01, 04
 
-**Status:** ready-for-agent
+**Status:** done (de verificat pe API-ul real)
 
 - [x] Antrenamentul și lecția pornesc fără cheie în `localStorage`. (Bifat pe fapte din cod: teste de unitate `tools/unit/token.test.mjs` și ecran `tools/test_jarvis.py`. **Doar pe API-ul real** rămâne de văzut că jetonul deschide efectiv o sesiune: `docs/probe-jeton-live.html`, pasul A.)
 - [x] O sesiune care depășește durata jetonului continuă (test de unitate peste `fakes.mjs`: „a session longer than the token life continues”, plus refuzul handle-ului vechi și cererea unui jeton nou la `auth`). **Doar pe API-ul real:** dacă Gemini acceptă handle-ul vechi cu un jeton nou (proba, pasul C); codul acoperă ambele rezultate.
@@ -39,3 +39,7 @@ Serverul are acum cheia Gemini (a doua lansare). Rezultate:
 - **C**: reluare cu **alt jeton** și handle-ul vechi: acceptată, cu context. Documentația Google nu o descrie; observată pe 2026-11-13. Calea de siguranță din aplicație (repornire curată cu `recap`, evenimentul `restarted`) rămâne pentru cazul în care Gemini o refuză.
 - **D**: sesiune nouă, fără handle, cu jeton nou: merge.
 - Jarvis pornește și rulează în PWA, prin serverul real.
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul era rămas de la creare; bifele și comentariile de mai sus arată lucrul făcut. Verificat acum față de istoric și suită (`npm run test:unit`, 643). Rămâne proba pe API-ul real: `docs/probe-jeton-live.html` (pasul A: jetonul deschide o sesiune; pasul C: handle-ul vechi cu jeton nou).

@@ -6,7 +6,7 @@
 
 **Blocked by:** 01, 03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Trimiterea aceluiași eveniment de două ori îl păstrează o dată.
 - [x] Citirea de la un cursor întoarce evenimentele în ordinea sosirii, cu cursorul următor; paginată.
@@ -37,3 +37,7 @@ Corecturi făcute la prima lansare: `deploy.sh` fără bit de execuție, `deploy
 
 ### 2026-11-11, prima rulare reală
 `POST /events` dădea 500 (`AccessDenied`) pe AWS real: tranzacția de scriere folosește un `ConditionCheck`, iar politica funcției n-avea `dynamodb:ConditionCheckItem`. Moto nu verifică IAM. Reparat (PR #8), cu un test care cere în politică fiecare tip de operație folosit de `dynamo.py`. După relansare, Alex a văzut „La zi” în PWA.
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul era rămas de la creare; bifele și comentariile de mai sus arată lucrul făcut. Verificat acum față de istoric și suită (`npm run test:unit`, 643). Serverul e lansat în `eu-central-1` (comentariul din 04): `/health` 200, `/events` fără secret 401, CORS pe originea PWA-ului.

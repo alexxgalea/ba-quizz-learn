@@ -6,7 +6,7 @@
 
 **Blocked by:** 02, 04
 
-**Status:** ready-for-agent
+**Status:** done (de verificat pe telefon)
 
 - [x] Un răspuns dat pe telefon apare pe laptop după sincronizare, cu aceeași cutie.
 - [x] Răspunsuri date fără semnal pe două dispozitive se regăsesc toate după reconectare.
@@ -28,3 +28,7 @@
 
 ### 2026-11-11, verificat pe serverul real
 Alex a legat PWA-ul de server (eu-central-1). Cele 278 de evenimente adunate local au plecat după repararea politicii IAM și starea arată „La zi”. Rămâne de verificat de Alex: același cont pe telefon (răspuns dat pe un dispozitiv, văzut pe celălalt) și un reset.
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul era rămas de la creare; bifele și comentariile de mai sus arată lucrul făcut. Verificat acum față de istoric și suită (`npm run test:unit`, 643). Rămâne de verificat de Alex: același cont pe telefon și un răspuns dat pe un dispozitiv care apare pe celălalt.

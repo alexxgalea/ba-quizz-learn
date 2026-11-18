@@ -6,10 +6,14 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Nicio instrucțiune nu mai cere un exemplu din afara materialului primit.
-- [ ] Test pe fișa `django`: o secvență pe bucată, de tip `punct`.
-- [ ] Pe ecran, cartonașul e punctul, pe toată durata bucății.
+- [x] Nicio instrucțiune nu mai cere un exemplu din afara materialului primit.
+- [x] Test pe fișa `django`: o secvență pe bucată, de tip `punct`.
+- [x] Pe ecran, cartonașul e punctul, pe toată durata bucății.
 
 ## Comments
+
+### 2026-11-18 (curățarea statusurilor)
+
+Statusul și bifele erau rămase de la creare: lucrul e făcut în commit-ul numit mai jos și `plan.md` îl dă ca gata. Verificat acum: commit-ul există în istoric, iar suita completă (`npm run test:unit`, 643, și `tools/test_lesson.py`) trece. Bifele nu au fost reverificate una câte una. Commit: `90720ef`.
