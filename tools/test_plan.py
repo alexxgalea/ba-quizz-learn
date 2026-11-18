@@ -41,14 +41,23 @@ async def main():
           out.noRepeat = !out.sheetsToday.some(m => out.sheetsTomorrow.includes(m));
           out.kataToday = (plan[0].tasks.find(t => t.go.t === "kata") || {}).go;
           out.firstModuleP1 = window.PREP.modules.find(m => m.id === out.sheetsToday[0]).p === 1;
-          // due dates per box
-          const t0 = Date.now();
+          // due dates per box (orarul de durată): interview far away, so the interview window does not cap them
+          const t0 = Date.now(), dd = x => Math.round((new Date(new Date(x).setHours(0, 0, 0, 0)) - day(0)) / 86400000);
+          const cfgAt = d => { S.c = { d: iso(day(d)), h: 2.5, t: Date.now() }; T.setState(S); };
+          cfgAt(30);
           T.updQ("gil-01", false); out.box1 = S.q["gil-01"].b; out.due1 = Math.round((T.dueAt(S.q["gil-01"]) - t0) / 60000);        // 20 min
           T.updQ("gil-01", true); out.box2 = S.q["gil-01"].b; out.due2 = Math.round((T.dueAt(S.q["gil-01"]) - t0) / 3600000);      // 4 h
-          T.updQ("gil-01", true); out.box3 = S.q["gil-01"].b; out.due3 = iso(new Date(T.dueAt(S.q["gil-01"]))) === iso(day(1));   // tomorrow
-          T.updQ("gil-01", true); out.box4 = S.q["gil-01"].b; out.due4 = iso(new Date(T.dueAt(S.q["gil-01"]))) === iso(day(2));   // in two days
-          T.updQ("gil-01", true); out.box5 = S.q["gil-01"].b; out.due5 = T.dueAt(S.q["gil-01"]) === Infinity;
+          out.boxes = []; out.dueDays = [];
+          for (let i = 0; i < 7; i++) { T.updQ("gil-01", true); out.boxes.push(S.q["gil-01"].b); out.dueDays.push(dd(T.dueAt(S.q["gil-01"]))); }   // 3..8, 8
           out.notDueNow = !T.isDue(S.q["gil-01"]);
+          // an item that sat in the old top box (5) comes back 7 days after its last answer
+          out.oldTop = dd(T.dueAt({ b: 5, n: 6, c: 6, l: 1, t: day(-2).getTime() + 3600000 }));                                    // -2 + 7 = 5
+          // interview window: 6 days left → day intervals at most 3 days; an item answered long ago is due now
+          cfgAt(6);
+          out.winTop = dd(T.dueAt(S.q["gil-01"]));
+          out.winOld = T.isDue({ b: 6, n: 6, c: 6, l: 1, t: day(-10).getTime() });
+          out.win20 = Math.round((T.dueAt({ b: 1, n: 1, c: 0, l: 0, t: t0 }) - t0) / 60000);
+          cfgAt(2);
           // an item answered wrong 30 min ago is due; one answered right 10 min ago is not
           S.q["gil-02"] = { b: 1, n: 1, c: 0, l: 0, t: t0 - 30 * 60000 };
           S.q["gil-03"] = { b: 2, n: 1, c: 1, l: 1, t: t0 - 10 * 60000 };
@@ -84,11 +93,75 @@ async def main():
         ok(all(abs(m - 150) <= 25 for m in logic["eveningMin"]), "plan: evenings fit ~2.5 h " + str(logic["eveningMin"]))
         ok(logic["morning"] == ["due", "ivmock", "study", "study", "study"] and logic["lastHasIntv"], "plan: morning warm-up and formulations on the last evening")
         ok(logic["noRepeat"] and logic["firstModuleP1"] and logic["kataToday"], "plan: modules don't repeat, P1 first, one kata per evening")
-        ok(logic["box1"] == 1 and logic["due1"] == 20 and logic["box2"] == 2 and logic["due2"] == 4 and logic["due3"] and logic["due4"] and logic["due5"] and logic["notDueNow"], "due dates: 20 min, 4 h, tomorrow, in two days, never")
+        ok(logic["box1"] == 1 and logic["due1"] == 20 and logic["box2"] == 2 and logic["due2"] == 4 and logic["boxes"] == [3, 4, 5, 6, 7, 8, 8] and logic["dueDays"] == [1, 3, 7, 16, 35, 75, 75] and logic["notDueNow"], "due dates: 20 min, 4 h, then 1, 3, 7, 16, 35, 75 days; the top box (8) comes back " + str(logic["boxes"]) + " " + str(logic["dueDays"]))
+        ok(logic["oldTop"] == 5, "an item in the old top box (5) is due 7 days after its last answer: " + str(logic["oldTop"]))
+        ok(logic["winTop"] == 3 and logic["winOld"] and logic["win20"] == 20, "interview window (6 days left): day intervals capped at 3, an old item is due now, 20 min stays")
         ok("gil-02" in logic["dueIds"] and "gil-03" not in logic["dueIds"] and logic["smartHasDue"], "due queue: wrong 30 min ago is due, right 10 min ago is not; smart mix takes due first")
         ok(logic["xKnow"] == 2 and logic["xPart"] == 2 and logic["xNo"] == 1 and logic["openPick"] == 8 and logic["openMs"], "open questions: grading and picking")
-        ok(logic["mergeX"] and logic["badCfgDropped"] and logic["planPast"] == 0, "merge keeps newer settings and open-question items; past interview gives no plan")
+        ok(logic["mergeX"] and logic["badCfgDropped"] and logic["planPast"] == 1, "merge keeps newer settings and open-question items; a past interview gives the one-day maintenance plan")
         ok(logic["doneStays"] and logic["notTwice"] and logic["budgetShrinks"] and logic["oralCoversDone"], "today's list: checked task stays, module not re-proposed, spent time shrinks the budget, oral covers the done module")
+
+        # daily review cap (fundatie-concepte, ticket 02): 200 overdue MCQs from earlier days, one wrong answer from today
+        cap = await pg.evaluate("""() => {
+          const T = window.__prep, P = window.PREP, out = {}, D = 86400000;
+          const day = d => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate() + d); };
+          const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+          const keep = JSON.parse(JSON.stringify(T.state()));
+          const pr = id => P.modules.find(m => m.id === P.mcq.find(q => q.id === id).m).p;
+          const ids = P.mcq.filter(q => pr(q.id) < 4).map(q => q.id).slice(0, 200);
+          const S = { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [], c: { d: iso(day(30)), h: 2.5, t: Date.now() } };
+          ids.forEach((id, i) => { S.q[id] = { b: 3, n: 2, c: 2, l: 1, t: day(-2 - (i % 9)).getTime() + 3600000 }; });   // box 3: due 1 day after, so 1..9 days late
+          T.setState(S);
+          let dt = T.dueToday();
+          out.n = dt.q.length; out.min = dt.min; out.left = dt.left; out.cap = dt.cap;
+          out.firstP1 = pr(dt.q[0].id) === 1;
+          const late = id => Date.now() - T.dueAt(T.state().q[id]);
+          out.p1Order = dt.q.filter(q => pr(q.id) === 1).every((q, i, a) => i === 0 || late(a[i - 1].id) >= late(q.id) - 1000);
+          out.planLeft = /așteaptă zilele următoare/.test((T.genPlan()[0].tasks.find(t => t.key === "due") || {}).text || "");
+          // answer the 35 of the portion and one more today (reviews): the cap is spent, the rest waits; a wrong answer from today still comes back
+          dt.q.slice(0, 35).forEach(q => T.updQ(q.id, true));
+          T.updQ(ids[199], false);
+          const s2 = T.state(); s2.q[ids[199]].t = Date.now() - 21 * 60000; T.setState(s2);
+          dt = T.dueToday();
+          out.used = dt.used; out.after = dt.q.map(q => q.id);
+          out.wrongBack = out.after.includes(ids[199]);
+          out.spent = dt.q.length === 1;
+          T.setState(keep);
+          return out;
+        }""")
+        print("CAP", json.dumps(cap, ensure_ascii=False))
+        ok(cap["cap"] == 25 and 0 < cap["min"] <= 25.01 and cap["n"] == 35 and cap["left"] == 165, "review cap: 200 overdue MCQs → today's portion fits 25 min (35 MCQs), 165 wait")
+        ok(cap["firstP1"] and cap["p1Order"] and cap["planLeft"], "review cap: P1 first, most overdue first, the plan says what waits")
+        ok(cap["used"] >= 25 and cap["wrongBack"] and cap["spent"], "review cap: spent after 36 reviews today, a wrong answer from today still comes back")
+
+        # maintenance mode (fundatie-concepte, ticket 03): past or cleared date → today only, in the minutes per day
+        mt = await pg.evaluate("""() => {
+          const T = window.__prep, out = {};
+          const day = d => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate() + d); };
+          const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+          const keep = JSON.parse(JSON.stringify(T.state()));
+          const base = { v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] };
+          const run = c => { T.setState(Object.assign(JSON.parse(JSON.stringify(base)), c ? { c } : {})); const p = T.genPlan(); return { mode: T.planMode(), n: p.length, date: p[0] && p[0].date, keys: p[0] ? p[0].tasks.map(t => t.key) : [], min: p[0] ? p[0].tasks.reduce((a, t) => a + t.min, 0) : 0 }; };
+          out.past = run({ d: iso(day(-3)), h: 2.5, t: 1 });
+          out.cleared = run({ d: "", h: 2.5, t: 1 });
+          out.short = run({ d: "", h: 2.5, m: 20, r: 10, t: 1 });
+          out.oldEvent = run({ d: "", h: 2, t: 1 });
+          out.oldCfg = T.cfg();
+          out.future = run({ d: iso(day(4)), h: 2.5, t: 1 });
+          out.today = iso(day(0));
+          out.normKeeps = T.normalize({ c: { d: "", h: 2, m: 30, r: 15, t: 5 } }).c;
+          T.setState(keep);
+          return out;
+        }""")
+        print("MAINT", json.dumps(mt, ensure_ascii=False))
+        code = lambda k: "sch" in k or any(x.startswith("kata-") for x in k)
+        mod = lambda k: "smart" in k or any(x.startswith("sheet-") for x in k)
+        ok(mt["past"]["mode"] == "maint" and mt["past"]["n"] == 1 and mt["past"]["date"] == mt["today"] and "due" in mt["past"]["keys"] and mod(mt["past"]["keys"]) and code(mt["past"]["keys"]), "maintenance: a past date gives today only, with due, a module and a code task " + str(mt["past"]))
+        ok(mt["cleared"]["mode"] == "maint" and mt["cleared"]["keys"] == mt["past"]["keys"] and abs(mt["past"]["min"] - 45) <= 15, "maintenance: a cleared date gives the same plan, ~45 min " + str(mt["cleared"]))
+        ok(mt["short"]["min"] <= 30 and mt["short"]["min"] < mt["past"]["min"], "maintenance: 20 min per day gives a shorter plan " + str(mt["short"]))
+        ok(mt["oldCfg"]["m"] == 45 and mt["oldCfg"]["r"] == 25, "an old settings event without m / r takes the defaults")
+        ok(mt["future"]["mode"] == "interview" and mt["future"]["n"] == 5, "a future date brings the plan by days back: " + str(mt["future"]["n"]))
+        ok(mt["normKeeps"] == {"d": "", "h": 2, "m": 30, "r": 15, "t": 5}, "normalize keeps a cleared date and the new settings " + str(mt["normKeeps"]))
 
         # UI: plan tab after the state above (the page re-renders on tab switch)
         await pg.click('.tab[data-tab="progress"]')
@@ -183,6 +256,29 @@ async def main():
         await pg.click('.tab[data-tab="plan"]')
         await pg.wait_for_timeout(100)
         await pg.screenshot(path=str(SHOTS / "11-plan-dark.png"), full_page=True)
+        # maintenance from the settings: minutes per day, review cap, "Fără dată"
+        await pg.click('.tab[data-tab="progress"]')
+        await pg.wait_for_timeout(100)
+        await pg.select_option('#cfg-m', '30')
+        await pg.select_option('#cfg-r', '15')
+        await pg.click('[data-a="cfg-clear"]')
+        await pg.wait_for_timeout(150)
+        mc = await pg.evaluate("() => ({ c: window.__prep.state().c, mode: window.__prep.planMode(), hdr: document.querySelector('#hdr-t').textContent, cfgText: document.querySelector('#cfg-d').closest('section').innerText })")
+        print("maint cfg:", json.dumps(mc, ensure_ascii=False))
+        ok(mc["c"]["d"] == "" and mc["c"]["m"] == 30 and mc["c"]["r"] == 15 and mc["c"]["h"] == 2 and mc["mode"] == "maint" and "Întreținere" in mc["hdr"] and "Întreținere" in mc["cfgText"], "settings: 'Fără dată' clears the date and keeps minutes, cap and hours; the header says Întreținere")
+        await pg.click('.tab[data-tab="plan"]')
+        await pg.wait_for_timeout(100)
+        pm = await pg.evaluate("() => ({ hero: document.querySelector('.card.hero').innerText, days: document.querySelectorAll('details.day').length, passed: document.body.innerText.includes('Interviul a trecut') })")
+        ok("Întreținere" in pm["hero"] and pm["days"] == 1 and not pm["passed"], "plan in maintenance: one day, the hero says Întreținere, no 'Interviul a trecut' " + json.dumps(pm, ensure_ascii=False))
+        await pg.screenshot(path=str(SHOTS / "12-plan-maint-dark.png"), full_page=True)
+        await pg.emulate_media(color_scheme="light")
+        await pg.screenshot(path=str(SHOTS / "12-plan-maint-light.png"), full_page=True)
+        await pg.click('.tab[data-tab="progress"]')
+        await pg.wait_for_timeout(100)
+        await pg.locator('#cfg-d').scroll_into_view_if_needed()
+        await pg.screenshot(path=str(SHOTS / "13-progress-maint-light.png"), full_page=False)
+        await pg.click('.tab[data-tab="plan"]')
+        await pg.wait_for_timeout(100)
         overflow = await pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
         ok(overflow == 0, "no horizontal overflow")
         ok(not errors, "no page errors " + json.dumps(errors))

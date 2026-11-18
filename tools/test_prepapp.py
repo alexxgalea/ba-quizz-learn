@@ -93,7 +93,7 @@ async def main():
         # --- summary
         sm = await pg.evaluate("window.PrepApp.summary()")
         days = await pg.evaluate("""() => { const [y, m, d] = window.__prep.cfg().d.split('-').map(Number); const t = new Date(); return Math.round((new Date(y, m - 1, d) - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000); }""")
-        check("summary: readiness, days left, top gaps, role and profile", 0 <= sm["readiness"] <= 1 and sm["daysLeft"] == days and 1 <= len(sm["gaps"]) <= 3 and "Python" in sm["role"] and sm["profile"].startswith("Profilul candidatului"), sm)
+        check("summary: readiness, days left (null without an interview ahead), top gaps, role and profile", 0 <= sm["readiness"] <= 1 and sm["daysLeft"] == (days if days >= 0 else None) and 1 <= len(sm["gaps"]) <= 3 and "Python" in sm["role"] and sm["profile"].startswith("Profilul candidatului"), sm)
 
         # --- log
         await pg.evaluate("window.PrepApp.log({ title: 'Jarvis · antrenament', n: 2, c: 1.5, dur: 600 })")

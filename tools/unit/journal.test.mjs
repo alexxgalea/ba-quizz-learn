@@ -9,8 +9,11 @@ const Journal = createRequire(import.meta.url)("../../src/journal.js");
 const P = loadData(new URL("../../", import.meta.url));
 
 // ---------- oracolul: logica veche din app.js (updQ, leitnerStep, updX, guess, recordOral, gapFix, lecția, planul, setările), copiată ca să rămână martor ----------
-const MC_MAX = 9, HMAX = 80;
+const MC_MAX = 9, HMAX = 80, BOX_MAX = 8;          // cutia de sus: orarul de durată (fundatie-concepte, tichetul 01)
 const clone = x => JSON.parse(JSON.stringify(x));
+const dayOf = t => new Date(t).setHours(0, 0, 0, 0);
+// `rd`: ziua (miezul nopții local) în care itemul a fost repetat din restanță, adică un răspuns peste o intrare dintr-o zi anterioară (plafonul, tichetul 02).
+const markRd = (prev, e, t) => { if (prev && prev.t && dayOf(prev.t) < dayOf(t)) e.rd = dayOf(t); };
 const empty = () => ({ v: 1, r: 0, q: {}, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] });
 function gapCounts(e) {
   const out = {};
@@ -22,15 +25,17 @@ function gapCounts(e) {
 const old = {
   q(S, id, ok, assisted, t) {
     const e = Object.assign({ b: 0, n: 0, c: 0 }, S.q[id]);
+    markRd(S.q[id], e, t);
     e.n++;
-    if (ok) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    if (ok) { e.c++; const nb = Math.min(BOX_MAX, Math.max(1, e.b) + 1); e.b = assisted ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
     e.l = ok ? 1 : 0; e.t = t;
     S.q[id] = e;
   },
   step(map, id, p, t) {
     const e = Object.assign({ b: 0, n: 0 }, map[id]);
+    markRd(map[id], e, t);
     e.n++; e.s = Math.round(p * 100);
-    if (p >= 0.8) e.b = Math.min(5, Math.max(1, e.b) + 1);
+    if (p >= 0.8) e.b = Math.min(BOX_MAX, Math.max(1, e.b) + 1);
     else if (p >= 0.5) e.b = Math.max(1, e.b);
     else e.b = 1;
     e.t = t;
@@ -38,8 +43,9 @@ const old = {
   },
   x(S, id, g, t) {
     const e = Object.assign({ b: 0, n: 0, c: 0 }, S.x[id]);
+    markRd(S.x[id], e, t);
     e.n++;
-    if (g >= 1) { e.c++; const nb = Math.min(5, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
+    if (g >= 1) { e.c++; const nb = Math.min(BOX_MAX, Math.max(1, e.b) + 1); e.b = g === 1 ? Math.max(e.b, Math.min(nb, 2)) : nb; } else e.b = 1;
     e.l = g; e.t = t;
     S.x[id] = e;
   },
@@ -598,4 +604,31 @@ test("the events a caller reads back do not alias the state or the log", async (
   assert.deepEqual((await store.allEvents())[0].result.missed, [0, 1]);
   j.state().o.c.m.push(7);
   assert.deepEqual((await store.allEvents())[0].result.missed, [0, 1]);
+});
+
+test("the top box is 8: nine right answers in a row stop there, on every form", () => {
+  assert.equal(Journal.BOX_MAX, 8);
+  const { j } = mk();
+  for (let i = 0; i < 9; i++) { j.append(ev.q("q1", true)); j.append(ev.x("x1", 2)); j.append(ev.o("o1", 1)); j.append(ev.s("s1", 1)); }
+  const S = j.state();
+  assert.deepEqual([S.q.q1.b, S.x.x1.b, S.o.o1.b, S.s.s1.b], [8, 8, 8, 8]);
+});
+
+test("an item imported in box 5 climbs on: the next right answer puts it in box 6", () => {
+  const evs = Journal.importState({ v: 1, r: 0, q: { a: { b: 5, n: 7, c: 6, l: 1, t: T0 - 86400000 } }, o: {}, x: {}, k: {}, s: {}, p: {}, l: {}, h: [] });
+  const S = Journal.project(evs.concat([Object.assign({ id: "dev-a.z.1", t: T0, dev: "dev-a" }, ev.q("a", true))]));
+  assert.equal(S.q.a.b, 6);
+});
+
+test("an answer over an entry from an earlier day marks the review day (rd); one over an entry from today does not", () => {
+  const day0 = new Date(2026, 10, 12, 20, 0, 0).getTime(), c = clockOf(day0), { j } = mk({ clock: c });
+  j.append(ev.q("a", true)); j.append(ev.x("x", 2)); j.append(ev.o("o", 1));
+  c.tick(30 * 60000); j.append(ev.q("a", false));
+  assert.equal(j.state().q.a.rd, undefined, "same day: a learning step, not a review");
+  c.t = new Date(2026, 10, 14, 19, 0, 0).getTime();
+  j.append(ev.q("a", true)); j.append(ev.x("x", 1)); j.append(ev.o("o", 0.5));
+  const d14 = new Date(2026, 10, 14).getTime(), S = j.state();
+  assert.deepEqual([S.q.a.rd, S.x.x.rd, S.o.o.rd], [d14, d14, d14]);
+  c.tick(40 * 60000); j.append(ev.q("a", true));
+  assert.equal(j.state().q.a.rd, d14, "the second answer the same day keeps the review day");
 });
