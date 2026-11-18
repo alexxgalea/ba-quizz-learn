@@ -2,6 +2,12 @@
 
 Aplicația cu care Alex se pregătește pentru interviul tehnic Onapsis: grile, carduri orale, fișe de teorie și Jarvis, intervievatorul vocal.
 
+## Conturi
+
+**Cont**:
+O persoană care învață cu aplicația: are jurnalul ei de încercări, progresul ei și plafonul ei zilnic de AI, iar serverul o recunoaște după secretul ei. Conținutul (module, fișe, grile, carduri) e același pentru toate conturile. Conturile le creează Alex; nu există înscriere din aplicație.
+_Avoid_: utilizator (se confundă cu `user` din capabilitățile artifactului), profil
+
 ## Conținut
 
 **Modul**:
