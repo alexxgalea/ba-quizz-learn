@@ -127,3 +127,18 @@ def test_iam_covers_every_operation_the_store_uses():
     for marker, action in needs.items():
         if marker in code:
             assert action in actions, f"{marker} din dynamo.py cere {action} în politica funcției"
+
+
+def test_accounts_are_a_noecho_parameter_with_an_empty_default():
+    # ADR 0006: conturile celorlalți (cu secretele lor) vin la lansare din server/.accounts.json.
+    p = T["Parameters"]["Accounts"]
+    assert p["NoEcho"] is True and p["Default"] == "[]"
+    assert FN["Environment"]["Variables"]["ACCOUNTS"] == {"Ref": "Accounts"}
+
+
+def test_deploy_reads_and_validates_the_accounts_file():
+    deploy = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+    assert ".accounts.json" in deploy and "python3 -m ba_server.accounts" in deploy
+    assert "Accounts=" in deploy
+    gitignore = (ROOT.parent / ".gitignore").read_text(encoding="utf-8")
+    assert "server/.accounts.json" in gitignore.splitlines()

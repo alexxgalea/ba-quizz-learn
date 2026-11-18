@@ -23,3 +23,4 @@ smoke:
 	@curl -fsS "$$URL/health" && echo
 	@curl -sS -o /dev/null -w "fără secret: %{http_code} (așteptat 401)\n" "$$URL/events"
 	@curl -fsS -H "Authorization: Bearer $$BA_SECRET" "$$URL/events?limit=1" && echo
+	@curl -fsS -H "Authorization: Bearer $$BA_SECRET" "$$URL/me" && echo

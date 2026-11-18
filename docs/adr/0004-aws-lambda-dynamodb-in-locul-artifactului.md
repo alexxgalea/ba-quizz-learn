@@ -18,4 +18,4 @@ Lambda (1 milion de cereri pe lună) și DynamoDB (25 GB) rămân gratuite și d
 - DynamoDB nu e Postgres: jurnalul se citește după cheie și cursor, nu cu interogări libere. Măsurătorile se calculează în client.
 - Răspunsul în flux din Python nu e nativ pe Lambda; cere Lambda Web Adapter și o adresă a funcției cu fluxul pornit.
 - Jarvis rămâne conexiune directă către Gemini Live (ADR 0001 nu se schimbă); serverul îi dă doar un jeton de scurtă durată.
-- Serverul îl recunoaște pe Alex după un singur secret lung, introdus o dată pe fiecare dispozitiv. Nu există conturi.
+- Serverul îl recunoaște pe Alex după un singur secret lung, introdus o dată pe fiecare dispozitiv. Nu există conturi. (Înlocuit de ADR 0006: un secret pe persoană, fiecare cont cu partiția lui.)

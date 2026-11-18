@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Serverul minim ba-quizz-learn (FastAPI pe Lambda Web Adapter, DynamoDB). Vezi server/README.md.
 
-# Ce NU intră aici: secretul. Vine ca parametru la lansare (deploy.sh), din
+# Ce NU intră aici: secretele (al lui Alex și cele din server/.accounts.json). Vine ca parametru la lansare (deploy.sh), din
 # variabila BA_SECRET a lui Alex, și ajunge variabilă de mediu a funcției
 # (gratuit; Secrets Manager costă 0,40 USD pe secret pe lună).
 
@@ -12,6 +12,12 @@ Parameters:
     NoEcho: true
     MinLength: 32
     Description: Secretul lung al lui Alex (cel puțin 32 de caractere). Nu se pune în repo.
+  Accounts:
+    Type: String
+    NoEcho: true
+    Default: "[]"
+    MaxLength: 3000
+    Description: Celelalte conturi (ADR 0006), lista JSON din server/.accounts.json (în base64), cu secretele lor. deploy.sh o citește, o validează și o codează. Nu se pune în repo.
   GeminiApiKey:
     Type: String
     NoEcho: true
@@ -83,6 +89,7 @@ Resources:
           APP_SECRET: !Ref AppSecret
           TABLE_NAME: !Ref EventsTable
           USER_PK: u#alex
+          ACCOUNTS: !Ref Accounts
           GEMINI_API_KEY: !Ref GeminiApiKey
           DEEPSEEK_API_KEY: !Ref DeepseekApiKey
           AI_DAILY_CAP: !Ref AiDailyCap
