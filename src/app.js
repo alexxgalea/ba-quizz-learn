@@ -486,7 +486,7 @@
     else if (key === "due") {
       const n = c.today ? c.dq + c.dO + c.dX : 0;
       min = c.today ? (n ? Math.max(5, Math.round(c.dmin)) : 10) : Math.min(25, cfg().r);
-      text = !c.today ? "Scadențe: grilele, cardurile și întrebările deschise care revin azi." : n ? "Scadențe: " + c.dq + " grile, " + c.dO + " carduri orale, " + c.dX + " întrebări deschise." + leftNote(c.dleft) : "Scadențe: nimic încă. Revin pe măsură ce răspunzi." + leftNote(c.dleft);
+      text = !c.today ? "Scadențe: grilele, cardurile și întrebările deschise care revin azi." : n ? "Scadențe: " + dueCount(c.dq, c.dO, c.dX) + "." + leftNote(c.dleft) : "Scadențe: nimic încă. Revin pe măsură ce răspunzi." + leftNote(c.dleft);
       go = { t: "due" };
     }
     else if (key.indexOf("sheet-") === 0) { const m = MOD[key.slice(6)]; if (!m) return null; min = modMinutes(m); text = "Fișa + grilele „" + m.short + "”" + (P.sheets[m.id] && P.sheets[m.id].diagram ? " (cu diagramă)" : "") + "."; go = { t: "sheet", m: m.id }; }
@@ -514,6 +514,9 @@
     else return null;
     return { id: dayId + "-" + key, key, min, text, go };
   }
+  // „3 grile, 1 card oral, 0 întrebări deschise” (singularul la 1)
+  const dueWords = (n, one, many) => n + " " + (n === 1 ? one : many);
+  const dueCount = (q, o, x, b) => [dueWords(q, "grilă", "grile"), dueWords(o, "card oral", "carduri orale"), dueWords(x, "întrebare deschisă", "întrebări deschise")].map(t => b ? t.replace(/^(\d+)/, "<b>$1</b>") : t).join(b ? " · " : ", ");
   // Restanța care nu mai încape azi în plafon: rămâne scadentă, fără penalizare.
   const leftNote = n => (n ? " Încă " + n + " așteaptă zilele următoare (plafonul de " + cfg().r + " min pe zi)." : "");
   const KEY_ORDER = ["diag", "due", "sheet-", "oral", "sch", "gap", "open", "smart", "mock", "kata-", "mist", "intv", "log"];
@@ -734,7 +737,7 @@
         (nx.t.go ? '<button class="btn primary" data-a="go" data-id="' + nx.t.id + '">Start</button>' : '<button class="btn" data-a="plan-toggle" data-id="' + nx.t.id + '">Bifează</button>') + "</section>";
     }
     h += '<section class="card due"><div class="spread"><div class="stack-s"><div class="eyebrow">De repetat acum</div><div class="small">' +
-      (dq + dO + dX ? '<b>' + dq + "</b> grile · <b>" + dO + "</b> carduri orale · <b>" + dX + "</b> întrebări deschise" + (dt.left ? '<br><span class="xs muted">' + esc(leftNote(dt.left).trim()) + "</span>" : "") : (dt.left ? esc(leftNote(dt.left).trim()) + " " : "") + "Nimic scadent. Ce greșești sau marchezi „Nu știu încă” revine aici după 20 de minute; ce știi, după o zi, apoi după 3, 7, 16 zile și tot mai rar.") + "</div></div>" +
+      (dq + dO + dX ? dueCount(dq, dO, dX, true) + (dt.left ? '<br><span class="xs muted">' + esc(leftNote(dt.left).trim()) + "</span>" : "") : (dt.left ? esc(leftNote(dt.left).trim()) + " " : "") + "Nimic scadent. Ce greșești sau marchezi „Nu știu încă” revine aici după 20 de minute; ce știi, după o zi, apoi după 3, 7, 16 zile și tot mai rar.") + "</div></div>" +
       '<div class="row" style="flex:none">' + (dq ? '<button class="btn sm primary" data-a="mcq" data-mode="due">Grile</button>' : "") + (dO ? '<button class="btn sm" data-a="oral" data-f="due">Orale</button>' : "") + (dX ? '<button class="btn sm" data-a="open" data-f="due">Deschise</button>' : "") + "</div></div></section>";
     h += maint ? '<div class="sec-h"><h2>Planul de azi</h2><span class="xs muted mono">~' + totalMin + " min · " + cfg().m + " min/zi</span></div>"
       : '<div class="sec-h"><h2>Planul pe zile</h2><span class="xs muted mono">~' + Math.round(totalMin / 60) + " h · " + hoursRo(cfg().h) + "/seară</span></div>";
