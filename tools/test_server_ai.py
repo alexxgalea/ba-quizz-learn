@@ -43,6 +43,8 @@ async def new_page(b, scheme="light"):
         req = route.request
         if req.method == "OPTIONS":
             await route.fulfill(status=204, headers=CORS); return
+        if req.url.split("?")[0].endswith("/me"):   # accounts (ADR 0006): a server without /me (not yet redeployed); covered by test_account.py
+            await route.fulfill(status=404, headers=CORS, content_type="application/json", body='{"detail":"Not Found"}'); return
         body = json.loads(req.post_data)
         pg.srv.append({"url": req.url, "auth": req.headers.get("authorization"), "body": body})
         m = pg.mode["v"]

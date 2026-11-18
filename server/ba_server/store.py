@@ -56,6 +56,10 @@ class PurgeResult:
 
 
 class EventStore(Protocol):
+    def for_pk(self, pk: str) -> "EventStore":
+        """Același fel de depozit, pe partiția altui cont (ADR 0006). Aplicația îl ține minte pe cont."""
+        ...
+
     def append(self, events: list[dict[str, Any]]) -> AppendResult: ...
 
     def read(self, after: int, limit: int) -> Page: ...
@@ -116,6 +120,9 @@ class MemoryStore:
         self._ids: set[str] = set()
         self._ai_days: dict[str, int] = {}
         self._epoch = INITIAL_EPOCH
+
+    def for_pk(self, pk: str) -> "MemoryStore":
+        return MemoryStore()
 
     def epoch(self) -> str:
         with self._lock:

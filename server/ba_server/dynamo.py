@@ -86,6 +86,10 @@ class DynamoStore(EventStore):
         self._pk = user_pk
         self._sleep = sleep
 
+    def for_pk(self, pk: str) -> "DynamoStore":
+        """Același tabel, partiția altui cont."""
+        return DynamoStore(self._table, pk, self._sleep)
+
     @classmethod
     def from_settings(cls, settings: Any) -> "DynamoStore":
         import boto3  # importat aici: testele cu falsul nu au nevoie de AWS

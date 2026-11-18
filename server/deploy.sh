@@ -1,5 +1,6 @@
 #!/bin/bash
 # Lansează serverul cu o singură comandă:  BA_SECRET=... ./deploy.sh   (sau: make deploy)
+# Conturile celorlalți vin din server/.accounts.json (ADR 0006).
 # Pentru /ai (tichetul 06) dai și GEMINI_API_KEY și/sau DEEPSEEK_API_KEY, la fiecare lansare:
 # o cheie lipsă înlocuiește pe cea veche cu gol (sursa respectivă se sare).
 # Cere AWS CLI configurat (aws configure) și SAM CLI. Nu scrie secretul nicăieri.
@@ -10,6 +11,17 @@ if [ -z "${BA_SECRET:-}" ] || [ "${#BA_SECRET}" -lt 32 ]; then
   echo "Lipsește BA_SECRET (cel puțin 32 de caractere). Generează unul cu: make secret" >&2
   exit 1
 fi
+# Celelalte conturi (ADR 0006): server/.accounts.json, în afara repo-ului (vezi .accounts.example.json).
+# Trebuie dat la FIECARE lansare: un parametru lipsă ar șterge conturile (datele rămân, dar secretele n-ar mai intra).
+ACCOUNTS_FILE="${ACCOUNTS_FILE:-.accounts.json}"
+if [ ! -f "$ACCOUNTS_FILE" ]; then
+  echo "Lipsește $ACCOUNTS_FILE (conturile celorlalți). Dacă ești doar tu: echo '[]' > server/.accounts.json" >&2
+  exit 1
+fi
+python3 -m ba_server.accounts "$ACCOUNTS_FILE" || exit 1
+# În base64: `sam deploy --parameter-overrides` strică ghilimelele și spațiile din JSON.
+ACCOUNTS_B64="$(python3 -c 'import base64,json,sys; d=json.load(open(sys.argv[1], encoding="utf-8")); print(base64.b64encode(json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode()).decode())' "$ACCOUNTS_FILE")"
+
 command -v sam >/dev/null || { echo "Lipsește SAM CLI (https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)" >&2; exit 1; }
 
 STACK="${STACK_NAME:-ba-server}"
@@ -29,7 +41,7 @@ find .build/app -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 # SAM CLI refuză un parametru cu valoare goală (`Cheie=`): trimitem doar ce are valoare.
 # Un parametru omis rămâne la valoarea implicită din șablon (gol pentru chei).
-OVERRIDES=("AppSecret=$BA_SECRET" "PwaOrigin=$PWA_ORIGIN" "AiDailyCap=${AI_DAILY_CAP:-300}")
+OVERRIDES=("AppSecret=$BA_SECRET" "Accounts=$ACCOUNTS_B64" "PwaOrigin=$PWA_ORIGIN" "AiDailyCap=${AI_DAILY_CAP:-300}")
 if [ -n "${GEMINI_API_KEY:-}" ]; then OVERRIDES+=("GeminiApiKey=$GEMINI_API_KEY"); fi
 if [ -n "${DEEPSEEK_API_KEY:-}" ]; then OVERRIDES+=("DeepseekApiKey=$DEEPSEEK_API_KEY"); fi
 

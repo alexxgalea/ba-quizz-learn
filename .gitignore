@@ -8,3 +8,4 @@ __pycache__/
 export/brief-*.md
 server/.build/
 server/.venv/
+server/.accounts.json

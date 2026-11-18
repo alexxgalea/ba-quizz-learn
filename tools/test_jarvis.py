@@ -125,6 +125,8 @@ async def main():
             pg.on("pageerror", lambda e: errs.append(str(e)))
             pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "fonts" not in m.text and "Failed to load resource" not in m.text else None)
             await pg.route("**/fonts.*", lambda r: r.abort())
+            # Accounts (ADR 0006): saving the server asks GET /me; this fake server is an old one, without it.
+            await pg.route("https://abc.lambda-url.eu-central-1.on.aws/me", lambda r: r.fulfill(status=404, headers={"access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type"}, content_type="application/json", body='{"detail":"Not Found"}'))
             await fresh(pg)
             tag = "server " + scheme + ": "
             await pg.click('.tab[data-tab="jarvis"]'); await pg.wait_for_timeout(150)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import threading
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -36,6 +37,20 @@ def _load_routers(app: FastAPI) -> None:
         app.include_router(router, dependencies=guard)
 
 
+def _store_registry(settings: Settings, store: EventStore) -> Callable:
+    main = settings.accounts[0].id if settings.app_secret and settings.accounts else None
+    cache: dict[str, EventStore] = {main: store} if main else {}
+    lock = threading.Lock()
+
+    def store_for(account) -> EventStore:
+        with lock:
+            if account.id not in cache:
+                cache[account.id] = store.for_pk(account.pk)
+            return cache[account.id]
+
+    return store_for
+
+
 def _utc_today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -61,6 +76,8 @@ def create_app(
     )
     app.state.settings = settings
     app.state.store = store
+    # Un depozit pe cont (ADR 0006): `store` e al contului principal; celelalte, pe partiția lor, create o dată.
+    app.state.store_for = _store_registry(settings, store)
     # Pentru /ai: ziua (UTC) a plafonului; testele dau una fixă. Clientul HTTP: `http_client.get_http`.
     app.state.today = today or _utc_today
 

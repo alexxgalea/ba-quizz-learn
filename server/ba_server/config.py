@@ -6,8 +6,18 @@ lor, de exemplu cheile Gemini și DeepSeek.
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
+
+from .accounts import Account, AccountsError, parse_accounts
+
+log = logging.getLogger("ba_server.config")
+
+# Contul principal (Alex): numele, adresarea și profilul din prompturile AI (ADR 0006).
+# Profilul e cel care stătea înainte în client (`IV_PROFILE`, src/app.js).
+MAIN_NAME = "Alex"
+MAIN_PROFILE = "dezvoltator cu experiență în Django/DRF, React, Elasticsearch, Docker Swarm, Keycloak, Celery și computer vision"
 
 
 def _int(raw: str | None, default: int) -> int:
@@ -19,7 +29,7 @@ def _int(raw: str | None, default: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    # Secretul lung al lui Alex. Gol = serverul refuză orice cerere.
+    # Secretul lung al lui Alex (contul principal). Gol = doar conturile din `ACCOUNTS` intră.
     app_secret: str = field(default="", repr=False)
     # Tabelul DynamoDB și partiția (un utilizator; ușa spre mai mulți rămâne deschisă).
     table_name: str = "ba-events"
@@ -40,14 +50,38 @@ class Settings:
     ai_max_prompt_chars: int = 60_000
     # Pe fiecare model; două modele la rând încap în timpul funcției (template.yaml).
     ai_timeout_s: float = 20.0
+    # Celelalte conturi (ADR 0006), din `ACCOUNTS`; `repr=False`: au secrete.
+    extra_accounts: tuple[Account, ...] = field(default=(), repr=False)
+
+    @property
+    def accounts(self) -> tuple[Account, ...]:
+        """Toate conturile: întâi cel principal (din `APP_SECRET`, dacă e setat), apoi celelalte."""
+        main = ()
+        if self.app_secret:
+            aid = self.user_pk.removeprefix("u#")
+            main = (Account(aid, self.app_secret, MAIN_NAME, "m", MAIN_PROFILE, self.user_pk),)
+        return main + self.extra_accounts
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
         e = os.environ if env is None else env
+        user_pk = e.get("USER_PK", cls.user_pk)
+        app_secret = e.get("APP_SECRET", "")
+        try:
+            extra = parse_accounts(
+                e.get("ACCOUNTS"),
+                reserved_ids={user_pk.removeprefix("u#")},
+                reserved_secrets={app_secret} if app_secret else set(),
+            )
+        except AccountsError as err:
+            # Un fișier de conturi stricat nu are voie să-l blocheze pe Alex: doar celelalte conturi lipsesc.
+            log.error("ACCOUNTS ignorat: %s", err)
+            extra = ()
         return cls(
-            app_secret=e.get("APP_SECRET", ""),
+            extra_accounts=extra,
+            app_secret=app_secret,
             table_name=e.get("TABLE_NAME", cls.table_name),
-            user_pk=e.get("USER_PK", cls.user_pk),
+            user_pk=user_pk,
             local_cors_origin=e.get("LOCAL_CORS_ORIGIN", ""),
             gemini_api_key=e.get("GEMINI_API_KEY", ""),
             deepseek_api_key=e.get("DEEPSEEK_API_KEY", ""),

@@ -6,6 +6,7 @@ import { fakeLive, fakeAudio, fakeClock, memoryStorage, stubApp, CARD_A, CARD_B,
 const require = createRequire(import.meta.url);
 const Call = require("../../src/call.js");
 const Jarvis = require("../../src/jarvis.js");
+const ServerAccount = require("../../src/account.js");
 
 // O sesiune Jarvis peste Call real, Live și Audio false, un PrepApp în memorie și o stocare în memorie.
 function setup(over = {}) {
@@ -429,4 +430,30 @@ test("the state tells the mode and the module of the session", async () => {
   const t = setup();
   await t.jarvis.start({ mode: "topic", module: "asyncio" });
   assert.deepEqual([t.state().mode, t.state().module], ["topic", "asyncio"]);
+});
+
+// Conturile (ADR 0006): numele și adresarea vin din summary (PrepApp.summary ← ServerAccount); fără ele, Alex, ca înainte.
+test("another account: Jarvis uses her name and the feminine, in the instructions and the tool descriptions", async () => {
+  const app = stubApp(), base = app.summary();
+  app.summary = () => ({ ...base, name: "Ioana", address: "f", profile: "", addressLine: ServerAccount.addressLine({ name: "Ioana", address: "f" }) });
+  const t = setup({ app });
+  await t.jarvis.start({ mode: "train" });
+  const sys = t.live.cfg.system, descs = t.live.cfg.tools.map(x => x.description).join("\n");
+  assert.equal(/\bAlex\b/.test(sys) || /\bAlex\b/.test(descs), false);
+  assert.ok(sys.includes("Îi spui „Ioana”"));
+  assert.ok(sys.includes("feminin"));
+  assert.ok(descs.includes("Ioana"));
+});
+
+test("Alex's account (or none known): the instructions are the ones from before accounts", () => {
+  const a = Jarvis.buildSystem({ mode: "train", summary: SUMMARY });
+  const b = Jarvis.buildSystem({ mode: "train", summary: { ...SUMMARY, name: "Alex", address: "m" } });
+  assert.equal(a, b);
+  assert.ok(a.includes("Îi spui „Alex”") && !a.includes("feminin"));
+});
+
+test("a lesson for another account: name in the instructions and in the messages the app sends", async () => {
+  const sys = Jarvis.buildLessonSystem({ name: "asyncio", muted: false, summary: { name: "Ioana", address: "f", addressLine: ServerAccount.addressLine({ name: "Ioana", address: "f" }) } });
+  assert.equal(/\bAlex\b/.test(sys), false);
+  assert.ok(sys.includes("Ioana") && sys.includes("feminin"));
 });
