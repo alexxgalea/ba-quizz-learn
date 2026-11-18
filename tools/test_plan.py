@@ -172,7 +172,7 @@ async def main():
           due: document.querySelector('.card.due').innerText, days: document.querySelectorAll('details.day').length,
           next: document.querySelector('.card.next') ? document.querySelector('.card.next').innerText.slice(0, 80) : '' })""")
         print("plan ui:", json.dumps(plan_ui, ensure_ascii=False))
-        ok(plan_ui["days"] == 3 and "Mai sunt 2 zile" in plan_ui["t"] and "grile" in plan_ui["due"], "plan page renders the generated days and the due card")
+        ok(plan_ui["days"] == 3 and "Mai sunt 2 zile" in plan_ui["t"] and ("grile" in plan_ui["due"] or "1 grilă" in plan_ui["due"]), "plan page renders the generated days and the due card")
         await pg.screenshot(path=str(SHOTS / "6-plan-gen.png"), full_page=False)
 
         # start today's "Scadențe" task → due MCQ run

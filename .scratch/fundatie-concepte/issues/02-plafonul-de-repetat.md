@@ -6,9 +6,15 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `dueQ` / `dueO` / `dueX` întorc porția de azi; ce nu încape rămâne scadent mâine, fără să-și schimbe cutia.
-- [ ] Un răspuns peste o intrare din altă zi pune `rd` (ziua de azi); unul peste o intrare de azi nu.
-- [ ] Cardul „De repetat acum” spune câte rămân pentru zilele următoare.
-- [ ] Test cu 200 de grile restante: porția încape în plafon, cele P1 și cele mai întârziate primele, iar o grilă greșită azi apare peste plafon.
+- [x] `dueQ` / `dueO` / `dueX` întorc porția de azi; ce nu încape rămâne scadent mâine, fără să-și schimbe cutia.
+- [x] Un răspuns peste o intrare din altă zi pune `rd` (ziua de azi); unul peste o intrare de azi nu.
+- [x] Cardul „De repetat acum” spune câte rămân pentru zilele următoare.
+- [x] Test cu 200 de grile restante: porția încape în plafon, cele P1 și cele mai întârziate primele, iar o grilă greșită azi apare peste plafon.
+
+## Comments
+
+### 2026-11-18
+
+Livrat: `rd` în `Journal.apply` (`markRd`), `dueToday()` (în `__prep`) și `dueQ` / `dueO` / `dueX` din el; cardul „De repetat acum” și sarcina „Scadențe” spun câte așteaptă. Teste: `journal.test.mjs` (`rd` doar peste o intrare din altă zi; oracolul sesiunilor aleatoare îl calculează la fel) și `test_plan.py` (200 de restante → 35 de grile în 25 min, 165 așteaptă, P1 și cele mai întârziate primele, greșeala de azi revine cu plafonul consumat). Suita completă din `CLAUDE.md` trece (`npm run test:unit` 647, cele 24 de teste de interfață, `desf_examples`).
