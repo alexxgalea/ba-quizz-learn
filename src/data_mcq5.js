@@ -145,7 +145,7 @@
       o: [
         "Repetată de mai multe ori, are același efect ca o singură rulare",
         "Rulează garantat o singură dată, oricâte retry-uri ar apărea pe drum",
-        "Nu modifică nimic în baza de date, doar citește date",
+        "Nu modifică nimic în baza de date, ci citește date",
         "Se execută atomic, într-o singură tranzacție, fără lock-uri"], a: 0,
       e: "`SET status = 'done'` e idempotent, `balance = balance - 100` nu. Un insert cu cheie unică și `ON CONFLICT DO NOTHING` devine idempotent. Idempotență + livrare at-least-once = efect „exactly once” în practică." }
   ]);

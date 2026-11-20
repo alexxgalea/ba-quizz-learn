@@ -11,7 +11,7 @@ Azi:
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `pytest`, `python`, `design` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
 - [ ] `node tools/xcheck.mjs pytest python design` citit integral; explicațiile variantelor greșite schimbate sunt noi.

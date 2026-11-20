@@ -148,9 +148,9 @@ Limită: `match` e o expresie regulată: caractere ca `+`, `*`, `?` sau `[` din 
 La interviu: „Cu `pytest.raises(Tip, match=...)` verific și tipul, și mesajul excepției; testul pică dacă blocul nu aruncă. `match` e regex, căutat cu `re.search`.”
 Verificare: Mesajul e „expected host+port”, iar `match="host+port"`. Trece testul?
 Răspuns verificare: Nu: `+` e cuantificator, deci tiparul caută „host” lipit de „port” (cu unul sau mai mulți „t”) și nu găsește „host+port”. Cu `match=re.escape("host+port")` trece.
-Varianta greșită B: Doar `ValueError` și subclasele lui sunt acceptate; alt tip de excepție se propagă și testul pică.
-Varianta greșită C: Dacă blocul nu aruncă, pytest raportează „DID NOT RAISE”.
-Varianta greșită D: `match` folosește `re.search`, deci ajunge ca „port” să apară undeva în mesaj.
+Varianta greșită B: `raises(ValueError)` acceptă doar `ValueError` și subclasele lui. O `Exception` simplă nu se potrivește: se propagă, iar testul pică înainte să conteze `match`.
+Varianta greșită C: `raises` cere o excepție, nu un mesaj de log. Dacă blocul se termină normal, pytest raportează „DID NOT RAISE”.
+Varianta greșită D: `match` folosește `re.search`, deci „port” poate apărea oriunde în mesaj, ca în „bad port”. Egalitatea exactă ar cere `^port$`.
 
 ### pt-12
 Pe scurt: Testul pică: pytest nu rulează singur corutinele și cere un plugin async (pytest-asyncio sau anyio).
@@ -176,9 +176,9 @@ Limită: pytest-asyncio rulează implicit în mod `strict`: fiecare test async a
 La interviu: „pytest e sincron; pentru teste `async def` folosesc pytest-asyncio sau anyio. Fără plugin, pytest recent marchează testul ca eșuat; versiunile vechi doar îl săreau, ceea ce ascundea teste.”
 Verificare: De ce era periculos comportamentul vechi, în care testul era doar sărit?
 Răspuns verificare: Suita părea verde, deși testele async nu rulaseră niciodată.
-Varianta greșită B: pytest nu are o buclă de evenimente proprie; ai nevoie de plugin.
-Varianta greșită C: Așa era înainte de pytest 8.4; acum testul pică explicit.
-Varianta greșită D: O corutină nerulată nu execută nimic; nu există un mod sincron care să ignore `await`.
+Varianta greșită B: pytest nu pornește nicio buclă de evenimente; pentru asta ai nevoie de un plugin (pytest-asyncio sau anyio).
+Varianta greșită C: Skip cu warning era comportamentul de până la pytest 8.4. Din 8.4 testul pică explicit, deci suita nu mai poate părea verde.
+Varianta greșită D: pytest nu rescrie corpul testului. Fără plugin, corutina nu rulează deloc, iar un mod sincron care ignoră `await` nu există.
 
 ### pt-13
 Pe scurt: 6: decoratoarele `parametrize` suprapuse fac produsul cartezian al valorilor (3 × 2).
@@ -231,8 +231,8 @@ Limită: Codul testat trebuie să primească drumul ca parametru. Dacă scrie la
 La interviu: „Pentru fișiere folosesc `tmp_path`: fiecare test are directorul lui, deci testele nu se influențează și pot rula în paralel. Codul primește drumul ca parametru.”
 Verificare: De ce un fișier fix, `/tmp/report.txt`, strică testele rulate în paralel (`pytest -n 4`)?
 Răspuns verificare: Toate testele scriu și citesc același fișier în același timp, deci rezultatul depinde de ordine.
-Varianta greșită B: Un drum fix e partajat între teste și rulări și poate rămâne de la un test eșuat.
-Varianta greșită C: Un mock pe `open` testează apelurile, nu conținutul real, și se strică la orice schimbare de implementare.
+Varianta greșită B: Un drum fix e partajat între teste. Cu `-n 4`, două teste îl scriu în același timp, iar ștergerea de la final nu rulează dacă testul pică pe drum.
+Varianta greșită C: Cu un mock pe `open` nu scrii nimic pe disc, dar nici nu verifici conținutul real al raportului, iar testul se strică la orice schimbare de implementare.
 Varianta greșită D: Curățenia de mână nu rulează dacă testul pică la jumătate.
 
 ### pt-15
@@ -253,9 +253,9 @@ Limită: pytest-randomly (ordine aleatoare) scoate la iveală astfel de dependen
 La interviu: „Un test care trece singur și pică în suită depinde de starea lăsată de alt test. Izolez: rollback pe DB după fiecare test, fixture-uri cu scope `function`, `monkeypatch` pentru globale.”
 Verificare: Cum găsești testul care lasă stare în urmă?
 Răspuns verificare: Rulezi suita în ordini diferite (pytest-randomly) sau prin bisecție: rulezi testul tău după jumătăți din suită până găsești vinovatul.
-Varianta greșită B: pytest rulează implicit secvențial; paralelismul cere pytest-xdist.
+Varianta greșită B: pytest rulează secvențial, într-un singur thread; paralelismul cere pytest-xdist, care folosește procese, nu thread-uri.
 Varianta greșită C: pytest nu păstrează rezultatele de la o rulare la alta (cache-ul reține doar ce a eșuat, pentru `--lf`).
-Varianta greșită D: Durata nu schimbă rezultatul unei aserțiuni; ordinea și starea, da.
+Varianta greșită D: Un timeout nu vine din pytest, ci dintr-un plugin ca pytest-timeout, iar durata oricum nu schimbă rezultatul unei aserțiuni; ordinea și starea, da.
 
 ### asgi-12
 Pe scurt: În `lifespan`: creezi clientul înainte de `yield` (la pornire) și îl închizi după `yield` (la oprire).
@@ -565,4 +565,4 @@ Verificare: Cum verifici că un spinner a dispărut după încărcare?
 Răspuns verificare: `expect(spinner).to_be_hidden()`: reîncearcă până dispare. Un `assert not spinner.is_visible()` ar putea trece prea devreme, înainte să apară spinnerul.
 Varianta greșită B: Un `sleep` mai lung face testul mai lent și tot nu garantează nimic pe un CI încărcat.
 Varianta greșită C: `click()` așteaptă deja singur ca butonul să fie vizibil și activ; un `sleep` în plus doar încetinește.
-Varianta greșită D: Viteza selectorului nu e problema. Problema e că aserția nu așteaptă; XPath ar face selectorul și mai fragil.
+Varianta greșită D: Problema nu e viteza selectorului, ci aserția care nu așteaptă. Documentația Playwright nu recomandă XPath: depinde de structura DOM-ului, deci se strică ușor.

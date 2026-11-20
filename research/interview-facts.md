@@ -1338,3 +1338,12 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 16. TypeScript (secțiunea 47): documentația `tsconfig` dă `strict` implicit `true`, verificat cu `tsc` 7.0.2; data schimbării (TypeScript 6.0) e din surse secundare. Pagina „Everyday Types” nu acoperă excess property checks.
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
 18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.
+
+## 39. Grile fără tipar: `pytest`, `python`, `design` (tichetul 07; verificat 20 noiembrie 2026)
+
+- ✅ **pytest e single-thread și secvențial**: „single-threaded, executing its tests always in the same thread, sequentially, never spawning any threads itself”; paralelismul cere un plugin (pytest-xdist: procese, nu thread-uri). Testele dependente de ordine apar când un test se bazează pe date lăsate de altul; pytest-randomly / pytest-random-order le scot la iveală. Sursă: https://docs.pytest.org/en/stable/explanation/flaky.html (pt-15).
+- ✅ **pytest nu are timeout propriu pe suită**: pagina de flaky tests nu menționează niciun timeout implicit; timeout-ul vine din pluginul `pytest-timeout` (pt-15, varianta D; formulat prudent în explicație).
+- ✅ **Playwright nu recomandă XPath / CSS**: „CSS and XPath are not recommended as the DOM can often change leading to non resilient tests”; recomandă locatori după rol. Nu am găsit o afirmație despre viteză, deci varianta D de la pt-17 se bazează pe fragilitate, nu pe viteză. Sursă: https://playwright.dev/python/docs/locators (pt-17).
+- ✅ **Testele async fără plugin** (pt-12), `match` = `re.search` (pt-11), xdist (pt-16): secțiunea 6 și 24, neschimbate.
+- ✅ **Rulat** (Python 3.13): `py-02` → `[2, 2, 2]`, `py-09` → `6 0`, `py-13` → `[[1, 0], [1, 0]]`, `py-18` → `[1, 2, 3]`. Restul grilelor `python` citite cu xcheck, fără erori de fapt.
+- Erori de fapt corectate: niciuna. Variantele greșite noi (pt-11 B/C/D, pt-12 B/C/D, pt-14 B/C, pt-15 B/D, pt-17 D, design) sunt greșite fără dubiu: `Exception` nu e `ValueError` (raises verifică tipul), `PostgreSQL` suportă `CREATE DATABASE` per tenant.

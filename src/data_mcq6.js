@@ -316,17 +316,17 @@ print(list(islice(ids(), 3)))`, o: ["[1, 2, 3]", "Nimic: rulează la nesfârșit
     with pytest.raises(
             ValueError, match="port"):
         parse_port("abc")`, o: [
-      "Dacă `parse_port` aruncă `ValueError` cu un mesaj care conține „port”",
-      "Dacă aruncă orice excepție",
-      "Dacă nu aruncă nimic",
-      "Doar dacă mesajul e exact „port”"],
+      "`parse_port` aruncă `ValueError` cu „port” în mesaj",
+      "`parse_port` aruncă `Exception`, indiferent de mesaj",
+      "`parse_port` întoarce `None` și scrie „port” în log",
+      "`parse_port` aruncă `ValueError` cu mesajul egal cu „port”"],
       ctx: "`pytest.raises` verifică că blocul aruncă o excepție de un anumit tip; `match` verifică și mesajul.",
       e: "Testul trece doar dacă blocul aruncă `ValueError` (sau o subclasă) și dacă `re.search(\"port\", mesaj)` găsește ceva. Fără excepție, testul pică." },
     { id: "pt-12", lvl: 3, q: "Scrii `async def test_alert()` și rulezi pytest 9 fără pytest-asyncio sau anyio. Ce se întâmplă?", o: [
-      "Testul pică: pytest nu rulează singur corutinele, are nevoie de un plugin async",
-      "Trece: pytest rulează automat corutinele",
-      "E sărit cu un warning, deci suita pare verde",
-      "Rulează sincron, ignorând `await`"],
+      "Testul pică: pytest nu rulează singur corutinele",
+      "Trece: pytest pornește singur o buclă `asyncio`",
+      "E sărit cu un warning, iar suita rămâne verde",
+      "Rulează sincron: pytest scoate `await` din corpul testului"],
       ctx: "pytest e sincron. Pentru teste `async def` ai nevoie de un plugin (pytest-asyncio, sau anyio cu `@pytest.mark.anyio`, ca în documentația FastAPI).",
       e: "Din pytest 8.4, un test `async def` fără plugin pică explicit („async def functions are not natively supported”). Înainte era doar sărit cu un warning, ceea ce ascundea teste nerulate." },
     { id: "pt-13", lvl: 2, q: "Câte teste rulează?", code: R`@pytest.mark.parametrize(
@@ -338,17 +338,17 @@ def test_grid(a, b):
       ctx: "Fiecare `parametrize` multiplică testul cu valorile lui. Două decoratoare puse unul peste altul se combină.",
       e: "Decoratoarele `parametrize` suprapuse fac produsul cartezian: 3 valori pentru `a` × 2 pentru `b` = 6 teste." },
     { id: "pt-14", lvl: 1, q: "Testezi o funcție care scrie un raport pe disc. Ce folosești?", o: [
-      "Fixture-ul `tmp_path`: un director temporar, unic pentru fiecare test",
-      "Un fișier fix, `/tmp/report.txt`",
-      "Un mock pe `open` în fiecare test",
+      "Fixture-ul `tmp_path`: director nou la fiecare test",
+      "Un fișier fix `/tmp/report.txt`, șters la final",
+      "Un mock pe `open`, ca să nu scrii nimic pe disc",
       "Directorul proiectului, curățat de mână la final"],
       ctx: "Testele care scriu fișiere în același loc se calcă pe picioare, mai ales când rulează în paralel sau când unul pică la jumătate.",
       e: "`tmp_path` dă fiecărui test un `pathlib.Path` către un director nou, deci testele nu împart fișiere și nu lasă gunoi în proiect." },
     { id: "pt-15", lvl: 2, q: "Un test trece singur, dar pică atunci când rulează toată suita. Cauza cea mai probabilă?", o: [
-      "Stare partajată între teste (DB, variabile globale, fixture cu scope larg) care depinde de ordine",
-      "pytest rulează implicit testele în paralel",
+      "Stare lăsată de alt test: rezultatul depinde de ordine",
+      "pytest rulează testele din suită în paralel, pe thread-uri",
       "pytest păstrează rezultatele testelor de la o rulare la alta",
-      "Testul e prea lent pentru suita completă"],
+      "Testul depășește timeout-ul suitei complete"],
       ctx: "Un test bun nu depinde de alte teste: nici de ordinea lor, nici de ce au lăsat în urmă.",
       e: "Dacă rezultatul depinde de ce rulează înainte, un test anterior lasă stare în urmă: rânduri în DB, un singleton modificat, un mock nedesfăcut. Soluția e izolarea: rollback per test, fixture-uri cu scope `function`, `monkeypatch`." }
   ]);
@@ -575,10 +575,10 @@ class OffHours(Rule):
 time.sleep(2)
 assert page.locator(
     ".toast").is_visible()`, o: [
-      "`is_visible()` nu așteaptă; folosești `expect(locator).to_be_visible()`, care reîncearcă",
+      "`is_visible()` nu așteaptă; treci pe `expect(locator)`",
       "`sleep(2)` e prea scurt; îl mărești la 5 secunde",
       "`click()` nu așteaptă butonul; adaugi un `sleep` înainte",
-      "Selectorul CSS e lent; îl înlocuiești cu XPath"],
+      "Selectorul CSS e lent; îl înlocuiești cu XPath, mai rapid"],
       ctx: "Playwright așteaptă singur înainte de acțiuni (click, fill). Pentru aserții are funcția `expect`, cu timeout implicit de 5 secunde.",
       e: "`is_visible()` răspunde imediat, deci testul depinde de cât de repede apare toast-ul. `expect(...).to_be_visible()` reîncearcă până la timeout, iar `sleep` dispare." }
   ]);

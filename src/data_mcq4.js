@@ -128,8 +128,8 @@ session = pickle.loads(data)`, o: [
       "Two-phase commit distribuit între Postgres și RabbitMQ"], a: 0,
       e: "Un relay citește tabela outbox și publică. Elimină „dual write”-ul. Relay-ul poate publica de două ori, deci consumatorii trebuie să fie idempotenți. Alternativ: CDC (Debezium) pe WAL." },
     { id: "des-02", q: "Exactly-once end-to-end într-un sistem distribuit, în practică:", o: [
-      "At-least-once plus procesare idempotentă",
-      "E garantat de orice broker modern, prin confirmări",
+      "At-least-once, iar procesarea e mereu idempotentă",
+      "Îl dă brokerul modern, prin confirmări de la consumator",
       "Se obține cu at-most-once și fără retry",
       "Nu se poate apropia, deci duplicatele se acceptă"], a: 0,
       e: "„Effectively once”: rețeaua poate pierde confirmarea după ce efectul s-a produs; retry-ul produce duplicat. Deduplicarea la consumator (cheie unică) închide bucla." },
@@ -141,20 +141,20 @@ session = pickle.loads(data)`, o: [
       e: "După N eșecuri nu mai încerci o perioadă și degradezi grațios. Retry-urile fără backoff amplifică problema. Bulkheads (pool-uri separate per dependență) împiedică o dependență să consume toate resursele." },
     { id: "des-04", q: "Cum scalezi workerii care consumă o coadă?", o: [
       "Orizontal, după lungimea cozii (workeri stateless)",
-      "Doar vertical, cu un singur worker mai mare",
+      "Vertical: un singur worker, cu mai mult CPU și memorie",
       "După CPU-ul serviciului de API care publică mesajele în coadă",
       "Nu se pot scala fără downtime, din cauza ack-urilor"], a: 0,
       e: "Te uiți și la vârsta celui mai vechi mesaj. Atenție la resursele din aval: 100 de workeri = peste 100 de conexiuni DB (PgBouncer) și presiune pe dependențe." },
     { id: "des-05", q: "Un client retrimite un POST de creare a unei alerte după un timeout de rețea. Cum eviți duplicatul?", o: [
       "Idempotency key de la client, stocat împreună cu rezultatul",
-      "Imposibil de evitat: duplicatele țin de rețea",
+      "Nu se poate evita: duplicatele țin de rețea",
       "Interzici retry-urile pe client pentru request-uri POST",
       "Ștergi duplicatele cu un job de noapte"], a: 0,
       e: "La o cerere repetată cu aceeași cheie returnezi același rezultat. Pattern folosit de API-urile de plăți; cheia se stochează cu constrângere unică și TTL." },
     { id: "des-06", q: "Izolare multi-tenant în Postgres, de la cea mai partajată la cea mai izolată:", o: [
       "`tenant_id` (+ RLS) → schema per tenant → bază de date per tenant",
       "Bază de date per tenant → schema per tenant → `tenant_id` (+ RLS)",
-      "Doar coloana `tenant_id` e posibilă în Postgres",
+      "Postgres suportă `tenant_id` și scheme, dar nu baze separate",
       "Doar baza de date per tenant e sigură pentru date sensibile"], a: 0,
       e: "RLS = row-level security. Trade-off: cost și operare vs izolare și „noisy neighbour”. Pentru datele de securitate ale clienților, izolarea e un argument serios." },
     { id: "des-07", q: "După o cădere, retry-urile tuturor clienților lovesc simultan serviciul revenit și îl pică din nou. Ce schimbi?", o: [

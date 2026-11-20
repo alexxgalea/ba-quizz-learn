@@ -13,13 +13,13 @@ def db_session(engine):
       "Setup înainte de `yield`, teardown după, chiar dacă testul pică",
       "Testul primește un generator pe care trebuie să-l itereze",
       "Fixture-ul rulează de două ori pentru fiecare test: înainte și după",
-      "Codul de după `yield` rulează doar dacă testul trece cu succes"], a: 0,
+      "Codul de după `yield` rulează dacă testul trece cu succes"], a: 0,
       e: "Valoarea de la `yield` e injectată în test. Pattern clasic de izolare: tranzacție + rollback per test, deci testele nu-și văd datele unul altuia." },
     { id: "pt-02", q: "Fixture-ul `engine` pornește un container Postgres (~5 s) și e folosit de 300 de teste. Ce scope?", o: [
       "`session`; datele rămân izolate per test",
       "`function`, ca fiecare test să aibă containerul lui",
       "`class`, ca să fie reutilizat în clasa de teste",
-      "Nu se poate partaja: fixture-urile sunt mereu per test"], a: 0,
+      "Nu se poate partaja: fixture-urile sunt create per test"], a: 0,
       e: "Resurse scumpe, fără stare per test → scope mare. Sesiunea DB per test rămâne cu scope `function`. Un fixture cu scope mare nu poate depinde de unul cu scope mai mic." },
     { id: "pt-03", q: "Ce patch e corect în testul pentru `raise_alert`?", code: R`# app/alerts.py
 from app.notify import send_email
@@ -59,7 +59,7 @@ def raise_alert(alert):
       "Ocolește brokerul, workerul și ack-urile",
       "E mai lent decât un worker real, deci testele durează",
       "Cere oricum un RabbitMQ pornit, deci nu e izolat",
-      "Nu execută deloc task-ul, doar înregistrează apelul"], a: 0,
+      "Nu execută task-ul, ci îl înregistrează ca apel"], a: 0,
       e: "E OK pentru unit teste pe logică. Pentru integrare: worker real în test (fixture-ul `celery_worker`) sau broker în Docker." },
     { id: "pt-09", q: "Un test folosește `time.sleep(2)` ca să aștepte un job asincron. Problema?", o: [
       "E lent și flaky; aștepți o condiție sau controlezi ceasul",
