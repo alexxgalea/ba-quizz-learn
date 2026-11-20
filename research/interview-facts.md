@@ -1364,3 +1364,9 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ **React Strict Mode** (`fe-07`): efectele rulează un ciclu setup + cleanup în plus doar în development; build-ul de producție le rulează o dată (https://react.dev/reference/react/StrictMode, deja în secțiunea de mai sus).
 - ✅ **CORS** (`fd-02`, `fe-13`): un POST cu `Content-Type: application/json` nu e cerere simplă (doar `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain` sunt), deci declanșează preflight `OPTIONS`; verificat pe MDN (https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS). `credentials: "include"` nu declanșează singur preflight-ul.
 - Nicio eroare de fapt găsită în grilele rescrise; variantele greșite noi sunt false fără dubiu (fiecare are explicația ei).
+
+## Grile fără tipar: asyncio, asgi, gil (tichetul 06, 2026-11-20)
+
+- ✅ Rulat pe Python local: `threading.Timer` are `start()` și `cancel()` (e subclasă de `Thread`); `threading.Event` are `set()` / `wait()`; `CancelledError` e `BaseException`, nu `Exception`; `gather` nu anulează celelalte task-uri când unul aruncă (b a terminat după `ValueError` din a); `asyncio.timeout` ridică `TimeoutError`; un `Lock` luat de același thread blochează a doua oară (`acquire(timeout=.1)` dă `False`).
+- ✅ RFC 9110 §9.2.2: metodele idempotente sunt PUT, DELETE și cele safe; POST nu e. Sursă: https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2
+- ✅ `on_event("startup")` și `on_event("shutdown")` sunt depreciate în FastAPI și eliminate din Starlette 1.0 (secțiunea 5, deja verificat); variantele noi spun același lucru despre ambele.

@@ -9,8 +9,8 @@
       o: [
         "Threadurile unui proces împart memoria; procesele au memorie separată",
         "Procesele împart memoria; threadurile au fiecare memoria lor separată",
-        "Sunt același lucru; „thread” e doar numele folosit în Python",
-        "Un proces rulează mereu pe un singur core, un thread pe toate"], a: 0,
+        "Sunt același lucru; „thread” e numele folosit în Python",
+        "Un proces rulează pe un singur core, iar un thread pe mai multe"], a: 0,
       e: "Threadurile sunt ieftine și comunică direct prin memorie, de aici nevoia de lock-uri. Procesele sunt izolate, mai scumpe de pornit și comunică prin IPC (pipe-uri, cozi, pickling). În CPython, pentru calcul în Python pur, doar procesele ocolesc GIL-ul." },
     { id: "gil-14", q: "Ce face event loop-ul din asyncio?",
       ctx: "O corutină e o funcție `async def`: poate fi pusă pe pauză la `await` și reluată mai târziu. Cineva trebuie să decidă ce corutină rulează în fiecare moment.",
@@ -18,7 +18,7 @@
         "Alternează corutinele pe un thread, reluând-o pe cea care poate continua",
         "Pornește câte un thread nou pentru fiecare corutină și le rulează în paralel",
         "Rulează corutinele una după alta, fiecare până la capăt, fără pauze",
-        "Distribuie corutinele pe toate core-urile procesorului, ca procesele"], a: 0,
+        "Distribuie corutinele pe core-urile procesorului, ca procesele"], a: 0,
       e: "Loop-ul ține evidența task-urilor gata de rulare. Când o corutină ajunge la `await` pe o operație I/O, cedează controlul; loop-ul rulează alta și o reia pe prima când a sosit răspunsul. Totul pe un singur thread: concurență, nu paralelism." }
   ]);
 

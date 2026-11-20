@@ -281,9 +281,9 @@ Limită: Cu mai mulți workeri Gunicorn sau Uvicorn, fiecare proces își ruleaz
 La interviu: „Resursele partajate le creez în `lifespan`: înainte de `yield` la pornire, după `yield` la oprire. `on_event` e depreciat. Fiecare worker are instanța lui.”
 Verificare: De ce e o idee proastă un `AsyncClient` nou la fiecare cerere?
 Răspuns verificare: Pierzi pool-ul de conexiuni și keep-alive: fiecare cerere deschide conexiuni și face handshake TLS din nou, iar clientul trebuie închis de fiecare dată.
-Varianta greșită B: Un client pe cerere pierde reutilizarea conexiunilor și costă un handshake la fiecare cerere.
-Varianta greșită C: Un client creat la import nu e închis niciodată și e creat chiar și când doar importi modulul, de exemplu în teste.
-Varianta greșită D: `on_event("startup")` e depreciat în favoarea lui `lifespan`, iar Starlette 1.0 l-a eliminat.
+Varianta greșită B: Un client pe cerere pierde reutilizarea conexiunilor și costă un handshake la fiecare cerere, chiar dacă îl închizi în `async with`.
+Varianta greșită C: Un client creat la import nu are un moment clar de închidere și e creat chiar și când doar importi modulul, de exemplu în teste.
+Varianta greșită D: `on_event("startup")` și `on_event("shutdown")` sunt depreciate în favoarea lui `lifespan`, iar Starlette 1.0 le-a eliminat.
 
 ### asgi-13
 Pe scurt: Rulează funcția după trimiterea răspunsului, în același proces; dacă procesul moare, sarcina se pierde.
@@ -303,9 +303,9 @@ Limită: O sarcină grea rulată astfel ocupă workerul care servește cereri: C
 La interviu: „`BackgroundTasks` rulează după răspuns, în același proces, fără coadă și fără retry. Îl folosesc pentru lucruri mici; tot ce nu are voie să se piardă merge în Celery.”
 Verificare: O alertă de securitate trebuie trimisă sigur, chiar dacă podul se repornește. Ce folosești?
 Răspuns verificare: O coadă durabilă: publici mesajul în RabbitMQ (sau un task Celery cu `acks_late`) și răspunzi; un worker separat îl procesează, cu retry și idempotență.
-Varianta greșită B: Nu există coadă: sarcina trăiește doar în memoria procesului.
-Varianta greșită C: Sarcina rulează în același proces, pe buclă sau în threadpool.
-Varianta greșită D: Răspunsul pleacă înainte ca sarcina să ruleze; asta e chiar ideea.
+Varianta greșită B: Nu există coadă și nici retry: sarcina trăiește doar în memoria procesului.
+Varianta greșită C: Sarcina rulează în același proces, pe buclă sau în threadpool, deci moare odată cu workerul.
+Varianta greșită D: Răspunsul pleacă înainte ca sarcina să ruleze; asta e chiar ideea. Clientul nu așteaptă sarcina.
 
 ### asgi-14
 Pe scurt: Endpoint-urile care cer `Depends(get_db)` primesc `fake_db`, fără nicio schimbare în codul lor.
@@ -335,7 +335,7 @@ Verificare: Cum simulezi un utilizator autentificat într-un test, fără tokenu
 Răspuns verificare: Faci override pe dependența de autentificare (de exemplu `get_current_user`) cu o funcție care întoarce un utilizator de test.
 Varianta greșită B: Override-ul acționează doar în rezolvarea dependențelor FastAPI; un apel direct `get_db()` din alt cod rămâne cel real.
 Varianta greșită C: Endpoint-ul primește valoarea întoarsă de înlocuitor, adică `fake_db`, nu `None`.
-Varianta greșită D: Nu se pornește nimic: e doar o înlocuire de funcție.
+Varianta greșită D: Nu se pornește nicio bază de date: e doar o înlocuire de funcție, iar `fake_db` există deja în test.
 
 ### asgi-15
 Pe scurt: Clientul primește doar `{"id": 1}`: `response_model` validează valoarea întoarsă și scoate câmpurile care nu sunt în model.
@@ -379,7 +379,7 @@ Verificare: Ai nevoie de o a doua sesiune, independentă, pentru un log de audit
 Răspuns verificare: Ceri dependența cu `use_cache=False` sau o dependență separată, care deschide propria sesiune și face commit separat.
 Varianta greșită B: Ar fi adevărat doar cu `use_cache=False`. Implicit, rezultatul e refolosit în cerere.
 Varianta greșită C: Endpoint-ul nu cere direct `get_db`, iar chiar dacă ar cere-o, ar primi aceeași valoare din cache.
-Varianta greșită D: Cache-ul ține o cerere, nu toată aplicația; fiecare cerere primește sesiunea ei.
+Varianta greșită D: Cache-ul ține o cerere, nu viața workerului: fiecare cerere primește sesiunea ei, iar la sfârșit sesiunea se închide.
 
 ### asgi-17
 Pe scurt: 403 Forbidden. Serverul știe cine e userul, dar refuză accesul la tenant.
@@ -467,9 +467,9 @@ Limită: Două cereri cu aceeași cheie pot ajunge simultan pe workeri diferiți
 La interviu: „POST nu e idempotent, deci la timeout nu reîncerc orbește. Clientul trimite un `Idempotency-Key`, serverul ține cheia cu răspunsul, iar un retry primește același rezultat. În bază pun o constrângere unică pe cheie, pentru cereri simultane.”
 Verificare: Clientul reîncearcă cu aceeași cheie, dar cu alt body. Ce faci?
 Răspuns verificare: Refuzi (de obicei 409 sau 422): cheia identifică o operație deja făcută, iar un body diferit înseamnă o greșeală a clientului.
-Varianta greșită B: RFC 9110 nu definește POST ca idempotent. Fiecare cerere poate crea o resursă nouă.
+Varianta greșită B: RFC 9110 definește idempotente PUT și DELETE, nu POST. Fiecare cerere POST poate crea o resursă nouă.
 Varianta greșită C: Timpul scurs nu schimbă nimic: serverul poate să fi creat deja alerta în primele milisecunde.
-Varianta greșită D: Se poate reîncerca în siguranță, cu condiția ca serverul să deduplice după cheie.
+Varianta greșită D: Se poate reîncerca în siguranță, cu condiția ca serverul să deduplice după cheie. Retry-ul cu cheie e tocmai soluția.
 
 ### asgi-20
 Pe scurt: 409 Conflict. Cererea e corectă, dar intră în conflict cu starea curentă a resursei.

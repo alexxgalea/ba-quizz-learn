@@ -537,11 +537,11 @@ Verificare: Fiecare thread numără într-o variabilă locală și adună rezult
 
 Răspuns verificare: Nu în buclă: variabilele locale nu sunt partajate între threaduri. Lock-ul rămâne necesar doar la adunarea finală în `counter`, care e tot o operație citește-modifică-scrie.
 
-Varianta greșită: „E mereu 4.000.000, pentru că GIL-ul face fiecare instrucțiune Python atomică” — GIL-ul serializează execuția bytecode-ului, dar nu face atomică o operație compusă precum `+=`.
+Varianta greșită: „E 4.000.000, pentru că GIL-ul face instrucțiunile Python atomice” — GIL-ul serializează execuția bytecode-ului, dar nu face atomică o operație compusă precum `+=`.
 
-Varianta greșită: „Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală” — threadurile pot modifica variabile globale. Problema este concurența, nu accesul.
+Varianta greșită: „Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală din alt thread” — threadurile pot modifica variabile globale. Problema este concurența, nu accesul.
 
-Varianta greșită: „E mereu 1.000.000, pentru că fiecare thread își incrementează propria copie” — toate threadurile referă aceeași variabilă globală, nu câte o copie separată.
+Varianta greșită: „E 1.000.000, pentru că fiecare thread își incrementează propria copie” — toate threadurile referă aceeași variabilă globală, nu câte o copie separată.
 
 ### sqa-02
 
