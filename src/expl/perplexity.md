@@ -250,7 +250,7 @@ Varianta greșită: „Ca să ruleze mai repede, fiind compilat separat de restu
 
 Varianta greșită: „Pentru că altfel interpretorul nu găsește funcția `main` la pornire” — Python nu caută automat o funcție numită `main`. Numele este o convenție, nu o cerință a interpretorului.
 
-Varianta greșită: „Ca să ruleze doar pe Linux, nu și pe Windows sau macOS” — `__name__` nu depinde de sistemul de operare. Regula este aceeași pe toate platformele.
+Varianta greșită: „Ca să ruleze pe Linux, dar să fie ignorat pe Windows sau macOS” — `__name__` nu depinde de sistemul de operare. Condiția se comportă la fel pe Linux, Windows și macOS.
 
 ### asgi-10
 

@@ -96,14 +96,14 @@ print(counter)`, o: [
     { id: "rt-01", q: "Ce se întâmplă când rulezi `python app.py` în CPython?", o: [
       "Sursa e compilată în bytecode, apoi bytecode-ul e executat de interpretor",
       "Sursa e tradusă în C++ și compilată cu un compilator nativ",
-      "Sursa e citită și executată ca text, linie cu linie, fără nicio compilare",
+      "Sursa e citită și executată ca text, linie cu linie, fără pas de compilare",
       "Fiecare funcție e compilată JIT în cod mașină înainte de prima rulare"], a: 0,
       e: "CPython parsează sursa în AST, o compilează în bytecode și o execută în bucla de evaluare. Importurile se cache-uiesc ca `.pyc`. Există un JIT experimental, oprit implicit; nu e pasul standard." },
     { id: "rt-02", q: "De ce primești `TypeError` abia când rulezi linia respectivă?", o: [
       "Tipurile aparțin obiectelor și se verifică dinamic, când se execută operația",
-      "Pentru că Python nu are deloc tipuri, doar valori fără tip",
+      "Pentru că Python nu are deloc tipuri, ci valori fără tip",
       "Pentru că compilatorul Python ignoră erorile de tip ca să meargă mai repede",
-      "Pentru că verificarea tipurilor se face doar în modul debug"], a: 0,
+      "Pentru că verificarea tipurilor se face în modul debug, nu în cel normal"], a: 0,
       e: "Variabilele sunt nume legate de obiecte; `a + b` se rezolvă după tipul obiectelor, la runtime. Nu există un pas de compilare care să verifice tipurile: asta fac, opțional, mypy sau pyright." },
     { id: "rt-03", q: "Ce face `\"1\" + 1` în Python?", o: ["Aruncă TypeError", "Returnează \"11\"", "Returnează 2", "Returnează None"], a: 0,
       e: "Python e dinamic, dar puternic tipat: nu face conversii implicite între str și int. În JavaScript rezultatul ar fi \"11\"." },
@@ -115,8 +115,8 @@ print(counter)`, o: [
       e: "Hint-urile stau în `__annotations__` (evaluate leneș din 3.14) și sunt ignorate de interpretor. mypy/pyright verifică static; Pydantic și FastAPI le citesc ca să valideze date." },
     { id: "rt-05", q: "Cum gestionează CPython memoria?", o: [
       "Reference counting + un GC generațional pentru cicluri de referințe",
-      "Doar un garbage collector mark-and-sweep, rulat periodic, ca în Java",
-      "Manual: obiectele sunt eliberate doar când apelezi explicit `del`",
+      "Un GC mark-and-sweep periodic, fără contoare de referințe, ca în Java",
+      "Manual: obiectele rămân în memorie până apelezi explicit `del` pe ele",
       "Memoria nu se eliberează deloc până la terminarea procesului"], a: 0,
       e: "La contor 0, obiectul e eliberat imediat. Ciclurile (a → b → a) le colectează modulul `gc`. `del` șterge doar un nume, nu forțează eliberarea." },
     { id: "rt-06", q: "Ce e un fișier `.pyc`?", o: [
@@ -127,7 +127,7 @@ print(counter)`, o: [
       e: "Stă în `__pycache__/`, e specific versiunii de Python și se regenerează când se schimbă sursa. Accelerează pornirea, nu execuția." },
     { id: "rt-07", tag: "formulare", q: "Care formulare e cea mai precisă?", o: [
       "„Python e compilat în bytecode, rulat de VM-ul CPython; tipurile se verifică la runtime.”",
-      "„Python e interpretat linie cu linie, deci nu are niciun pas de compilare înainte de execuție.”",
+      "„Python e interpretat linie cu linie, deci nu are pas de compilare înainte de execuție.”",
       "„Python se transformă întâi în cod C++, care apoi e compilat și rulează pe procesor.”",
       "„Python e compilat în bytecode ca Java, deci tipurile se verifică încă de la compilare.”"], a: 0,
       e: "Există compilare, dar în bytecode, nu în cod mașină, și fără verificare de tipuri: spre deosebire de Java, bytecode-ul nu vine cu tipuri verificate. Formularea cu C++ e exact cea de evitat." },
@@ -135,7 +135,7 @@ print(counter)`, o: [
       "Ca să nu ruleze când modulul e importat de alt modul sau de teste",
       "Ca să ruleze mai repede, fiind compilat separat de restul modulului",
       "Pentru că altfel interpretorul nu găsește funcția `main` la pornire",
-      "Ca să ruleze doar pe Linux, nu și pe Windows sau macOS"], a: 0,
+      "Ca să ruleze pe Linux, dar să fie ignorat pe Windows sau macOS"], a: 0,
       e: "La import, tot codul de la nivelul modulului se execută. `__name__` e `\"__main__\"` doar când fișierul e rulat direct. Contează și pentru `multiprocessing` cu metoda spawn." }
   ]);
 
