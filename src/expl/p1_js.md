@@ -164,7 +164,7 @@ Limită: Deodată nu înseamnă oricâte: 20.000 de id-uri trimit 20.000 de cere
 La interviu: „`await` într-o buclă rulează pe rând. Pentru cereri independente folosesc `Promise.all`, iar `forEach(async …)` nu e așteptat, deci nu-l folosesc.”
 Verificare: Ai cinci cereri independente și vrei rezultatele chiar dacă una eșuează. Ce folosești?
 Răspuns verificare: `Promise.allSettled`. Așteaptă toate și întoarce, pentru fiecare, fie `fulfilled` cu valoare, fie `rejected` cu motiv.
-Varianta greșită B: `await` oprește funcția până se termină cererea, deci nu doar o pornește: iterația următoare așteaptă.
+Varianta greșită B: `await` oprește funcția până se termină cererea, deci nu trece mai departe: iterația următoare așteaptă.
 Varianta greșită C: `forEach` ignoră promisiunile întoarse de callback: pornește cererile deodată, dar `load` se termină înainte de ele, iar o eroare rămâne netratată.
 Varianta greșită D: `for...of` e sincron și nu așteaptă nimic singur. Așteptarea vine de la `await`.
 

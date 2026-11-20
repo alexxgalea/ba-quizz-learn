@@ -1338,3 +1338,10 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 16. TypeScript (secțiunea 47): documentația `tsconfig` dă `strict` implicit `true`, verificat cu `tsc` 7.0.2; data schimbării (TypeScript 6.0) e din surse secundare. Pagina „Everyday Types” nu acoperă excess property checks.
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
 18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.
+
+## Grile fără tipar: `frontend`, `fedebug`, `js` (tichetul 05)
+
+- ✅ **TanStack Query v5**: `cacheTime` a fost redenumit `gcTime` (ghidul de migrare v5, „Rename `cacheTime` to `gcTime`”); `staleTime` nu a fost redenumit și rămâne „cât sunt datele proaspete”. Varianta greșită „gcTime e noul nume al lui staleTime” din `fe-04` e deci falsă. Sursă: https://github.com/TanStack/query/blob/main/docs/framework/react/guides/migrating-to-v5.md
+- ✅ **React Strict Mode** (`fe-07`): efectele rulează un ciclu setup + cleanup în plus doar în development; build-ul de producție le rulează o dată (https://react.dev/reference/react/StrictMode, deja în secțiunea de mai sus).
+- ✅ **CORS** (`fd-02`, `fe-13`): un POST cu `Content-Type: application/json` nu e cerere simplă (doar `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain` sunt), deci declanșează preflight `OPTIONS`; verificat pe MDN (https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS). `credentials: "include"` nu declanșează singur preflight-ul.
+- Nicio eroare de fapt găsită în grilele rescrise; variantele greșite noi sunt false fără dubiu (fiecare are explicația ei).
