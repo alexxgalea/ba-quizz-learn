@@ -245,8 +245,8 @@ Limită: Un singleton prin `__new__` e rar necesar în Python: un modul e deja i
 La interviu: „`__new__` creează obiectul, `__init__` îl inițializează. Suprascriu `__new__` doar la tipuri imutabile sau când vreau să întorc o instanță existentă; în rest, `__init__`.”
 Verificare: De ce `Host("A.example")` nu poate fi normalizat la litere mici în `__init__`?
 Răspuns verificare: Valoarea unui `str` e fixată în `__new__`. În `__init__` obiectul există deja și e imutabil.
-Varianta greșită B: Validarea obișnuită a argumentelor stă în `__init__` (sau în `__post_init__` la dataclass). `__new__` nu aduce nimic în plus aici.
-Varianta greșită C: Atributele obligatorii sunt parametri ai lui `__init__`; `__new__` nu e locul lor și nu le verifică mai bine.
+Varianta greșită B: `__init__` poate arunca excepții: validarea obișnuită a argumentelor stă acolo (sau în `__post_init__` la dataclass). `__new__` nu aduce nimic în plus.
+Varianta greșită C: Atributele obligatorii sunt parametri ai lui `__init__`, care îi poate cere și verifica; `__new__` nu e locul lor.
 Varianta greșită D: Moștenirea multiplă nu cere `__new__`; ordinea apelurilor o dă MRO-ul.
 
 ### oop-10

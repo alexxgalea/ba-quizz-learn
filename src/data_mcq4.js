@@ -128,8 +128,8 @@ session = pickle.loads(data)`, o: [
       "Two-phase commit distribuit între Postgres și RabbitMQ"], a: 0,
       e: "Un relay citește tabela outbox și publică. Elimină „dual write”-ul. Relay-ul poate publica de două ori, deci consumatorii trebuie să fie idempotenți. Alternativ: CDC (Debezium) pe WAL." },
     { id: "des-02", q: "Exactly-once end-to-end într-un sistem distribuit, în practică:", o: [
-      "At-least-once, iar procesarea e mereu idempotentă",
-      "Îl dă brokerul modern, prin confirmări de la consumator",
+      "At-least-once, iar procesarea e idempotentă",
+      "Îl garantează brokerul, prin confirmări, inclusiv pentru efectele din alte sisteme",
       "Se obține cu at-most-once și fără retry",
       "Nu se poate apropia, deci duplicatele se acceptă"], a: 0,
       e: "„Effectively once”: rețeaua poate pierde confirmarea după ce efectul s-a produs; retry-ul produce duplicat. Deduplicarea la consumator (cheie unică) închide bucla." },
@@ -234,7 +234,7 @@ session = pickle.loads(data)`, o: [
     { id: "dbm-05", q: "Teorema CAP: în prezența unei partiții de rețea, un sistem distribuit…", o: [
       "trebuie să aleagă între consistență și disponibilitate",
       "poate avea consistență, disponibilitate și toleranță la partiții simultan",
-      "pierde o parte din datele scrise în timpul partiției",
+      "oprește scrierile pe ambele părți ale partiției, ca să nu piardă date",
       "devine automat eventual consistent, fără să piardă nimic"], a: 0,
       e: "CAP vorbește despre comportamentul la partiție. PACELC adaugă: fără partiție, alegi între latență și consistență. Un Postgres cu un singur primar alege consistența." },
     { id: "dbm-06", q: "Când alegi JSONB în Postgres în locul unui document store separat?", o: [

@@ -44,7 +44,7 @@ print(counter)`, o: [
       e: "asyncio e cooperativ: o corutină cedează controlul doar la `await`. `time.sleep` blochează threadul loop-ului. Folosești `await asyncio.sleep()` sau muți codul blocant cu `await asyncio.to_thread(...)`." },
     { id: "gil-05", q: "Ce e adevărat despre cod nativ (NumPy, OpenCV) și GIL?", o: [
       "Multe operații native eliberează GIL-ul, deci pot rula în paralel din threaduri",
-      "Codul nativ ține GIL-ul pe durata calculului, deci nu rulează în paralel",
+      "NumPy și OpenCV nu pot elibera GIL-ul: sunt extensii C, iar GIL-ul aparține interpretorului",
       "NumPy pornește automat câte un proces separat pentru fiecare operație mare pe array-uri",
       "GIL-ul se aplică operațiilor de I/O, nu și calculelor făcute în extensii C"], a: 0,
       e: "O extensie C poate elibera GIL-ul cât timp nu atinge obiecte Python (calcule NumPy mari, `cv2.resize`). De aceea un thread pool peste OpenCV poate folosi mai multe core-uri, iar același calcul scris în Python pur nu." },

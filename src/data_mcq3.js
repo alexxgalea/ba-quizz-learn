@@ -194,7 +194,7 @@ def raise_alert(alert):
       e: "Fără versiuni /v2: clienții cer explicit câmpurile, deci adăugarea nu strică nimic. Monitorizezi folosirea câmpurilor depreciate înainte să le scoți." },
     { id: "gql-05", q: "Unde faci autorizarea într-un API GraphQL multi-tenant?", o: [
       "În resolvers / logica de business, per obiect sau câmp",
-      "În gateway, la intrarea în endpoint",
+      "În gateway, după calea URL-ului, ca la REST: o rută per resursă",
       "Nicăieri: schema e publică, deci datele sunt publice",
       "În frontend, care ascunde câmpurile nepermise"], a: 0,
       e: "Un singur endpoint expune tot graful; un user autentificat nu trebuie să poată traversa spre datele altui tenant." },
@@ -294,7 +294,7 @@ def raise_alert(alert):
       "Owner: citire și scriere; grup: citire; ceilalți: nimic",
       "Owner, grup și ceilalți: citire și scriere, fără execuție",
       "Owner: execuție; grup: scriere; ceilalți: citire",
-      "Fișierul îl poate citi și modifica root, nu și ceilalți"], a: 0,
+      "Doar owner-ul poate citi și modifica fișierul; grupul și ceilalți nu au acces"], a: 0,
       e: "Cifre octale: 4 = r, 2 = w, 1 = x. 6 = rw, 4 = r, 0 = nimic." },
     { id: "lx-06", q: "Pe ce mecanisme ale kernelului Linux se bazează containerele?", o: [
       "Namespaces (izolare) și cgroups (limite de CPU și memorie)",

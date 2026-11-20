@@ -85,8 +85,8 @@ n = Slack()`, o: [
       e: "Cu compoziție, în test dai un notifier fals și verifici ce a primit. Canalele noi nu cer schimbări în `ScanJob`." },
     { id: "oop-09", lvl: 2, q: "Când suprascrii `__new__` în loc de `__init__`?", o: [
       "Când controlezi crearea instanței: tip imutabil sau cache de instanțe",
-      "Când vrei să validezi argumentele constructorului înainte ca obiectul să existe",
-      "Când clasa are atribute obligatorii, ca să fie verificate la creare",
+      "Când vrei să validezi argumentele, fiindcă `__init__` nu poate arunca excepții",
+      "Când clasa are atribute obligatorii, fiindcă `__init__` nu le poate impune",
       "Când clasa moștenește din mai multe clase, ca să rezolvi ordinea inițializării"],
       ctx: "`__new__` creează obiectul și îl întoarce; `__init__` primește obiectul deja creat și îl inițializează.",
       e: "La un tip imutabil, valoarea trebuie fixată la creare, deci în `__new__`; în `__init__` e deja prea târziu. Pentru validare obișnuită ajunge `__init__`." },
@@ -344,7 +344,7 @@ def test_grid(a, b):
     { id: "pt-14", lvl: 1, q: "Testezi o funcție care scrie un raport pe disc. Ce folosești?", o: [
       "Fixture-ul `tmp_path`: director nou la fiecare test",
       "Un fișier fix `/tmp/report.txt`, șters la final",
-      "Un mock pe `open`, ca să nu scrii nimic pe disc",
+      "Un mock pe `open`, iar apoi citești fișierul de pe disc ca să verifici raportul",
       "Directorul proiectului, curățat de mână la final"],
       ctx: "Testele care scriu fișiere în același loc se calcă pe picioare, mai ales când rulează în paralel sau când unul pică la jumătate.",
       e: "`tmp_path` dă fiecărui test un `pathlib.Path` către un director nou, deci testele nu împart fișiere și nu lasă gunoi în proiect." },
@@ -415,7 +415,7 @@ function onClick() {
     { id: "fe-06", lvl: 2, q: "Un `useEffect(() => { ... })` nu are array de dependențe. Când rulează?", o: [
       "După fiecare render al componentei",
       "O singură dată, după primul render",
-      "La fiecare schimbare a props-urilor primite",
+      "Când se schimbă props-urile, nu și când se schimbă starea",
       "Înainte de fiecare render, ca să pregătească datele"],
       ctx: "Al doilea argument al lui `useEffect` e lista de dependențe. Poate lipsi, poate fi `[]` sau poate conține valori din props și state.",
       e: "Fără array, efectul rulează după fiecare commit. Cu `[]` rulează doar după primul render, iar cu `[a, b]` când se schimbă `a` sau `b`." },

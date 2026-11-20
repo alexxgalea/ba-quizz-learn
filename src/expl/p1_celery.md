@@ -238,7 +238,7 @@ Limită: JSON nu știe de `datetime`, `Decimal` sau obiecte proprii. Le converte
 La interviu: „Folosesc JSON și `accept_content=['json']`: pickle poate executa cod la deserializare, deci oricine poate scrie în broker ar putea rula cod pe workeri. JSON e implicit din Celery 4.”
 Verificare: Ai setat `task_serializer = "json"`, dar `accept_content` include și `"pickle"`. E suficient?
 Răspuns verificare: Nu: workerul acceptă în continuare mesaje pickle venite din altă parte. `accept_content` trebuie restrâns la `["json"]`.
-Varianta greșită B: Viteza nu compensează riscul: pickle pe date care trec prin broker deschide calea spre execuție de cod la deserializare.
+Varianta greșită B: Formatul binar nu apără de nimic: cine poate scrie în broker poate trimite un pickle construit să ruleze cod la deserializare. Pickle e chiar riscul.
 Varianta greșită C: YAML cu obiecte Python complete are aceeași problemă ca pickle, pentru că poate construi obiecte arbitrare. Nu e o alegere sigură.
 Varianta greșită D: Diferența de securitate e chiar miezul întrebării: pickle poate rula cod, JSON nu.
 

@@ -137,7 +137,7 @@ Limită: DataLoader-ele (GQL-01) încarcă și ele date, deci au nevoie de aceea
 La interviu: „Autorizarea o fac în resolvere și, ideal, în stratul de acces la date, pe obiect și pe câmp, pentru că un query poate traversa tot graful. Gateway-ul verifică doar autentificarea.”
 Verificare: Filtrezi pe tenant în resolverul `alerts` de la rădăcină, dar nu și în câmpul `rule.alerts`, iar regulile de detecție sunt comune tuturor clienților. Ce poate face un user?
 Răspuns verificare: Să ceară una dintre alertele lui, apoi `rule { alerts }`, și să vadă alertele tuturor clienților pentru acea regulă. Fiecare drum din graf are nevoie de aceeași filtrare.
-Varianta greșită B: Gateway-ul vede doar request-ul și token-ul, nu și obiectele pe care le vor întoarce resolverele, deci nu poate decide pe fiecare obiect.
+Varianta greșită B: GraphQL are un singur endpoint, deci calea URL-ului nu spune la ce date ajunge cererea. Gateway-ul vede doar request-ul și token-ul, nu și obiectele pe care le întorc resolverele, deci nu poate decide pe fiecare obiect.
 Varianta greșită C: Schema publică arată ce tipuri există, nu datele. Datele rămân protejate de autorizare.
 Varianta greșită D: Frontend-ul poate fi ocolit oricând: oricine trimite query-ul direct, din curl sau din consola browserului.
 

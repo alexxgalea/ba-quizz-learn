@@ -84,7 +84,7 @@ Verificare: Ce permisiuni dă `chmod 755 deploy.sh`?
 Răspuns verificare: Owner: rwx (7 = 4 + 2 + 1); grup și ceilalți: r-x (5 = 4 + 1). Toți pot citi și rula scriptul, dar doar owner-ul îl poate modifica.
 Varianta greșită B: Citire și scriere pentru toți ar fi `666`. Aici a treia cifră e 0, deci ceilalți nu au niciun drept.
 Varianta greșită C: Cifrele se citesc ca sume de 4 (r), 2 (w) și 1 (x): 6 înseamnă rw, nu execuție.
-Varianta greșită D: Permisiunile privesc owner-ul și grupul fișierului, nu doar pe root, care oricum le ignoră.
+Varianta greșită D: Grupul fișierului are citire (a doua cifră e 4), deci accesul nu e doar al owner-ului.
 
 ### lx-06
 Pe scurt: Pe namespaces, care izolează ce vede procesul (procese, rețea, fișiere, hostname), și pe cgroups, care limitează cât consumă (CPU, memorie, I/O).

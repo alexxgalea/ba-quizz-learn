@@ -188,7 +188,7 @@ La interviu: „Pentru inserturi idempotente folosesc `insert().on_conflict_do_n
 Verificare: Ai pus `on_conflict_do_nothing()`, dar tabela nu are nicio constrângere unică pe `event_id`. Ce se întâmplă când același eveniment vine de două ori?
 Răspuns verificare: Se inserează de două ori: fără constrângere unică nu există conflict, deci nimic nu e sărit.
 Varianta greșită B: `merge()` face SELECT, apoi INSERT sau UPDATE. Între cele două, alt proces poate insera același rând, deci operația nu e atomică.
-Varianta greșită C: Prinderea lui `Exception` ascunde și erorile reale, nu doar duplicatele. În plus, după o eroare de integritate sesiunea cere rollback înainte să continui.
+Varianta greșită C: Fără rollback, după o eroare de integritate sesiunea rămâne blocată (`PendingRollbackError`) și nu mai poate continua. Prinderea lui `Exception` ar ascunde și erorile reale, nu doar duplicatele.
 Varianta greșită D: Identity map-ul vede doar obiectele din sesiunea curentă, nu rândurile inserate de alte procese.
 
 ### sqa-10

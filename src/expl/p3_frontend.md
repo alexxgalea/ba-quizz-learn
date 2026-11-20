@@ -166,7 +166,7 @@ La interviu: „Fără array, efectul rulează după fiecare render; cu `[]`, do
 Verificare: Un efect fără array face `setCount(count + 1)`. Ce se întâmplă?
 Răspuns verificare: Buclă infinită: fiecare render rulează efectul, efectul schimbă state-ul, iar asta cere un render nou.
 Varianta greșită B: Așa se comportă un array gol, `[]`. Lipsa array-ului înseamnă „după fiecare render”.
-Varianta greșită C: Props-urile nu sunt singura cauză: fără array, orice render (din props, state sau părinte) rulează efectul.
+Varianta greșită C: Starea declanșează efectul la fel ca props-urile: fără array, orice render (din props, state sau părinte) rulează efectul.
 Varianta greșită D: Efectele rulează după render, nu înainte. Logica dinaintea randării stă direct în corpul componentei.
 
 ### fe-07

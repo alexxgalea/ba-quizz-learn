@@ -115,7 +115,7 @@ La interviu: „CAP spune că, la o partiție de rețea, alegi între consisten�
 Verificare: Ai un Postgres cu primar și o replică asincronă. Primarul cade, iar tu promovezi imediat replica. Ce ai ales?
 Răspuns verificare: Disponibilitatea: serviciul revine repede, dar ultimele tranzacții confirmate pe primar și încă nereplicate se pot pierde.
 Varianta greșită B: La o partiție nu le poți avea pe toate trei simultan: exact asta spune teorema.
-Varianta greșită C: Un sistem care alege consistența refuză scrierile în timpul partiției, deci nu pierde ce a confirmat. Pierderea nu e obligatorie.
+Varianta greșită C: Nu se oprește totul: un sistem AP continuă să primească scrieri pe ambele părți și le reconciliază apoi, iar unul CP refuză cereri doar pe partea care nu are cvorum.
 Varianta greșită D: Consistența eventuală e o alegere de proiectare (AP), nu ceva automat. Un sistem CP refuză cereri în loc să devină eventual consistent.
 
 ### dbm-06

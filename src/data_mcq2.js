@@ -53,7 +53,7 @@ for u in users:
     { id: "sqa-09", q: "Cum faci un insert idempotent în Postgres cu SQLAlchemy?", o: [
       "`insert(...).on_conflict_do_nothing(...)` din dialectul postgresql",
       "`session.merge(obj)`, care face upsert atomic sub concurență",
-      "`try: session.add(obj); session.commit()` și prinzi `Exception`",
+      "`try: session.add(obj); session.commit()` și continui în aceeași sesiune, fără rollback",
       "`session.add(obj)`: identity map-ul previne automat duplicatele"], a: 0,
       e: "Upsert-ul nativ e atomic în DB. `merge()` face SELECT, apoi INSERT/UPDATE: sub concurență, două procese pot insera amândouă. După o eroare de integritate, sesiunea cere rollback." },
     { id: "sqa-10", q: "Ce face `alembic revision --autogenerate`?", o: [
@@ -215,7 +215,7 @@ def fetch_sap_logs(self, system_id):
       e: "Un mesaj neconfirmat redevine vizibil după visibility_timeout și ajunge la alt worker. Crești timeout-ul sau eviți ETA-uri lungi. RabbitMQ nu are mecanismul ăsta: re-livrează la închiderea conexiunii." },
     { id: "cel-11", q: "Ce serializer folosești pentru Celery și de ce?", o: [
       "JSON: pickle poate executa cod la deserializare",
-      "pickle: e mai rapid și păstrează tipurile Python originale",
+      "pickle: e mai sigur, pentru că formatul binar nu poate fi falsificat",
       "YAML: e lizibil și suportă obiecte Python complete",
       "Nu contează, toate sunt echivalente ca securitate"], a: 0,
       e: "Dacă cineva poate scrie în broker, pickle înseamnă execuție de cod. JSON e implicit din Celery 4. La o firmă de securitate, „de ce nu pickle?” e un test de reflexe." },

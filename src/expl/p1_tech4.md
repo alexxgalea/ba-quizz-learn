@@ -232,7 +232,7 @@ La interviu: „Pentru fișiere folosesc `tmp_path`: fiecare test are directorul
 Verificare: De ce un fișier fix, `/tmp/report.txt`, strică testele rulate în paralel (`pytest -n 4`)?
 Răspuns verificare: Toate testele scriu și citesc același fișier în același timp, deci rezultatul depinde de ordine.
 Varianta greșită B: Un drum fix e partajat între teste. Cu `-n 4`, două teste îl scriu în același timp, iar ștergerea de la final nu rulează dacă testul pică pe drum.
-Varianta greșită C: Cu un mock pe `open` nu scrii nimic pe disc, dar nici nu verifici conținutul real al raportului, iar testul se strică la orice schimbare de implementare.
+Varianta greșită C: Cu un mock pe `open` nu ajunge nimic pe disc, deci n-ai ce citi după aceea; testul se contrazice.
 Varianta greșită D: Curățenia de mână nu rulează dacă testul pică la jumătate.
 
 ### pt-15
