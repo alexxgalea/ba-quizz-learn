@@ -13,24 +13,28 @@ print(a2.items)`, o: ["[1]", "[]", "AttributeError", "None"],
       ctx: "Un atribut scris în corpul clasei aparține clasei. `self.x` caută întâi pe instanță, apoi pe clasă. Întrebarea: câte liste există aici?",
       e: "`items` e atribut de clasă: o singură listă, comună tuturor instanțelor. Starea per obiect se creează în `__init__`." },
     { id: "oop-02", lvl: 1, q: "Ce câștigi cu `@property` față de o metodă `get_score()`?", o: [
-      "Păstrezi interfața `obj.score` și adaugi calcul sau validare fără să schimbi apelanții",
-      "Valoarea e calculată o singură dată și păstrată",
-      "Atributul devine privat și nu mai poate fi citit din afară",
-      "Accesul e mai rapid decât la un atribut obișnuit"],
+      "Poți adăuga calcul sau validare păstrând sintaxa `obj.score`",
+      "Valoarea e calculată la primul acces și apoi păstrată în instanță",
+      "Atributul devine privat: `obj.score` nu mai poate fi citit din afara clasei",
+      "Accesul e mai rapid decât la un atribut obișnuit, fiindcă nu mai trece prin `__dict__`"],
       ctx: "În Java scrii getteri și setteri din prima, ca să poți schimba implementarea mai târziu. În Python începi cu un atribut simplu.",
       e: "`@property` transformă accesul la atribut într-un apel de metodă, deci poți începe cu un atribut simplu și adăuga logică mai târziu fără să rupi codul care îl folosește." },
     { id: "oop-03", lvl: 1, q: "Care e folosirea tipică pentru `@classmethod`?", o: [
-      "Constructori alternativi, ca `Finding.from_dict(d)`, care merg și pentru subclase",
-      "Funcții care nu au nevoie nici de instanță, nici de clasă",
-      "Metode care pot fi apelate doar pe clasă, niciodată pe instanță",
-      "Metode care modifică starea unei singure instanțe"],
+      "Constructori alternativi, ca `Finding.from_dict(d)`, valabili și pe subclase",
+      "Funcții utilitare legate de clasă, care nu primesc nici `self`, nici `cls`",
+      "Metode apelabile pe clasă, dar nu pe instanțe: `obj.from_dict(d)` dă `TypeError`",
+      "Metode care citesc și modifică starea unei instanțe, prin `cls` în loc de `self`"],
       ctx: "`@classmethod` primește clasa ca prim argument (`cls`), `@staticmethod` nu primește nimic implicit, iar o metodă obișnuită primește instanța (`self`).",
       e: "Pentru că primește `cls`, un `@classmethod` poate construi instanțe ale clasei pe care e apelat, inclusiv ale unei subclase: `cls(**d)`." },
     { id: "oop-04", lvl: 2, q: "Ce se întâmplă?", code: R`@dataclass
 class Rule:
     name: str
 
-seen = {Rule("brute-force")}`, o: ["TypeError: unhashable type: 'Rule'", "Un set cu un element", "Un set gol", "AttributeError la `name`"],
+seen = {Rule("brute-force")}`, o: [
+      "TypeError: unhashable type: 'Rule'",
+      "Un set cu elementul `Rule(name='brute-force')`",
+      "`set()` gol: obiectele cu `__eq__` generat sunt scoase din set",
+      "AttributeError: `Rule` nu are metoda `__hash__` definită"],
       ctx: "`@dataclass` generează `__init__`, `__repr__` și `__eq__`. Un obiect intră într-un `set` doar dacă are `__hash__`.",
       e: "Cu `eq=True` (implicit) și fără `frozen=True`, dataclass-ul pune `__hash__ = None`: obiectele mutabile cu egalitate de valoare nu pot fi hash-uite. `@dataclass(frozen=True)` rezolvă." },
     { id: "oop-05", lvl: 3, q: "Ce afișează?", code: R`class Base:
@@ -66,10 +70,10 @@ n = Slack()`, o: [
       ctx: "Un ABC (`abc.ABC`) cu metode `@abstractmethod` definește un contract. Python verifică contractul la instanțiere, nu la definirea clasei.",
       e: "O clasă care moștenește un ABC și nu implementează toate metodele abstracte rămâne abstractă: instanțierea ei aruncă `TypeError`." },
     { id: "oop-07", lvl: 2, q: "Ce aduce `typing.Protocol` față de un ABC?", o: [
-      "Contract structural: orice clasă cu metodele potrivite îl satisface, fără să moștenească",
-      "Verificarea tipurilor argumentelor la fiecare apel, la runtime",
-      "Moștenire multiplă fără conflicte de MRO",
-      "Interzice instanțierea claselor care îl implementează"],
+      "Contract structural: o clasă îl satisface prin metodele ei, fără moștenire",
+      "Verifică la runtime tipurile argumentelor, la fiecare apel al metodelor din contract",
+      "Moștenire multiplă fără conflicte de MRO: metodele se potrivesc după nume",
+      "Blochează la import clasele care nu respectă semnăturile din contract"],
       ctx: "Un ABC e nominal: clasa trebuie să-l moștenească. Duck typing înseamnă că contează ce metode are obiectul, nu din ce clasă vine.",
       e: "`Protocol` (PEP 544) descrie forma unui obiect. mypy sau pyright verifică static că o clasă o respectă, chiar dacă nu moștenește din ea. Util pentru biblioteci externe pe care nu le poți modifica." },
     { id: "oop-08", lvl: 1, q: "Un `ScanJob` trebuie să notifice prin email sau Slack, după client. Ce design se testează cel mai ușor?", o: [
@@ -80,33 +84,33 @@ n = Slack()`, o: [
       ctx: "Compoziție („are un”) vs moștenire („este un”). Întrebarea de test: ce pui în locul notificării reale când testezi un `ScanJob`?",
       e: "Cu compoziție, în test dai un notifier fals și verifici ce a primit. Canalele noi nu cer schimbări în `ScanJob`." },
     { id: "oop-09", lvl: 2, q: "Când suprascrii `__new__` în loc de `__init__`?", o: [
-      "Când controlezi crearea instanței: subclase de tipuri imutabile (`str`, `tuple`) sau un cache de instanțe",
-      "Când vrei să validezi argumentele constructorului",
-      "Mereu când clasa are atribute obligatorii",
-      "Când clasa moștenește din mai multe clase"],
+      "Când controlezi crearea instanței: tip imutabil sau cache de instanțe",
+      "Când vrei să validezi argumentele, fiindcă `__init__` nu poate arunca excepții",
+      "Când clasa are atribute obligatorii, fiindcă `__init__` nu le poate impune",
+      "Când clasa moștenește din mai multe clase, ca să rezolvi ordinea inițializării"],
       ctx: "`__new__` creează obiectul și îl întoarce; `__init__` primește obiectul deja creat și îl inițializează.",
       e: "La un tip imutabil, valoarea trebuie fixată la creare, deci în `__new__`; în `__init__` e deja prea târziu. Pentru validare obișnuită ajunge `__init__`." },
     { id: "oop-10", lvl: 2, q: "Ce se întâmplă?", code: R`@dataclass
 class Report:
     findings: list = []`, o: [
-      "ValueError la definirea clasei: valoare implicită mutabilă; folosești `field(default_factory=list)`",
-      "Toate rapoartele împart aceeași listă, fără nicio eroare",
-      "Fiecare raport primește automat o listă nouă",
-      "TypeError la crearea primului `Report()`"],
+      "ValueError la definirea clasei: `list` e o valoare implicită mutabilă",
+      "Rapoartele împart aceeași listă, ca la `def f(x=[])`, fără eroare",
+      "Fiecare raport primește automat o listă nouă, copiată din valoarea implicită",
+      "TypeError la crearea primului `Report()`: lipsește argumentul `findings`"],
       ctx: "La funcții, `def f(x=[])` împarte aceeași listă între apeluri. Dataclass-urile verifică această capcană pentru `list`, `dict` și `set`.",
       e: "Dataclass-ul refuză o valoare implicită de tip `list`, `dict` sau `set` și aruncă `ValueError` chiar la definire. Corect: `findings: list = field(default_factory=list)`." },
     { id: "oop-11", lvl: 2, q: "Ce obții cu `__slots__ = (\"rule\", \"host\")`?", o: [
-      "Instanțe fără `__dict__`: mai puțină memorie, iar atributele noi sunt interzise",
-      "Atribute imutabile după `__init__`",
-      "Acces thread-safe la atribute",
-      "Validarea tipurilor la atribuire"],
+      "Fără `__dict__` per instanță: mai puțină memorie și fără atribute noi",
+      "Atribute imutabile după `__init__`, ca la un `frozen=True`",
+      "Acces thread-safe la atribute, fără lock-uri în jurul citirilor și scrierilor",
+      "Validarea tipului la atribuire, pe baza anotărilor din clasă"],
       ctx: "Fiecare instanță obișnuită are un `__dict__` în care stau atributele. La milioane de obiecte mici, dicționarele astea contează.",
       e: "`__slots__` rezervă locuri fixe pentru atributele numite, fără `__dict__`. Economisești memorie, iar o greșeală de tastare (`obj.hots = ...`) aruncă `AttributeError`. Atributele rămân modificabile." },
     { id: "oop-12", lvl: 3, q: "`ReadOnlyRepo(Repo)` suprascrie `save()` doar ca să arunce `NotImplementedError`. Ce problemă e?", o: [
-      "Încalcă substituția Liskov: codul care primește un `Repo` crapă cu subclasa",
-      "Încalcă responsabilitatea unică: clasa face prea multe",
-      "Nicio problemă: așa se restricționează o clasă",
-      "O problemă de performanță: excepțiile sunt lente"],
+      "Încalcă Liskov: apelantul unui `Repo` nu poate folosi subclasa",
+      "Încalcă responsabilitatea unică: clasa face și citire, și validare",
+      "E în regulă: așa restricționezi o clasă fără să-i schimbi interfața",
+      "Problemă de performanță: excepțiile Python sunt lente față de un `if`"],
       ctx: "Liskov: oriunde merge un obiect de tipul părintelui, trebuie să meargă și unul de tipul subclasei, fără ca apelantul să știe diferența.",
       e: "Subclasa promite (prin moștenire) că știe să salveze, apoi refuză. Corect: două interfețe mici, `Reader` și `Writer`, iar `Repo` le implementează pe amândouă." },
     { id: "oop-13", lvl: 2, q: "Ce afișează?", code: R`class Base:
@@ -121,35 +125,35 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       ctx: "Când o subclasă își definește propriul `__init__`, cel al părintelui nu mai rulează automat.",
       e: "`Scanner.__init__` nu cheamă `super().__init__()`, deci `ready` nu e setat niciodată, iar accesul aruncă `AttributeError`." },
     { id: "oop-14", lvl: 2, q: "Adaugi des reguli noi de detecție. Ce structură evită să modifici același `if/elif` de fiecare dată?", o: [
-      "Fiecare regulă e o clasă sau funcție cu aceeași interfață, înregistrată într-o listă pe care motorul o parcurge",
-      "Același `if/elif`, dar mutat într-un modul separat",
-      "O clasă de bază cu câte o metodă pentru fiecare regulă",
-      "Reguli scrise ca stringuri și rulate cu `eval`"],
+      "Reguli cu aceeași interfață, înregistrate într-o listă parcursă de motor",
+      "Același `if/elif`, dar mutat într-un modul separat, importat de motor",
+      "O clasă de bază cu câte o metodă pentru fiecare regulă nouă, apelată pe rând",
+      "Regulile scrise ca stringuri și rulate cu `eval`, citite dintr-un fișier"],
       ctx: "Open/closed: codul e deschis pentru extindere (reguli noi), dar închis pentru modificare (motorul nu se schimbă).",
       e: "Cu o interfață comună și un registru, o regulă nouă e un fișier nou. Motorul și regulile vechi rămân neatinse, iar fiecare regulă se testează separat." }
   ]);
   Q("asyncio", [
     { id: "aio-01", pt: [1], lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
       "O corutină rulează până la un `await`; abia atunci bucla poate trece la alta",
-      "Corutinele rulează în paralel, pe mai multe core-uri",
-      "Sistemul de operare întrerupe corutinele oricând, ca pe threaduri",
+      "Corutinele rulează în paralel, câte una pe fiecare core al procesorului",
+      "Sistemul de operare întrerupe o corutină după o felie de timp, ca la threaduri",
       "Fiecare corutină primește propriul thread"],
       ctx: "La threaduri, sistemul de operare decide când comută. În asyncio există un singur thread și o buclă de evenimente care rulează corutinele pe rând.",
       e: "Bucla poate comuta doar când corutina curentă cedează controlul, la un `await` pe ceva care chiar așteaptă (I/O, timer). Între două `await`-uri, corutina rulează singură." },
     { id: "aio-02", pt: [2], lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
     time.sleep(2)
     return "ok"`, o: [
-      "~200 s: `time.sleep` blochează bucla, cererile se servesc pe rând",
-      "~2 s: toate așteaptă în paralel",
-      "~2 s, pentru că `async def` face apelul non-blocant",
-      "Nimic: `time.sleep` aruncă eroare într-o corutină"],
+      "~200 s: cererile se servesc una după alta, câte 2 s fiecare",
+      "~2 s: cererile așteaptă în paralel, iar bucla le alternează",
+      "~2 s: `async def` face apelul din corutină non-blocant",
+      "Cererea eșuează: `time.sleep` aruncă eroare într-o corutină"],
       ctx: "`time.sleep` blochează threadul care îl apelează. `asyncio.sleep` e o corutină care cedează controlul buclei cât așteaptă.",
       e: "`time.sleep` nu cedează controlul: bucla stă blocată 2 s pe fiecare cerere, deci cererile se servesc una după alta. Cu `await asyncio.sleep(2)` toate ar aștepta în paralel, ~2 s în total." },
     { id: "aio-03", pt: [2], lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
-      "Rulează funcția sincronă într-un thread al executorului implicit, fără să blocheze bucla",
-      "Rulează funcția într-un proces separat, pe alt core",
+      "Rulează funcția sincronă într-un thread, iar bucla rămâne liberă",
+      "Rulează funcția într-un proces separat, pe alt core al procesorului",
       "Transformă funcția într-o corutină care cedează controlul la fiecare linie",
-      "Rulează funcția direct pe bucla evenimentelor, cu prioritate"],
+      "Rulează funcția direct pe bucla evenimentelor, cu prioritate maximă"],
       ctx: "Uneori trebuie să apelezi dintr-o corutină cod sincron: un SDK fără variantă async, un driver blocant, o funcție de parsare.",
       e: "`asyncio.to_thread` (3.9+) trimite funcția într-un thread și întoarce o corutină pe care o aștepți. Bucla rămâne liberă cât rulează funcția." },
     { id: "aio-04", pt: [3], lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
@@ -157,25 +161,25 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
         a(), b(), c())
 except ValueError:
     ...`, o: [
-      "Continuă să ruleze; `gather` doar propagă prima excepție",
-      "Sunt anulate automat",
+      "Continuă să ruleze; `gather` propagă prima excepție",
+      "Sunt anulate automat, ca într-un `TaskGroup`",
       "Sunt anulate, iar excepția devine `ExceptionGroup`",
-      "`gather` așteaptă să termine toate, apoi ridică excepția"],
+      "`gather` așteaptă să termine celelalte task-uri, apoi ridică excepția"],
       ctx: "`asyncio.gather` și `asyncio.TaskGroup` rulează amândouă corutine concurent, dar tratează diferit prima eroare.",
       e: "Fără `return_exceptions=True`, `gather` propagă imediat prima excepție, dar nu anulează celelalte task-uri: ele continuă în fundal. Dacă vrei anulare, folosești `TaskGroup`." },
     { id: "aio-05", pt: [4], lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
-      "Anulează celelalte task-uri din grup, așteaptă să se oprească și ridică `ExceptionGroup`",
-      "Ignoră eroarea și continuă cu celelalte",
-      "Întoarce eroarea ca valoare, ca `return_exceptions=True`",
-      "Repornește task-ul care a eșuat"],
+      "Anulează celelalte task-uri din grup și ridică `ExceptionGroup`",
+      "Ignoră eroarea și lasă celelalte task-uri să continue",
+      "Întoarce eroarea ca valoare, ca `gather(return_exceptions=True)`",
+      "Repornește task-ul care a eșuat, de până la 3 ori"],
       ctx: "`async with asyncio.TaskGroup() as tg:` (3.11+) creează task-uri cu `tg.create_task(...)`; blocul se termină abia când s-au terminat toate.",
       e: "TaskGroup implementează concurența structurată: la prima eroare anulează frații, iar la ieșirea din bloc ridică toate excepțiile într-un `ExceptionGroup`, prinse cu `except*`." },
     { id: "aio-06", pt: [5], lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
     data = await fetch(url)`, o: [
       "După 5 s task-ul e anulat, iar blocul ridică `TimeoutError`",
       "`fetch` continuă în fundal, iar `data` devine `None`",
-      "În afara blocului primești `CancelledError`",
-      "Programul așteaptă toate cele 10 s, apoi ridică `TimeoutError`"],
+      "În afara blocului primești `CancelledError`, nu `TimeoutError`",
+      "Programul așteaptă să se termine cele 10 s, apoi ridică `TimeoutError`"],
       ctx: "`asyncio.timeout` (3.11+) e un context manager. Intern, la expirare anulează task-ul curent și transformă anularea în altă excepție la ieșire.",
       e: "La expirare, task-ul primește `CancelledError` în `fetch`, iar la ieșirea din bloc ea devine `TimeoutError`. `fetch` e oprit, nu lăsat în fundal." },
     { id: "aio-07", pt: [6], lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
@@ -185,16 +189,16 @@ except ValueError:
         except BaseException:
             log.exception("failed")`, o: [
       "Prinde `CancelledError` și continuă bucla: task-ul nu mai poate fi oprit",
-      "Nicio problemă: `except BaseException` e modul corect de a prinde tot",
-      "`log.exception` nu funcționează în corutine",
-      "Bucla consumă 100% CPU"],
+      "Nu are probleme: `except BaseException` e modul corect de a prinde erorile",
+      "`log.exception` nu funcționează într-o corutină, doar în funcții sincrone",
+      "`await job()` blochează bucla cât timp jobul rulează"],
       ctx: "Anularea unui task (`task.cancel()`, timeout, oprirea aplicației) se face aruncând `CancelledError` în el, la următorul `await`.",
       e: "`CancelledError` e `BaseException` (din 3.8), deci `except BaseException` o înghite, iar bucla continuă. Corect: `except Exception`, iar dacă prinzi anularea pentru cleanup, o ridici din nou." },
     { id: "aio-08", pt: [8], lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
-      "Task-ul poate fi colectat de GC înainte să termine, iar excepțiile lui se pierd",
-      "Corutina nu pornește până nu faci `await` pe ea",
-      "Rulează sincron și blochează apelantul",
-      "Pornește un thread nou pentru fiecare task"],
+      "Task-ul poate fi colectat de GC înainte să termine; excepțiile se pierd",
+      "Corutina nu pornește până nu faci `await` pe obiectul `Task` întors",
+      "Rulează sincron, în threadul apelantului, și blochează bucla până termină",
+      "Pornește un thread nou pentru fiecare task, ca `to_thread`"],
       ctx: "`create_task` programează corutina pe buclă și întoarce un obiect `Task`. Bucla ține doar o referință slabă la el.",
       e: "Documentația cere explicit să păstrezi o referință: fără ea task-ul poate dispărea la jumătate, iar o excepție rămâne doar un warning „Task exception was never retrieved”." },
     { id: "aio-09", pt: [9], lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
@@ -209,7 +213,7 @@ except ValueError:
   Q("gil", [
     { id: "gil-15", lvl: 2, q: "Un producător și 4 consumatori, în threaduri. Ce folosești drept coadă de lucru?", o: [
       "`queue.Queue`: thread-safe, cu `get()` blocant și `task_done()` / `join()`",
-      "O listă cu `append` și `pop(0)`, protejată de GIL",
+      "O listă cu `append` și `pop(0)`, protejată de GIL la fiecare operație",
       "`asyncio.Queue`, pentru că e mai rapidă",
       "Un `dict` global și un `while True` care verifică dacă are elemente"],
       ctx: "Producer/consumer: un thread pune lucru, alții îl iau. Ai nevoie de sincronizare și de un mod de a aștepta fără să consumi CPU.",
@@ -223,10 +227,10 @@ def outer():
 def inner():
     with lock:
         ...`, o: [
-      "Deadlock: același thread încearcă să ia din nou un `Lock` pe care îl ține",
+      "Deadlock: `inner` cere un `Lock` pe care `outer` îl ține deja",
       "Merge: același thread poate lua de mai multe ori un lock",
-      "`RuntimeError`: lock deja luat",
-      "`inner` sare peste blocul `with`"],
+      "`RuntimeError`: `Lock` a fost deja luat de același thread",
+      "`inner` sare peste blocul `with`, iar `outer` continuă"],
       ctx: "`threading.Lock` nu ține minte cine l-a luat. `threading.RLock` (reentrant) ține minte threadul proprietar și un contor.",
       e: "Un `Lock` simplu blochează pe oricine îl cere a doua oară, inclusiv threadul care îl ține. Fix: `RLock`, sau, mai curat, o funcție internă care presupune lock-ul deja luat." },
     { id: "gil-17", lvl: 2, q: "În ce ordine se afișează rezultatele?", code: R`with ThreadPoolExecutor(8) as ex:
@@ -237,21 +241,21 @@ def inner():
       "În ordinea în care termină cererile",
       "În ordinea din `urls`",
       "Aleator, fără legătură cu durata",
-      "Toate deodată, după ce termină ultima"],
+      "Împreună, într-o listă, după ce termină ultima cerere"],
       ctx: "`executor.map` întoarce rezultatele în ordinea intrărilor. `concurrent.futures.as_completed` întoarce viitoarele (futures) pe măsură ce se termină.",
       e: "`as_completed` dă fiecare future imediat ce e gata, deci cererile rapide apar primele. `f.result()` ridică din nou excepția dacă sarcina a eșuat." },
     { id: "gil-18", lvl: 1, q: "La ce folosești `threading.Event`?", o: [
-      "Un semnal pe care un thread îl setează (`set()`) și altele îl așteaptă (`wait()`)",
+      "Un semnal: un thread face `set()`, iar altele așteaptă cu `wait()`",
       "Un lock pe care același thread îl poate lua de mai multe ori",
-      "O coadă de mesaje între threaduri",
-      "Un timer care pornește o funcție după un interval"],
+      "O coadă de mesaje între threaduri, cu `put()` și `get()`",
+      "Un timer care pornește o funcție după un interval, cu `start()` și `cancel()`"],
       ctx: "Exemplu tipic: oprirea curată a workerilor. Firul principal anunță „oprește-te”, iar workerii verifică semnalul între sarcini.",
       e: "`Event` e un flag sincronizat: `set()` îl pornește, `wait()` blochează până e pornit, `is_set()` îl citește. E modul simplu de a cere workerilor să se oprească." },
     { id: "gil-19", lvl: 3, q: "Ce face `cond.wait()` într-un `threading.Condition`?", o: [
-      "Eliberează lock-ul asociat, așteaptă un `notify()`, apoi îl reia înainte să revină",
-      "Așteaptă un `notify()` ținând lock-ul luat",
-      "Așteaptă un interval fix, apoi verifică singur condiția",
-      "Blochează toate threadurile până la `notify_all()`"],
+      "Eliberează lock-ul, așteaptă `notify()`, apoi îl reia înainte să revină",
+      "Așteaptă un `notify()` și ține lock-ul luat cât timp doarme",
+      "Așteaptă un interval fix, apoi verifică singur condiția și revine la apelant",
+      "Blochează threadurile procesului până primește `notify_all()`"],
       ctx: "Un `Condition` combină un lock cu o listă de așteptare: un thread așteaptă o stare („coada nu e goală”), altul o schimbă și îl anunță.",
       e: "`wait()` trebuie apelat cu lock-ul luat. Îl eliberează cât doarme, ca alții să poată schimba starea, și îl reia la trezire. Verifici condiția într-o buclă sau cu `wait_for(predicat)`." }
   ]);
@@ -316,17 +320,17 @@ print(list(islice(ids(), 3)))`, o: ["[1, 2, 3]", "Nimic: rulează la nesfârșit
     with pytest.raises(
             ValueError, match="port"):
         parse_port("abc")`, o: [
-      "Dacă `parse_port` aruncă `ValueError` cu un mesaj care conține „port”",
-      "Dacă aruncă orice excepție",
-      "Dacă nu aruncă nimic",
-      "Doar dacă mesajul e exact „port”"],
+      "`parse_port` aruncă `ValueError` cu „port” în mesaj",
+      "`parse_port` aruncă `Exception`, indiferent de mesaj",
+      "`parse_port` întoarce `None` și scrie „port” în log",
+      "`parse_port` aruncă `ValueError` cu mesajul egal cu „port”"],
       ctx: "`pytest.raises` verifică că blocul aruncă o excepție de un anumit tip; `match` verifică și mesajul.",
       e: "Testul trece doar dacă blocul aruncă `ValueError` (sau o subclasă) și dacă `re.search(\"port\", mesaj)` găsește ceva. Fără excepție, testul pică." },
     { id: "pt-12", lvl: 3, q: "Scrii `async def test_alert()` și rulezi pytest 9 fără pytest-asyncio sau anyio. Ce se întâmplă?", o: [
-      "Testul pică: pytest nu rulează singur corutinele, are nevoie de un plugin async",
-      "Trece: pytest rulează automat corutinele",
-      "E sărit cu un warning, deci suita pare verde",
-      "Rulează sincron, ignorând `await`"],
+      "Testul pică: pytest nu rulează singur corutinele",
+      "Trece: pytest pornește singur o buclă `asyncio`",
+      "E sărit cu un warning, iar suita rămâne verde",
+      "Rulează sincron: pytest scoate `await` din corpul testului"],
       ctx: "pytest e sincron. Pentru teste `async def` ai nevoie de un plugin (pytest-asyncio, sau anyio cu `@pytest.mark.anyio`, ca în documentația FastAPI).",
       e: "Din pytest 8.4, un test `async def` fără plugin pică explicit („async def functions are not natively supported”). Înainte era doar sărit cu un warning, ceea ce ascundea teste nerulate." },
     { id: "pt-13", lvl: 2, q: "Câte teste rulează?", code: R`@pytest.mark.parametrize(
@@ -338,44 +342,44 @@ def test_grid(a, b):
       ctx: "Fiecare `parametrize` multiplică testul cu valorile lui. Două decoratoare puse unul peste altul se combină.",
       e: "Decoratoarele `parametrize` suprapuse fac produsul cartezian: 3 valori pentru `a` × 2 pentru `b` = 6 teste." },
     { id: "pt-14", lvl: 1, q: "Testezi o funcție care scrie un raport pe disc. Ce folosești?", o: [
-      "Fixture-ul `tmp_path`: un director temporar, unic pentru fiecare test",
-      "Un fișier fix, `/tmp/report.txt`",
-      "Un mock pe `open` în fiecare test",
+      "Fixture-ul `tmp_path`: director nou la fiecare test",
+      "Un fișier fix `/tmp/report.txt`, șters la final",
+      "Un mock pe `open`, iar apoi citești fișierul de pe disc ca să verifici raportul",
       "Directorul proiectului, curățat de mână la final"],
       ctx: "Testele care scriu fișiere în același loc se calcă pe picioare, mai ales când rulează în paralel sau când unul pică la jumătate.",
       e: "`tmp_path` dă fiecărui test un `pathlib.Path` către un director nou, deci testele nu împart fișiere și nu lasă gunoi în proiect." },
     { id: "pt-15", lvl: 2, q: "Un test trece singur, dar pică atunci când rulează toată suita. Cauza cea mai probabilă?", o: [
-      "Stare partajată între teste (DB, variabile globale, fixture cu scope larg) care depinde de ordine",
-      "pytest rulează implicit testele în paralel",
+      "Stare lăsată de alt test: rezultatul depinde de ordine",
+      "pytest rulează testele din suită în paralel, pe thread-uri",
       "pytest păstrează rezultatele testelor de la o rulare la alta",
-      "Testul e prea lent pentru suita completă"],
+      "Testul depășește timeout-ul suitei complete"],
       ctx: "Un test bun nu depinde de alte teste: nici de ordinea lor, nici de ce au lăsat în urmă.",
       e: "Dacă rezultatul depinde de ce rulează înainte, un test anterior lasă stare în urmă: rânduri în DB, un singleton modificat, un mock nedesfăcut. Soluția e izolarea: rollback per test, fixture-uri cu scope `function`, `monkeypatch`." }
   ]);
 
   Q("asgi", [
     { id: "asgi-12", lvl: 2, q: "Unde creezi un `httpx.AsyncClient` partajat de toată aplicația și unde îl închizi?", o: [
-      "În funcția `lifespan` (un `@asynccontextmanager` dat la `FastAPI(lifespan=...)`): îl creezi înainte de `yield` și îl închizi după",
-      "În fiecare endpoint, la fiecare cerere",
-      "Într-o variabilă globală creată la import, fără închidere",
-      "În `@app.on_event(\"startup\")`, modul recomandat acum"],
+      "În `lifespan`: îl creezi înainte de `yield` și îl închizi după `yield`",
+      "În fiecare endpoint, într-un `async with`, nou la fiecare cerere",
+      "Într-o variabilă globală creată la import, fără închidere explicită",
+      "În `@app.on_event(\"startup\")` și `@app.on_event(\"shutdown\")`, modul recomandat acum"],
       ctx: "Un client HTTP sau un pool de conexiuni se creează o dată, la pornire, și se închide la oprire. FastAPI are un singur loc pentru amândouă.",
       e: "`lifespan` rulează codul de dinainte de `yield` la pornire și pe cel de după la oprire. `on_event` e depreciat în favoarea lui." },
     { id: "asgi-13", lvl: 2, q: "Ce garantează `BackgroundTasks` din FastAPI?", o: [
-      "Rulează funcția după trimiterea răspunsului, în același proces; dacă procesul moare, sarcina se pierde",
-      "Pune sarcina într-o coadă durabilă, cu retry",
-      "Rulează sarcina într-un proces separat",
-      "Întârzie răspunsul până termină sarcina"],
+      "Rulează funcția după trimiterea răspunsului, în același proces",
+      "Pune sarcina într-o coadă durabilă, cu retry automat la eroare",
+      "Rulează sarcina într-un proces separat, care supraviețuiește workerului",
+      "Întârzie răspunsul până termină sarcina, apoi îl trimite clientului"],
       ctx: "Uneori vrei să răspunzi repede și să faci după aceea ceva mic: un email, un log de audit, o invalidare de cache.",
       e: "`BackgroundTasks` e convenabil pentru lucruri mici: clientul primește răspunsul, apoi sarcina rulează în același worker. Nu are coadă, retry sau persistență; pentru lucru care nu are voie să se piardă folosești Celery." },
     { id: "asgi-14", lvl: 1, q: "Ce face prima linie din test?", code: R`app.dependency_overrides[get_db] = (
     lambda: fake_db)
 client = TestClient(app)
 r = client.get("/alerts")`, o: [
-      "Endpoint-urile care cer `Depends(get_db)` primesc `fake_db`, fără schimbări în cod",
+      "Endpoint-urile care cer `Depends(get_db)` primesc `fake_db`",
       "Înlocuiește `get_db` peste tot în proces, și în afara FastAPI",
       "Dezactivează dependența: endpoint-ul primește `None`",
-      "Pornește o bază de date de test"],
+      "Pornește o bază de date de test, în memorie, pentru fiecare cerere"],
       ctx: "`Depends` e mecanismul de dependency injection al FastAPI. `dependency_overrides` e un dicționar pe aplicație.",
       e: "La fiecare cerere, FastAPI caută dependența în `dependency_overrides` și, dacă e acolo, apelează înlocuitorul. Codul endpoint-ului rămâne neschimbat; după test golești dicționarul." },
     { id: "asgi-15", lvl: 2, q: "Funcția întoarce `{\"id\": 1, \"secret\": \"x\"}`. Ce primește clientul?", code: R`class AlertOut(BaseModel):
@@ -391,10 +395,10 @@ def get_alert():
       ctx: "Modelul Pydantic de la intrare validează ce trimite clientul; `response_model` controlează ce trimite serverul.",
       e: "FastAPI trece valoarea întoarsă prin `AlertOut`: câmpurile care nu sunt în model sunt scoase. Așa nu expui din greșeală câmpuri interne." },
     { id: "asgi-16", lvl: 3, q: "Un endpoint cere două dependențe, iar fiecare cere `Depends(get_db)`. De câte ori rulează `get_db` într-o cerere?", o: [
-      "O dată: FastAPI ține minte rezultatul unei dependențe pe durata cererii",
+      "O dată: FastAPI refolosește rezultatul în cadrul cererii",
       "De două ori, câte o sesiune pentru fiecare dependență",
-      "De trei ori, inclusiv pentru endpoint",
-      "O dată pentru toată aplicația"],
+      "De trei ori, inclusiv pentru endpoint, care primește propria sesiune",
+      "O dată pe worker, la prima cerere, apoi se refolosește"],
       ctx: "Dependențele pot depinde la rândul lor de alte dependențe, deci aceeași dependență apare des de mai multe ori în același arbore.",
       e: "Implicit, o dependență e calculată o singură dată pe cerere și refolosită, deci toate primesc aceeași sesiune. Cu `Depends(get_db, use_cache=False)` ai fi primit sesiuni separate." }
   ]);
@@ -411,15 +415,15 @@ function onClick() {
     { id: "fe-06", lvl: 2, q: "Un `useEffect(() => { ... })` nu are array de dependențe. Când rulează?", o: [
       "După fiecare render al componentei",
       "O singură dată, după primul render",
-      "Doar când se schimbă props-urile",
+      "Când se schimbă props-urile, nu și când se schimbă starea",
       "Înainte de fiecare render, ca să pregătească datele"],
       ctx: "Al doilea argument al lui `useEffect` e lista de dependențe. Poate lipsi, poate fi `[]` sau poate conține valori din props și state.",
       e: "Fără array, efectul rulează după fiecare commit. Cu `[]` rulează doar după primul render, iar cu `[a, b]` când se schimbă `a` sau `b`." },
     { id: "fe-07", lvl: 2, q: "În dev, un `useEffect` cu `[]` se execută de două ori la mount. De ce?", o: [
-      "Strict Mode face un ciclu setup → cleanup → setup în plus, ca să verifice cleanup-ul",
+      "Strict Mode adaugă un ciclu setup → cleanup → setup în dev",
       "Părintele montează componenta de două ori, deci e un bug în aplicație",
-      "React randează mereu de două ori, și în producție",
-      "Lipsește `key` pe componentă, iar React o recreează"],
+      "React rulează efectele de două ori și în build-ul de producție",
+      "Lipsește `key` pe componentă, iar React o montează de două ori"],
       ctx: "Aplicațiile create cu Vite sau Next.js pornesc cu `<StrictMode>` în jurul aplicației. Strict Mode adaugă verificări doar în development.",
       e: "Strict Mode simulează un unmount și un mount imediat după primul mount. Un efect cu cleanup corect nu se vede deloc; unul fără cleanup (interval, subscribe) se dublează." },
     { id: "fe-08", lvl: 2, q: "Userul tastează repede în căutare. Ce poate merge prost?", code: R`useEffect(() => {
@@ -427,7 +431,7 @@ function onClick() {
     .then(r => r.json())
     .then(setAlerts);
 }, [q]);`, o: [
-      "Un răspuns vechi sosește ultimul și suprascrie rezultatul corect",
+      "Răspunsul unei cereri vechi sosește ultimul și câștigă",
       "Fetch-ul rulează o singură dată, după primul render",
       "React anulează singur request-urile vechi, deci nimic",
       "`[q]` garantează că răspunsurile vin în ordinea cererilor"],
@@ -437,14 +441,14 @@ function onClick() {
       "`queryByText`: întoarce `null` dacă nu găsește",
       "`getByText`: întoarce `null` dacă nu găsește",
       "`findByText`: așteaptă, apoi întoarce `null`",
-      "`getAllByText`: întoarce o listă goală"],
+      "`getAllByText`: întoarce o listă goală dacă nu găsește"],
       ctx: "Testing Library are trei familii de query-uri: `getBy`, `queryBy` și `findBy`, fiecare cu varianta `All`. Diferă prin ce fac când elementul lipsește.",
       e: "`getBy` și `getAllBy` aruncă excepție dacă nu găsesc nimic, iar `findBy` întoarce un Promise care eșuează după timeout. Pentru „nu există” folosești `queryBy`." },
     { id: "fe-10", lvl: 2, q: "Ce tip dai rezultatului `await res.json()` dintr-un API extern?", o: [
       "`unknown`: te obligă să verifici forma înainte s-o folosești",
-      "`any`: e mai sigur, pentru că acceptă orice formă",
-      "`unknown`: TypeScript verifică forma la runtime",
-      "Oricare: `any` și `unknown` se comportă identic"],
+      "`any`: e mai sigur, fiindcă acceptă datele indiferent de formă",
+      "`unknown`: TypeScript verifică forma datelor la runtime, la `json()`",
+      "Nu contează: `any` și `unknown` se comportă identic în cod"],
       ctx: "`res.json()` întoarce date pe care compilatorul nu le cunoaște. TypeScript are două tipuri „orice”: `any` și `unknown`.",
       e: "Cu `any` compilatorul te lasă să faci orice, deci greșelile ajung la runtime. Cu `unknown` nu poți folosi valoarea până nu o îngustezi (verificare manuală, type guard sau zod)." },
     { id: "fe-11", lvl: 3, q: "Ce face `const n: never = x` în ramura `default`?", code: R`type State =
@@ -464,21 +468,21 @@ function label(x: State) {
 }`, o: [
       "Dă eroare la compilare: cazul `error` nu e tratat",
       "Aruncă excepție la runtime când `s` e `error`",
-      "Nimic: compilatorul ignoră tipul `never`",
+      "Nimic: compilatorul ignoră tipul `never` din `default`",
       "Transformă `x` în `null` pentru cazurile netratate"],
       ctx: "`State` e un union discriminat: câmpul comun `s` spune care variantă e. În fiecare `case`, TypeScript îngustează tipul lui `x`.",
       e: "După `loading` și `ok`, în `default` a rămas `{ s: \"error\" }`, care nu se poate atribui lui `never`. Compilarea pică, deci afli de cazul uitat înainte de rulare." },
     { id: "fe-12", lvl: 2, q: "Un SPA React se autentifică la Keycloak. Ce flux e recomandat azi?", o: [
-      "Authorization Code cu PKCE, sau un BFF care ține tokenurile pe server",
-      "Implicit grant: tokenul vine direct în URL, fără server",
+      "Authorization Code cu PKCE, sau un BFF care ține tokenurile",
+      "Implicit grant: tokenul vine direct în URL, fără server de backend",
       "Password grant: SPA-ul trimite parola userului la Keycloak",
       "Client Credentials, cu secretul clientului în bundle-ul JS"],
       ctx: "Un SPA e un client public: tot codul lui ajunge în browser, deci nu poate păstra un secret. OAuth 2.0 are mai multe fluxuri (grant types).",
       e: "RFC 9700 cere PKCE pentru clienții publici și descurajează implicit grant. RFC 10017 (2026) pune BFF-ul primul ca securitate: tokenurile nu ajung deloc în browser." },
     { id: "fe-13", lvl: 2, q: "API-ul răspunde cu `Access-Control-Allow-Origin: *`, iar frontendul face `fetch(url, { credentials: \"include\" })`. Ce se întâmplă?", o: [
-      "Browserul blochează răspunsul: cu credentials, originea trebuie numită explicit",
-      "Merge: `*` acceptă orice origine, inclusiv cu cookies",
-      "Serverul respinge cererea cu 401",
+      "Browserul blochează răspunsul, iar JS nu îl poate citi",
+      "Merge: `*` acceptă și cererile cu cookies, deci răspunsul ajunge în JS",
+      "Serverul respinge cererea cu 401 Unauthorized, fără body",
       "Cookie-urile ajung la server, dar body-ul răspunsului e gol"],
       ctx: "Frontendul (`app.example.com`) și API-ul (`api.example.com`) au origini diferite. Browserul aplică CORS: citești răspunsul doar dacă serverul permite explicit originea ta.",
       e: "Pentru cereri cu credentials, `*` nu e acceptat. Serverul trebuie să întoarcă originea exactă și `Access-Control-Allow-Credentials: true`. Blocajul e în browser, nu pe server." },
@@ -486,8 +490,8 @@ function label(x: State) {
   fetchA(), fetchB(), fetchC(),
 ]);`, o: [
       "`await` aruncă după ~100 ms; A și C continuă să ruleze",
-      "`await` aruncă după 2 s, când s-au terminat toate",
-      "A și C sunt anulate automat la eșecul lui B",
+      "`await` aruncă după 2 s, când se termină și A, și C",
+      "A și C sunt anulate automat de `Promise.all` la eșecul lui B",
       "`r` conține două rezultate și eroarea lui B"],
       ctx: "`Promise.all` așteaptă mai multe promisiuni în paralel. Există și `Promise.allSettled`, care nu respinge niciodată.",
       e: "`Promise.all` respinge la primul eșec, dar o promisiune nu se poate anula, deci A și C își termină treaba. Ca să aștepți toate rezultatele, folosești `allSettled`; ca să le oprești, `AbortController`." }
@@ -508,10 +512,10 @@ function label(x: State) {
       ctx: "O operație e idempotentă dacă efectul a N cereri identice e același ca al uneia. Contează pentru retry-urile automate ale clienților și proxy-urilor.",
       e: "Metodele safe (GET, HEAD, OPTIONS, TRACE) nu schimbă nimic, deci sunt idempotente; PUT și DELETE sunt idempotente fără să fie safe. POST și PATCH nu sunt." },
     { id: "asgi-19", lvl: 2, q: "Un `POST /alerts` primește timeout, fără răspuns. Clientul poate reîncerca în siguranță?", o: [
-      "Doar dacă API-ul acceptă o cheie de idempotență (`Idempotency-Key`)",
-      "Da, POST e idempotent după standard",
-      "Da, dacă reîncearcă în mai puțin de 30 de secunde",
-      "Nu, un POST nu se poate reîncerca niciodată"],
+      "Doar cu o cheie de idempotență (`Idempotency-Key`)",
+      "Da, POST e idempotent după RFC 9110, ca PUT și DELETE",
+      "Da, dacă reîncearcă imediat, în mai puțin de 30 de secunde",
+      "Nu, un POST care a dat timeout nu se mai poate reîncerca"],
       ctx: "La un timeout, clientul nu știe dacă serverul a primit cererea și a creat alerta sau nu.",
       e: "POST nu e idempotent: un retry poate crea a doua alertă. Cu o cheie trimisă de client, serverul recunoaște cererea repetată și întoarce același răspuns (exercițiul k13)." },
     { id: "asgi-20", lvl: 2, q: "Body-ul e valid, dar o alertă cu același `external_id` există deja. Ce status întorci?", o: [
@@ -526,16 +530,16 @@ function label(x: State) {
   Q("oop", [
     { id: "oop-15", lvl: 1, q: "Trimiți alerte în Splunk, Sentinel sau QRadar, fiecare cu alt API. Vrei ca restul codului să apeleze doar `siem.send(alert)`. Ce pattern folosești?", o: [
       "Adapter: câte o clasă care traduce interfața comună în API-ul fiecărui SIEM",
-      "Singleton: o singură instanță globală de client SIEM",
-      "Observer: SIEM-urile se abonează la crearea alertelor",
-      "Template Method: o clasă de bază cu pașii ficși ai trimiterii"],
+      "Singleton: o singură instanță globală de client SIEM, partajată de tot codul",
+      "Observer: fiecare SIEM se abonează la crearea alertelor și o primește",
+      "Template Method: clasă de bază cu pașii ficși ai trimiterii alertei"],
       ctx: "Codul tău are deja o interfață (`send(alert)`), iar sistemele externe au API-uri diferite pe care nu le poți schimba.",
       e: "Adapter-ul aduce un API străin la interfața pe care o așteaptă codul tău. Restul aplicației depinde de `send(alert)`, iar un SIEM nou înseamnă o clasă nouă." },
     { id: "oop-16", lvl: 2, q: "La crearea unei alerte vrei să trimiți email, să scrii în SIEM și să actualizezi un dashboard, fără ca `AlertService` să știe de ele. Ce pattern?", o: [
       "Observer: ascultătorii se înregistrează la evenimentul „alertă creată”",
-      "Adapter: traduci alerta pentru fiecare destinație",
-      "Factory: creezi destinațiile după tipul alertei",
-      "Decorator: împachetezi `AlertService` de trei ori"],
+      "Adapter: traduci alerta în formatul fiecărei destinații, prin câte o clasă",
+      "Factory: creezi destinațiile după tipul alertei, într-o metodă de fabrică",
+      "Decorator: împachetezi `AlertService` în câte un wrapper pentru fiecare destinație"],
       ctx: "Vrei să adaugi reacții noi la un eveniment fără să modifici codul care produce evenimentul.",
       e: "Cu Observer, `AlertService` doar anunță evenimentul, iar ascultătorii se abonează singuri. O reacție nouă înseamnă un ascultător nou, nu o modificare în serviciu." },
     { id: "oop-17", lvl: 2, q: "Ce pattern vezi aici?", code: R`RULES = {}
@@ -547,17 +551,17 @@ def register(cls):
 @register
 class OffHours(Rule):
     rule_id = "LOGIN-002"`, o: [
-      "Registry folosit ca factory: clasele se înregistrează singure, iar motorul le creează după id",
-      "Singleton: există o singură regulă de fiecare tip",
-      "Decorator în sensul GoF: adaugă comportament la apelurile metodelor",
-      "Observer: regulile ascultă modificările din `RULES`"],
+      "Registry folosit ca factory: clasele se înregistrează singure, motorul le creează",
+      "Singleton: există o singură regulă de fiecare tip, ținută în `RULES`",
+      "Decorator în sensul GoF: adaugă comportament apelurilor metodelor clasei",
+      "Observer: regulile ascultă modificările din `RULES` și se reînregistrează"],
       ctx: "Un decorator de clasă primește clasa după ce e definită și întoarce ceva în locul ei; aici întoarce chiar clasa.",
       e: "La import, fiecare regulă se adaugă în `RULES`. Motorul le instanțiază din dict, fără să le știe numele: o regulă nouă nu cere modificări în motor (open/closed)." },
     { id: "oop-18", lvl: 3, q: "Ce pattern implementează `Session` din SQLAlchemy?", o: [
       "Unit of Work: adună modificările și le scrie într-o tranzacție la `commit()`",
-      "Singleton: o conexiune unică pentru toată aplicația",
-      "Active Record: fiecare obiect se salvează singur cu `.save()`",
-      "Facade fără stare peste driverul bazei de date"],
+      "Singleton: o conexiune unică la baza de date, folosită de toată aplicația",
+      "Active Record: fiecare obiect se salvează singur, la apelul lui `.save()`",
+      "Facade fără stare peste driverul bazei de date, care traduce apelurile în SQL"],
       ctx: "În Django scrii `obj.save()`. În SQLAlchemy faci `session.add(obj)` și, la final, `session.commit()`.",
       e: "Sesiunea ține evidența obiectelor noi, modificate și șterse și le scrie împreună la flush sau commit. Django ORM folosește Active Record: obiectul se salvează singur." }
   ]);
@@ -575,10 +579,10 @@ class OffHours(Rule):
 time.sleep(2)
 assert page.locator(
     ".toast").is_visible()`, o: [
-      "`is_visible()` nu așteaptă; folosești `expect(locator).to_be_visible()`, care reîncearcă",
+      "`is_visible()` nu așteaptă; treci pe `expect(locator)`",
       "`sleep(2)` e prea scurt; îl mărești la 5 secunde",
       "`click()` nu așteaptă butonul; adaugi un `sleep` înainte",
-      "Selectorul CSS e lent; îl înlocuiești cu XPath"],
+      "Selectorul CSS e lent; îl înlocuiești cu XPath, mai rapid"],
       ctx: "Playwright așteaptă singur înainte de acțiuni (click, fill). Pentru aserții are funcția `expect`, cu timeout implicit de 5 secunde.",
       e: "`is_visible()` răspunde imediat, deci testul depinde de cât de repede apare toast-ul. `expect(...).to_be_visible()` reîncearcă până la timeout, iar `sleep` dispare." }
   ]);

@@ -443,3 +443,47 @@ export function proposeTags(P, m) {
   for (const c of (P.oral || []).filter(x => x.m === m)) out.push({ kind: "oral", id: c.id, text: c.q, prop: (c.k || []).map(k => top(k)[0] || null), has: c.kp });
   return out;
 }
+
+// ---------- indiciile de formă (`.scratch/grile-fara-tipar/`, tichetul 01) ----------
+// Lungimea variantelor și cuvintele absolute nu trebuie să trădeze răspunsul. Pragurile stau aici, într-un singur loc.
+export const CUE = { ratio: 1.15, gap: 8, rankShare: 0.35, absPp: 10 };
+export const ABS_WORDS = ["mereu", "niciodată", "întotdeauna", "doar", "numai", "orice", "oricând", "toate", "toți", "niciun", "nicio", "imposibil", "garantat", "exclusiv"];
+// Lungimea vizibilă a unei variante: fără backtick-uri (codul se numără, delimitatorii nu).
+export const optLen = s => [...String(s || "").replace(/`/g, "")].length;
+const ABS_RE = new RegExp("(?<![\\p{L}\\p{N}_])(" + ABS_WORDS.join("|") + ")(?![\\p{L}\\p{N}_])", "giu");
+// Cuvintele absolute dintr-un text (cuvânt întreg, fără să conteze literele mari), în ordinea apariției, cu litere mici.
+export const absWords = s => [...String(s || "").matchAll(ABS_RE)].map(m => m[1].toLowerCase());
+// Măsurile unei grile: lungimile, raportul corectă / cea mai lungă greșită, `longest` / `shortest` (strict), `viol` (regula pe grilă) și cuvintele absolute pe variantă.
+export function cueGrid(q) {
+  const lens = q.o.map(optLen), c = lens[q.a], wr = lens.filter((_, i) => i !== q.a);
+  const maxW = Math.max(...wr), minW = Math.min(...wr);
+  return {
+    lens, ratio: c / maxW, longest: c > maxW, shortest: c < minW,
+    viol: c * 100 > Math.round(CUE.ratio * 100) * maxW && c - maxW > CUE.gap,
+    abs: q.o.map(absWords)
+  };
+}
+// Regulile și raportul; toate sunt erori, pe toate modulele (nu mai există clichet: lista de bază a fost golită și ștearsă).
+// Întoarce { errors, report: { modul: { n, longest, shortest, absCorrect, absWrong, wrongTotal, viol, k } } }.
+export function checkCues(P) {
+  const errors = [], report = {};
+  for (const m of P.modules) report[m.id] = { n: 0, longest: 0, shortest: 0, absCorrect: 0, absWrong: 0, wrongTotal: 0, viol: 0, k: 0 };
+  for (const q of P.mcq || []) {
+    const r = report[q.m] || (report[q.m] = { n: 0, longest: 0, shortest: 0, absCorrect: 0, absWrong: 0, wrongTotal: 0, viol: 0, k: 0 });
+    const g = cueGrid(q);
+    r.n++; if (g.longest) r.longest++; if (g.shortest) r.shortest++;
+    g.abs.forEach((a, i) => { if (i === q.a) { if (a.length) r.absCorrect++; } else { r.wrongTotal++; if (a.length) r.absWrong++; } });
+    if (g.viol) r.viol++;
+    const lens = g.lens.join("/");
+    if (g.viol) errors.push(q.id + ": varianta corectă iese în evidență prin lungime (" + lens + "; corectă / cea mai lungă greșită = " + g.ratio.toFixed(2) + "); regulile: > " + CUE.ratio + "× și > " + CUE.gap + " caractere (tools/cues.mjs " + q.m + ")");
+  }
+  for (const [m, r] of Object.entries(report)) {
+    if (!r.n) continue;
+    r.k = Math.ceil(0.35 * r.n);
+    if (r.longest > r.k) errors.push(m + ": corecta e cea mai lungă în " + r.longest + " din " + r.n + " grile (cel mult " + r.k + ")");
+    if (r.shortest > r.k) errors.push(m + ": corecta e cea mai scurtă în " + r.shortest + " din " + r.n + " grile (cel mult " + r.k + ")");
+    const pc = r.n ? r.absCorrect / r.n : 0, pw = r.wrongTotal ? r.absWrong / r.wrongTotal : 0;
+    if (pw * 100 > pc * 100 + CUE.absPp + 1e-9) errors.push(m + ": cuvinte absolute în " + (pw * 100).toFixed(0) + "% din variantele greșite față de " + (pc * 100).toFixed(0) + "% din cele corecte (cel mult +" + CUE.absPp + " puncte)");
+  }
+  return { errors, report };
+}

@@ -26,7 +26,7 @@ Verificare: Testul aruncă o excepție la jumătate. Se mai face rollback?
 Răspuns verificare: Da: pytest rulează partea de după `yield` indiferent de rezultatul testului, inclusiv la excepție.
 Varianta greșită B: Testul primește direct valoarea de la `yield`, adică sesiunea, nu generatorul. De iterare se ocupă pytest.
 Varianta greșită C: Fixture-ul rulează o singură dată pe test: partea dinainte de `yield` înainte de test, partea de după, după test.
-Varianta greșită D: Teardown-ul rulează și când testul pică. Altfel, un test eșuat ar lăsa date murdare pentru celelalte.
+Varianta greșită D: Scope-ul implicit e `function`, deci teardown-ul rulează după fiecare test, nu o singură dată după toate. Altfel testele ar împărți aceeași sesiune și și-ar vedea datele.
 
 ### pt-02
 Pe scurt: Scope `session`: containerul pornește o singură dată pentru toată rularea, iar izolarea datelor o face un fixture separat, per test, cu rollback.
@@ -56,7 +56,7 @@ Verificare: Pui și `db_session` pe scope `session`, ca să meargă mai repede. 
 Răspuns verificare: Toate testele împart aceeași sesiune și aceleași date: un test vede ce a scris altul, iar rezultatul depinde de ordinea rulării.
 Varianta greșită B: Cu scope `function` pornești 300 de containere: 25 de minute doar de setup, fără niciun câștig de izolare față de rollback-ul per test.
 Varianta greșită C: Scope `class` ar porni containerul pentru fiecare clasă de teste: mai bine decât per test, dar tot repetat inutil.
-Varianta greșită D: Fixture-urile pot fi partajate prin `scope`: `class`, `module`, `package` sau `session`.
+Varianta greșită D: Fixture-ul nu e legat de un singur test: cu `scope` poate trăi pe `class`, `module`, `package` sau `session`.
 
 ### pt-03
 Pe scurt: `patch("app.alerts.send_email")`: înlocuiești numele în modulul unde e folosit, pentru că `raise_alert` caută `send_email` în `app.alerts`.
@@ -221,7 +221,7 @@ Verificare: Un task Celery e testat doar cu `task_always_eager=True` și testul 
 Răspuns verificare: Drumul prin broker și worker: rutarea pe cozi, ack-urile, redelivery-ul după căderea unui worker, retry-urile reale. De aceea, pentru integrare, pornești un worker real.
 Varianta greșită B: Eager e mai rapid, nu mai lent: rulează direct, fără rețea. Problema e că testează mai puțin.
 Varianta greșită C: Eager nu folosește deloc brokerul, deci nu are nevoie de RabbitMQ pornit.
-Varianta greșită D: Eager execută task-ul, imediat și sincron. Problema e că sare peste tot drumul real.
+Varianta greșită D: Eager execută task-ul pe loc, în procesul testului, și îi întoarce rezultatul. Problema e că sare peste brokerul și workerul reale.
 
 ### pt-09
 Pe scurt: `time.sleep(2)` face testul lent și instabil (flaky), pentru că pe un runner CI încărcat jobul poate dura mai mult. Aștepți o condiție, cu timeout, sau controlezi ceasul.

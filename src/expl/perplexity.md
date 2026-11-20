@@ -250,7 +250,7 @@ Varianta greșită: „Ca să ruleze mai repede, fiind compilat separat de restu
 
 Varianta greșită: „Pentru că altfel interpretorul nu găsește funcția `main` la pornire” — Python nu caută automat o funcție numită `main`. Numele este o convenție, nu o cerință a interpretorului.
 
-Varianta greșită: „Ca să ruleze doar pe Linux, nu și pe Windows sau macOS” — `__name__` nu depinde de sistemul de operare. Regula este aceeași pe toate platformele.
+Varianta greșită: „Ca să ruleze pe Linux, dar să fie ignorat pe Windows sau macOS” — `__name__` nu depinde de sistemul de operare. Condiția se comportă la fel pe Linux, Windows și macOS.
 
 ### asgi-10
 
@@ -414,7 +414,7 @@ Răspuns verificare: Da. Kafka păstrează evenimentele în log, iar consumatoru
 
 Varianta greșită: „Sunt același produs: Kafka e versiunea comercială, plătită, a RabbitMQ” — sunt produse diferite, cu modele de livrare și retenție diferite.
 
-Varianta greșită: „Kafka ține mesajele doar în memorie, RabbitMQ pe disc” — Kafka scrie logul pe disc și poate păstra evenimentele conform retenției configurate.
+Varianta greșită: „Kafka ține mesajele în memorie, RabbitMQ pe disc” — Kafka scrie logul pe disc și poate păstra evenimentele conform retenției configurate.
 
 Varianta greșită: „RabbitMQ nu suportă mai mulți consumatori pe aceeași coadă” — suportă mai mulți consumatori; aceștia împart mesajele din coadă, nu primesc fiecare toate mesajele.
 
@@ -453,7 +453,7 @@ Verificare: Un proces primește `SIGTERM`, dar handlerul său rămâne blocat la
 
 Răspuns verificare: Kubernetes trimite `SIGKILL`. Procesul este oprit imediat, fără să poată executa cleanup-ul.
 
-Varianta greșită: „Sunt identice, diferă doar numărul semnalului trimis” — numerele diferă, dar și comportamentul: `SIGTERM` poate fi tratat, `SIGKILL` nu.
+Varianta greșită: „Sunt identice, diferă numărul semnalului trimis” — numerele diferă, dar și comportamentul: `SIGTERM` poate fi tratat, `SIGKILL` nu.
 
 Varianta greșită: „`-9` oprește grațios procesul, `-15` îl oprește imediat” — este inversat: `-15` este `SIGTERM`, oprirea grațioasă; `-9` este `SIGKILL`, oprirea forțată.
 
@@ -537,11 +537,11 @@ Verificare: Fiecare thread numără într-o variabilă locală și adună rezult
 
 Răspuns verificare: Nu în buclă: variabilele locale nu sunt partajate între threaduri. Lock-ul rămâne necesar doar la adunarea finală în `counter`, care e tot o operație citește-modifică-scrie.
 
-Varianta greșită: „E mereu 4.000.000, pentru că GIL-ul face fiecare instrucțiune Python atomică” — GIL-ul serializează execuția bytecode-ului, dar nu face atomică o operație compusă precum `+=`.
+Varianta greșită: „E 4.000.000, pentru că GIL-ul face instrucțiunile Python atomice” — GIL-ul serializează execuția bytecode-ului, dar nu face atomică o operație compusă precum `+=`.
 
-Varianta greșită: „Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală” — threadurile pot modifica variabile globale. Problema este concurența, nu accesul.
+Varianta greșită: „Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală din alt thread” — threadurile pot modifica variabile globale. Problema este concurența, nu accesul.
 
-Varianta greșită: „E mereu 1.000.000, pentru că fiecare thread își incrementează propria copie” — toate threadurile referă aceeași variabilă globală, nu câte o copie separată.
+Varianta greșită: „E 1.000.000, pentru că fiecare thread își incrementează propria copie” — toate threadurile referă aceeași variabilă globală, nu câte o copie separată.
 
 ### sqa-02
 

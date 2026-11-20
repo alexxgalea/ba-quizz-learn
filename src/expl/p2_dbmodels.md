@@ -20,8 +20,8 @@ La interviu: „Postgres ține fără probleme sute de milioane de rânduri, dac
 Verificare: Ai un tabel de 300 de milioane de evenimente, citit mereu după `system_id` și un interval de timp. Treci pe NoSQL?
 Răspuns verificare: Nu neapărat: un index compus pe `(system_id, created_at)` și partiționarea pe timp rezolvă citirile în Postgres. Ai motiv să schimbi doar dacă rata de scriere depășește ce poate duce un singur primar.
 Varianta greșită B: Câteva milioane de rânduri sunt puține pentru Postgres: cu indexuri, căutările rămân rapide și la sute de milioane.
-Varianta greșită C: NoSQL nu e mereu mai rapid: lipsa JOIN-urilor mută munca în aplicație, iar pentru query-uri variate un SQL indexat e adesea mai bun.
-Varianta greșită D: Multe baze NoSQL oferă consistență reglabilă, unele chiar tranzacții. O formulare absolută arată că nu cunoști opțiunile.
+Varianta greșită C: NoSQL nu e mai rapid în general: lipsa JOIN-urilor mută munca în aplicație, iar pentru query-uri variate un SQL indexat e adesea mai bun.
+Varianta greșită D: Multe baze NoSQL oferă consistență reglabilă, unele chiar tranzacții. A le exclude din start arată că nu cunoști opțiunile.
 
 ### dbm-02
 Pe scurt: Userii și facturile în Postgres, pentru tranzacții și integritate; logurile în Elasticsearch, pentru căutare full-text și agregări pe volum mare.
@@ -115,7 +115,7 @@ La interviu: „CAP spune că, la o partiție de rețea, alegi între consisten�
 Verificare: Ai un Postgres cu primar și o replică asincronă. Primarul cade, iar tu promovezi imediat replica. Ce ai ales?
 Răspuns verificare: Disponibilitatea: serviciul revine repede, dar ultimele tranzacții confirmate pe primar și încă nereplicate se pot pierde.
 Varianta greșită B: La o partiție nu le poți avea pe toate trei simultan: exact asta spune teorema.
-Varianta greșită C: Un sistem care alege consistența refuză scrierile în timpul partiției, deci nu pierde ce a confirmat. Pierderea nu e obligatorie.
+Varianta greșită C: Nu se oprește totul: un sistem AP continuă să primească scrieri pe ambele părți și le reconciliază apoi, iar unul CP refuză cereri doar pe partea care nu are cvorum.
 Varianta greșită D: Consistența eventuală e o alegere de proiectare (AP), nu ceva automat. Un sistem CP refuză cereri în loc să devină eventual consistent.
 
 ### dbm-06
@@ -144,7 +144,7 @@ Limită: Câmpurile din JSONB n-au constrângeri de tip sau chei străine, iar s
 La interviu: „Aleg JSONB pentru partea variabilă a datelor, cum e payload-ul unui eveniment, când vreau totuși tranzacții și JOIN-uri. Câmpurile stabile rămân coloane, iar pentru căutare pun un index GIN. Un sistem în loc de două.”
 Verificare: Filtrezi des după `payload->>'user'`, iar câmpul trebuie să fie mereu prezent și de tip text. Ce faci?
 Răspuns verificare: Îl promovezi la o coloană proprie (`user_name text NOT NULL`), cu index normal: primești constrângeri, statistici bune și query-uri mai simple.
-Varianta greșită B: JSONB e puțin mai lent la scriere decât textul simplu, dar mult mai rapid la interogare: nu reparsează JSON-ul la fiecare citire și poate fi indexat.
+Varianta greșită B: JSONB se indexează (GIN pe tot documentul sau un index pe expresie, ca `(payload->>'user')`), deci filtrul pe un câmp interior nu scanează tabela. Se scrie ceva mai lent decât textul, dar se interoghează mult mai repede.
 Varianta greșită C: Chei străine pe câmpurile din interiorul JSONB nu există. Dacă îți trebuie, câmpul trebuie să fie coloană.
 Varianta greșită D: Fișierele binare mari nu stau în JSONB: le pui în object storage (S3), iar în DB păstrezi doar referința.
 

@@ -89,7 +89,7 @@ Limită: Nu toate operațiile eliberează GIL-ul: depinde de cum e scrisă exten
 La interviu: „Extensiile native pot elibera GIL-ul cât lucrează pe memoria lor, cum fac multe operații NumPy și OpenCV. De aceea threadurile pot scala pentru astfel de calcule; pentru Python pur folosesc procese.”
 Verificare: Rulezi 4 threaduri care parcurg fiecare, cu un `for` în Python, pixelii unei imagini. Folosești 4 core-uri?
 Răspuns verificare: Nu: bucla e bytecode Python și ține GIL-ul. Ai folosi 4 core-uri dacă ai înlocui bucla cu o operație NumPy sau OpenCV pe toată imaginea.
-Varianta greșită B: Multe extensii eliberează GIL-ul pe durata calculului. Codul nativ îl ține doar cât atinge obiecte Python.
+Varianta greșită B: Extensiile C pot elibera GIL-ul chiar fiindcă sunt C: cât nu ating obiecte Python, nu au nevoie de el (NumPy și OpenCV o fac la calculele mari).
 Varianta greșită C: NumPy nu pornește procese. Unele operații, de exemplu înmulțirea de matrici prin BLAS, folosesc threaduri native, dar în același proces.
 Varianta greșită D: GIL-ul privește execuția bytecode-ului Python. În extensiile C, autorul alege dacă și când îl eliberează, fie la I/O, fie la calcul.
 

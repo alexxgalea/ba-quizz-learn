@@ -1214,6 +1214,7 @@ Surse: react.dev (paginile citate mai jos) și rulări în vitest 5 cu react 19.
 - ✅ **Custom hooks**: „Custom Hooks let you share stateful logic but not state itself. Each call to a Hook is completely independent from every other call to the same Hook.”; numele începe cu `use` + literă mare. Rulat: două `useCounter()` în același component, click pe primul → `a1`, `b0`. Sursă: https://react.dev/learn/reusing-logic-with-custom-hooks
 - ✅ **Reconcilierea**: „React preserves a component's state for as long as it's being rendered at its position in the UI tree.”; alt tip pe aceeași poziție resetează state-ul întregului subarbore; `key` face parte din poziție; „always declare component functions at the top level, and don't nest their definitions.” Rulat: `mode === "login" ? <Form /> : <Form />` păstrează „ana” după schimbare; `<Form key={mode} />` o golește; o componentă `Row` definită în interiorul lui `Outer` pierde „abc” la primul re-render al lui `Outer`. Sursă: https://react.dev/learn/preserving-and-resetting-state
 - ✅ **Tipurile TSX din exemple**: `tsc --strict --noEmit -p katas` trece cu `@types/react` 19.3.0 (reducer cu `switch` exhaustiv, `useRef<HTMLInputElement>(null)`, `useState<string | undefined>`, `<Ctx value={…}>`).
+- ✅ **Grile fără tipar, `react` (variantele greșite rescrise, 20 nov. 2026)**: faptele din variantele noi sunt cele de mai sus. `setItems` aplică imediat comparația `Object.is`, fără amânare la click-ul următor (re-03); fără `onChange`, câmpul cu `value` îngheață și React avertizează, fără eroare (re-04); `memo` oprește re-randări, nu transmite date (re-05); `startTransition` primește funcții sincrone sau asincrone, iar `isPending` e doar un indicator (secțiunea 48, re-12); `htmlFor` caută după `id` în tot documentul, iar React nu adaugă sufixe la `id` (re-13); `getSnapshot` se compară cu `Object.is`, nu după conținut (re-14); `use` primește promisiuni și Context și întoarce valoarea rezolvată, nu `undefined` (re-16). Sursă: https://react.dev/reference/react/use
 
 ## 45. Desfășurări, grile și snippet-uri `fedebug` (frontend extins, tichetul 04; verificat 5 noiembrie 2026)
 
@@ -1302,6 +1303,7 @@ Surse: handbook-ul TypeScript (Utility Types, Enums, Conditional Types, Mapped T
 - ✅ **Conditional type distributiv** (ts-17): `T extends any ? T[] : never` pe `string | number` respinge `[1, "a"]` (TS2322, tipul e `string[] | number[]`); `[T] extends [any]` îl acceptă.
 - ✅ **`readonly string[]`**: `xs.sort()` → TS2339 (metoda nu există pe tipul readonly).
 - ✅ **C++** (punctele 12 și 13): `enum class` (C++11) e scoped și fără conversie implicită la `int`; `std::conditional<B, T, F>` (C++11, `<type_traits>`) alege un tip după un `bool` constant. Surse: https://en.cppreference.com/w/cpp/language/enum și https://en.cppreference.com/w/cpp/types/conditional
+- ✅ **Variantele greșite rescrise în tichetul 03 „grile fără tipar” (20 noiembrie 2026; `tsc` 6.0.2, `--strict --noEmit`, fișier temporar în afara repo-ului)**: `Omit<User, "idd">` compilează, iar `{ name: "Ana" }` → TS2741 (ts-11); `names[5].toUpperCase()` compilează fără `noUncheckedIndexedAccess`, deci nicio eroare de „index în afara limitelor” (ts-09); `return [on, fn]` → `toggle()` TS2349, iar cu `as const` apelul compilează (ts-16); `Partial<Pick<…>>` acceptă `{}` și `{ name: "x" }` (ts-06); `Partial<U2>` cu `address` complet și fără `name` compilează, deci `name` nu e obligatoriu, iar `address` fără `zip` → TS2741 (ts-12); `ReturnType<typeof f>` pe o funcție sincronă compilează, `ReturnType<getUser>` → TS2749 (ts-13); `ToArr<string | number>` primește atât `["a"]`, cât și `[1]` (distribuire, ts-17); `x.toUpperCase()` pe `unknown` → TS18046 (ts-10).
 
 ## 50. Tabla pentru `asyncio` (lecția pe tablă, tichetul 02; verificat 14 noiembrie 2026)
 
@@ -1317,6 +1319,14 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ **`run_coroutine_threadsafe(coro, loop)`** (punctul 9): trimite corutina buclei, thread-safe, și întoarce un `concurrent.futures.Future` pe care îl aștepți dintr-un alt thread. `loop.call_soon_threadsafe` e varianta thread-safe a lui `call_soon`. Surse: https://docs.python.org/3.14/library/asyncio-task.html#asyncio.run_coroutine_threadsafe și https://docs.python.org/3.14/library/asyncio-eventloop.html#asyncio.loop.call_soon_threadsafe
 - ✅ **Cuvinte cheie C++** (puncte 2, 5, 6, 9): `std::async`, `future::wait_for`, `catch (...)`, `std::mutex` + `std::condition_variable`, aceleași ca în textul desfășurărilor, deja verificate acolo.
 - Punctele 10 și 11 n-au schemă; cuvintele lor cheie repetă doar fapte din text.
+
+## 53. Grile `oop` fără indicii de formă: variantele greșite noi (rulate în Python 3, 20 noiembrie 2026)
+
+- `{Rule("brute-force")}` cu `@dataclass` simplu: `TypeError: unhashable type: 'Rule'`; `Rule.__hash__` este `None` (deci nu `AttributeError`, nu set gol).
+- `findings: list = []` într-un `@dataclass`: `ValueError: mutable default <class 'list'> for field findings is not allowed: use default_factory`, la definirea clasei; cu `default_factory=list`, instanțele nu împart lista.
+- `@classmethod` apelat pe instanță (`F().from_dict({})`) merge; `cls` e clasa instanței.
+- `__slots__`: atributele din slot-uri se pot reatribui (`x.rule = 5`), iar instanța nu are `__dict__`.
+- `typing.Protocol`: o clasă cu semnătură diferită de contract se importă și rulează; verificarea e doar statică (mypy, pyright). Un `@property` rulează getterul la fiecare acces.
 
 ## Rezumat: ce era greșit sau depinde de versiune
 
@@ -1338,3 +1348,46 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 16. TypeScript (secțiunea 47): documentația `tsconfig` dă `strict` implicit `true`, verificat cu `tsc` 7.0.2; data schimbării (TypeScript 6.0) e din surse secundare. Pagina „Everyday Types” nu acoperă excess property checks.
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
 18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.
+
+## 51. Grile fără tipar: `pytest`, `python`, `design` (tichetul 07; verificat 20 noiembrie 2026)
+
+- ✅ **pytest e single-thread și secvențial**: „single-threaded, executing its tests always in the same thread, sequentially, never spawning any threads itself”; paralelismul cere un plugin (pytest-xdist: procese, nu thread-uri). Testele dependente de ordine apar când un test se bazează pe date lăsate de altul; pytest-randomly / pytest-random-order le scot la iveală. Sursă: https://docs.pytest.org/en/stable/explanation/flaky.html (pt-15).
+- ✅ **pytest nu are timeout propriu pe suită**: pagina de flaky tests nu menționează niciun timeout implicit; timeout-ul vine din pluginul `pytest-timeout` (pt-15, varianta D; formulat prudent în explicație).
+- ✅ **Playwright nu recomandă XPath / CSS**: „CSS and XPath are not recommended as the DOM can often change leading to non resilient tests”; recomandă locatori după rol. Nu am găsit o afirmație despre viteză, deci varianta D de la pt-17 se bazează pe fragilitate, nu pe viteză. Sursă: https://playwright.dev/python/docs/locators (pt-17).
+- ✅ **Testele async fără plugin** (pt-12), `match` = `re.search` (pt-11), xdist (pt-16): secțiunea 6 și 24, neschimbate.
+- ✅ **Rulat** (Python 3.13): `py-02` → `[2, 2, 2]`, `py-09` → `6 0`, `py-13` → `[[1, 0], [1, 0]]`, `py-18` → `[1, 2, 3]`. Restul grilelor `python` citite cu xcheck, fără erori de fapt.
+- Erori de fapt corectate: niciuna. Variantele greșite noi (pt-11 B/C/D, pt-12 B/C/D, pt-14 B/C, pt-15 B/D, pt-17 D, design) sunt greșite fără dubiu: `Exception` nu e `ValueError` (raises verifică tipul), `PostgreSQL` suportă `CREATE DATABASE` per tenant.
+
+## 52. Grile fără tipar: `frontend`, `fedebug`, `js` (tichetul 05; verificat 20 noiembrie 2026)
+
+- ✅ **TanStack Query v5**: `cacheTime` a fost redenumit `gcTime` (ghidul de migrare v5, „Rename `cacheTime` to `gcTime`”); `staleTime` nu a fost redenumit și rămâne „cât sunt datele proaspete”. Varianta greșită „gcTime e noul nume al lui staleTime” din `fe-04` e deci falsă. Sursă: https://github.com/TanStack/query/blob/main/docs/framework/react/guides/migrating-to-v5.md
+- ✅ **React Strict Mode** (`fe-07`): efectele rulează un ciclu setup + cleanup în plus doar în development; build-ul de producție le rulează o dată (https://react.dev/reference/react/StrictMode, deja în secțiunea de mai sus).
+- ✅ **CORS** (`fd-02`, `fe-13`): un POST cu `Content-Type: application/json` nu e cerere simplă (doar `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain` sunt), deci declanșează preflight `OPTIONS`; verificat pe MDN (https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS). `credentials: "include"` nu declanșează singur preflight-ul.
+- Nicio eroare de fapt găsită în grilele rescrise; variantele greșite noi sunt false fără dubiu (fiecare are explicația ei).
+
+## Grile fără tipar: asyncio, asgi, gil (tichetul 06, 2026-11-20)
+
+- ✅ Rulat pe Python local: `threading.Timer` are `start()` și `cancel()` (e subclasă de `Thread`); `threading.Event` are `set()` / `wait()`; `CancelledError` e `BaseException`, nu `Exception`; `gather` nu anulează celelalte task-uri când unul aruncă (b a terminat după `ValueError` din a); `asyncio.timeout` ridică `TimeoutError`; un `Lock` luat de același thread blochează a doua oară (`acquire(timeout=.1)` dă `False`).
+- ✅ RFC 9110 §9.2.2: metodele idempotente sunt PUT, DELETE și cele safe; POST nu e. Sursă: https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2
+- ✅ `on_event("startup")` și `on_event("shutdown")` sunt depreciate în FastAPI și eliminate din Starlette 1.0 (secțiunea 5, deja verificat); variantele noi spun același lucru despre ambele.
+
+## 54. Grile fără tipar: P3 și P4 (tichetul 10, partea de module; 20 noiembrie 2026)
+
+- Variantele greșite noi sunt false prin ce erau deja (cuvintele absolute au fost scoase, nu s-au adăugat fapte). Singura afirmație nouă: „Gunicorn nu tratează SIGTERM, deci workerii mor imediat” (`dk-04`, B) e falsă; gunicorn instalează handler pentru SIGTERM și oprește grațios (secțiunile 13 și 23).
+- ✅ `noeviction` e valoarea implicită a `maxmemory-policy` și `allkeys-lru` / `allkeys-lfu` evacuează doar când `maxmemory` e setat (secțiunea 870 mai sus; `rd-07` cere `maxmemory` în varianta corectă).
+- ⚠️ `sudo ss -tlnp` / `sudo lsof -i :8000` (`lx-02`): `-p` arată procesul doar pentru socket-urile pe care le poți inspecta; pentru procesele altor useri trebuie privilegii. Nu l-am rulat într-un sandbox cu alt user.
+- Nicio eroare de fapt găsită în grilele atinse.
+
+## 55. Grile fără tipar: `runtime`, `index`, `sqlalchemy`, `postgres`, `celery`, `security` (tichetul 09; verificat 20 noiembrie 2026)
+
+- ✅ Rulat într-un venv cu SQLAlchemy 2.1.9 și Celery 5.7.0: `Session(...).expire_on_commit` e `True` implicit (deci `commit()` expiră toate atributele instanțelor din sesiune); `Celery().conf.task_serializer` e `json`; `worker_pool` implicit e `prefork`.
+- ✅ Variantele greșite noi sunt false fără dubiu: `joinedload` nu e numele vechi al lui `selectinload` (loaderi diferiți, SQL diferit); `close()` nu face COMMIT (rollback la tranzacția necomisă); `select()` e construct Core, nu doar ORM, iar Core nu e depreciat în 2.x; pool-ul nu deschide conexiunile la pornire (la cerere, până la `pool_size`); Celery nu limitează argumentele la `int` / `str` (orice tip serializabil în JSON); Beat nu are coordonare între instanțe (nu alege un lider), deci 3 replici = 3 publicări.
+- Nicio eroare de fapt găsită în grilele atinse; `index`, `postgres` și `security` treceau deja regulile și au intrat în `CUE_DONE` neschimbate.
+
+## 56. Grile fără tipar: reparații după code review (PR #21, 20 noiembrie 2026)
+
+- ✅ Rulat (SQLAlchemy 2.1.9, SQLite): după `session.add(obj); session.commit()` care ridică `IntegrityError`, orice folosire a sesiunii ridică `PendingRollbackError` până faci `rollback()`. Același lucru după un `flush()` eșuat (`sqa-09` C).
+- ✅ `pt-01` D: fixture-ul are scope-ul implicit `function`, deci teardown-ul de după `yield` rulează după fiecare test, nu o singură dată după toate (documentația pytest, „Fixture finalization / teardown”).
+- ✅ `dbm-06` B: JSONB se indexează (GIN pe document sau index pe expresie), deci afirmația „nu se poate indexa” e falsă (documentația PostgreSQL, „JSON Types”, „jsonb Indexing”).
+- ✅ `oop-02` D: nu mai afirmăm că interpretorul „inlinează” property-ul. CPython 3.12+ specializează `LOAD_ATTR_PROPERTY`, dar accesul tot rulează o funcție Python; explicația spune doar asta.
+- ✅ `cel-11` B: pickle nu apără de falsificare; mesajele Celery nu sunt semnate decât cu serializerul `auth` din `security` (documentația Celery, „Security”).

@@ -55,7 +55,7 @@ Limită: Deduplicarea are un cost: tabela de id-uri procesate crește, deci o cu
 La interviu: „Exactly once end-to-end nu se poate garanta peste rețea; în practică fac at-least-once plus procesare idempotentă, cu deduplicare după un id unic, în aceeași tranzacție cu efectul.”
 Verificare: Consumatorul inserează id-ul în `processed_events` într-o tranzacție, iar efectul (UPDATE pe sold) îl face în alta. Ce poate merge prost?
 Răspuns verificare: Dacă moare între cele două tranzacții, id-ul e marcat ca procesat, dar efectul nu s-a produs: la re-livrare, mesajul e ignorat, iar efectul se pierde. Le pui în aceeași tranzacție.
-Varianta greșită B: Confirmările brokerului acoperă drumul mesajului, nu efectul din aplicația ta. Un ack pierdut tot duce la re-livrare.
+Varianta greșită B: Un ack acoperă drumul mesajului până la broker, nu efectul din aplicația ta. Dacă ack-ul se pierde după efect, mesajul se re-livrează și efectul se repetă.
 Varianta greșită C: At-most-once fără retry pierde mesaje, adică exact opusul a ceea ce vrei.
 Varianta greșită D: Te poți apropia mult: cu idempotență, duplicatele există pe fir, dar nu produc efecte duble.
 
@@ -99,7 +99,7 @@ Limită: Workerii în plus apasă pe tot ce e în aval: 100 de workeri înseamn�
 La interviu: „Workerii stateless îi scalez orizontal, după lungimea cozii și vârsta celui mai vechi mesaj, de exemplu cu KEDA. Am grijă la dependențele din aval: conexiunile DB, prin PgBouncer, și limitele API-urilor externe.”
 Verificare: Coada crește, deși workerii stau la 10% CPU. Ajută să adaugi workeri?
 Răspuns verificare: Poate, dacă workerii așteaptă după I/O, dar mai întâi afli după ce: dacă așteaptă un DB sau un API saturat, mai mulți workeri doar măresc presiunea pe el. Cauza e în aval.
-Varianta greșită B: Un singur worker mare are o limită și e un punct unic de defect. Workerii stateless se scalează natural orizontal.
+Varianta greșită B: Un singur worker, oricât de mare, are o limită de resurse și e un punct unic de defect. Workerii stateless se scalează orizontal.
 Varianta greșită C: CPU-ul API-ului arată cât e de ocupat API-ul, nu câtă muncă așteaptă în coadă. Semnalul corect e coada.
 Varianta greșită D: Workerii noi doar încep să consume, iar cei opriți își termină munca sau lasă mesajele neconfirmate să revină în coadă. Nu e nevoie de downtime.
 
@@ -128,7 +128,7 @@ Limită: Două cereri cu aceeași cheie pot sosi simultan; constrângerea unică
 La interviu: „Clientul trimite un idempotency key per operație. Îl stochez cu constrângere unică, în aceeași tranzacție cu alerta, împreună cu răspunsul, iar la un retry cu aceeași cheie întorc același rezultat. Cheile expiră după un TTL.”
 Verificare: Clientul generează o cheie nouă la fiecare retry. Mai funcționează protecția?
 Răspuns verificare: Nu: serverul vede chei diferite, deci cereri diferite, și creează alerte duplicate. Cheia se generează o dată per operație și se refolosește la toate retry-urile ei.
-Varianta greșită B: Se poate evita: cu o cheie unică per operație, serverul recunoaște cererea repetată.
+Varianta greșită B: Duplicatul se poate evita: cu o cheie unică per operație, serverul recunoaște cererea repetată, indiferent de rețea.
 Varianta greșită C: Fără retry, clientul nu mai află dacă alerta a fost creată, deci pierzi operații sau îl pui pe user să decidă. Problema se rezolvă pe server, nu interzicând retry-ul.
 Varianta greșită D: Până noaptea, duplicatele au declanșat deja notificări și acțiuni. Iar un job nu poate ști sigur ce e duplicat și ce e o alertă legitimă.
 
@@ -160,7 +160,7 @@ La interviu: „Ordinea, de la partajat la izolat: `tenant_id` cu RLS, schemă p
 Verificare: Un client mare cere ca datele lui să poată fi restaurate separat dintr-un backup, fără să-i afecteze pe ceilalți. Ce model îl servește cel mai simplu?
 Răspuns verificare: Bază de date per tenant, măcar pentru acel client: backup-ul și restaurarea se fac pe baza lui, independent de ceilalți.
 Varianta greșită B: E ordinea inversă: baza per tenant e varianta cea mai izolată, iar `tenant_id` cea mai partajată.
-Varianta greșită C: Postgres le suportă pe toate trei: coloană cu RLS, scheme separate și baze separate.
+Varianta greșită C: Postgres suportă și baze separate pe tenant (`CREATE DATABASE`), alături de coloana cu RLS și de scheme.
 Varianta greșită D: Și modelele partajate pot fi sigure (RLS, roluri, audit). Baza per tenant e cea mai izolată, nu singura acceptabilă.
 
 ### des-07

@@ -19,8 +19,8 @@ Limită: Cooperativ înseamnă și că o singură corutină care nu cedează (ca
 La interviu: „asyncio e concurență cooperativă pe un singur thread: o corutină cedează controlul doar la `await`. E ideal pentru multe operații I/O, dar nu dă paralelism pe core-uri.”
 Verificare: Ai o corutină care face o buclă de calcul de 3 s, fără niciun `await`. Ce pățesc celelalte cereri din același worker?
 Răspuns verificare: Stau toate 3 s: bucla nu poate comuta până când corutina nu ajunge la un `await`.
-Varianta greșită B: asyncio rulează pe un singur thread. Pentru mai multe core-uri ai nevoie de procese.
-Varianta greșită C: Așa funcționează threadurile (preemptive). În asyncio comutarea se face doar la `await`.
+Varianta greșită B: asyncio rulează pe un singur thread, deci pe un singur core. Pentru mai multe core-uri ai nevoie de procese.
+Varianta greșită C: Așa funcționează threadurile (preemptive): sistemul de operare comută după o felie de timp. În asyncio comutarea se face doar la `await`.
 Varianta greșită D: Corutinele nu au threaduri proprii: toate rulează în threadul buclei.
 
 ### aio-02
@@ -185,7 +185,7 @@ Verificare: De ce a fost mutată `CancelledError` sub `BaseException` în Python
 Răspuns verificare: Ca blocurile obișnuite `except Exception:` din codul de aplicație să nu mai înghită anularea din greșeală.
 Varianta greșită B: `except BaseException` prinde și anularea și `KeyboardInterrupt`. E exact problema.
 Varianta greșită C: `log.exception` merge oriunde într-un `except`; nu are legătură cu corutinele.
-Varianta greșită D: `await job()` cedează controlul, deci bucla nu se învârte în gol cât timp jobul rulează.
+Varianta greșită D: `await job()` cedează controlul: bucla servește alte task-uri cât timp jobul așteaptă.
 
 ### aio-08
 Pe scurt: Task-ul poate fi colectat de GC înainte să termine, iar excepțiile lui se pierd.

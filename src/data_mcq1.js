@@ -32,43 +32,43 @@ for t in threads: t.start()
 for t in threads: t.join()
 print(counter)`, o: [
       "Poate fi sub 4.000.000: `counter += 1` nu e atomic, deci codul e greșit fără Lock",
-      "E mereu 4.000.000, pentru că GIL-ul face fiecare instrucțiune Python atomică",
-      "Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală",
-      "E mereu 1.000.000, pentru că fiecare thread își incrementează propria copie"], a: 0,
+      "E 4.000.000, pentru că GIL-ul face instrucțiunile Python atomice",
+      "Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală din alt thread",
+      "E 1.000.000, pentru că fiecare thread își incrementează propria copie"], a: 0,
       e: "`+=` pe un global înseamnă load, add, store; GIL-ul poate trece la alt thread între ele, deci se pot pierde update-uri. În versiunile recente race-ul apare mai rar în practică, dar codul rămâne greșit. Fix: `threading.Lock`." },
     { id: "gil-04", q: "Ce se întâmplă dacă apelezi `time.sleep(2)` într-o funcție `async def` care rulează pe event loop?", o: [
       "Tot event loop-ul stă 2 secunde: nicio altă corutină nu progresează",
-      "Doar corutina curentă așteaptă, celelalte continuă normal",
+      "Corutina curentă așteaptă 2 secunde, iar celelalte continuă normal",
       "Python îl transformă automat în `await asyncio.sleep(2)`",
       "Interpretorul aruncă excepție: apelurile sincrone sunt interzise în async def"], a: 0,
       e: "asyncio e cooperativ: o corutină cedează controlul doar la `await`. `time.sleep` blochează threadul loop-ului. Folosești `await asyncio.sleep()` sau muți codul blocant cu `await asyncio.to_thread(...)`." },
     { id: "gil-05", q: "Ce e adevărat despre cod nativ (NumPy, OpenCV) și GIL?", o: [
       "Multe operații native eliberează GIL-ul, deci pot rula în paralel din threaduri",
-      "Codul nativ ține GIL-ul tot timpul, deci nu poate rula niciodată în paralel",
+      "NumPy și OpenCV nu pot elibera GIL-ul: sunt extensii C, iar GIL-ul aparține interpretorului",
       "NumPy pornește automat câte un proces separat pentru fiecare operație mare pe array-uri",
-      "GIL-ul se aplică doar operațiilor de I/O, nu și calculelor făcute în extensii C"], a: 0,
+      "GIL-ul se aplică operațiilor de I/O, nu și calculelor făcute în extensii C"], a: 0,
       e: "O extensie C poate elibera GIL-ul cât timp nu atinge obiecte Python (calcule NumPy mari, `cv2.resize`). De aceea un thread pool peste OpenCV poate folosi mai multe core-uri, iar același calcul scris în Python pur nu." },
     { id: "gil-06", q: "Ce trebuie să fie adevărat despre argumentele trimise la un `ProcessPoolExecutor`?", o: [
       "Să poată fi serializate cu pickle",
       "Să fie obiecte imutabile",
-      "Să fie doar tipuri primitive (int, str, float)",
-      "Nicio restricție: procesele partajează memoria părintelui"], a: 0,
+      "Să fie tipuri primitive (int, str, float)",
+      "Fără restricții: procesele partajează memoria părintelui"], a: 0,
       e: "Procesele au memorie separată; argumentele și rezultatele trec granița prin pickling. Lambdas, conexiuni DB sau socket-uri nu se pot trimite. Overhead-ul face ca task-urile foarte mici să nu merite." },
     { id: "gil-07", q: "Ai 10.000 de request-uri HTTP de făcut în asyncio, cu maximum 50 simultan. Ce folosești?", o: [
       "Un `asyncio.Semaphore(50)` în jurul fiecărui request, plus `gather`",
-      "`asyncio.gather` pe toate 10.000, pentru că event loop-ul le dozează singur",
+      "`asyncio.gather` pe cele 10.000, pentru că event loop-ul le dozează singur",
       "Un `ThreadPoolExecutor(max_workers=10_000)` peste un client HTTP sincron",
       "`time.sleep(0.02)` între request-uri, ca să nu depășești 50 de conexiuni deschise"], a: 0,
       e: "`gather` pornește toate corutinele deodată; fără limită deschizi 10.000 de conexiuni. Semaforul sau N workeri pe o `asyncio.Queue` limitează concurența. `TaskGroup` (3.11+) anulează și restul task-urilor la prima eroare." },
     { id: "gil-08", q: "Diferența dintre `await coro()` și `asyncio.create_task(coro())`?", o: [
       "`create_task` o pornește concurent și întoarce un Task; `await` așteaptă pe loc",
-      "Sunt echivalente; `create_task` e doar sintaxa veche, dinainte de `async/await`",
+      "Sunt echivalente; `create_task` e sintaxa veche, dinainte de `async/await`",
       "`create_task` rulează corutina într-un thread separat din pool-ul implicit",
       "`await` pornește corutina într-un proces nou, `create_task` în același thread"], a: 0,
       e: "Cu `create_task` poți face altceva și aștepți task-ul mai târziu. Păstrezi o referință la el (altfel poate fi colectat) și îi tratezi excepțiile." },
     { id: "gil-09", tag: "formulare", q: "Ce formulare ai folosi la interviu?", o: [
       "„GIL-ul limitează paralelismul bytecode-ului, nu concurența: pentru I/O folosesc threads sau asyncio, pentru CPU procese.”",
-      "„GIL-ul împiedică orice execuție paralelă în procesul Python, deci folosesc mereu procese, inclusiv pentru operațiile I/O.”",
+      "„GIL-ul împiedică execuția paralelă în procesul Python, deci folosesc procese, inclusiv pentru operațiile I/O.”",
       "„GIL-ul face codul multi-threaded thread-safe, deci în Python nu am nevoie de Lock pentru contoare partajate.”",
       "„asyncio ocolește GIL-ul rulând corutinele pe mai multe core-uri, de aceea e mai rapid decât threadurile.”"], a: 0,
       e: "Codul nativ poate rula în paralel, GIL-ul nu protejează invariantele tale, iar asyncio e concurent pe un singur thread, nu paralel." },
@@ -86,7 +86,7 @@ print(counter)`, o: [
       e: "Disponibil din 3.9, e o scurtătură pentru `loop.run_in_executor(None, ...)`: loop-ul nu se blochează cât rulează funcția. Util pentru biblioteci sincrone (driver DB, `requests`). Pentru CPU greu: un executor de procese." },
     { id: "gil-12", q: "Folosești `asyncio.TaskGroup` (3.11+) pentru 5 sub-task-uri și unul aruncă excepție. Ce se întâmplă?", o: [
       "Celelalte task-uri sunt anulate, iar erorile ies ca `ExceptionGroup`",
-      "Celelalte continuă până la final, iar excepția apare doar în log",
+      "Celelalte continuă până la final, iar excepția apare în log",
       "Tot event loop-ul se oprește imediat, iar procesul iese cu cod de eroare",
       "Task-ul care a eșuat e reluat automat, iar celelalte îl așteaptă"], a: 0,
       e: "Concurență structurată: niciun task nu rămâne orfan. Le prinzi cu `except*`. `gather(..., return_exceptions=True)` e alternativa când vrei să continue toate." }
@@ -96,14 +96,14 @@ print(counter)`, o: [
     { id: "rt-01", q: "Ce se întâmplă când rulezi `python app.py` în CPython?", o: [
       "Sursa e compilată în bytecode, apoi bytecode-ul e executat de interpretor",
       "Sursa e tradusă în C++ și compilată cu un compilator nativ",
-      "Sursa e citită și executată ca text, linie cu linie, fără nicio compilare",
+      "Sursa e citită și executată ca text, linie cu linie, fără pas de compilare",
       "Fiecare funcție e compilată JIT în cod mașină înainte de prima rulare"], a: 0,
       e: "CPython parsează sursa în AST, o compilează în bytecode și o execută în bucla de evaluare. Importurile se cache-uiesc ca `.pyc`. Există un JIT experimental, oprit implicit; nu e pasul standard." },
     { id: "rt-02", q: "De ce primești `TypeError` abia când rulezi linia respectivă?", o: [
       "Tipurile aparțin obiectelor și se verifică dinamic, când se execută operația",
-      "Pentru că Python nu are deloc tipuri, doar valori fără tip",
+      "Pentru că Python nu are deloc tipuri, ci valori fără tip",
       "Pentru că compilatorul Python ignoră erorile de tip ca să meargă mai repede",
-      "Pentru că verificarea tipurilor se face doar în modul debug"], a: 0,
+      "Pentru că verificarea tipurilor se face în modul debug, nu în cel normal"], a: 0,
       e: "Variabilele sunt nume legate de obiecte; `a + b` se rezolvă după tipul obiectelor, la runtime. Nu există un pas de compilare care să verifice tipurile: asta fac, opțional, mypy sau pyright." },
     { id: "rt-03", q: "Ce face `\"1\" + 1` în Python?", o: ["Aruncă TypeError", "Returnează \"11\"", "Returnează 2", "Returnează None"], a: 0,
       e: "Python e dinamic, dar puternic tipat: nu face conversii implicite între str și int. În JavaScript rezultatul ar fi \"11\"." },
@@ -115,8 +115,8 @@ print(counter)`, o: [
       e: "Hint-urile stau în `__annotations__` (evaluate leneș din 3.14) și sunt ignorate de interpretor. mypy/pyright verifică static; Pydantic și FastAPI le citesc ca să valideze date." },
     { id: "rt-05", q: "Cum gestionează CPython memoria?", o: [
       "Reference counting + un GC generațional pentru cicluri de referințe",
-      "Doar un garbage collector mark-and-sweep, rulat periodic, ca în Java",
-      "Manual: obiectele sunt eliberate doar când apelezi explicit `del`",
+      "Un GC mark-and-sweep periodic, fără contoare de referințe, ca în Java",
+      "Manual: obiectele rămân în memorie până apelezi explicit `del` pe ele",
       "Memoria nu se eliberează deloc până la terminarea procesului"], a: 0,
       e: "La contor 0, obiectul e eliberat imediat. Ciclurile (a → b → a) le colectează modulul `gc`. `del` șterge doar un nume, nu forțează eliberarea." },
     { id: "rt-06", q: "Ce e un fișier `.pyc`?", o: [
@@ -127,7 +127,7 @@ print(counter)`, o: [
       e: "Stă în `__pycache__/`, e specific versiunii de Python și se regenerează când se schimbă sursa. Accelerează pornirea, nu execuția." },
     { id: "rt-07", tag: "formulare", q: "Care formulare e cea mai precisă?", o: [
       "„Python e compilat în bytecode, rulat de VM-ul CPython; tipurile se verifică la runtime.”",
-      "„Python e interpretat linie cu linie, deci nu are niciun pas de compilare înainte de execuție.”",
+      "„Python e interpretat linie cu linie, deci nu are pas de compilare înainte de execuție.”",
       "„Python se transformă întâi în cod C++, care apoi e compilat și rulează pe procesor.”",
       "„Python e compilat în bytecode ca Java, deci tipurile se verifică încă de la compilare.”"], a: 0,
       e: "Există compilare, dar în bytecode, nu în cod mașină, și fără verificare de tipuri: spre deosebire de Java, bytecode-ul nu vine cu tipuri verificate. Formularea cu C++ e exact cea de evitat." },
@@ -135,7 +135,7 @@ print(counter)`, o: [
       "Ca să nu ruleze când modulul e importat de alt modul sau de teste",
       "Ca să ruleze mai repede, fiind compilat separat de restul modulului",
       "Pentru că altfel interpretorul nu găsește funcția `main` la pornire",
-      "Ca să ruleze doar pe Linux, nu și pe Windows sau macOS"], a: 0,
+      "Ca să ruleze pe Linux, dar să fie ignorat pe Windows sau macOS"], a: 0,
       e: "La import, tot codul de la nivelul modulului se execută. `__name__` e `\"__main__\"` doar când fișierul e rulat direct. Contează și pentru `multiprocessing` cu metoda spawn." }
   ]);
 

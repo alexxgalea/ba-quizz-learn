@@ -51,7 +51,7 @@ let y = 2;`, o: ["Afișează `undefined`, apoi aruncă `ReferenceError`", "Afiș
       this.seconds++;
     }, 1000);
   }
-}`, o: ["`function` primește `this` de la cine o apelează (timerul), nu din clasă; o arrow function îl ia din `start()`", "Câmpul `seconds` e privat, iar `setInterval` nu are voie să-l modifice", "`setInterval` are nevoie de `await`, altfel callback-ul nu rulează", "`this.seconds++` nu merge pe câmpuri de clasă; trebuie `Timer.seconds`"],
+}`, o: ["Callback-ul `function` are alt `this`; o arrow function îl ia din `start()`", "Câmpul `seconds` e privat în clasă, iar `setInterval` nu are voie să-l modifice din afară", "`setInterval` are nevoie de `await`, altfel callback-ul nu rulează", "`this.seconds++` nu merge pe câmpuri de clasă; trebuie `Timer.seconds`"],
       ctx: "`this` se stabilește la apel. Un callback dat unui timer nu e apelat ca metodă a lui `Timer`.",
       e: "Callback-ul e o funcție obișnuită, apelată de timer, deci `this` nu e instanța `Timer`: `this.seconds++` nu atinge câmpul ei. O arrow function nu are `this` propriu și îl ia din `start()`, unde `this` e instanța." },
     { id: "js-05", lvl: 1, q: "Ce afișează?", code: R`console.log(0 || 10, 0 ?? 10, null ?? 5);`, o: ["`10 0 5`", "`10 10 5`", "`0 0 5`", "`10 0 null`"],
@@ -67,7 +67,7 @@ console.log(a, b === a);`, o: ["`[ 1, 10, 9 ] true`", "`[ 1, 9, 10 ] true`", "`[
   for (const id of ids) {
     await fetchUser(id);
   }
-}`, o: ["Pe rând, fiecare după cea dinainte; `await Promise.all(ids.map(fetchUser))` le pornește deodată", "Deodată, fiindcă `await` doar pornește cererea", "Pe rând; `ids.forEach(async id => { await fetchUser(id); })` e varianta deodată, iar `load` așteaptă după ea", "Deodată, fiindcă `for...of` e asincron"],
+}`, o: ["Pe rând, fiecare după cea dinainte; `await Promise.all(ids.map(fetchUser))` le pornește deodată", "Deodată, fiindcă `await` pornește cererea și trece mai departe", "Pe rând; `ids.forEach(async id => { await fetchUser(id); })` e varianta deodată, iar `load` așteaptă după ea", "Deodată, fiindcă `for...of` e asincron"],
       ctx: "`await` oprește funcția `async` până se termină promisiunea. O buclă cu `await` la fiecare pas pornește cererea următoare abia după ce s-a terminat cea dinainte.",
       e: "Fiecare `await` din buclă așteaptă răspunsul înainte de iterația următoare, deci cererile rulează pe rând (de 3 ori cât durează una). `Promise.all` pornește toate promisiunile deodată și așteaptă ultima." },
     { id: "js-08", lvl: 3, q: "Ce afișează?", code: R`class A {
@@ -135,30 +135,30 @@ class OrderId {
   constructor(public v: number) {}
 }
 function loadUser(id: UserId) {}
-loadUser(new OrderId(7));`, o: ["Da: tiparea e structurală, iar `OrderId` are aceeași formă ca `UserId`", "Nu: sunt clase diferite, deci tipuri diferite, ca în C++", "Nu: `loadUser` cere exact `UserId`, iar `strict` verifică numele claselor", "Da, dar doar dacă pui `as UserId` la apel"],
+loadUser(new OrderId(7));`, o: ["Da: tiparea e structurală, iar `OrderId` are aceeași formă ca `UserId`", "Nu: clasele au nume diferite, deci tipurile sunt diferite, ca în C++", "Nu: `loadUser` cere exact `UserId`, iar `strict` verifică numele claselor", "Da, dar apelul are nevoie de `as UserId`, altfel tipurile nu se potrivesc"],
       ctx: "TypeScript compară tipurile după formă, nu după nume. Un tip e compatibil dacă are câmpurile cerute.",
       e: "Amândouă clasele au un singur câmp public, `v: number`, deci formele coincid și apelul compilează. În C++ ar fi două tipuri fără legătură. Ca să le separi, adaugi un câmp-etichetă sau un membru `private`." },
     { id: "ts-02", lvl: 1, q: "Care dintre atribuirile `a` și `b` dă eroare?", code: R`type P = { x: number };
 const o = { x: 1, y: 2 };
 const a: P = o;
-const b: P = { x: 1, y: 2 };`, o: ["Doar `b`: un literal de obiect cu proprietate în plus pică (TS2353)", "Amândouă: `y` nu există în `P`", "Doar `a`: `o` are tipul `{ x: number; y: number }`", "Niciuna: tiparea structurală acceptă proprietăți în plus"],
+const b: P = { x: 1, y: 2 };`, o: ["Doar `b`: un literal de obiect cu `y` în plus pică (TS2353)", "Amândouă: `y` nu există în `P`, deci ambele atribuiri sunt respinse", "Doar `a`: `o` are tipul `{ x: number; y: number }`, care nu e `P`", "Niciuna: tiparea structurală permite proprietăți în plus și la literale"],
       ctx: "Verificarea proprietăților în plus (excess property check) se aplică doar unui literal de obiect scris direct în locul atribuirii.",
       e: "`a` trece: `o` e o variabilă cu o formă care conține `x: number`, deci e compatibilă cu `P`. `b` e un literal proaspăt, iar `y` apare doar acolo, deci compilatorul presupune o greșeală de scriere și dă TS2353." },
     { id: "ts-03", lvl: 1, q: "Ce face compilatorul cu aceste declarații?", code: R`interface I { a: number }
 interface I { b: string }
 type T = { a: number };
-type T = { b: string };`, o: ["`I` primește ambele câmpuri; `T` dă eroare: Duplicate identifier (TS2300)", "Ambele se îmbină, fiindcă tipurile se pot redeschide", "Ambele dau eroare: nu poți declara același nume de două ori", "`T` se îmbină, iar `I` dă eroare, fiindcă `interface` e închis"],
+type T = { b: string };`, o: ["`I` primește ambele câmpuri; `T` dă eroare: Duplicate identifier (TS2300)", "Ambele se îmbină, fiindcă un alias `type` se poate redeschide ca o interfață", "Ambele dau eroare: același nume nu poate fi declarat de două ori în fișier", "`T` se îmbină cu `b: string`, iar `I` dă eroare, fiindcă `interface` e închis"],
       ctx: "Una dintre diferențele dintre `type` și `interface`: cine poate fi redeschis.",
       e: "Interfețele cu același nume se îmbină (declaration merging): `I` are `a` și `b`. Un alias `type` nu se poate redeclara, deci al doilea `T` dă TS2300. Tot de aceea bibliotecile îți lasă să le extinzi tipurile prin `interface`." },
     { id: "ts-04", lvl: 3, q: "Ce se întâmplă cu acest cod?", code: R`const isStr = (x: unknown): x is string =>
   typeof x === "number";
 const v: unknown = 5;
-if (isStr(v)) v.toUpperCase();`, o: ["Compilează, dar la runtime aruncă `TypeError: v.toUpperCase is not a function`", "Nu compilează: predicatul `x is string` nu se potrivește cu corpul funcției", "Compilează și rulează: `toUpperCase` există pe orice valoare", "Nu compilează: `v` e `unknown`, deci nu poate fi restrâns"],
+if (isStr(v)) v.toUpperCase();`, o: ["Compilează, dar la runtime aruncă `TypeError: v.toUpperCase is not a function`", "Nu compilează: corpul cu `typeof x === \"number\"` contrazice predicatul `x is string`", "Compilează și rulează, fiindcă `5` se convertește automat în string la apel", "Nu compilează: `v` e declarat `unknown`, iar un type guard nu-l poate restrânge"],
       ctx: "Un type guard definit de tine (`x is T`) îi spune compilatorului ce să creadă. Corpul lui nu e verificat față de predicat.",
       e: "TypeScript nu analizează corpul funcției. Ia predicatul `x is string` drept adevărat și în ramura `if` tratează `v` ca string, deci apelul compilează. La runtime `v` e 5, iar `toUpperCase` nu există pe un număr. Guard-ul tău poate minți." },
     { id: "ts-05", lvl: 2, q: "De ce pică funcția `len`, și cum o repari?", code: R`function len<T>(x: T) {
   return x.length;
-}`, o: ["`T` n-are constrângeri, deci nu se știe că are `length` (TS2339); repari cu `T extends { length: number }`", "`length` nu există în JavaScript pe valori generice; folosești `any`", "Lipsește tipul de întoarcere; cu `: number` compilează", "Generics nu pot accesa proprietăți; folosești o supraîncărcare"],
+}`, o: ["`T` nu garantează `length` (TS2339); repari cu `T extends { length: number }`", "`length` nu există pe valori generice în JavaScript; repari cu `x: any`", "Lipsește tipul de întoarcere; cu `: number` după lista de parametri compilează", "Generics nu pot accesa proprietăți; repari cu o supraîncărcare a funcției `len`"],
       ctx: "Într-o funcție generică, `T` e orice tip până îl restrângi. Poți face doar ce merge pe orice tip.",
       e: "Fără constrângere, `T` poate fi `number`, `null` sau orice altceva, iar compilatorul nu dă voie la `x.length`. `T extends { length: number }` cere un `T` cu acel câmp, deci `len(\"abc\")` și `len([1, 2])` merg, iar `len(5)` pică la apel." },
     { id: "ts-06", lvl: 2, q: "Care dintre `a`, `b` și `c` dă eroare?", code: R`type User = {
@@ -168,7 +168,7 @@ type Patch = Partial<
   Pick<User, "name" | "email">>;
 const a: Patch = {};
 const b: Patch = { name: "Ana" };
-const c: Patch = { id: 1 };`, o: ["Doar `c`: `Pick` păstrează `name` și `email`, deci `id` e în plus (TS2353)", "Toate trei: `Partial` nu acceptă un obiect gol", "`a` și `c`: `Pick` face câmpurile obligatorii", "Niciuna: `Partial` face toate câmpurile din `User` opționale"],
+const c: Patch = { id: 1 };`, o: ["Doar `c`: `Pick` păstrează `name` și `email`, deci `id` e în plus (TS2353)", "`a` și `b`: `Partial` cere cel puțin un câmp, deci `{}` e respins", "`a` și `c`: `Pick` păstrează câmpurile obligatorii, iar `{}` le lasă lipsă", "Niciuna: `Partial` face opționale și câmpurile pe care `Pick` le-a scos"],
       ctx: "Utility types se aplică de la interior spre exterior: `Pick` alege câmpurile, apoi `Partial` le face opționale.",
       e: "`Pick<User, \"name\" | \"email\">` are doar `name` și `email`. `Partial` le face opționale, deci `{}` și `{ name: \"Ana\" }` merg. `id` nu mai e în tip, iar un literal cu el pică la excess property check." },
     { id: "ts-07", lvl: 3, q: "Care rând dă eroare, și de ce?", code: R`type Colors = "red" | "blue";
@@ -178,29 +178,29 @@ const a = {
 const b: Record<Colors, unknown> =
   { red: [1], blue: "#00f" };
 a.red.map((x) => x);
-b.red.map((x) => x);`, o: ["Doar ultimul: `b.red` e `unknown` (TS18046), fiindcă anotarea lărgește tipul", "Penultimul: `satisfies` pierde tipul lui `a.red`", "Amândouă: `unknown` nu are `map`", "Niciunul: ambele forme dau același tip"],
+b.red.map((x) => x);`, o: ["Doar ultimul: `b.red` e `unknown` (TS18046), fiindcă anotarea lărgește tipul", "Penultimul: `satisfies` pierde tipul exact al lui `a.red` și îl lasă `unknown`", "Amândouă: `unknown` nu are `map`, iar ambele rânduri apelează `map`", "Niciunul: anotarea și `satisfies` dau același tip pentru `a.red` și `b.red`"],
       ctx: "`satisfies` verifică forma valorii, dar îi lasă tipul exact. O anotare îl înlocuiește cu tipul declarat.",
       e: "La `a`, `satisfies` doar verifică forma, iar tipul rămâne `{ red: number[]; blue: string }`, deci `a.red.map` merge. La `b`, anotarea `Record<Colors, unknown>` face `b.red` de tip `unknown`, iar `unknown` nu are `map`." },
     { id: "ts-08", lvl: 2, q: "Ce tip are `u`, și ce se întâmplă la `setU({ id: 1 })`?", code: R`type User = { id: number };
 function F() {
   const [u, setU] = useState(null);
   setU({ id: 1 });
-}`, o: ["`null`: setter-ul nu acceptă un obiect, deci pică la compilare (TS2353)", "`User | null`: TypeScript deduce din apelul `setU`", "`any`: `null` nu spune nimic despre tip", "`null`, dar `setU({ id: 1 })` compilează, fiindcă obiectele sunt compatibile cu `null`"],
+}`, o: ["`null`: setter-ul nu acceptă un obiect, deci pică la compilare (TS2353)", "`User | null`: TypeScript deduce din apelul `setU({ id: 1 })` de mai jos", "`any`: `null` nu spune nimic despre tip, deci `useState` cade pe `any`", "`null`, dar `setU({ id: 1 })` compilează, fiindcă obiectele sunt compatibile cu `null`"],
       ctx: "`useState(valoare)` deduce tipul din valoarea inițială. Dacă tipul real e mai larg, îl dai ca generic.",
       e: "Inițial `null`, deci `u` are tipul `null`, iar `setU` primește `null` sau o funcție de la `null` la `null`. Un obiect pică. Corect: `useState<User | null>(null)`." },
     { id: "ts-09", lvl: 3, q: "Cu `strict` pornit, `first.toUpperCase()` compilează. Ce schimbă `noUncheckedIndexedAccess`?", code: R`const names: string[] = ["a"];
 const first = names[0];
-first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar al treilea rând pică (TS18048)", "Nimic: `strict` include deja flag-ul", "`names[0]` devine `string`, iar `names[5]` pică la compilare", "Nu mai poți indexa array-uri cu un număr"],
+first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar `first.toUpperCase()` pică (TS18048)", "Nimic: `strict` pornește deja `noUncheckedIndexedAccess`, deci nu se schimbă", "`names[0]` rămâne `string`, dar `names[5]` pică la compilare ca index în afara limitelor", "Indexarea cu un număr nu mai e permisă; array-urile se citesc cu `.at(0)`"],
       ctx: "Un array nu garantează că indexul există. Implicit, TypeScript presupune că da.",
       e: "Fără flag, indexarea unui `string[]` dă `string`, chiar dacă la runtime `names[5]` e `undefined`. Cu `noUncheckedIndexedAccess` (în afara lui `strict`) tipul devine `string | undefined`, deci trebuie să verifici înainte de `toUpperCase()`." },
     { id: "ts-10", lvl: 1, q: "Ce spune compilatorul?", code: R`function shout(x: unknown) {
   return x.toUpperCase();
-}`, o: ["Eroare TS18046: `x` e `unknown`, deci trebuie restrâns înainte, de exemplu cu `typeof x === \"string\"`", "Compilează: `unknown` se comportă ca `any`", "Compilează, dar aruncă la runtime dacă `x` nu e string", "Compilează dacă funcția e apelată doar cu string-uri"],
+}`, o: ["Eroare TS18046: `x` e `unknown`, deci trebuie restrâns înainte de apel", "Compilează: `unknown` se comportă ca `any`, deci `x.toUpperCase()` e permis", "Compilează, dar aruncă `TypeError` la runtime dacă `x` nu e string", "Compilează dacă apelurile din proiect pasează un string, nu `unknown`"],
       ctx: "`unknown` acceptă orice valoare la intrare. `any` acceptă orice și te lasă să faci orice cu ea.",
       e: "`unknown` e varianta sigură a lui `any`: poți atribui orice în el, dar nu poți apela metode, accesa câmpuri sau pasa valoarea mai departe ca alt tip până nu o restrângi. `if (typeof x === \"string\") return x.toUpperCase();` compilează. Cu `x: any`, același cod ar trece și ar putea cădea la runtime." },
     { id: "ts-11", lvl: 2, q: "Ce se întâmplă la ultima linie?", code: R`type User = { id: number; name: string };
 type NewUser = Omit<User, "idd">;
-const u: NewUser = { name: "Ana" };`, o: ["Eroare TS2741, lipsește `id`: `Omit` nu verifică dacă `\"idd\"` e o cheie, deci n-a scos nimic", "Eroare la `Omit`: `\"idd\"` nu e o cheie a lui `User`", "Compilează: `NewUser` e `{ name: string }`", "Compilează: `Omit` face toate câmpurile opționale"],
+const u: NewUser = { name: "Ana" };`, o: ["Eroare TS2741: `Omit` acceptă `\"idd\"` fără să scoată ceva, deci `id` lipsește", "Eroare pe rândul 2: `\"idd\"` nu e o cheie a lui `User`, ca la `Pick`", "Compilează: `NewUser` rămâne `{ name: string }` și `id` dispare prin `Omit`", "Compilează: `Omit` face opționale câmpurile pe care nu le recunoaște"],
       ctx: "`Omit<T, K>` scoate cheile `K` din `T`. Constrângerea lui `K` e `keyof any`, adică orice string, număr sau simbol.",
       e: "`Omit` acceptă orice cheie, chiar și una inexistentă, fără eroare. `\"idd\"` nu scoate nimic, deci `NewUser` are tot `id`, iar literalul fără `id` pică cu TS2741. Greșeala de scriere iese la iveală doar indirect. `Pick` e strict: `Pick<User, \"idd\">` dă eroare la cheie." },
     { id: "ts-12", lvl: 2, q: "Compilează corpul acestui PATCH?", code: R`type User = {
@@ -209,23 +209,23 @@ const u: NewUser = { name: "Ana" };`, o: ["Eroare TS2741, lipsește `id`: `Omit`
 };
 const p: Partial<User> = {
   address: { city: "Iași" },
-};`, o: ["Nu: `Partial` lucrează pe un nivel, deci `address`, dacă apare, cere și `zip` (TS2741)", "Da: `Partial` face opționale toate câmpurile, inclusiv cele imbricate", "Nu: cu `Partial` trebuie să dai și `name`", "Da, dar `address.zip` devine `undefined` la runtime"],
+};`, o: ["Nu: `Partial` lucrează pe un nivel, deci `address` cere și `zip` (TS2741)", "Da: `Partial` face opționale câmpurile din `User`, inclusiv cele imbricate", "Nu: `Partial` face opțional doar `address`, deci `name` rămâne obligatoriu", "Da: obiectul compilează, iar `address.zip` ajunge `undefined` la runtime"],
       ctx: "`Partial<T>` construiește un tip în care fiecare proprietate a lui `T` e opțională.",
       e: "`Partial` adaugă `?` doar proprietăților de pe primul nivel. `address` devine opțional, dar tipul lui rămâne `{ city: string; zip: string }`, deci un obiect fără `zip` pică. Pentru un update pe mai multe niveluri scrii tipul explicit sau un tip recursiv (`DeepPartial`), pe care biblioteca standard nu-l are." },
     { id: "ts-13", lvl: 1, q: "Vrei tipul a ce întoarce `getUser`. Ce e greșit?", code: R`function getUser() {
   return { id: 1, name: "Ana" };
 }
-type U = ReturnType<getUser>;`, o: ["`getUser` e o valoare, nu un tip (TS2749); scrii `ReturnType<typeof getUser>`", "`ReturnType` merge doar pe funcții `async`", "Lipsește tipul de retur explicit al lui `getUser`", "Nimic: `U` e `{ id: number; name: string }`"],
+type U = ReturnType<getUser>;`, o: ["`getUser` e o valoare, nu un tip (TS2749); scrii `ReturnType<typeof getUser>`", "`ReturnType` cere o funcție `async`, iar `getUser` e sincronă", "Lipsește tipul de retur explicit: `ReturnType` nu îl poate deduce singur", "Nimic: `ReturnType` primește funcția și dă `{ id: number; name: string }`"],
       ctx: "Un tip generic primește tipuri. O funcție e o valoare; `typeof` îi ia tipul.",
       e: "În poziție de tip, numele unei funcții nu înseamnă nimic, iar compilatorul spune exact asta: „refers to a value, but is being used as a type here. Did you mean 'typeof getUser'?”. `typeof getUser` dă tipul funcției, iar `ReturnType` îi scoate tipul rezultatului, dedus fără să-l scrii de mână." },
     { id: "ts-14", lvl: 2, q: "Ce tip are `U`?", code: R`async function getUser() {
   return { id: 1 };
 }
-type U = ReturnType<typeof getUser>;`, o: ["`Promise<{ id: number }>`; tipul obiectului îl dă `Awaited<ReturnType<typeof getUser>>`", "`{ id: number }`, fiindcă `ReturnType` așteaptă promisiunea", "`{ id: 1 }`, cu valoarea exactă", "`any`, fiindcă funcția e asincronă"],
+type U = ReturnType<typeof getUser>;`, o: ["`Promise<{ id: number }>`: `ReturnType` dă tipul exact de retur", "`{ id: number }`: `ReturnType` așteaptă promisiunea, ca un `await`", "`{ id: 1 }`: tipul păstrează valoarea literală a lui `id`", "`any`: `ReturnType` nu poate deduce tipul unei funcții `async`"],
       ctx: "O funcție `async` întoarce mereu o promisiune. `Awaited<T>` modelează ce face `await`.",
       e: "`ReturnType` dă exact tipul de retur, iar pentru o funcție `async` acesta e `Promise<{ id: number }>`. `Awaited` desface promisiunea (și pe cele imbricate), deci `Awaited<ReturnType<typeof getUser>>` e `{ id: number }`. Literalul `1` se lărgește la `number`, fiindcă proprietatea unui obiect e mutabilă." },
     { id: "ts-15", lvl: 2, q: "Compilezi și rulezi. Ce afișează?", code: R`enum Dir { Up, Down }
-console.log(Object.keys(Dir));`, o: ["`[\"0\", \"1\", \"Up\", \"Down\"]`: un `enum` numeric e un obiect la runtime, cu mapare și inversă", "`[\"Up\", \"Down\"]`", "`[]`: tipurile se șterg la compilare", "`[0, 1]`"],
+console.log(Object.keys(Dir));`, o: ["`[\"0\", \"1\", \"Up\", \"Down\"]`: un `enum` numeric are și mapare inversă", "`[\"Up\", \"Down\"]`: cheile sunt numele membrilor enum-ului", "`[]`: tipurile se șterg la compilare, iar `enum` e un tip", "`[0, 1]`: cheile sunt valorile numerice ale membrilor, ca numere"],
       ctx: "Spre deosebire de un `type`, un `enum` generează cod JavaScript.",
       e: "`enum Dir { Up, Down }` devine un obiect cu `Dir.Up = 0` și `Dir[0] = \"Up\"`, deci are patru chei. De aceea `enum` nu e „doar un tip”, iar `erasableSyntaxOnly` (TS 5.8) îl interzice. O uniune de literale, `type Dir = \"up\" | \"down\"`, nu lasă nimic la runtime." },
     { id: "ts-16", lvl: 3, q: "De ce pică `toggle()` la compilare?", code: R`function useToggle() {
@@ -233,12 +233,12 @@ console.log(Object.keys(Dir));`, o: ["`[\"0\", \"1\", \"Up\", \"Down\"]`: un `en
   return [on, () => { on = !on; }];
 }
 const [on, toggle] = useToggle();
-toggle();`, o: ["Rezultatul e dedus ca array de uniuni, `(boolean | (() => void))[]`, deci `toggle` poate fi și `boolean` (TS2349); `as const` îl face tuplu", "Un custom hook nu poate întoarce o funcție", "`on` e `const` în destructurare, deci `toggle` nu-l poate schimba", "Nu pică: `toggle` e `() => void`"],
+toggle();`, o: ["Tipul dedus e `(boolean | (() => void))[]`, deci `toggle` poate fi `boolean` (TS2349)", "Un custom hook nu poate întoarce o funcție împreună cu o valoare", "`on` e `const` în destructurare, deci `toggle` nu poate schimba valoarea lui `on`", "Nu pică: TypeScript deduce `readonly [boolean, () => void]`, ca la `useState`"],
       ctx: "Fără alt indiciu, TypeScript deduce un literal de array ca `T[]`, cu `T` uniunea tipurilor elementelor.",
       e: "`[on, fn]` devine `(boolean | (() => void))[]`: un array în care orice poziție poate fi oricare dintre tipuri. `toggle` primește tipul `boolean | (() => void)`, iar un `boolean` nu se poate apela (TS2349). `return [on, fn] as const` dă tuplul `readonly [boolean, () => void]`, ca la `useState`. Merge și un tip de retur explicit." },
     { id: "ts-17", lvl: 3, q: "Ce tip are `R`?", code: R`type ToArr<T> =
   T extends unknown ? T[] : never;
-type R = ToArr<string | number>;`, o: ["`string[] | number[]`: un conditional type se aplică separat pe fiecare membru al uniunii", "`(string | number)[]`", "`never`", "`unknown[]`"],
+type R = ToArr<string | number>;`, o: ["`string[] | number[]`: tipul condițional se distribuie pe uniune", "`(string | number)[]`: uniunea e tratată ca un singur tip", "`never`: uniunea nu se potrivește cu `extends unknown`, deci ramura falsă", "`unknown[]`: `T` ia tipul din dreapta lui `extends`"],
       ctx: "Când parametrul verificat e un tip generic gol, `T extends …` se distribuie peste o uniune.",
       e: "`ToArr<string | number>` devine `ToArr<string> | ToArr<number>`, adică `string[] | number[]`: un array numai de string-uri sau numai de numere. Ca să tratezi uniunea întreagă, înfășori ambele părți: `[T] extends [unknown] ? T[] : never` dă `(string | number)[]`. Așa e construit și `Exclude`." }
   ]);
@@ -302,7 +302,7 @@ type R = ToArr<string | number>;`, o: ["`string[] | number[]`: un conditional ty
 function Badge({ n }: { n: number }) {
   total += n;
   return <b>{total}</b>;
-}`, o: ["`2`: React apelează componenta de două ori, iar randarea modifică `total` din afara funcției", "`1`: Strict Mode apelează componenta o singură dată", "`1`: `total` e resetat la fiecare apel", "`0`: `total` nu se poate modifica dintr-o componentă"],
+}`, o: ["`2`: componenta se apelează de două ori, iar `total` e modificat din afara funcției", "`1`: Strict Mode apelează componenta o singură dată, deci `total` ajunge la `1`", "`1`: `total` se resetează la `0` la fiecare apel, deci fiecare apel adaugă `1` la `0`", "`0`: o componentă nu poate modifica o variabilă din afara ei, deci `total` rămâne `0`"],
       ctx: "O componentă trebuie să fie pură: nu modifică în timpul randării nimic din ce exista înainte de ea. În dev, Strict Mode apelează funcția de două ori ca să scoată la iveală asta.",
       e: "`total` e declarat în afara funcției, deci `total += n` e un efect lateral al randării. Strict Mode apelează componenta de două ori, iar `total` ajunge la 2. Varianta pură calculează din props: `<b>{n}</b>`." },
     { id: "re-02", lvl: 2, q: "Apeși butonul „q”. Ce componente se apelează din nou?", code: R`function Parent() {
@@ -316,18 +316,18 @@ function Badge({ n }: { n: number }) {
       <B />
     </>
   );
-}`, o: ["`Parent`, `A` și `B`: copiii se re-randează odată cu părintele, chiar fără props noi", "Doar `Parent`: `A` și `B` n-au primit props noi", "Doar `Parent` și `B`, fiindcă `A` n-are state", "Niciuna: `q` nu apare nicăieri în JSX"],
+}`, o: ["`Parent`, `A` și `B`: copiii se re-randează odată cu părintele, chiar fără props noi", "`Parent` singur: `A` și `B` n-au primit props noi, deci React nu le mai apelează", "`Parent` și `B`, fiindcă `A` n-are state, iar React sare peste copiii fără state propriu", "Niciuna: `q` nu apare nicăieri în JSX, iar React re-randează ce afișează state-ul"],
       ctx: "Un re-render pornește de la componenta al cărei state s-a schimbat și coboară în toți copiii ei. Butonul „h” modifică doar o ref.",
       e: "`setQ` schimbă state-ul lui `Parent`, deci React îl apelează din nou, iar odată cu el pe `A` și `B`, indiferent de props. `hits.current++` (butonul „h”) nu declanșează nimic: ref-ul nu e state." },
     { id: "re-03", lvl: 1, q: "Apeși butonul, iar lista de pe ecran rămâne goală. De ce?", code: R`const [items, setItems] = useState<string[]>([]);
 const add = (x: string) => {
   items.push(x);
   setItems(items);
-};`, o: ["Array-ul e același: `Object.is` îl vede neschimbat, deci React sare peste re-render", "`setItems` e asincron și actualizează la click-ul următor", "`push` întoarce lungimea, nu array-ul, deci state-ul devine un număr", "`items` ar trebui declarat cu `let`, nu cu `const`"],
+};`, o: ["Array-ul e același: `Object.is` îl vede neschimbat, deci React sare peste re-render", "`setItems` e asincron și aplică lista abia la click-ul următor, deci ecranul întârzie cu un pas", "`push` întoarce lungimea, nu array-ul, deci state-ul devine un număr și lista dispare", "`items` ar trebui declarat cu `let`, nu cu `const`, ca `push` să poată modifica array-ul"],
       ctx: "React decide dacă state-ul s-a schimbat comparând valoarea nouă cu cea veche prin `Object.is`, adică după referință.",
       e: "`push` modifică array-ul existent, iar `setItems(items)` îi dă lui React aceeași referință. `Object.is(items, items)` e `true`, deci nu se întâmplă re-render. Corect: `setItems([...items, x])`, un array nou." },
     { id: "re-04", lvl: 1, q: "Ce se întâmplă când tastezi în câmp?", code: R`const [name, setName] = useState("");
-return <input value={name} />;`, o: ["Textul nu apare: `value` îl forțează la `\"\"`, iar React avertizează în consolă", "Textul apare, dar `name` rămâne `\"\"`", "Textul apare și `name` se actualizează singur", "Componenta aruncă o eroare și dispare din pagină"],
+return <input value={name} />;`, o: ["Textul nu apare: `value` îl forțează la `\"\"`, iar React avertizează", "Textul apare în câmp, dar `name` rămâne `\"\"` fiindcă nimic nu apelează `setName`", "Textul apare și `name` se actualizează singur, fiindcă `value` leagă câmpul de state", "Componenta aruncă o eroare și dispare din pagină, fiindcă `value` cere un `onChange`"],
       ctx: "Cu `value`, inputul e controlat: React îi impune valoarea din state după fiecare tastă.",
       e: "Fără `onChange`, state-ul nu se schimbă niciodată, iar React readuce câmpul la `\"\"` după fiecare tastă. Consola spune că e un câmp read-only; îl repari cu `onChange={e => setName(e.target.value)}` sau, pentru un câmp necontrolat, cu `defaultValue`." },
     { id: "re-05", lvl: 2, q: "`Filter` și `List` sunt frați. Filtrul scrie „ro”, dar lista nu se filtrează. Ce schimbi?", code: R`function Filter() {
@@ -339,7 +339,7 @@ function List({ items }: { items: string[] }) {
   const [q] = useState("");
   return <ul>{items.filter(x => x.includes(q))
     .map(x => <li key={x}>{x}</li>)}</ul>;
-}`, o: ["Muți `q` în părintele comun și îl dai ambelor componente prin props, plus `setQ` către `Filter`", "Pui un `useEffect` în `List` care copiază valoarea din `Filter`", "Ții `q` într-o variabilă din afara componentelor, ca să o vadă amândouă", "Faci `List` cu `memo`, ca să se actualizeze la orice schimbare"],
+}`, o: ["Muți `q` în părintele comun; `Filter` primește `setQ`, iar `List` primește `q`", "Pui un `useEffect` în `List` care copiază valoarea din `Filter` într-un state propriu", "Ții `q` într-o variabilă din afara componentelor, ca să o vadă amândouă la fiecare render", "Faci `List` cu `memo`, ca să se actualizeze când se schimbă `q` în `Filter`"],
       ctx: "Fiecare `useState` creează o variabilă separată. Cele două `q` n-au nicio legătură între ele.",
       e: "State-ul e duplicat: `Filter` își schimbă `q`-ul, iar `List` are altul, mereu gol. Informația comună urcă în cel mai apropiat părinte, care o pasează în jos și primește schimbarea printr-un callback. Datele curg într-un singur sens." },
     { id: "re-06", lvl: 3, q: "Ce se întâmplă la `dispatch({ type: \"add\", item: \"x\" })`?", code: R`function reducer(state: State, a: Act) {
@@ -348,7 +348,7 @@ function List({ items }: { items: string[] }) {
     return state;
   }
   return state;
-}`, o: ["Ecranul rămâne neschimbat: întoarce aceeași referință, iar React vede „neschimbat”", "Ecranul se actualizează cu `x`, fiindcă reducer-ul rulează la `dispatch`", "Aruncă eroare: un reducer nu poate modifica `state`", "Ecranul se actualizează cu `x` de două ori"],
+}`, o: ["Ecranul rămâne neschimbat: reducer-ul întoarce aceeași referință", "Ecranul se actualizează cu `x`, fiindcă reducer-ul rulează la fiecare `dispatch`", "Aruncă eroare, fiindcă un reducer nu are voie să modifice `state` primit ca argument", "Ecranul se actualizează cu `x` de două ori: o dată din `push` și o dată din `return`"],
       ctx: "Reducer-ul primește starea veche și o acțiune și întoarce starea nouă. React compară rezultatul cu starea veche prin `Object.is`.",
       e: "Reducer-ul modifică starea pe loc și întoarce același obiect, deci `Object.is` zice că nimic nu s-a schimbat și ecranul rămâne la fel. Nu aruncă nicio eroare. Reducer-ul trebuie să fie pur: `return { ...state, items: [...state.items, a.item] }`." },
     { id: "re-07", lvl: 1, q: "Apeși „+” din `A`. Ce arată `B`?", code: R`function useCounter() {
@@ -369,7 +369,7 @@ function B() {
   return mode === "login"
     ? <Form />
     : <Form />;
-}`, o: ["„ana” rămâne: același tip pe aceeași poziție păstrează state-ul; `<Form key={mode} />` îl golește", "Câmpul se golește, fiindcă ramura a doua e alt element", "Câmpul se golește, fiindcă `mode` s-a schimbat și `Form` primește props noi", "„ana” rămâne; singura soluție e un `useEffect` care golește câmpul"],
+}`, o: ["„ana” rămâne, fiindcă tipul și poziția sunt aceleași; `key={mode}` îl golește", "Câmpul se golește, fiindcă ramura a doua e alt element în arborele JSX", "Câmpul se golește, fiindcă `mode` s-a schimbat și `Form` primește props noi", "„ana” rămâne; ca să-l golești scrii un `useEffect` care apelează `setValue(\"\")` la `mode`"],
       ctx: "React compară arborele nou cu cel vechi, poziție cu poziție. State-ul aparține unui tip de componentă aflat la o poziție.",
       e: "Ambele ramuri sunt `<Form />` pe aceeași poziție, deci React păstrează componenta și state-ul ei. O cheie diferită face din ea o componentă nouă: `key={mode}` distruge `Form` și montează altul, cu state-ul gol." },
     { id: "re-09", lvl: 1, q: "Apeși „start”, aștepți trei secunde, apoi „stop”. De ce numărul crește în continuare?", code: R`function Timer() {
@@ -381,7 +381,7 @@ function B() {
   };
   const stop = () => clearInterval(id);
   return <b onClick={stop}>{n}</b>;
-}`, o: ["`id` e o variabilă locală: fiecare render o recreează cu `0`, deci `stop` șterge alt id; ID-ul stă într-un `useRef`", "`clearInterval` nu merge într-o componentă; intervalul se oprește doar dintr-un `useEffect`", "Intervalul se oprește, dar `setN` îl pornește din nou la fiecare render", "`setInterval` întoarce o promisiune, nu un număr, deci `clearInterval` o ignoră"],
+}`, o: ["`id` e local și revine la `0` la fiecare render, deci `stop` nu găsește intervalul", "`clearInterval` nu merge într-un handler de click; intervalul se oprește din `useEffect`", "Intervalul se oprește la `stop`, dar `setN` îl pornește din nou la fiecare render", "`setInterval` întoarce o promisiune, nu un număr, deci `clearInterval` o ignoră"],
       ctx: "Variabilele locale ale unei componente se creează din nou la fiecare apel al funcției. `setN` cere un re-render la fiecare secundă.",
       e: "După primul tick, `setN` re-randează `Timer`, iar `let id = 0` se execută din nou. `stop` din randarea curentă vede noul `id`, adică `0`, deci intervalul real rămâne pornit. O valoare care trebuie păstrată între randări, dar nu apare pe ecran, stă în `useRef`: `id.current = window.setInterval(…)`." },
     { id: "re-10", lvl: 2, q: "Tooltip-ul apare o clipă sub buton, apoi sare deasupra. Ce schimbi?", code: R`const ref = useRef<HTMLDivElement>(null);
@@ -389,7 +389,7 @@ const [up, setUp] = useState(false);
 useEffect(() => {
   const h = ref.current!.offsetHeight;
   setUp(h > 40);
-}, []);`, o: ["`useLayoutEffect` în loc de `useEffect`: măsurarea și `setUp` se aplică înainte ca browserul să deseneze ecranul", "Muți măsurarea în corpul componentei, ca să ruleze în timpul randării", "Adaugi `up` în array-ul de dependențe", "Pui măsurarea într-un `useMemo`, ca să se calculeze o singură dată"],
+}, []);`, o: ["`useLayoutEffect` în loc de `useEffect`: măsurarea și `setUp` rulează înainte de desenare", "Muți măsurarea în corpul componentei, ca `ref.current` să fie gata în timpul randării", "Adaugi `up` în array-ul de dependențe, ca effect-ul să ruleze din nou după `setUp`", "Pui măsurarea într-un `useMemo`, ca poziția să se calculeze o singură dată, înainte de randare"],
       ctx: "`useEffect` rulează după ce browserul a desenat ecranul. Măsurarea are nevoie de DOM, iar rezultatul schimbă poziția.",
       e: "Cu `useEffect`, browserul desenează întâi tooltip-ul sub buton, apoi effect-ul măsoară și `setUp(true)` îl mută: utilizatorul vede saltul. `useLayoutEffect` rulează după ce React a scris în DOM, dar înainte de desenare, iar re-render-ul din el se termină tot înainte de desenare. Blochează desenarea, deci îl folosești doar pentru măsurători." },
     { id: "re-11", lvl: 2, q: "`Row` se re-randează la fiecare tastă, deși `del` e în `useCallback`. Ce lipsește?", code: R`function List({ items }: P) {
@@ -402,14 +402,14 @@ useEffect(() => {
     {items.map((x) => <Row key={x.id}
       x={x} onDel={del} />)}
   </>);
-}`, o: ["`memo(Row)`: `del` e deja stabilă, dar fără `memo` copilul se re-randează odată cu părintele oricum", "`q` în dependențele lui `useCallback`", "`useMemo` în loc de `useCallback` pentru `del`", "Nimic: `useCallback` oprește deja re-render-ul lui `Row`"],
+}`, o: ["`memo(Row)`: `del` e stabilă, dar fără `memo` copilul se re-randează cu părintele", "`q` în dependențele lui `useCallback`, ca `del` să citească valoarea curentă", "`useMemo` în loc de `useCallback` pentru `del`, ca funcția să fie memorată și pentru `Row`", "Nimic: `useCallback` oprește deja re-render-ul lui `Row`, fiindcă `del` nu se schimbă"],
       ctx: "`useCallback` ține minte funcția între randări. Un copil se re-randează odată cu părintele, chiar dacă props sunt aceleași.",
       e: "`del` e aceeași funcție la fiecare render, dar asta contează doar pentru cine compară props. Un copil obișnuit se re-randează cu părintele. `memo(Row)` compară props cu `Object.is` și sare peste `Row` când `x` și `onDel` sunt aceleași. Fără `memo`, `useCallback` de aici nu ajută la nimic." },
     { id: "re-12", lvl: 3, q: "Un coleg vrea ca tastarea să nu mai fie blocată de lista grea `Slow`. Ce e greșit în soluția lui?", code: R`const [q, setQ] = useState("");
 const [, start] = useTransition();
 <input value={q} onChange={(e) =>
   start(() => setQ(e.target.value))} />
-<Slow q={q} />`, o: ["State-ul unui input controlat nu poate sta într-o tranziție: câmpul rămâne urgent, iar `Slow` primește `useDeferredValue(q)` și stă în `memo`", "Lipsește `isPending`: fără el tranziția nu pornește", "`startTransition` primește doar funcții asincrone", "Nimic: e soluția recomandată de documentație"],
+<Slow q={q} />`, o: ["Inputul controlat nu poate sta într-o tranziție; `Slow` ia `useDeferredValue(q)` în `memo`", "Lipsește `isPending`: fără el React nu pornește tranziția și tastarea rămâne blocată", "`startTransition` cere o funcție asincronă, iar `setQ` din `onChange` e apelat sincron", "Nimic: e soluția recomandată de documentație pentru o listă grea și un câmp de text"],
       ctx: "O tranziție marchează o actualizare ca neurgentă: React o poate amâna și întrerupe. Un câmp de text trebuie să arate tasta imediat.",
       e: "Documentația spune explicit că o tranziție nu poate controla un input de text. Câmpul are nevoie de actualizare urgentă. Separi: `q` rămâne urgent pentru `value`, iar lista primește `const dq = useDeferredValue(q)`. `Slow` stă în `memo`, ca re-render-ul urgent să sară peste ea cât `dq` e vechi." },
     { id: "re-13", lvl: 1, q: "`Field` apare de două ori pe pagină. Ce se întâmplă la click pe a doua etichetă?", code: R`function Field() {
@@ -417,7 +417,7 @@ const [, start] = useTransition();
     <label htmlFor="mail">Email</label>
     <input id="mail" />
   </>);
-}`, o: ["Focusul merge în primul câmp, fiindcă id-ul se repetă; `const id = useId()` dă un id per instanță", "React adaugă automat un sufix unic la fiecare `id`", "Focusul merge corect: fiecare etichetă își caută câmpul vecin", "Repari cu `id={Math.random()}`, recalculat la fiecare render"],
+}`, o: ["Focusul merge în primul câmp, fiindcă ambele au `id=\"mail\"`, iar `useId()` dă id unic", "Focusul merge în al doilea câmp, fiindcă React adaugă automat un sufix unic la `id`", "Focusul merge corect: fiecare etichetă își caută câmpul vecin din același fragment", "Focusul merge în primul câmp; un `id={Math.random()}` calculat la fiecare render rezolvă problema"],
       ctx: "`htmlFor` caută în document elementul cu acel `id`. Un `id` trebuie să fie unic în pagină.",
       e: "Ambele câmpuri au `id=\"mail\"`, iar browserul leagă eticheta de primul element cu acel id. `useId()` dă un id unic și stabil pentru fiecare instanță, identic pe server și în client. `Math.random()` se schimbă la fiecare render și diferă între server și client, deci strică hidratarea." },
     { id: "re-14", lvl: 3, q: "Ce se întâmplă la randarea lui `C`?", code: R`const store = { n: 1, subscribe };
@@ -427,7 +427,7 @@ function C() {
     () => ({ n: store.n }),
   );
   return <b>{s.n}</b>;
-}`, o: ["O buclă de re-randări: `getSnapshot` dă un obiect nou la fiecare apel; React avertizează, apoi aruncă `Maximum update depth exceeded`", "Afișează `1`: React compară obiectele după conținut", "Afișează `1`, dar nu se mai actualizează niciodată", "Aruncă imediat, fiindcă `subscribe` trebuie declarat în componentă"],
+}`, o: ["O buclă de re-randări, fiindcă `getSnapshot` dă un obiect nou la fiecare apel", "Afișează `1`, fiindcă React compară snapshot-urile după conținut, nu după referință", "Afișează `1`, dar nu se mai actualizează, fiindcă `subscribe` e legat o singură dată", "Aruncă imediat, fiindcă `subscribe` trebuie declarat în componentă, nu în afara ei"],
       ctx: "React apelează `getSnapshot` de mai multe ori și compară rezultatele cu `Object.is`. Cât store-ul nu s-a schimbat, trebuie să primească aceeași valoare.",
       e: "Fiecare apel întoarce `{ n: 1 }` nou, deci `Object.is` vede mereu o schimbare și React randează din nou. Consola arată „The result of getSnapshot should be cached to avoid an infinite loop”, apoi React aruncă `Maximum update depth exceeded`. Repari întorcând o valoare primitivă (`() => store.n`) sau un obiect păstrat în cache cât store-ul nu se schimbă." },
     { id: "re-15", lvl: 3, q: "Butonul nu se dezactivează niciodată cât durează `save`. De ce?", code: R`function Form() {
@@ -439,7 +439,7 @@ function C() {
       </button>
     </form>
   );
-}`, o: ["`useFormStatus` vede doar un `<form>` părinte; într-o componentă `Submit` randată în formular, merge", "`save` trebuie să fie sincronă", "`pending` devine `true` abia după ce `save` se termină", "Un `<form>` cu `action` funcție nu trimite nimic fără `onSubmit`"],
+}`, o: ["`useFormStatus` e apelat în `Form`, nu într-un copil al lui `<form>`, deci `pending` e `false`", "`save` trebuie să fie sincronă, fiindcă `pending` urmărește acțiunile sincrone", "`pending` devine `true` abia după ce `save` se termină, ca să blocheze trimiterea următoare", "Un `<form>` cu `action` funcție nu trimite nimic fără un `onSubmit` care apelează `save`"],
       ctx: "`useFormStatus` (din `react-dom`) citește starea formularului în care e randată componenta care îl apelează.",
       e: "`Form` randează formularul, deci nu e în interiorul lui: `pending` rămâne `false`. Muți butonul într-o componentă `Submit` cu `useFormStatus` și o pui în `<form>`; acolo `pending` e `true` cât rulează `save`. O acțiune poate fi asincronă, iar `action={save}` trimite formularul fără `onSubmit`." },
     { id: "re-16", lvl: 2, q: "`Albums` stă în `<Suspense fallback={<Spin />}>`. Ce vede userul?", code: R`function Albums() {
@@ -447,7 +447,7 @@ function C() {
     fetch("/albums").then((r) =>
       r.json()));
   return <List items={list} />;
-}`, o: ["Fallback-ul la nesfârșit: fiecare render creează altă promisiune, deci componenta se suspendă din nou", "Lista, după ce răspunde serverul", "O eroare: `use` nu primește promisiuni", "Lista goală, apoi lista plină, fără fallback"],
+}`, o: ["Fallback-ul rămâne, fiindcă fiecare render creează o altă promisiune", "Lista, după ce răspunde serverul, fiindcă `use` așteaptă promisiunea de la `fetch`", "O eroare la randare: `use` nu primește promisiuni, ci valori deja rezolvate", "Lista goală, apoi lista plină, fără fallback, fiindcă `use` întoarce întâi `undefined`"],
       ctx: "`use(promise)` suspendă componenta până se rezolvă promisiunea, apoi React o randează din nou. Documentația cere ca promisiunea să fie aceeași între randări.",
       e: "La reluare, React apelează din nou `Albums`, care face alt `fetch` și primește altă promisiune, încă nerezolvată, deci se suspendă iar. Promisiunea vine din cache sau din părinte (de exemplu dintr-un loader sau dintr-un Server Component), nu se creează în render. Pentru date de la API, în client, TanStack Query rămâne alegerea obișnuită." }
   ]);
@@ -499,7 +499,7 @@ function C() {
   };
 
   Q("fedebug", [
-    { id: "fd-01", lvl: 1, q: "Mesajul e `TypeError: Cannot read properties of undefined (reading 'name')`. Ce e `undefined`?", code: R`const label = user.profile.name;`, o: ["`user.profile`: eroarea citește `name` dintr-o valoare `undefined`", "`name`: proprietatea nu există pe obiect", "`user`: altfel mesajul ar fi spus `reading 'profile'`", "Nu poți ști fără să rulezi codul cu un breakpoint"],
+    { id: "fd-01", lvl: 1, q: "Mesajul e `TypeError: Cannot read properties of undefined (reading 'name')`. Ce e `undefined`?", code: R`const label = user.profile.name;`, o: ["`user.profile`: valoarea din fața lui `.name` lipsește", "`name`: proprietatea citită nu există pe obiectul `user`", "`user`: altfel mesajul ar fi spus `reading 'profile'`", "Nu poți ști fără să rulezi codul cu un breakpoint"],
       ctx: "Mesajul numește proprietatea pe care codul a încercat s-o citească, nu valoarea care lipsește. Valoarea lipsă e cea din fața punctului.",
       e: "`reading 'name'` spune că `name` s-a citit dintr-o valoare `undefined`. Valoarea din fața lui `.name` e `user.profile`. Dacă `user` ar fi fost `undefined`, mesajul ar fi spus `reading 'profile'`." },
     { id: "fd-02", lvl: 2, q: "Pagina e pe alt origin decât API-ul. Ce apare în Network înainte de POST?", code: R`void fetch("https://api.x.ro/items", {
@@ -508,7 +508,7 @@ function C() {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({ n: 1 }),
-});`, o: ["O cerere `OPTIONS` (preflight): `application/json` nu e un `Content-Type` permis fără verificare", "Nimic: un POST e întotdeauna o cerere simplă", "Un GET de verificare către același URL", "Preflight apare doar dacă adaugi `credentials: \"include\"`"],
+});`, o: ["O cerere `OPTIONS` (preflight) către același URL", "Nimic: un POST cu corp JSON e o cerere simplă", "Un GET de verificare către același URL, fără corp", "Preflight apare când adaugi `credentials: \"include\"` la cerere"],
       ctx: "Browserul trimite cereri simple direct. Pentru celelalte întreabă mai întâi serverul dacă are voie, cu o cerere `OPTIONS`.",
       e: "O cerere e simplă doar cu `GET`, `HEAD` sau `POST`, cu headere obișnuite și cu `Content-Type` de tip `text/plain`, `multipart/form-data` sau `application/x-www-form-urlencoded`. `application/json` iese din listă, deci browserul trimite întâi `OPTIONS`, iar serverul trebuie să răspundă cu `Access-Control-Allow-*`." },
     { id: "fd-03", lvl: 1, q: "Ce se întâmplă la click pe buton?", code: R`<ErrorBoundary fallback={<p>Eroare</p>}>
@@ -517,10 +517,10 @@ function C() {
   }}>
     Salvează
   </button>
-</ErrorBoundary>`, o: ["Fallback-ul nu apare: boundary-ul nu prinde erorile din handlere, iar eroarea ajunge în consolă", "Apare fallback-ul `Eroare`", "Pagina rămâne albă, fiindcă React demontează tot arborele", "Apare fallback-ul, dar abia după următorul re-render"],
+</ErrorBoundary>`, o: ["Fallback-ul nu apare; eroarea ajunge în consolă", "Apare fallback-ul `Eroare` în locul butonului", "Pagina rămâne albă: React demontează tot arborele", "Apare fallback-ul, dar abia după următorul re-render"],
       ctx: "Un error boundary prinde erorile aruncate de copii în timpul randării. Un handler rulează mai târziu, la click.",
       e: "Documentația React spune că error boundaries nu prind erorile din event handlers (nici din cod asincron, SSR sau din boundary însuși). Handlerul rulează după randare, deci eroarea ajunge în consolă, iar UI-ul rămâne cum era. În handler folosești `try` / `catch`." },
-    { id: "fd-04", lvl: 1, q: "Stack trace-ul arată `main.4f2a.js:1:48210`. Cum ajungi la rândul din codul tău?", o: ["Cu source maps: build-ul generează fișierele `.map`, iar DevTools arată sursa originală", "Cu „pretty print” în Sources: formatează codul și revine la sursa originală", "Pui `debugger;` în bundle și cauți rândul 1, coloana 48210", "Dezactivezi minificarea în producție: nu există altă cale"],
+    { id: "fd-04", lvl: 1, q: "Stack trace-ul arată `main.4f2a.js:1:48210`. Cum ajungi la rândul din codul tău?", o: ["Cu source maps: fișierele `.map` duc DevTools la sursa originală", "Cu „pretty print” în Sources: formatează codul și revine la sursa originală", "Pui `debugger;` în bundle și cauți rândul 1, coloana 48210", "Dezactivezi minificarea în producție: nu există altă cale"],
       ctx: "Codul de producție e minificat, adică tot pe un singur rând, cu nume scurte. Browserul rulează acel cod, nu sursa ta.",
       e: "Un source map leagă fișierul minificat de fișierele originale. DevTools îl găsește prin comentariul `//# sourceMappingURL`, iar stack trace-urile, erorile și breakpoint-urile apar apoi în codul scris de tine. Build-ul trebuie să genereze `.map`, iar serverul să-l servească." }
   ]);

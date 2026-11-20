@@ -9,8 +9,8 @@
       o: [
         "Threadurile unui proces împart memoria; procesele au memorie separată",
         "Procesele împart memoria; threadurile au fiecare memoria lor separată",
-        "Sunt același lucru; „thread” e doar numele folosit în Python",
-        "Un proces rulează mereu pe un singur core, un thread pe toate"], a: 0,
+        "Sunt același lucru; „thread” e numele folosit în Python",
+        "Un proces rulează pe un singur core, iar un thread pe mai multe"], a: 0,
       e: "Threadurile sunt ieftine și comunică direct prin memorie, de aici nevoia de lock-uri. Procesele sunt izolate, mai scumpe de pornit și comunică prin IPC (pipe-uri, cozi, pickling). În CPython, pentru calcul în Python pur, doar procesele ocolesc GIL-ul." },
     { id: "gil-14", q: "Ce face event loop-ul din asyncio?",
       ctx: "O corutină e o funcție `async def`: poate fi pusă pe pauză la `await` și reluată mai târziu. Cineva trebuie să decidă ce corutină rulează în fiecare moment.",
@@ -18,7 +18,7 @@
         "Alternează corutinele pe un thread, reluând-o pe cea care poate continua",
         "Pornește câte un thread nou pentru fiecare corutină și le rulează în paralel",
         "Rulează corutinele una după alta, fiecare până la capăt, fără pauze",
-        "Distribuie corutinele pe toate core-urile procesorului, ca procesele"], a: 0,
+        "Distribuie corutinele pe core-urile procesorului, ca procesele"], a: 0,
       e: "Loop-ul ține evidența task-urilor gata de rulare. Când o corutină ajunge la `await` pe o operație I/O, cedează controlul; loop-ul rulează alta și o reia pe prima când a sosit răspunsul. Totul pe un singur thread: concurență, nu paralelism." }
   ]);
 
@@ -108,7 +108,7 @@
         "Publică într-un exchange; consumă dintr-o coadă legată de el",
         "Publică direct într-o coadă; consumă dintr-un exchange",
         "Publică și consumă din același exchange, prin abonare",
-        "Publică într-o coadă; RabbitMQ o copiază în toate celelalte"], a: 0,
+        "Publică într-o coadă; RabbitMQ o copiază în celelalte cozi"], a: 0,
       e: "Producătorul nu scrie direct în cozi: trimite mesajul unui exchange, cu un routing key. Exchange-ul îl pune în cozile legate (binding-uri), după tipul lui (direct, topic, fanout), iar consumatorii citesc din cozi. Exchange-ul implicit (cu numele gol) rutează direct după numele cozii." },
     { id: "rmq-11", q: "Ce e un ack (acknowledgement) în mesagerie?",
       ctx: "Un consumator primește un mesaj din coadă și îl procesează. Brokerul trebuie să afle dacă poate șterge mesajul sau dacă trebuie să-l dea altcuiva.",
@@ -133,7 +133,7 @@
       ctx: "În Redis, multe date sunt temporare: o sesiune, un cod de verificare, un contor pe minut. Ar fi incomod să ții minte să le ștergi manual.",
       o: [
         "Cheia `session:42` va fi ștearsă automat după 3600 de secunde",
-        "Șterge acum toate cheile mai vechi de 3600 de secunde din Redis",
+        "Șterge acum cheile mai vechi de 3600 de secunde din Redis",
         "Blochează cheia `session:42` timp de o oră pentru alți clienți",
         "Salvează cheia pe disc, iar după o oră o mută înapoi în memorie"], a: 0,
       e: "EXPIRE pune un TTL (time to live) pe cheie; `TTL session:42` îți arată cât mai are. Poți seta TTL-ul direct la scriere: `SET session:42 ... EX 3600`. Atenție: un SET ulterior fără EX șterge TTL-ul." }
@@ -145,7 +145,7 @@
       o: [
         "Repetată de mai multe ori, are același efect ca o singură rulare",
         "Rulează garantat o singură dată, oricâte retry-uri ar apărea pe drum",
-        "Nu modifică nimic în baza de date, doar citește date",
+        "Nu modifică nimic în baza de date, ci citește date",
         "Se execută atomic, într-o singură tranzacție, fără lock-uri"], a: 0,
       e: "`SET status = 'done'` e idempotent, `balance = balance - 100` nu. Un insert cu cheie unică și `ON CONFLICT DO NOTHING` devine idempotent. Idempotență + livrare at-least-once = efect „exactly once” în practică." }
   ]);

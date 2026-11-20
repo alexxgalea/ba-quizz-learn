@@ -43,9 +43,9 @@ Limită: joinedload pe mai multe colecții deodată produce un produs cartezian 
 La interviu: „joinedload face un JOIN în același query și e bun pentru many-to-one. selectinload face un al doilea SELECT cu IN și e bun pentru colecții, pentru că un JOIN pe colecție multiplică rândurile părintelui.”
 Verificare: Încarci 100 de comenzi și, pentru fiecare, userul ei. Ce opțiune alegi?
 Răspuns verificare: `joinedload(Order.user)`: relația e many-to-one, fiecare comandă are un singur user, deci JOIN-ul nu multiplică rândurile.
-Varianta greșită B: Nu sunt identice: generează SQL diferit, cu costuri diferite. Amândouă există în SQLAlchemy 2.0.
-Varianta greșită C: Un singur query nu e automat mai bun. Pe colecții, JOIN-ul aduce rândul părintelui repetat pentru fiecare copil.
-Varianta greșită D: Amândouă încarcă toată colecția; diferă doar felul în care o aduc.
+Varianta greșită B: Nu sunt echivalente: selectinload trimite un SELECT separat cu `IN`, joinedload adaugă un JOIN. Ambele există în SQLAlchemy 2.0 și au costuri diferite.
+Varianta greșită C: Un singur query nu e automat mai bun. Pe colecții, JOIN-ul repetă rândul părintelui pentru fiecare copil, iar rezultatul crește.
+Varianta greșită D: Amândouă încarcă colecția întreagă; diferă felul în care o aduc: un SELECT separat cu `IN`, respectiv un JOIN.
 
 ### sqa-04
 Pe scurt: `commit()` face flush (trimite modificările ca SQL), apoi COMMIT; implicit marchează atributele obiectelor ca expirate.
@@ -64,7 +64,7 @@ Limită: Expirarea nu reîncarcă nimic pe loc: reîncărcarea se face abia la a
 La interviu: „`session.commit()` face flush, apoi COMMIT, și implicit expiră atributele, ca următorul acces să citească date proaspete. Flush trimite SQL-ul în tranzacție, dar până la commit totul e încă reversibil.”
 Verificare: După `commit()` închizi sesiunea și accesezi `order.status`, cu setările implicite. Ce se întâmplă?
 Răspuns verificare: Primești `DetachedInstanceError`: atributul e expirat și nu mai există o sesiune care să-l reîncarce.
-Varianta greșită B: `close()` nu face COMMIT. Dacă tranzacția n-a fost comisă, la închidere se face rollback.
+Varianta greșită B: COMMIT-ul se face la `commit()`, nu la `close()`. Dacă tranzacția n-a fost comisă, `close()` face rollback.
 Varianta greșită C: Conexiunea nu se închide: după commit se întoarce în pool, ca s-o refolosească alt request.
 Varianta greșită D: Reîncărcarea nu e imediată: atributele sunt doar marcate expirate și se reîncarcă la primul acces.
 
@@ -159,7 +159,7 @@ Limită: Costă un drum dus-întors în plus la fiecare checkout și nu ajută d
 La interviu: „`pool_pre_ping` verifică o conexiune când e luată din pool și o înlocuiește dacă a murit, de exemplu după un restart de DB. Îl combin cu `pool_recycle` când un firewall închide conexiunile inactive.”
 Verificare: Un load balancer închide conexiunile TCP inactive după 10 minute. Ce setezi în plus față de `pool_pre_ping`?
 Răspuns verificare: `pool_recycle` sub 10 minute, de exemplu 300 de secunde, ca pool-ul să nu țină conexiuni mai vechi decât limita.
-Varianta greșită B: Pool-ul nu deschide toate conexiunile la pornire: le deschide la cerere, până la `pool_size`.
+Varianta greșită B: Pool-ul nu deschide conexiunile la pornire: le deschide la cerere, până la `pool_size`. `pool_pre_ping` acționează abia la checkout.
 Varianta greșită C: Nu trimite ping-uri periodice în fundal: verifică doar în momentul în care conexiunea e luată din pool.
 Varianta greșită D: Dezactivarea pool-ului ar fi `poolclass=NullPool`. `pool_pre_ping` păstrează pool-ul.
 
@@ -188,7 +188,7 @@ La interviu: „Pentru inserturi idempotente folosesc `insert().on_conflict_do_n
 Verificare: Ai pus `on_conflict_do_nothing()`, dar tabela nu are nicio constrângere unică pe `event_id`. Ce se întâmplă când același eveniment vine de două ori?
 Răspuns verificare: Se inserează de două ori: fără constrângere unică nu există conflict, deci nimic nu e sărit.
 Varianta greșită B: `merge()` face SELECT, apoi INSERT sau UPDATE. Între cele două, alt proces poate insera același rând, deci operația nu e atomică.
-Varianta greșită C: Ignorarea oricărei excepții ascunde și erorile reale. În plus, după o eroare de integritate sesiunea cere rollback înainte să poți continua.
+Varianta greșită C: Fără rollback, după o eroare de integritate sesiunea rămâne blocată (`PendingRollbackError`) și nu mai poate continua. Prinderea lui `Exception` ar ascunde și erorile reale, nu doar duplicatele.
 Varianta greșită D: Identity map-ul vede doar obiectele din sesiunea curentă, nu rândurile inserate de alte procese.
 
 ### sqa-10
@@ -255,8 +255,8 @@ Limită: Core nu e „vechi” sau depreciat: în SQLAlchemy 2.0, ORM-ul folose�
 La interviu: „Folosesc ORM-ul pentru logica de business și Core pentru bulk, ETL și rapoarte complexe, unde nu am nevoie de obiecte și de unit of work. În 2.0 au aceeași sintaxă de `select()`.”
 Verificare: Trebuie să copiezi 5M de rânduri dintr-o tabelă în alta, cu o transformare simplă. ORM sau Core?
 Răspuns verificare: Core, sau chiar un `INSERT ... SELECT` direct în SQL. Nu ai nevoie de obiecte, iar 5M de obiecte ORM ar consuma memorie și timp.
-Varianta greșită B: Core nu e depreciat: în SQLAlchemy 2.0 e baza peste care e construit ORM-ul.
-Varianta greșită C: ORM-ul funcționează complet și pe SQLite. Alegerea nu ține de baza de date.
+Varianta greșită B: Core nu e depreciat: în SQLAlchemy 2.0 e baza peste care e construit ORM-ul, iar `select()` e același pentru amândouă.
+Varianta greșită C: ORM-ul funcționează complet și pe SQLite. Alegerea dintre Core și ORM nu ține de baza de date.
 Varianta greșită D: Lazy loading e o funcționalitate a ORM-ului. Core nu are relații încărcate automat.
 
 ### sqa-13

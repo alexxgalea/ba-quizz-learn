@@ -55,7 +55,7 @@ La interviu: „Un `Lock` nu e reentrant: dacă același thread îl cere de dou�
 Verificare: Cum ai diagnostica un worker blocat în producție?
 Răspuns verificare: Cu un dump al stivelor tuturor threadurilor (`py-spy dump --pid` sau `faulthandler`): vezi exact la ce `acquire` stă fiecare thread.
 Varianta greșită B: Asta face un `RLock`. Un `Lock` simplu nu ține minte proprietarul.
-Varianta greșită C: `Lock` nu detectează situația; doar așteaptă. Nu există o eroare care să te salveze.
+Varianta greșită C: `Lock` nu detectează situația, nici când îl ține același thread; doar așteaptă. Nu există o eroare care să te salveze.
 Varianta greșită D: `with lock:` nu e opțional: `inner` așteaptă la `acquire` și nu ajunge niciodată în bloc.
 
 ### gil-17
@@ -84,7 +84,7 @@ Verificare: Unul dintre `fetch` aruncă excepție. Când o vezi?
 Răspuns verificare: Doar când apelezi `result()` pe future-ul lui. Dacă nu-l apelezi niciodată, eroarea trece neobservată.
 Varianta greșită B: Asta face `executor.map`. `as_completed` nu păstrează ordinea.
 Varianta greșită C: Ordinea nu e aleatoare: e ordinea terminării.
-Varianta greșită D: `as_completed` dă fiecare rezultat imediat, nu le adună pe toate.
+Varianta greșită D: `as_completed` dă fiecare rezultat imediat, nu așteaptă ultima cerere ca să-i dea pe toți odată.
 
 ### gil-18
 Pe scurt: `Event` e un semnal sincronizat: un thread face `set()`, iar altele așteaptă cu `wait()` sau verifică `is_set()`.
@@ -114,8 +114,8 @@ La interviu: „Pentru oprirea curată folosesc un `threading.Event`: firul prin
 Verificare: De ce `stop.wait(1)` e mai bun decât `time.sleep(1)` în bucla workerului?
 Răspuns verificare: Revine imediat ce evenimentul e setat, deci oprirea nu mai așteaptă până la o secundă în plus.
 Varianta greșită B: Asta descrie un `RLock`.
-Varianta greșită C: Asta e o `queue.Queue`.
-Varianta greșită D: Asta e `threading.Timer`.
+Varianta greșită C: Asta e o `queue.Queue`, cu `put()` și `get()`. `Event` nu transportă date, doar un steag pornit / oprit.
+Varianta greșită D: Asta e `threading.Timer`, care are `start()` și `cancel()`. `Event` nu pornește nicio funcție, doar semnalează.
 
 ### gil-19
 Pe scurt: `wait()` eliberează lock-ul asociat, doarme până la un `notify()` și îl reia înainte să revină.
