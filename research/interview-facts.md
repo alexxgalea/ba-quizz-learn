@@ -1318,6 +1318,14 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ **Cuvinte cheie C++** (puncte 2, 5, 6, 9): `std::async`, `future::wait_for`, `catch (...)`, `std::mutex` + `std::condition_variable`, aceleași ca în textul desfășurărilor, deja verificate acolo.
 - Punctele 10 și 11 n-au schemă; cuvintele lor cheie repetă doar fapte din text.
 
+## 53. Grile `oop` fără indicii de formă: variantele greșite noi (rulate în Python 3, 20 noiembrie 2026)
+
+- `{Rule("brute-force")}` cu `@dataclass` simplu: `TypeError: unhashable type: 'Rule'`; `Rule.__hash__` este `None` (deci nu `AttributeError`, nu set gol).
+- `findings: list = []` într-un `@dataclass`: `ValueError: mutable default <class 'list'> for field findings is not allowed: use default_factory`, la definirea clasei; cu `default_factory=list`, instanțele nu împart lista.
+- `@classmethod` apelat pe instanță (`F().from_dict({})`) merge; `cls` e clasa instanței.
+- `__slots__`: atributele din slot-uri se pot reatribui (`x.rule = 5`), iar instanța nu are `__dict__`.
+- `typing.Protocol`: o clasă cu semnătură diferită de contract se importă și rulează; verificarea e doar statică (mypy, pyright). Un `@property` rulează getterul la fiecare acces.
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.
@@ -1339,7 +1347,7 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
 18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.
 
-## 50. Grile fără tipar: `pytest`, `python`, `design` (tichetul 07; verificat 20 noiembrie 2026)
+## 51. Grile fără tipar: `pytest`, `python`, `design` (tichetul 07; verificat 20 noiembrie 2026)
 
 - ✅ **pytest e single-thread și secvențial**: „single-threaded, executing its tests always in the same thread, sequentially, never spawning any threads itself”; paralelismul cere un plugin (pytest-xdist: procese, nu thread-uri). Testele dependente de ordine apar când un test se bazează pe date lăsate de altul; pytest-randomly / pytest-random-order le scot la iveală. Sursă: https://docs.pytest.org/en/stable/explanation/flaky.html (pt-15).
 - ✅ **pytest nu are timeout propriu pe suită**: pagina de flaky tests nu menționează niciun timeout implicit; timeout-ul vine din pluginul `pytest-timeout` (pt-15, varianta D; formulat prudent în explicație).
@@ -1348,7 +1356,7 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ **Rulat** (Python 3.13): `py-02` → `[2, 2, 2]`, `py-09` → `6 0`, `py-13` → `[[1, 0], [1, 0]]`, `py-18` → `[1, 2, 3]`. Restul grilelor `python` citite cu xcheck, fără erori de fapt.
 - Erori de fapt corectate: niciuna. Variantele greșite noi (pt-11 B/C/D, pt-12 B/C/D, pt-14 B/C, pt-15 B/D, pt-17 D, design) sunt greșite fără dubiu: `Exception` nu e `ValueError` (raises verifică tipul), `PostgreSQL` suportă `CREATE DATABASE` per tenant.
 
-## 51. Grile fără tipar: `frontend`, `fedebug`, `js` (tichetul 05; verificat 20 noiembrie 2026)
+## 52. Grile fără tipar: `frontend`, `fedebug`, `js` (tichetul 05; verificat 20 noiembrie 2026)
 
 - ✅ **TanStack Query v5**: `cacheTime` a fost redenumit `gcTime` (ghidul de migrare v5, „Rename `cacheTime` to `gcTime`”); `staleTime` nu a fost redenumit și rămâne „cât sunt datele proaspete”. Varianta greșită „gcTime e noul nume al lui staleTime” din `fe-04` e deci falsă. Sursă: https://github.com/TanStack/query/blob/main/docs/framework/react/guides/migrating-to-v5.md
 - ✅ **React Strict Mode** (`fe-07`): efectele rulează un ciclu setup + cleanup în plus doar în development; build-ul de producție le rulează o dată (https://react.dev/reference/react/StrictMode, deja în secțiunea de mai sus).

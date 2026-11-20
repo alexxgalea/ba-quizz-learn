@@ -13,24 +13,28 @@ print(a2.items)`, o: ["[1]", "[]", "AttributeError", "None"],
       ctx: "Un atribut scris în corpul clasei aparține clasei. `self.x` caută întâi pe instanță, apoi pe clasă. Întrebarea: câte liste există aici?",
       e: "`items` e atribut de clasă: o singură listă, comună tuturor instanțelor. Starea per obiect se creează în `__init__`." },
     { id: "oop-02", lvl: 1, q: "Ce câștigi cu `@property` față de o metodă `get_score()`?", o: [
-      "Păstrezi interfața `obj.score` și adaugi calcul sau validare fără să schimbi apelanții",
-      "Valoarea e calculată o singură dată și păstrată",
-      "Atributul devine privat și nu mai poate fi citit din afară",
-      "Accesul e mai rapid decât la un atribut obișnuit"],
+      "Poți adăuga calcul sau validare păstrând sintaxa `obj.score`",
+      "Valoarea e calculată la primul acces și apoi păstrată în instanță",
+      "Atributul devine privat: `obj.score` nu mai poate fi citit din afara clasei",
+      "Accesul e mai rapid decât la un atribut obișnuit, cu apelul inlinat de interpretor"],
       ctx: "În Java scrii getteri și setteri din prima, ca să poți schimba implementarea mai târziu. În Python începi cu un atribut simplu.",
       e: "`@property` transformă accesul la atribut într-un apel de metodă, deci poți începe cu un atribut simplu și adăuga logică mai târziu fără să rupi codul care îl folosește." },
     { id: "oop-03", lvl: 1, q: "Care e folosirea tipică pentru `@classmethod`?", o: [
-      "Constructori alternativi, ca `Finding.from_dict(d)`, care merg și pentru subclase",
-      "Funcții care nu au nevoie nici de instanță, nici de clasă",
-      "Metode care pot fi apelate doar pe clasă, niciodată pe instanță",
-      "Metode care modifică starea unei singure instanțe"],
+      "Constructori alternativi, ca `Finding.from_dict(d)`, valabili și pe subclase",
+      "Funcții utilitare legate de clasă, care nu primesc nici `self`, nici `cls`",
+      "Metode apelabile pe clasă, dar nu pe instanțe: `obj.from_dict(d)` dă `TypeError`",
+      "Metode care citesc și modifică starea unei instanțe, prin `cls` în loc de `self`"],
       ctx: "`@classmethod` primește clasa ca prim argument (`cls`), `@staticmethod` nu primește nimic implicit, iar o metodă obișnuită primește instanța (`self`).",
       e: "Pentru că primește `cls`, un `@classmethod` poate construi instanțe ale clasei pe care e apelat, inclusiv ale unei subclase: `cls(**d)`." },
     { id: "oop-04", lvl: 2, q: "Ce se întâmplă?", code: R`@dataclass
 class Rule:
     name: str
 
-seen = {Rule("brute-force")}`, o: ["TypeError: unhashable type: 'Rule'", "Un set cu un element", "Un set gol", "AttributeError la `name`"],
+seen = {Rule("brute-force")}`, o: [
+      "TypeError: unhashable type: 'Rule'",
+      "Un set cu elementul `Rule(name='brute-force')`",
+      "`set()` gol: obiectele cu `__eq__` generat sunt scoase din set",
+      "AttributeError: `Rule` nu are metoda `__hash__` definită"],
       ctx: "`@dataclass` generează `__init__`, `__repr__` și `__eq__`. Un obiect intră într-un `set` doar dacă are `__hash__`.",
       e: "Cu `eq=True` (implicit) și fără `frozen=True`, dataclass-ul pune `__hash__ = None`: obiectele mutabile cu egalitate de valoare nu pot fi hash-uite. `@dataclass(frozen=True)` rezolvă." },
     { id: "oop-05", lvl: 3, q: "Ce afișează?", code: R`class Base:
@@ -66,10 +70,10 @@ n = Slack()`, o: [
       ctx: "Un ABC (`abc.ABC`) cu metode `@abstractmethod` definește un contract. Python verifică contractul la instanțiere, nu la definirea clasei.",
       e: "O clasă care moștenește un ABC și nu implementează toate metodele abstracte rămâne abstractă: instanțierea ei aruncă `TypeError`." },
     { id: "oop-07", lvl: 2, q: "Ce aduce `typing.Protocol` față de un ABC?", o: [
-      "Contract structural: orice clasă cu metodele potrivite îl satisface, fără să moștenească",
-      "Verificarea tipurilor argumentelor la fiecare apel, la runtime",
-      "Moștenire multiplă fără conflicte de MRO",
-      "Interzice instanțierea claselor care îl implementează"],
+      "Contract structural: o clasă îl satisface prin metodele ei, fără moștenire",
+      "Verifică la runtime tipurile argumentelor, la fiecare apel al metodelor din contract",
+      "Moștenire multiplă fără conflicte de MRO: metodele se potrivesc după nume",
+      "Blochează la import clasele care nu respectă semnăturile din contract"],
       ctx: "Un ABC e nominal: clasa trebuie să-l moștenească. Duck typing înseamnă că contează ce metode are obiectul, nu din ce clasă vine.",
       e: "`Protocol` (PEP 544) descrie forma unui obiect. mypy sau pyright verifică static că o clasă o respectă, chiar dacă nu moștenește din ea. Util pentru biblioteci externe pe care nu le poți modifica." },
     { id: "oop-08", lvl: 1, q: "Un `ScanJob` trebuie să notifice prin email sau Slack, după client. Ce design se testează cel mai ușor?", o: [
@@ -80,33 +84,33 @@ n = Slack()`, o: [
       ctx: "Compoziție („are un”) vs moștenire („este un”). Întrebarea de test: ce pui în locul notificării reale când testezi un `ScanJob`?",
       e: "Cu compoziție, în test dai un notifier fals și verifici ce a primit. Canalele noi nu cer schimbări în `ScanJob`." },
     { id: "oop-09", lvl: 2, q: "Când suprascrii `__new__` în loc de `__init__`?", o: [
-      "Când controlezi crearea instanței: subclase de tipuri imutabile (`str`, `tuple`) sau un cache de instanțe",
-      "Când vrei să validezi argumentele constructorului",
-      "Mereu când clasa are atribute obligatorii",
-      "Când clasa moștenește din mai multe clase"],
+      "Când controlezi crearea instanței: tip imutabil sau cache de instanțe",
+      "Când vrei să validezi argumentele constructorului înainte ca obiectul să existe",
+      "Când clasa are atribute obligatorii, ca să fie verificate la creare",
+      "Când clasa moștenește din mai multe clase, ca să rezolvi ordinea inițializării"],
       ctx: "`__new__` creează obiectul și îl întoarce; `__init__` primește obiectul deja creat și îl inițializează.",
       e: "La un tip imutabil, valoarea trebuie fixată la creare, deci în `__new__`; în `__init__` e deja prea târziu. Pentru validare obișnuită ajunge `__init__`." },
     { id: "oop-10", lvl: 2, q: "Ce se întâmplă?", code: R`@dataclass
 class Report:
     findings: list = []`, o: [
-      "ValueError la definirea clasei: valoare implicită mutabilă; folosești `field(default_factory=list)`",
-      "Toate rapoartele împart aceeași listă, fără nicio eroare",
-      "Fiecare raport primește automat o listă nouă",
-      "TypeError la crearea primului `Report()`"],
+      "ValueError la definirea clasei: `list` e o valoare implicită mutabilă",
+      "Rapoartele împart aceeași listă, ca la `def f(x=[])`, fără eroare",
+      "Fiecare raport primește automat o listă nouă, copiată din valoarea implicită",
+      "TypeError la crearea primului `Report()`: lipsește argumentul `findings`"],
       ctx: "La funcții, `def f(x=[])` împarte aceeași listă între apeluri. Dataclass-urile verifică această capcană pentru `list`, `dict` și `set`.",
       e: "Dataclass-ul refuză o valoare implicită de tip `list`, `dict` sau `set` și aruncă `ValueError` chiar la definire. Corect: `findings: list = field(default_factory=list)`." },
     { id: "oop-11", lvl: 2, q: "Ce obții cu `__slots__ = (\"rule\", \"host\")`?", o: [
-      "Instanțe fără `__dict__`: mai puțină memorie, iar atributele noi sunt interzise",
-      "Atribute imutabile după `__init__`",
-      "Acces thread-safe la atribute",
-      "Validarea tipurilor la atribuire"],
+      "Fără `__dict__` per instanță: mai puțină memorie și fără atribute noi",
+      "Atribute imutabile după `__init__`, ca la un `frozen=True`",
+      "Acces thread-safe la atribute, fără lock-uri în jurul citirilor și scrierilor",
+      "Validarea tipului la atribuire, pe baza anotărilor din clasă"],
       ctx: "Fiecare instanță obișnuită are un `__dict__` în care stau atributele. La milioane de obiecte mici, dicționarele astea contează.",
       e: "`__slots__` rezervă locuri fixe pentru atributele numite, fără `__dict__`. Economisești memorie, iar o greșeală de tastare (`obj.hots = ...`) aruncă `AttributeError`. Atributele rămân modificabile." },
     { id: "oop-12", lvl: 3, q: "`ReadOnlyRepo(Repo)` suprascrie `save()` doar ca să arunce `NotImplementedError`. Ce problemă e?", o: [
-      "Încalcă substituția Liskov: codul care primește un `Repo` crapă cu subclasa",
-      "Încalcă responsabilitatea unică: clasa face prea multe",
-      "Nicio problemă: așa se restricționează o clasă",
-      "O problemă de performanță: excepțiile sunt lente"],
+      "Încalcă Liskov: apelantul unui `Repo` nu poate folosi subclasa",
+      "Încalcă responsabilitatea unică: clasa face și citire, și validare",
+      "E în regulă: așa restricționezi o clasă fără să-i schimbi interfața",
+      "Problemă de performanță: excepțiile Python sunt lente față de un `if`"],
       ctx: "Liskov: oriunde merge un obiect de tipul părintelui, trebuie să meargă și unul de tipul subclasei, fără ca apelantul să știe diferența.",
       e: "Subclasa promite (prin moștenire) că știe să salveze, apoi refuză. Corect: două interfețe mici, `Reader` și `Writer`, iar `Repo` le implementează pe amândouă." },
     { id: "oop-13", lvl: 2, q: "Ce afișează?", code: R`class Base:
@@ -121,10 +125,10 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
       ctx: "Când o subclasă își definește propriul `__init__`, cel al părintelui nu mai rulează automat.",
       e: "`Scanner.__init__` nu cheamă `super().__init__()`, deci `ready` nu e setat niciodată, iar accesul aruncă `AttributeError`." },
     { id: "oop-14", lvl: 2, q: "Adaugi des reguli noi de detecție. Ce structură evită să modifici același `if/elif` de fiecare dată?", o: [
-      "Fiecare regulă e o clasă sau funcție cu aceeași interfață, înregistrată într-o listă pe care motorul o parcurge",
-      "Același `if/elif`, dar mutat într-un modul separat",
-      "O clasă de bază cu câte o metodă pentru fiecare regulă",
-      "Reguli scrise ca stringuri și rulate cu `eval`"],
+      "Reguli cu aceeași interfață, înregistrate într-o listă parcursă de motor",
+      "Același `if/elif`, dar mutat într-un modul separat, importat de motor",
+      "O clasă de bază cu câte o metodă pentru fiecare regulă nouă, apelată pe rând",
+      "Regulile scrise ca stringuri și rulate cu `eval`, citite dintr-un fișier"],
       ctx: "Open/closed: codul e deschis pentru extindere (reguli noi), dar închis pentru modificare (motorul nu se schimbă).",
       e: "Cu o interfață comună și un registru, o regulă nouă e un fișier nou. Motorul și regulile vechi rămân neatinse, iar fiecare regulă se testează separat." }
   ]);
@@ -526,16 +530,16 @@ function label(x: State) {
   Q("oop", [
     { id: "oop-15", lvl: 1, q: "Trimiți alerte în Splunk, Sentinel sau QRadar, fiecare cu alt API. Vrei ca restul codului să apeleze doar `siem.send(alert)`. Ce pattern folosești?", o: [
       "Adapter: câte o clasă care traduce interfața comună în API-ul fiecărui SIEM",
-      "Singleton: o singură instanță globală de client SIEM",
-      "Observer: SIEM-urile se abonează la crearea alertelor",
-      "Template Method: o clasă de bază cu pașii ficși ai trimiterii"],
+      "Singleton: o singură instanță globală de client SIEM, partajată de tot codul",
+      "Observer: fiecare SIEM se abonează la crearea alertelor și o primește",
+      "Template Method: clasă de bază cu pașii ficși ai trimiterii alertei"],
       ctx: "Codul tău are deja o interfață (`send(alert)`), iar sistemele externe au API-uri diferite pe care nu le poți schimba.",
       e: "Adapter-ul aduce un API străin la interfața pe care o așteaptă codul tău. Restul aplicației depinde de `send(alert)`, iar un SIEM nou înseamnă o clasă nouă." },
     { id: "oop-16", lvl: 2, q: "La crearea unei alerte vrei să trimiți email, să scrii în SIEM și să actualizezi un dashboard, fără ca `AlertService` să știe de ele. Ce pattern?", o: [
       "Observer: ascultătorii se înregistrează la evenimentul „alertă creată”",
-      "Adapter: traduci alerta pentru fiecare destinație",
-      "Factory: creezi destinațiile după tipul alertei",
-      "Decorator: împachetezi `AlertService` de trei ori"],
+      "Adapter: traduci alerta în formatul fiecărei destinații, prin câte o clasă",
+      "Factory: creezi destinațiile după tipul alertei, într-o metodă de fabrică",
+      "Decorator: împachetezi `AlertService` în câte un wrapper pentru fiecare destinație"],
       ctx: "Vrei să adaugi reacții noi la un eveniment fără să modifici codul care produce evenimentul.",
       e: "Cu Observer, `AlertService` doar anunță evenimentul, iar ascultătorii se abonează singuri. O reacție nouă înseamnă un ascultător nou, nu o modificare în serviciu." },
     { id: "oop-17", lvl: 2, q: "Ce pattern vezi aici?", code: R`RULES = {}
@@ -547,17 +551,17 @@ def register(cls):
 @register
 class OffHours(Rule):
     rule_id = "LOGIN-002"`, o: [
-      "Registry folosit ca factory: clasele se înregistrează singure, iar motorul le creează după id",
-      "Singleton: există o singură regulă de fiecare tip",
-      "Decorator în sensul GoF: adaugă comportament la apelurile metodelor",
-      "Observer: regulile ascultă modificările din `RULES`"],
+      "Registry folosit ca factory: clasele se înregistrează singure, motorul le creează",
+      "Singleton: există o singură regulă de fiecare tip, ținută în `RULES`",
+      "Decorator în sensul GoF: adaugă comportament apelurilor metodelor clasei",
+      "Observer: regulile ascultă modificările din `RULES` și se reînregistrează"],
       ctx: "Un decorator de clasă primește clasa după ce e definită și întoarce ceva în locul ei; aici întoarce chiar clasa.",
       e: "La import, fiecare regulă se adaugă în `RULES`. Motorul le instanțiază din dict, fără să le știe numele: o regulă nouă nu cere modificări în motor (open/closed)." },
     { id: "oop-18", lvl: 3, q: "Ce pattern implementează `Session` din SQLAlchemy?", o: [
       "Unit of Work: adună modificările și le scrie într-o tranzacție la `commit()`",
-      "Singleton: o conexiune unică pentru toată aplicația",
-      "Active Record: fiecare obiect se salvează singur cu `.save()`",
-      "Facade fără stare peste driverul bazei de date"],
+      "Singleton: o conexiune unică la baza de date, folosită de toată aplicația",
+      "Active Record: fiecare obiect se salvează singur, la apelul lui `.save()`",
+      "Facade fără stare peste driverul bazei de date, care traduce apelurile în SQL"],
       ctx: "În Django scrii `obj.save()`. În SQLAlchemy faci `session.add(obj)` și, la final, `session.commit()`.",
       e: "Sesiunea ține evidența obiectelor noi, modificate și șterse și le scrie împreună la flush sau commit. Django ORM folosește Active Record: obiectul se salvează singur." }
   ]);

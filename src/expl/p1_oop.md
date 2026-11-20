@@ -56,9 +56,9 @@ Limită: Un property care face I/O (citește din DB la fiecare acces) ascunde un
 La interviu: „Încep cu atribute simple. Dacă mai târziu am nevoie de calcul sau validare, le transform în `@property`, fără să schimb apelanții. De aceea în Python nu scriu getteri și setteri din prima.”
 Verificare: Ai un property `total` care adună 10.000 de rânduri din memorie și e citit de 50 de ori pe cerere. Ce schimbi?
 Răspuns verificare: `functools.cached_property`, care calculează o dată pe instanță și păstrează rezultatul, sau o metodă explicită, ca apelantul să vadă că e un calcul.
-Varianta greșită B: Asta face `functools.cached_property`. Un `@property` simplu rulează funcția la fiecare acces.
-Varianta greșită C: Python nu are atribute private. `_score` e doar o convenție, iar property-ul există tocmai ca să fie citit din afară.
-Varianta greșită D: Un property e un apel de funcție la fiecare acces, deci e puțin mai lent decât un atribut simplu, nu mai rapid.
+Varianta greșită B: Asta face `functools.cached_property`. Un `@property` simplu rulează funcția la fiecare acces și nu păstrează nimic în instanță.
+Varianta greșită C: Python nu are atribute private. `_score` e doar o convenție, iar `obj.score` rămâne citibil din afară: property-ul există tocmai pentru asta.
+Varianta greșită D: Un property e un apel de funcție la fiecare acces, deci e mai lent decât un atribut simplu. Interpretorul nu inlinează apelul.
 
 ### oop-03
 Pe scurt: Un `@classmethod` primește clasa (`cls`), deci e locul natural pentru constructori alternativi care funcționează și pentru subclase.
@@ -84,9 +84,9 @@ Limită: Un `@staticmethod` e doar o funcție pusă în clasă. Dacă nu folose�
 La interviu: „Folosesc `@classmethod` pentru constructori alternativi, ca `from_dict`: primește `cls`, deci merge corect și pentru subclase. `@staticmethod` e o funcție legată doar logic de clasă.”
 Verificare: Scrii `from_dict` ca `@staticmethod` care întoarce `Finding(...)`. Ce se strică la `CriticalFinding.from_dict(d)`?
 Răspuns verificare: Primești un `Finding`, nu un `CriticalFinding`, pentru că numele clasei e scris fix. Cu `@classmethod` și `cls(...)` primești subclasa.
-Varianta greșită B: Asta descrie un `@staticmethod`. Un `@classmethod` primește clasa.
-Varianta greșită C: Și un `@classmethod` poate fi apelat pe instanță: `obj.from_dict(d)` trimite clasa obiectului.
-Varianta greșită D: Asta e o metodă obișnuită, care primește `self`. Un `@classmethod` nu are acces la o instanță anume.
+Varianta greșită B: Asta descrie un `@staticmethod`: nu primește nici `self`, nici `cls`. Un `@classmethod` primește clasa.
+Varianta greșită C: Un `@classmethod` se poate apela și pe instanță: `obj.from_dict(d)` merge și trimite clasa obiectului. Nu dă `TypeError`.
+Varianta greșită D: Asta e o metodă obișnuită, care primește `self`. Un `@classmethod` primește clasa, nu o instanță anume.
 
 ### oop-04
 Pe scurt: `TypeError: unhashable type: 'Rule'`: un dataclass cu `eq=True` și fără `frozen=True` are `__hash__ = None`.
@@ -112,9 +112,9 @@ Limită: `unsafe_hash=True` forțează un `__hash__` pe un obiect mutabil. Merge
 La interviu: „Un dataclass compară după valoare, dar fără `frozen=True` nu e hashable, pentru că un obiect mutabil și-ar putea schimba hash-ul în set. Pentru set sau chei de dict îl fac `frozen`.”
 Verificare: Faci `Rule` `frozen=True` și încerci `r.name = "x"`. Ce se întâmplă?
 Răspuns verificare: `dataclasses.FrozenInstanceError`. Imutabilitatea e chiar ce face hash-ul sigur.
-Varianta greșită B: Ar fi adevărat doar cu `frozen=True` sau `unsafe_hash=True`. Implicit, `__hash__` e `None`.
-Varianta greșită C: Setul nu se creează deloc: hash-ul elementului e cerut la construcție și aruncă.
-Varianta greșită D: `name` există, primit în constructorul generat. Eroarea vine din hash, nu din atribut.
+Varianta greșită B: Setul nu se poate crea: hash-ul elementului e cerut la construcție și aruncă. Implicit, `__hash__` e `None`.
+Varianta greșită C: Setul nu apucă să existe, deci nu poate fi gol. `__eq__` generat nu scoate nimic din set; contează `__hash__`, care lipsește.
+Varianta greșită D: Atributul `__hash__` există, dar e `None`, iar apelul lui dă `TypeError`, nu `AttributeError`. `name` e setat de `__init__` generat.
 
 ### oop-05
 Pe scurt: Afișează `ABBase`: `super()` cheamă următoarea clasă din MRO, nu neapărat părintele direct.
@@ -189,9 +189,9 @@ Limită: `Protocol` nu adaugă implementare comună și nu blochează instanție
 La interviu: „ABC-ul e nominal și verificat la runtime: trebuie moștenit. `Protocol` e structural și verificat static: contează doar metodele. Îl prefer la granițe, pentru dependențe pe care le înlocuiesc în teste.”
 Verificare: Cu `@runtime_checkable`, `isinstance(obj, Notifier)` întoarce `True` pentru un obiect care are `send(self)` fără parametri. De ce?
 Răspuns verificare: Verificarea la runtime se uită doar dacă metoda există, nu și la semnătură. Semnătura o verifică doar mypy sau pyright.
-Varianta greșită B: Python nu verifică tipurile la runtime. `Protocol` e pentru analiza statică.
-Varianta greșită C: `Protocol` nu schimbă MRO-ul claselor care îl satisfac: ele nici măcar nu-l moștenesc.
-Varianta greșită D: Un `Protocol` nu poate fi instanțiat el însuși, dar clasele care îl respectă se instanțiază normal.
+Varianta greșită B: Python nu verifică tipurile la runtime. `Protocol` e pentru analiza statică (mypy, pyright), iar verificarea de la apel nu există.
+Varianta greșită C: `Protocol` nu schimbă MRO-ul: clasele care îl satisfac nici nu-l moștenesc. Conflictele de MRO țin de bazele clasei, nu de contract.
+Varianta greșită D: Nimic nu se blochează la import: o clasă cu semnături greșite se importă și rulează. Doar mypy sau pyright le semnalează, înainte de rulare.
 
 ### oop-08
 Pe scurt: Compoziția: `ScanJob` primește un notifier în constructor. În test îi dai un fals și verifici ce a primit.
@@ -245,8 +245,8 @@ Limită: Un singleton prin `__new__` e rar necesar în Python: un modul e deja i
 La interviu: „`__new__` creează obiectul, `__init__` îl inițializează. Suprascriu `__new__` doar la tipuri imutabile sau când vreau să întorc o instanță existentă; în rest, `__init__`.”
 Verificare: De ce `Host("A.example")` nu poate fi normalizat la litere mici în `__init__`?
 Răspuns verificare: Valoarea unui `str` e fixată în `__new__`. În `__init__` obiectul există deja și e imutabil.
-Varianta greșită B: Validarea obișnuită a argumentelor stă în `__init__` (sau în `__post_init__` la dataclass).
-Varianta greșită C: Atributele obligatorii sunt parametri ai lui `__init__`, fără `__new__`.
+Varianta greșită B: Validarea obișnuită a argumentelor stă în `__init__` (sau în `__post_init__` la dataclass). `__new__` nu aduce nimic în plus aici.
+Varianta greșită C: Atributele obligatorii sunt parametri ai lui `__init__`; `__new__` nu e locul lor și nu le verifică mai bine.
 Varianta greșită D: Moștenirea multiplă nu cere `__new__`; ordinea apelurilor o dă MRO-ul.
 
 ### oop-10
@@ -273,9 +273,9 @@ Limită: Din 3.11, verificarea respinge orice valoare implicită nehashable (apr
 La interviu: „O valoare implicită se evaluează o dată, deci o listă ar fi comună tuturor instanțelor. Dataclass-ul o refuză, iar eu folosesc `field(default_factory=list)`.”
 Verificare: Ce face `field(default_factory=dict)` la fiecare `Report()`?
 Răspuns verificare: Cheamă `dict()` și dă fiecărui raport un dicționar nou, propriu.
-Varianta greșită B: Asta s-ar întâmpla cu un atribut de clasă obișnuit. Dataclass-ul oprește tocmai acest caz, cu eroare.
-Varianta greșită C: Fără `default_factory` nu se creează nimic nou; dataclass-ul aruncă eroare.
-Varianta greșită D: Eroarea apare la definirea clasei, nu la prima instanțiere.
+Varianta greșită B: Asta s-ar întâmpla cu un atribut de clasă obișnuit, în afara unui dataclass. Dataclass-ul oprește exact acest caz, cu `ValueError`.
+Varianta greșită C: Nu se copiază nimic: valoarea implicită se evaluează o singură dată. Fără `default_factory`, dataclass-ul aruncă eroare.
+Varianta greșită D: Eroarea apare la definirea clasei, nu la prima instanțiere, și e `ValueError`. `findings` are valoare implicită, deci nu lipsește.
 
 ### oop-11
 Pe scurt: Instanțe fără `__dict__`: mai puțină memorie, iar atributele noi, nedeclarate, sunt interzise.
@@ -294,9 +294,9 @@ Limită: Fără `__dict__` nu merg `functools.cached_property` și atributele di
 La interviu: „`__slots__` elimină `__dict__`-ul fiecărei instanțe: economisesc memorie la multe obiecte mici și prind greșelile de nume de atribut. Atributele rămân modificabile.”
 Verificare: Atributele dintr-o clasă cu `__slots__` sunt imutabile?
 Răspuns verificare: Nu. Le poți schimba liber; doar nu poți adăuga atribute noi. Pentru imutabilitate folosești `frozen=True`.
-Varianta greșită B: Atributele din slot-uri se pot schimba. Imutabilitatea o dau `frozen=True` sau un tuplu.
-Varianta greșită C: `__slots__` nu adaugă nicio sincronizare; accesul concurent are aceleași reguli ca înainte.
-Varianta greșită D: Python nu validează tipurile la atribuire; asta face Pydantic.
+Varianta greșită B: Atributele din slot-uri se pot reatribui: `obj.rule = 5` merge. Imutabilitatea o dau `frozen=True` sau un tuplu.
+Varianta greșită C: `__slots__` nu adaugă nicio sincronizare: accesul concurent are aceleași reguli ca înainte, deci tot ai nevoie de lock.
+Varianta greșită D: Python nu validează tipuri la atribuire; anotările sunt doar indicii pentru analiza statică. Validarea o face Pydantic.
 
 ### oop-12
 Pe scurt: Încalcă substituția Liskov: codul care primește un `Repo` și apelează `save()` crapă când primește subclasa.
@@ -323,9 +323,9 @@ Limită: Uneori o bibliotecă îți impune o interfață mare. Atunci documentez
 La interviu: „Dacă o subclasă aruncă `NotImplementedError` pe o metodă a părintelui, încalcă Liskov. Aș sparge interfața în roluri mai mici, `Reader` și `Writer`, iar fiecare clasă implementează doar ce poate face.”
 Verificare: Un `Square(Rectangle)` cu `set_width` care schimbă și înălțimea: ce test al lui `Rectangle` pică?
 Răspuns verificare: Cel care setează lățimea 2 și înălțimea 3 și se așteaptă la aria 6. Un `Square` nu poate respecta contractul lui `Rectangle`.
-Varianta greșită B: Problema nu e câte face clasa, ci că refuză contractul moștenit.
-Varianta greșită C: Așa se ascunde o eroare de design. Contractul părintelui spune că `save` funcționează.
-Varianta greșită D: Performanța nu e problema; codul crapă la runtime, nu e lent.
+Varianta greșită B: Problema nu e câte face clasa, ci că refuză contractul moștenit. Responsabilitatea unică nu e încălcată aici.
+Varianta greșită C: Așa se ascunde o eroare de design. Contractul părintelui spune că `save()` funcționează, iar o interfață nu se restrânge prin subclasă.
+Varianta greșită D: Performanța nu e problema: o excepție aruncată rar costă puțin. Defectul e că apelantul crapă la runtime.
 
 ### oop-13
 Pe scurt: `AttributeError`: `Scanner.__init__` nu cheamă `super().__init__()`, deci `ready` nu e setat niciodată.
@@ -381,9 +381,9 @@ Limită: Un registru global se umple la import: în teste îl golești sau const
 La interviu: „Aș defini o interfață comună pentru reguli și un registru. Motorul le parcurge fără să le cunoască, deci o regulă nouă e cod nou, testat separat, fără să ating motorul.”
 Verificare: Cum testezi motorul fără să depinzi de regulile reale din registru?
 Răspuns verificare: Construiești motorul cu o listă explicită de reguli false (una care se potrivește, una care nu) și verifici alertele produse.
-Varianta greșită B: Mutarea `if/elif` într-un alt modul nu schimbă nimic: fiecare regulă nouă tot modifică același cod.
-Varianta greșită C: O clasă cu câte o metodă pe regulă se modifică la fiecare regulă nouă și crește la nesfârșit.
-Varianta greșită D: `eval` pe stringuri e un risc de securitate (execuție de cod) și nu poate fi testat sau tipat.
+Varianta greșită B: Mutarea `if/elif` într-un alt modul nu schimbă nimic: fiecare regulă nouă tot modifică același cod, doar în alt fișier.
+Varianta greșită C: O clasă cu câte o metodă pe regulă se modifică la fiecare regulă nouă și crește la nesfârșit; motorul nu rămâne închis.
+Varianta greșită D: `eval` pe stringuri e un risc de securitate (execuție de cod) și codul nu poate fi tipat sau testat bine, chiar dacă vine dintr-un fișier.
 
 ### oop-15
 Pe scurt: Adapter. Fiecare SIEM primește o clasă care traduce `send(alert)` în API-ul lui.
@@ -415,8 +415,8 @@ La interviu: „Un Adapter pe SIEM: codul de detecție vede doar `send(alert)`, 
 Verificare: Cum testezi codul care trimite alerte, fără un SIEM real?
 Răspuns verificare: Îi dai un adapter fals care ține alertele într-o listă și verifici lista. Interfața comună face înlocuirea ușoară.
 Varianta greșită B: Singleton controlează câte instanțe există. Nu rezolvă faptul că cele trei API-uri sunt diferite.
-Varianta greșită C: Observer distribuie un eveniment la mai mulți ascultători. Aici problema e traducerea către API-uri diferite.
-Varianta greșită D: Template Method fixează pașii unui algoritm într-o clasă de bază. Nu te ajută să adaptezi API-uri externe pe care nu le controlezi.
+Varianta greșită C: Observer distribuie un eveniment la mai mulți ascultători. SIEM-urile nu se abonează la nimic; problema e traducerea către API-uri diferite.
+Varianta greșită D: Template Method fixează pașii unui algoritm într-o clasă de bază. Nu adaptează API-uri externe pe care nu le controlezi.
 
 ### oop-16
 Pe scurt: Observer. `AlertService` anunță evenimentul, iar emailul, SIEM-ul și dashboard-ul se abonează singure.
@@ -450,7 +450,7 @@ Verificare: Trimiterea în SIEM durează 2 s. Ce se întâmplă cu `create` și 
 Răspuns verificare: `create` durează și el 2 s, pentru că ascultătorii rulează sincron. Muți trimiterea într-un task Celery sau o publici pe o coadă.
 Varianta greșită B: Adapter traduce o interfață în alta. Nu decuplează producătorul evenimentului de lista reacțiilor.
 Varianta greșită C: Factory creează obiecte. Aici problema e cine e anunțat când apare alerta, nu cum se construiesc destinațiile.
-Varianta greșită D: Trei decoratori pe serviciu tot ar trebui adăugați în codul care construiește serviciul și n-ar putea fi activați separat ușor. Observer e făcut exact pentru reacții la evenimente.
+Varianta greșită D: Trei wrappere pe serviciu tot ar trebui adăugate în codul care îl construiește și nu s-ar putea activa separat. Observer e făcut pentru reacții la evenimente.
 
 ### oop-17
 Pe scurt: Un registry folosit ca factory: decoratorul pune fiecare clasă în `RULES`, iar motorul le creează după id, fără să le știe numele.
@@ -478,9 +478,9 @@ Limită: Regulile apar în registry doar dacă modulul lor e importat. Uiți un 
 La interviu: „E un registry: decoratorul înregistrează clasa la import, iar motorul instanțiază tot ce e în registry. O regulă nouă e un fișier nou, iar motorul rămâne neschimbat.”
 Verificare: De ce `register` întoarce `cls`?
 Răspuns verificare: Decoratorul înlocuiește numele clasei cu ce întoarce. Fără `return cls`, `OffHours` ar deveni `None` în modul.
-Varianta greșită B: Singleton limitează o clasă la o instanță. Aici registry-ul ține clase, iar motorul poate crea câte instanțe vrea.
+Varianta greșită B: Singleton limitează o clasă la o instanță. Aici `RULES` ține clase, iar motorul poate crea câte instanțe vrea.
 Varianta greșită C: Decorator-ul GoF împachetează un obiect ca să-i extindă comportamentul. `register` nu schimbă clasa; doar o notează.
-Varianta greșită D: Nimic nu ascultă modificările din `RULES`. Dict-ul e citit o dată, când motorul își creează regulile.
+Varianta greșită D: Nimic nu ascultă modificările din `RULES`. Dict-ul e citit când motorul își creează regulile, iar regulile nu se reînregistrează.
 
 ### oop-18
 Pe scurt: Unit of Work. Sesiunea ține evidența obiectelor noi, modificate și șterse și le scrie împreună, într-o tranzacție, la `commit()`.
@@ -511,4 +511,4 @@ Verificare: Modifici un obiect încărcat, dar nu chemi `commit()`, iar sesiunea
 Răspuns verificare: Modificarea se pierde: tranzacția e anulată la închidere. Nimic nu ajunge în bază fără commit.
 Varianta greșită B: Sesiunea nu e o conexiune globală: o creezi pe request sau pe task, iar conexiunile vin dintr-un pool separat.
 Varianta greșită C: Active Record e modelul din Django ORM (`obj.save()`). În SQLAlchemy obiectele nu se salvează singure.
-Varianta greșită D: Sesiunea are stare: identity map-ul și lista de modificări. Tocmai starea asta face posibil Unit of Work.
+Varianta greșită D: Sesiunea are stare: identity map-ul și lista de modificări. Tocmai starea asta face posibil Unit of Work; ea nu doar traduce apeluri în SQL.
