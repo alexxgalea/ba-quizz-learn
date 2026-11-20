@@ -16,7 +16,7 @@ print(a2.items)`, o: ["[1]", "[]", "AttributeError", "None"],
       "Poți adăuga calcul sau validare păstrând sintaxa `obj.score`",
       "Valoarea e calculată la primul acces și apoi păstrată în instanță",
       "Atributul devine privat: `obj.score` nu mai poate fi citit din afara clasei",
-      "Accesul e mai rapid decât la un atribut obișnuit, cu apelul inlinat de interpretor"],
+      "Accesul e mai rapid decât la un atribut obișnuit, fiindcă nu mai trece prin `__dict__`"],
       ctx: "În Java scrii getteri și setteri din prima, ca să poți schimba implementarea mai târziu. În Python începi cu un atribut simplu.",
       e: "`@property` transformă accesul la atribut într-un apel de metodă, deci poți începe cu un atribut simplu și adăuga logică mai târziu fără să rupi codul care îl folosește." },
     { id: "oop-03", lvl: 1, q: "Care e folosirea tipică pentru `@classmethod`?", o: [

@@ -1,6 +1,5 @@
 // Loads the data files the way the page does and checks the schema.
 import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles, DESF_FE_MODULES, checkPoints, PT_DONE, checkCues } from "./lib.mjs";
-import fs from "node:fs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);

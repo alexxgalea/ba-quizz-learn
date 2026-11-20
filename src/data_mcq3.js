@@ -13,7 +13,7 @@ def db_session(engine):
       "Setup înainte de `yield`, teardown după, chiar dacă testul pică",
       "Testul primește un generator pe care trebuie să-l itereze",
       "Fixture-ul rulează de două ori pentru fiecare test: înainte și după",
-      "Codul de după `yield` rulează dacă testul trece cu succes"], a: 0,
+      "Codul de după `yield` rulează o singură dată, după toate testele din fișier"], a: 0,
       e: "Valoarea de la `yield` e injectată în test. Pattern clasic de izolare: tranzacție + rollback per test, deci testele nu-și văd datele unul altuia." },
     { id: "pt-02", q: "Fixture-ul `engine` pornește un container Postgres (~5 s) și e folosit de 300 de teste. Ce scope?", o: [
       "`session`; datele rămân izolate per test",

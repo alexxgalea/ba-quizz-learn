@@ -144,7 +144,7 @@ Limită: Câmpurile din JSONB n-au constrângeri de tip sau chei străine, iar s
 La interviu: „Aleg JSONB pentru partea variabilă a datelor, cum e payload-ul unui eveniment, când vreau totuși tranzacții și JOIN-uri. Câmpurile stabile rămân coloane, iar pentru căutare pun un index GIN. Un sistem în loc de două.”
 Verificare: Filtrezi des după `payload->>'user'`, iar câmpul trebuie să fie mereu prezent și de tip text. Ce faci?
 Răspuns verificare: Îl promovezi la o coloană proprie (`user_name text NOT NULL`), cu index normal: primești constrângeri, statistici bune și query-uri mai simple.
-Varianta greșită B: JSONB e puțin mai lent la scriere decât textul simplu, dar mult mai rapid la interogare: nu reparsează JSON-ul la fiecare citire și poate fi indexat.
+Varianta greșită B: JSONB se indexează (GIN pe tot documentul sau un index pe expresie, ca `(payload->>'user')`), deci filtrul pe un câmp interior nu scanează tabela. Se scrie ceva mai lent decât textul, dar se interoghează mult mai repede.
 Varianta greșită C: Chei străine pe câmpurile din interiorul JSONB nu există. Dacă îți trebuie, câmpul trebuie să fie coloană.
 Varianta greșită D: Fișierele binare mari nu stau în JSONB: le pui în object storage (S3), iar în DB păstrezi doar referința.
 

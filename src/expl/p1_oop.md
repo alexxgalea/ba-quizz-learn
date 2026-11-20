@@ -58,7 +58,7 @@ Verificare: Ai un property `total` care adună 10.000 de rânduri din memorie ș
 Răspuns verificare: `functools.cached_property`, care calculează o dată pe instanță și păstrează rezultatul, sau o metodă explicită, ca apelantul să vadă că e un calcul.
 Varianta greșită B: Asta face `functools.cached_property`. Un `@property` simplu rulează funcția la fiecare acces și nu păstrează nimic în instanță.
 Varianta greșită C: Python nu are atribute private. `_score` e doar o convenție, iar `obj.score` rămâne citibil din afară: property-ul există tocmai pentru asta.
-Varianta greșită D: Un property e un apel de funcție la fiecare acces, deci e mai lent decât un atribut simplu. Interpretorul nu inlinează apelul.
+Varianta greșită D: Un property rulează o funcție Python la fiecare acces, deci nu e mai rapid decât un atribut simplu. Nu scutește de nimic: valoarea tot trebuie citită sau calculată.
 
 ### oop-03
 Pe scurt: Un `@classmethod` primește clasa (`cls`), deci e locul natural pentru constructori alternativi care funcționează și pentru subclase.

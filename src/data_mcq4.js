@@ -239,7 +239,7 @@ session = pickle.loads(data)`, o: [
       e: "CAP vorbește despre comportamentul la partiție. PACELC adaugă: fără partiție, alegi între latență și consistență. Un Postgres cu un singur primar alege consistența." },
     { id: "dbm-06", q: "Când alegi JSONB în Postgres în locul unui document store separat?", o: [
       "Când ai câmpuri variabile, dar vrei tranzacții și JOIN-uri",
-      "Nu: JSONB e mai lent decât un text simplu cu JSON",
+      "Nu: JSONB nu se poate indexa, deci filtrul pe un câmp interior scanează tabela",
       "Când ai nevoie de chei străine pe fiecare câmp intern",
       "Pentru fișiere binare mari, ca imagini sau PDF-uri"], a: 0,
       e: "De exemplu payload-ul unui eveniment. Câmpurile stabile rămân coloane, partea variabilă stă în JSONB: un sistem în loc de două." },

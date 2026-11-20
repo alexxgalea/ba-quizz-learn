@@ -26,7 +26,7 @@ Verificare: Testul aruncă o excepție la jumătate. Se mai face rollback?
 Răspuns verificare: Da: pytest rulează partea de după `yield` indiferent de rezultatul testului, inclusiv la excepție.
 Varianta greșită B: Testul primește direct valoarea de la `yield`, adică sesiunea, nu generatorul. De iterare se ocupă pytest.
 Varianta greșită C: Fixture-ul rulează o singură dată pe test: partea dinainte de `yield` înainte de test, partea de după, după test.
-Varianta greșită D: Teardown-ul rulează și când testul pică. Altfel, un test eșuat ar lăsa date murdare pentru celelalte.
+Varianta greșită D: Scope-ul implicit e `function`, deci teardown-ul rulează după fiecare test, nu o singură dată după toate. Altfel testele ar împărți aceeași sesiune și și-ar vedea datele.
 
 ### pt-02
 Pe scurt: Scope `session`: containerul pornește o singură dată pentru toată rularea, iar izolarea datelor o face un fixture separat, per test, cu rollback.

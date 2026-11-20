@@ -215,7 +215,7 @@ const p: Partial<User> = {
     { id: "ts-13", lvl: 1, q: "Vrei tipul a ce întoarce `getUser`. Ce e greșit?", code: R`function getUser() {
   return { id: 1, name: "Ana" };
 }
-type U = ReturnType<getUser>;`, o: ["`getUser` e o valoare, nu un tip (TS2749); folosești `typeof getUser`", "`ReturnType` cere o funcție `async`, iar `getUser` e sincronă", "Lipsește tipul de retur explicit: `ReturnType` nu îl poate deduce singur", "Nimic: `ReturnType` primește funcția și dă `{ id: number; name: string }`"],
+type U = ReturnType<getUser>;`, o: ["`getUser` e o valoare, nu un tip (TS2749); scrii `ReturnType<typeof getUser>`", "`ReturnType` cere o funcție `async`, iar `getUser` e sincronă", "Lipsește tipul de retur explicit: `ReturnType` nu îl poate deduce singur", "Nimic: `ReturnType` primește funcția și dă `{ id: number; name: string }`"],
       ctx: "Un tip generic primește tipuri. O funcție e o valoare; `typeof` îi ia tipul.",
       e: "În poziție de tip, numele unei funcții nu înseamnă nimic, iar compilatorul spune exact asta: „refers to a value, but is being used as a type here. Did you mean 'typeof getUser'?”. `typeof getUser` dă tipul funcției, iar `ReturnType` îi scoate tipul rezultatului, dedus fără să-l scrii de mână." },
     { id: "ts-14", lvl: 2, q: "Ce tip are `U`?", code: R`async function getUser() {
