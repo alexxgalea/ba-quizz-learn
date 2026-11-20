@@ -9,7 +9,7 @@ const q = (id, m, lens, extra = {}) => ({ id, m, a: 0, o: lens.map((n, i) => Str
 const world = (mcq, mods = ["a"]) => ({ modules: mods.map(id => ({ id })), mcq });
 const run = (mcq, opts = {}) => checkCues(world(mcq), { done: [], baseline: [], ...opts });
 
-test("CUE_DONE is a list of module names", () => assert.ok(CUE_DONE.every((m) => typeof m === "string")));
+test("CUE_DONE e o listă de module fără duplicate", () => { assert.ok(Array.isArray(CUE_DONE)); assert.equal(new Set(CUE_DONE).size, CUE_DONE.length); });
 
 test("optLen does not count backticks", () => {
   assert.equal(optLen("`ab`"), 2);

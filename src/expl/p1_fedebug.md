@@ -53,7 +53,7 @@ Limită: Preflight-ul e păstrat în cache cât spune `Access-Control-Max-Age`. 
 La interviu: „Un POST cu `application/json` către alt origin declanșează preflight. Browserul trimite `OPTIONS`, iar serverul trebuie să răspundă cu `Access-Control-Allow-Origin`, `Methods` și `Headers`. Postman nu aplică CORS.”
 Verificare: De ce merge aceeași cerere în Postman?
 Răspuns verificare: CORS e o regulă aplicată de browser, nu de rețea. Postman și curl trimit cererea fără să ceară permisiunea serverului.
-Varianta greșită B: O cerere `POST` e simplă doar cu un `Content-Type` din lista scurtă. `application/json` nu e în ea.
+Varianta greșită B: Un POST cu `Content-Type: application/json` nu mai e cerere simplă: lista scurtă are doar `text/plain`, `multipart/form-data` și `application/x-www-form-urlencoded`.
 Varianta greșită C: Browserul nu trimite un `GET` de verificare: verificarea se face cu `OPTIONS`.
 Varianta greșită D: `credentials: "include"` schimbă ce trebuie să răspundă serverul, dar nu e condiția pentru preflight.
 
@@ -85,7 +85,7 @@ Limită: Un boundary rămâne o clasă; nu există un echivalent în componente-
 La interviu: „Error boundary prinde erorile de randare ale copiilor. Nu prinde event handlers, cod asincron, SSR sau erori din el însuși. În handler folosesc `try` / `catch`.”
 Verificare: Cum raportezi totuși o eroare dintr-un handler?
 Răspuns verificare: Ai `try` / `catch` în handler și o trimiți la un serviciu de raportare sau o pui în state. Ca plasă de siguranță poți asculta evenimentul `error` pe `window`.
-Varianta greșită B: Boundary-ul reacționează la randare, nu la click, deci fallback-ul nu apare.
+Varianta greșită B: Boundary-ul reacționează la erorile de randare, nu la cele din handlerul unui click, deci butonul rămâne la locul lui.
 Varianta greșită C: Pagina nu rămâne albă: React demontează arborele doar când o eroare de randare nu e prinsă de niciun boundary.
 Varianta greșită D: Un re-render nu schimbă regula: eroarea aruncată din handler nu devine niciodată o eroare de randare.
 

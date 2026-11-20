@@ -11,10 +11,10 @@ Azi:
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `frontend`, `fedebug`, `js` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
-- [ ] `node tools/xcheck.mjs frontend fedebug js` citit integral; explicațiile variantelor greșite schimbate sunt noi.
-- [ ] Faptele noi verificate (comportamentul JS rulat în Node unde se poate).
-- [ ] Build, `node --check`, suita din `CLAUDE.md`.
-- [ ] Screenshot la 360 px, light și dark, pe câte o grilă rescrisă din fiecare modul.
+- [x] `frontend`, `fedebug`, `js` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
+- [x] `node tools/xcheck.mjs frontend fedebug js` citit integral; explicațiile variantelor greșite schimbate sunt noi.
+- [x] Faptele noi verificate (comportamentul JS rulat în Node unde se poate).
+- [x] Build, `node --check`, suita din `CLAUDE.md`.
+- [x] Screenshot la 360 px, light și dark, pe câte o grilă rescrisă din fiecare modul.

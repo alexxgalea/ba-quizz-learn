@@ -51,7 +51,7 @@ let y = 2;`, o: ["Afișează `undefined`, apoi aruncă `ReferenceError`", "Afiș
       this.seconds++;
     }, 1000);
   }
-}`, o: ["`function` primește `this` de la cine o apelează (timerul), nu din clasă; o arrow function îl ia din `start()`", "Câmpul `seconds` e privat, iar `setInterval` nu are voie să-l modifice", "`setInterval` are nevoie de `await`, altfel callback-ul nu rulează", "`this.seconds++` nu merge pe câmpuri de clasă; trebuie `Timer.seconds`"],
+}`, o: ["Callback-ul `function` are alt `this`; o arrow function îl ia din `start()`", "Câmpul `seconds` e privat în clasă, iar `setInterval` nu are voie să-l modifice din afară", "`setInterval` are nevoie de `await`, altfel callback-ul nu rulează", "`this.seconds++` nu merge pe câmpuri de clasă; trebuie `Timer.seconds`"],
       ctx: "`this` se stabilește la apel. Un callback dat unui timer nu e apelat ca metodă a lui `Timer`.",
       e: "Callback-ul e o funcție obișnuită, apelată de timer, deci `this` nu e instanța `Timer`: `this.seconds++` nu atinge câmpul ei. O arrow function nu are `this` propriu și îl ia din `start()`, unde `this` e instanța." },
     { id: "js-05", lvl: 1, q: "Ce afișează?", code: R`console.log(0 || 10, 0 ?? 10, null ?? 5);`, o: ["`10 0 5`", "`10 10 5`", "`0 0 5`", "`10 0 null`"],
@@ -67,7 +67,7 @@ console.log(a, b === a);`, o: ["`[ 1, 10, 9 ] true`", "`[ 1, 9, 10 ] true`", "`[
   for (const id of ids) {
     await fetchUser(id);
   }
-}`, o: ["Pe rând, fiecare după cea dinainte; `await Promise.all(ids.map(fetchUser))` le pornește deodată", "Deodată, fiindcă `await` doar pornește cererea", "Pe rând; `ids.forEach(async id => { await fetchUser(id); })` e varianta deodată, iar `load` așteaptă după ea", "Deodată, fiindcă `for...of` e asincron"],
+}`, o: ["Pe rând, fiecare după cea dinainte; `await Promise.all(ids.map(fetchUser))` le pornește deodată", "Deodată, fiindcă `await` pornește cererea și trece mai departe", "Pe rând; `ids.forEach(async id => { await fetchUser(id); })` e varianta deodată, iar `load` așteaptă după ea", "Deodată, fiindcă `for...of` e asincron"],
       ctx: "`await` oprește funcția `async` până se termină promisiunea. O buclă cu `await` la fiecare pas pornește cererea următoare abia după ce s-a terminat cea dinainte.",
       e: "Fiecare `await` din buclă așteaptă răspunsul înainte de iterația următoare, deci cererile rulează pe rând (de 3 ori cât durează una). `Promise.all` pornește toate promisiunile deodată și așteaptă ultima." },
     { id: "js-08", lvl: 3, q: "Ce afișează?", code: R`class A {
@@ -499,7 +499,7 @@ function C() {
   };
 
   Q("fedebug", [
-    { id: "fd-01", lvl: 1, q: "Mesajul e `TypeError: Cannot read properties of undefined (reading 'name')`. Ce e `undefined`?", code: R`const label = user.profile.name;`, o: ["`user.profile`: eroarea citește `name` dintr-o valoare `undefined`", "`name`: proprietatea nu există pe obiect", "`user`: altfel mesajul ar fi spus `reading 'profile'`", "Nu poți ști fără să rulezi codul cu un breakpoint"],
+    { id: "fd-01", lvl: 1, q: "Mesajul e `TypeError: Cannot read properties of undefined (reading 'name')`. Ce e `undefined`?", code: R`const label = user.profile.name;`, o: ["`user.profile`: valoarea din fața lui `.name` lipsește", "`name`: proprietatea citită nu există pe obiectul `user`", "`user`: altfel mesajul ar fi spus `reading 'profile'`", "Nu poți ști fără să rulezi codul cu un breakpoint"],
       ctx: "Mesajul numește proprietatea pe care codul a încercat s-o citească, nu valoarea care lipsește. Valoarea lipsă e cea din fața punctului.",
       e: "`reading 'name'` spune că `name` s-a citit dintr-o valoare `undefined`. Valoarea din fața lui `.name` e `user.profile`. Dacă `user` ar fi fost `undefined`, mesajul ar fi spus `reading 'profile'`." },
     { id: "fd-02", lvl: 2, q: "Pagina e pe alt origin decât API-ul. Ce apare în Network înainte de POST?", code: R`void fetch("https://api.x.ro/items", {
@@ -508,7 +508,7 @@ function C() {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({ n: 1 }),
-});`, o: ["O cerere `OPTIONS` (preflight): `application/json` nu e un `Content-Type` permis fără verificare", "Nimic: un POST e întotdeauna o cerere simplă", "Un GET de verificare către același URL", "Preflight apare doar dacă adaugi `credentials: \"include\"`"],
+});`, o: ["O cerere `OPTIONS` (preflight) către același URL", "Nimic: un POST cu corp JSON e o cerere simplă", "Un GET de verificare către același URL, fără corp", "Preflight apare când adaugi `credentials: \"include\"` la cerere"],
       ctx: "Browserul trimite cereri simple direct. Pentru celelalte întreabă mai întâi serverul dacă are voie, cu o cerere `OPTIONS`.",
       e: "O cerere e simplă doar cu `GET`, `HEAD` sau `POST`, cu headere obișnuite și cu `Content-Type` de tip `text/plain`, `multipart/form-data` sau `application/x-www-form-urlencoded`. `application/json` iese din listă, deci browserul trimite întâi `OPTIONS`, iar serverul trebuie să răspundă cu `Access-Control-Allow-*`." },
     { id: "fd-03", lvl: 1, q: "Ce se întâmplă la click pe buton?", code: R`<ErrorBoundary fallback={<p>Eroare</p>}>
@@ -517,10 +517,10 @@ function C() {
   }}>
     Salvează
   </button>
-</ErrorBoundary>`, o: ["Fallback-ul nu apare: boundary-ul nu prinde erorile din handlere, iar eroarea ajunge în consolă", "Apare fallback-ul `Eroare`", "Pagina rămâne albă, fiindcă React demontează tot arborele", "Apare fallback-ul, dar abia după următorul re-render"],
+</ErrorBoundary>`, o: ["Fallback-ul nu apare; eroarea ajunge în consolă", "Apare fallback-ul `Eroare` în locul butonului", "Pagina rămâne albă: React demontează tot arborele", "Apare fallback-ul, dar abia după următorul re-render"],
       ctx: "Un error boundary prinde erorile aruncate de copii în timpul randării. Un handler rulează mai târziu, la click.",
       e: "Documentația React spune că error boundaries nu prind erorile din event handlers (nici din cod asincron, SSR sau din boundary însuși). Handlerul rulează după randare, deci eroarea ajunge în consolă, iar UI-ul rămâne cum era. În handler folosești `try` / `catch`." },
-    { id: "fd-04", lvl: 1, q: "Stack trace-ul arată `main.4f2a.js:1:48210`. Cum ajungi la rândul din codul tău?", o: ["Cu source maps: build-ul generează fișierele `.map`, iar DevTools arată sursa originală", "Cu „pretty print” în Sources: formatează codul și revine la sursa originală", "Pui `debugger;` în bundle și cauți rândul 1, coloana 48210", "Dezactivezi minificarea în producție: nu există altă cale"],
+    { id: "fd-04", lvl: 1, q: "Stack trace-ul arată `main.4f2a.js:1:48210`. Cum ajungi la rândul din codul tău?", o: ["Cu source maps: fișierele `.map` duc DevTools la sursa originală", "Cu „pretty print” în Sources: formatează codul și revine la sursa originală", "Pui `debugger;` în bundle și cauți rândul 1, coloana 48210", "Dezactivezi minificarea în producție: nu există altă cale"],
       ctx: "Codul de producție e minificat, adică tot pe un singur rând, cu nume scurte. Browserul rulează acel cod, nu sursa ta.",
       e: "Un source map leagă fișierul minificat de fișierele originale. DevTools îl găsește prin comentariul `//# sourceMappingURL`, iar stack trace-urile, erorile și breakpoint-urile apar apoi în codul scris de tine. Build-ul trebuie să genereze `.map`, iar serverul să-l servească." }
   ]);

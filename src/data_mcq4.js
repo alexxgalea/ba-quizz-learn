@@ -270,11 +270,11 @@ session = pickle.loads(data)`, o: [
       "Starea e legată de key; la reordonare, se amestecă",
       "E interzis de sintaxa JSX și dă eroare la compilare",
       "Încetinește compilarea listelor mari cu Babel",
-      "Nu e nicio problemă dacă lista are sub 100 de elemente afișate"], a: 0,
+      "Problema apare la liste de peste 100 de elemente afișate"], a: 0,
       e: "Starea unei componente ajunge la elementul greșit. Folosești un ID stabil din date." },
     { id: "fe-04", q: "`staleTime` vs `gcTime` în TanStack Query?", o: [
       "staleTime: cât datele sunt proaspete; gcTime: cât stau în cache",
-      "Sunt identice; gcTime e doar numele nou pentru staleTime",
+      "Sunt identice; gcTime e noul nume al lui staleTime din v5",
       "gcTime e timeout-ul request-ului, iar staleTime e cel al retry-ului",
       "staleTime e intervalul de polling, gcTime al curățării"], a: 0,
       e: "Cât timp datele sunt proaspete nu se face refetch; gcTime e cât stau datele nefolosite în cache. Implicit staleTime = 0 (refetch la mount sau focus), gcTime = 5 minute." }

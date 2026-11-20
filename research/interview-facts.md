@@ -1339,7 +1339,7 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
 18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.
 
-## 39. Grile fără tipar: `pytest`, `python`, `design` (tichetul 07; verificat 20 noiembrie 2026)
+## 50. Grile fără tipar: `pytest`, `python`, `design` (tichetul 07; verificat 20 noiembrie 2026)
 
 - ✅ **pytest e single-thread și secvențial**: „single-threaded, executing its tests always in the same thread, sequentially, never spawning any threads itself”; paralelismul cere un plugin (pytest-xdist: procese, nu thread-uri). Testele dependente de ordine apar când un test se bazează pe date lăsate de altul; pytest-randomly / pytest-random-order le scot la iveală. Sursă: https://docs.pytest.org/en/stable/explanation/flaky.html (pt-15).
 - ✅ **pytest nu are timeout propriu pe suită**: pagina de flaky tests nu menționează niciun timeout implicit; timeout-ul vine din pluginul `pytest-timeout` (pt-15, varianta D; formulat prudent în explicație).
@@ -1347,3 +1347,10 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ **Testele async fără plugin** (pt-12), `match` = `re.search` (pt-11), xdist (pt-16): secțiunea 6 și 24, neschimbate.
 - ✅ **Rulat** (Python 3.13): `py-02` → `[2, 2, 2]`, `py-09` → `6 0`, `py-13` → `[[1, 0], [1, 0]]`, `py-18` → `[1, 2, 3]`. Restul grilelor `python` citite cu xcheck, fără erori de fapt.
 - Erori de fapt corectate: niciuna. Variantele greșite noi (pt-11 B/C/D, pt-12 B/C/D, pt-14 B/C, pt-15 B/D, pt-17 D, design) sunt greșite fără dubiu: `Exception` nu e `ValueError` (raises verifică tipul), `PostgreSQL` suportă `CREATE DATABASE` per tenant.
+
+## 51. Grile fără tipar: `frontend`, `fedebug`, `js` (tichetul 05; verificat 20 noiembrie 2026)
+
+- ✅ **TanStack Query v5**: `cacheTime` a fost redenumit `gcTime` (ghidul de migrare v5, „Rename `cacheTime` to `gcTime`”); `staleTime` nu a fost redenumit și rămâne „cât sunt datele proaspete”. Varianta greșită „gcTime e noul nume al lui staleTime” din `fe-04` e deci falsă. Sursă: https://github.com/TanStack/query/blob/main/docs/framework/react/guides/migrating-to-v5.md
+- ✅ **React Strict Mode** (`fe-07`): efectele rulează un ciclu setup + cleanup în plus doar în development; build-ul de producție le rulează o dată (https://react.dev/reference/react/StrictMode, deja în secțiunea de mai sus).
+- ✅ **CORS** (`fd-02`, `fe-13`): un POST cu `Content-Type: application/json` nu e cerere simplă (doar `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain` sunt), deci declanșează preflight `OPTIONS`; verificat pe MDN (https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS). `credentials: "include"` nu declanșează singur preflight-ul.
+- Nicio eroare de fapt găsită în grilele rescrise; variantele greșite noi sunt false fără dubiu (fiecare are explicația ei).

@@ -76,7 +76,7 @@ Verificare: Generezi key-ul cu `crypto.randomUUID()` direct în `map`, la fiecar
 Răspuns verificare: La fiecare render toate key-urile sunt noi, deci React distruge și recreează toate componentele: pierzi starea și performanța. Key-ul trebuie să fie stabil, deci vine din date.
 Varianta greșită B: JSX acceptă indexul ca key, iar React doar avertizează când key-ul lipsește. Problema apare la rulare, nu la compilare.
 Varianta greșită C: Key-ul n-are legătură cu compilarea: îl folosește React la runtime, ca să potrivească elementele între render-uri.
-Varianta greșită D: Problema nu ține de mărimea listei: și o listă de 3 elemente își amestecă starea la reordonare.
+Varianta greșită D: Mărimea listei nu contează: și cu 3 elemente reordonate, starea se amestecă.
 
 ### fe-04
 Pe scurt: `staleTime` spune cât timp datele sunt considerate proaspete (fără refetch); `gcTime` spune cât stau în cache datele nefolosite de nicio componentă, înainte să fie șterse.
@@ -103,7 +103,7 @@ Limită: Un `staleTime` mare reduce request-urile, dar arată date vechi mai mul
 La interviu: „`staleTime` e cât timp datele sunt proaspete și nu se face refetch; `gcTime` e cât stau în cache datele nefolosite. Implicit, `staleTime` e 0 și `gcTime` 5 minute. După o mutație invalidez explicit query-urile afectate.”
 Verificare: Cu valorile implicite, comuți pe alt tab și revii. Ce face TanStack Query?
 Răspuns verificare: Afișează imediat datele din cache și face refetch în fundal: cu `staleTime` 0, datele sunt imediat vechi, iar focusul pe fereastră declanșează reîmprospătarea.
-Varianta greșită B: Nu sunt identice: `gcTime` e noul nume al lui `cacheTime` (din v5), nu al lui `staleTime`.
+Varianta greșită B: Nu sunt identice: în v5, `cacheTime` a fost redenumit `gcTime`, iar `staleTime` a rămas cu alt rol (cât sunt datele proaspete).
 Varianta greșită C: Timeout-urile și retry-ul se configurează separat (`retry`, `retryDelay`); `staleTime` și `gcTime` țin de cache.
 Varianta greșită D: Polling-ul se configurează cu `refetchInterval`; `staleTime` doar marchează datele ca vechi, fără să declanșeze request-uri periodice.
 
@@ -166,7 +166,7 @@ La interviu: „Fără array, efectul rulează după fiecare render; cu `[]`, do
 Verificare: Un efect fără array face `setCount(count + 1)`. Ce se întâmplă?
 Răspuns verificare: Buclă infinită: fiecare render rulează efectul, efectul schimbă state-ul, iar asta cere un render nou.
 Varianta greșită B: Așa se comportă un array gol, `[]`. Lipsa array-ului înseamnă „după fiecare render”.
-Varianta greșită C: React nu se uită separat la props: fără array, orice render (din props, state sau părinte) rulează efectul.
+Varianta greșită C: Props-urile nu sunt singura cauză: fără array, orice render (din props, state sau părinte) rulează efectul.
 Varianta greșită D: Efectele rulează după render, nu înainte. Logica dinaintea randării stă direct în corpul componentei.
 
 ### fe-07
@@ -196,7 +196,7 @@ La interviu: „E Strict Mode: în dev React face setup, cleanup și iar setup, 
 Verificare: Efectul face `setInterval(tick, 1000)` fără cleanup. Ce vezi în dev?
 Răspuns verificare: Două intervale active, deci `tick` rulează de două ori pe secundă. Cu `return () => clearInterval(id)` rămâne unul.
 Varianta greșită B: Montarea dublă e simulată de Strict Mode, nu de părinte. Nu e un bug al aplicației.
-Varianta greșită C: Ciclul în plus există doar în development. În producție efectul rulează o dată.
+Varianta greșită C: Ciclul în plus există numai în development; build-ul de producție rulează efectul o singură dată.
 Varianta greșită D: `key` contează la liste și la resetarea unei componente. Nu provoacă rularea dublă a efectelor la mount.
 
 ### fe-08
@@ -290,7 +290,7 @@ Limită: `unknown` nu validează nimic singur; doar te obligă să validezi. Dac
 La interviu: „Pentru date externe folosesc `unknown`, nu `any`: compilatorul mă obligă să validez forma. La graniță pun o schemă zod sau generez tipurile din OpenAPI-ul FastAPI, pentru că tipurile TS dispar la runtime.”
 Verificare: Scrii `const a = data as Alert[]` pe o valoare `unknown`. E sigur?
 Răspuns verificare: Nu. `as` e o afirmație a ta, nu o verificare: compilatorul te crede, iar la runtime datele pot avea altă formă.
-Varianta greșită B: `any` nu e mai sigur: oprește verificările, deci greșelile ajung la runtime.
+Varianta greșită B: Acceptarea datelor oricum ar arăta nu înseamnă siguranță: `any` oprește verificările, deci greșelile ajung la runtime.
 Varianta greșită C: TypeScript nu verifică nimic la runtime; tipurile sunt șterse la compilare. Validarea o faci tu, de exemplu cu zod.
 Varianta greșită D: Nu se comportă identic: cu `any` poți folosi orice câmp direct, iar cu `unknown` compilatorul te oprește până îngustezi tipul.
 
@@ -393,7 +393,7 @@ Limită: CORS protejează userul în browser, nu API-ul. Un script sau `curl` ig
 La interviu: „Cu credentials, browserul refuză `Access-Control-Allow-Origin: *`. Pe server pun lista exactă de origini și `allow_credentials=True`. CORS e o protecție a browserului, nu autorizare: verificarea accesului rămâne pe server.”
 Verificare: Cererea merge din Postman, dar nu din browser. Ce verifici întâi?
 Răspuns verificare: Headerele CORS din răspuns și din preflight-ul `OPTIONS`. Postman nu aplică CORS, browserul da.
-Varianta greșită B: `*` nu e acceptat când trimiți cookies. Browserul blochează răspunsul.
+Varianta greșită B: Cu `credentials: "include"`, `*` nu e acceptat. Browserul blochează răspunsul, deci JS nu ajunge la el.
 Varianta greșită C: Serverul poate răspunde normal, cu 200. Blocajul îl face browserul, care nu dă răspunsul codului JS.
 Varianta greșită D: Body-ul nu ajunge „gol” la JS: `fetch` eșuează cu o eroare de rețea, iar codul nu vede nimic din răspuns.
 
