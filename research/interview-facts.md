@@ -1377,3 +1377,9 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ `noeviction` e valoarea implicită a `maxmemory-policy` și `allkeys-lru` / `allkeys-lfu` evacuează doar când `maxmemory` e setat (secțiunea 870 mai sus; `rd-07` cere `maxmemory` în varianta corectă).
 - ⚠️ `sudo ss -tlnp` / `sudo lsof -i :8000` (`lx-02`): `-p` arată procesul doar pentru socket-urile pe care le poți inspecta; pentru procesele altor useri trebuie privilegii. Nu l-am rulat într-un sandbox cu alt user.
 - Nicio eroare de fapt găsită în grilele atinse.
+
+## 55. Grile fără tipar: `runtime`, `index`, `sqlalchemy`, `postgres`, `celery`, `security` (tichetul 09; verificat 20 noiembrie 2026)
+
+- ✅ Rulat într-un venv cu SQLAlchemy 2.1.9 și Celery 5.7.0: `Session(...).expire_on_commit` e `True` implicit (deci `commit()` expiră toate atributele instanțelor din sesiune); `Celery().conf.task_serializer` e `json`; `worker_pool` implicit e `prefork`.
+- ✅ Variantele greșite noi sunt false fără dubiu: `joinedload` nu e numele vechi al lui `selectinload` (loaderi diferiți, SQL diferit); `close()` nu face COMMIT (rollback la tranzacția necomisă); `select()` e construct Core, nu doar ORM, iar Core nu e depreciat în 2.x; pool-ul nu deschide conexiunile la pornire (la cerere, până la `pool_size`); Celery nu limitează argumentele la `int` / `str` (orice tip serializabil în JSON); Beat nu are coordonare între instanțe (nu alege un lider), deci 3 replici = 3 publicări.
+- Nicio eroare de fapt găsită în grilele atinse; `index`, `postgres` și `security` treceau deja regulile și au intrat în `CUE_DONE` neschimbate.

@@ -23,7 +23,7 @@ La interviu: „CPython compilează sursa în bytecode și îl execută într-o 
 Verificare: Ai o eroare de sintaxă pe ultima linie din `app.py`. Rulează măcar primele linii?
 Răspuns verificare: Nu: fișierul e compilat întreg înainte de execuție, iar compilarea eșuează cu `SyntaxError`. Nu se execută nimic din el.
 Varianta greșită B: CPython nu generează C++. Unelte separate, ca Cython sau Nuitka, fac ceva asemănător, dar nu e pasul standard.
-Varianta greșită C: Există un pas de compilare: tot fișierul e transformat în bytecode înainte să ruleze ceva. De aceea o eroare de sintaxă oprește totul de la început.
+Varianta greșită C: Există un pas de compilare: tot fișierul se transformă în bytecode înainte să ruleze ceva. De aceea o eroare de sintaxă de pe ultima linie oprește totul de la început.
 Varianta greșită D: CPython nu compilează JIT implicit. Din 3.13 există un JIT experimental, dar e oprit implicit.
 
 ### rt-02
@@ -42,9 +42,9 @@ Limită: Verificarea statică e opțională și poate fi ocolită (`Any`, `# typ
 La interviu: „În Python, tipurile aparțin obiectelor și se verifică la execuția operației, deci un `TypeError` apare doar când rulează linia. Prind astfel de erori devreme cu type hints, mypy sau pyright în CI și cu teste.”
 Verificare: O ramură `if` care rulează o dată pe lună conține `total + "lei"`, unde `total` e int. Când afli de bug?
 Răspuns verificare: Abia când rulează ramura, în producție, dacă nu o acoperă un test. mypy ar fi semnalat problema din CI.
-Varianta greșită B: Python are tipuri, doar că aparțin obiectelor, nu variabilelor: `type(3)` e `int`.
+Varianta greșită B: Python are tipuri: `type(3)` e `int`. Ele aparțin obiectelor, nu variabilelor, iar de aceea eroarea apare abia la execuție.
 Varianta greșită C: Compilatorul nu ignoră erorile de tip ca optimizare: pur și simplu nu le verifică, pentru că tipurile se cunosc abia la execuție.
-Varianta greșită D: Nu există un mod debug care să verifice tipurile înainte. Verificarea se face mereu la execuție, la fiecare operație.
+Varianta greșită D: Python nu are un mod debug care verifică tipurile. Verificarea se face la execuție, la fiecare operație, indiferent de mod.
 
 ### rt-03
 Pe scurt: Aruncă `TypeError`: Python nu convertește singur un `str` în `int` sau invers, pentru că rezultatul ar fi ambiguu.
@@ -108,8 +108,8 @@ Limită: Memoria eliberată nu se întoarce mereu la sistemul de operare: alocat
 La interviu: „CPython folosește reference counting: un obiect e eliberat imediat ce nu mai are referințe. Ciclurile le colectează un GC generațional, modulul `gc`. `del` șterge doar un nume.”
 Verificare: Faci `del big_list`, dar memoria procesului nu scade. Ce poate explica asta?
 Răspuns verificare: Fie altă referință ține lista în viață (alt nume, un cache, o closure), fie lista a fost eliberată, dar alocatorul n-a returnat memoria sistemului.
-Varianta greșită B: CPython nu se bazează doar pe un GC periodic: majoritatea obiectelor sunt eliberate imediat, prin reference counting. GC-ul se ocupă doar de cicluri.
-Varianta greșită C: Nu e manual: `del` șterge doar un nume. Obiectul e eliberat automat, când nu mai are nicio referință.
+Varianta greșită B: CPython folosește întâi reference counting: majoritatea obiectelor sunt eliberate imediat, la contor 0. GC-ul periodic există, dar colectează ciclurile.
+Varianta greșită C: Nu e manual: `del` șterge un nume, nu obiectul. Obiectul e eliberat automat, când contorul lui de referințe ajunge la 0.
 Varianta greșită D: Memoria se eliberează continuu, pe măsură ce obiectele nu mai sunt referite, nu doar la final.
 
 ### rt-06
@@ -150,6 +150,6 @@ Limită: Detaliile țin de CPython. Alte implementări, ca PyPy, compilează JIT
 La interviu: „CPython compilează sursa în bytecode și îl execută în mașina lui virtuală. Tipurile se verifică la runtime, când rulează fiecare operație, așa că erorile de tip le prind static, cu mypy, sau prin teste.”
 Verificare: Intervievatorul spune: „Deci Python e ca Java?” Ce răspunzi?
 Răspuns verificare: Seamănă prin bytecode și mașina virtuală, dar diferă la tipuri: Java le verifică la compilare, Python la runtime. Iar Java are JIT implicit; CPython, nu.
-Varianta greșită B: CPython are un pas de compilare: tot fișierul e transformat în bytecode înainte de execuție.
+Varianta greșită B: CPython are un pas de compilare: tot fișierul devine bytecode înainte de execuție, iar `SyntaxError` apare înainte să ruleze vreo linie.
 Varianta greșită C: CPython nu trece prin C++. Bytecode-ul e executat de interpretor, care e scris în C.
 Varianta greșită D: Compilarea în bytecode nu verifică tipurile. Spre deosebire de Java, tipurile se verifică abia la execuție.

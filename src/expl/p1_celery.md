@@ -45,7 +45,7 @@ Verificare: Task-ul `charge_card(order_id)` rulează cu `acks_late=True`. Ce ver
 Răspuns verificare: Dacă la comanda respectivă plata e deja făcută. Dacă da, ieși fără să încarci cardul a doua oară.
 Varianta greșită B: Brokerul nu deduplică mesajele după id. Un mesaj neconfirmat e livrat din nou, cu același id.
 Varianta greșită C: Faptul că Redis e single-threaded nu schimbă garanțiile de livrare. Cu Redis, `visibility_timeout` poate chiar să provoace re-livrări.
-Varianta greșită D: `acks_late` crește riscul de dublă execuție (at-least-once). Iar `max_retries=0` oprește doar reîncercările tale, nu re-livrările brokerului.
+Varianta greșită D: `acks_late` crește riscul de dublă execuție (at-least-once). `max_retries=0` oprește reîncercările tale, nu re-livrările brokerului.
 
 ### cel-04
 Pe scurt: Task-ul se reîncearcă automat de cel mult 5 ori, doar la `ConnectionError`, cu pauze care cresc exponențial și au o parte aleatoare.
@@ -87,7 +87,7 @@ La interviu: „Beat nu are coordonare distribuită: fiecare instanță publică
 Verificare: Pornești Beat în același container cu workerii (`celery worker -B`) și scalezi workerii la 4 replici. Ce se întâmplă?
 Răspuns verificare: Ai 4 instanțe de Beat, deci fiecare task periodic e programat de 4 ori. De aceea Beat rulează separat.
 Varianta greșită B: Instanțele nu își împart nimic: nu știu una de alta.
-Varianta greșită C: Nimic nu le oprește pe celelalte două: toate pornesc și publică.
+Varianta greșită C: Nimic nu le oprește pe celelalte două: toate pornesc și publică. Beat nu coordonează instanțele între ele.
 Varianta greșită D: Nu rulează mai repede, ci de mai multe ori: aceeași muncă, triplată.
 
 ### cel-06
@@ -116,7 +116,7 @@ La interviu: „Trimit id-uri, nu obiecte ORM: mesajul rămâne mic și serializ
 Verificare: Între publicarea task-ului și execuția lui, userul e șters din DB. Ce trebuie să facă task-ul?
 Răspuns verificare: Să trateze cazul: `get()` întoarce `None`, deci task-ul iese curat (eventual loghează), în loc să crape la `user.email`.
 Varianta greșită B: Id-urile nu sunt secrete. Avantajul ține de dimensiunea mesajului și de prospețimea datelor, nu de securitate.
-Varianta greșită C: Celery acceptă orice tip serializabil în JSON: liste, dicționare, numere zecimale.
+Varianta greșită C: Celery acceptă orice tip serializabil în JSON: liste, dicționare, numere zecimale. Obiectul ORM nu e unul dintre ele.
 Varianta greșită D: Problema nu e threadul, ci faptul că obiectul ORM nu se poate serializa în JSON și ar fi o copie veche, legată de altă sesiune.
 
 ### cel-07
@@ -238,7 +238,7 @@ Limită: JSON nu știe de `datetime`, `Decimal` sau obiecte proprii. Le converte
 La interviu: „Folosesc JSON și `accept_content=['json']`: pickle poate executa cod la deserializare, deci oricine poate scrie în broker ar putea rula cod pe workeri. JSON e implicit din Celery 4.”
 Verificare: Ai setat `task_serializer = "json"`, dar `accept_content` include și `"pickle"`. E suficient?
 Răspuns verificare: Nu: workerul acceptă în continuare mesaje pickle venite din altă parte. `accept_content` trebuie restrâns la `["json"]`.
-Varianta greșită B: Viteza nu compensează riscul: pickle pe date care trec prin broker deschide calea spre execuție de cod.
+Varianta greșită B: Viteza nu compensează riscul: pickle pe date care trec prin broker deschide calea spre execuție de cod la deserializare.
 Varianta greșită C: YAML cu obiecte Python complete are aceeași problemă ca pickle, pentru că poate construi obiecte arbitrare. Nu e o alegere sigură.
 Varianta greșită D: Diferența de securitate e chiar miezul întrebării: pickle poate rula cod, JSON nu.
 
