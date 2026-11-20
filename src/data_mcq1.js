@@ -32,43 +32,43 @@ for t in threads: t.start()
 for t in threads: t.join()
 print(counter)`, o: [
       "Poate fi sub 4.000.000: `counter += 1` nu e atomic, deci codul e greșit fără Lock",
-      "E mereu 4.000.000, pentru că GIL-ul face fiecare instrucțiune Python atomică",
-      "Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală",
-      "E mereu 1.000.000, pentru că fiecare thread își incrementează propria copie"], a: 0,
+      "E 4.000.000, pentru că GIL-ul face instrucțiunile Python atomice",
+      "Aruncă RuntimeError, pentru că un thread nu poate modifica o variabilă globală din alt thread",
+      "E 1.000.000, pentru că fiecare thread își incrementează propria copie"], a: 0,
       e: "`+=` pe un global înseamnă load, add, store; GIL-ul poate trece la alt thread între ele, deci se pot pierde update-uri. În versiunile recente race-ul apare mai rar în practică, dar codul rămâne greșit. Fix: `threading.Lock`." },
     { id: "gil-04", q: "Ce se întâmplă dacă apelezi `time.sleep(2)` într-o funcție `async def` care rulează pe event loop?", o: [
       "Tot event loop-ul stă 2 secunde: nicio altă corutină nu progresează",
-      "Doar corutina curentă așteaptă, celelalte continuă normal",
+      "Corutina curentă așteaptă 2 secunde, iar celelalte continuă normal",
       "Python îl transformă automat în `await asyncio.sleep(2)`",
       "Interpretorul aruncă excepție: apelurile sincrone sunt interzise în async def"], a: 0,
       e: "asyncio e cooperativ: o corutină cedează controlul doar la `await`. `time.sleep` blochează threadul loop-ului. Folosești `await asyncio.sleep()` sau muți codul blocant cu `await asyncio.to_thread(...)`." },
     { id: "gil-05", q: "Ce e adevărat despre cod nativ (NumPy, OpenCV) și GIL?", o: [
       "Multe operații native eliberează GIL-ul, deci pot rula în paralel din threaduri",
-      "Codul nativ ține GIL-ul tot timpul, deci nu poate rula niciodată în paralel",
+      "Codul nativ ține GIL-ul pe durata calculului, deci nu rulează în paralel",
       "NumPy pornește automat câte un proces separat pentru fiecare operație mare pe array-uri",
-      "GIL-ul se aplică doar operațiilor de I/O, nu și calculelor făcute în extensii C"], a: 0,
+      "GIL-ul se aplică operațiilor de I/O, nu și calculelor făcute în extensii C"], a: 0,
       e: "O extensie C poate elibera GIL-ul cât timp nu atinge obiecte Python (calcule NumPy mari, `cv2.resize`). De aceea un thread pool peste OpenCV poate folosi mai multe core-uri, iar același calcul scris în Python pur nu." },
     { id: "gil-06", q: "Ce trebuie să fie adevărat despre argumentele trimise la un `ProcessPoolExecutor`?", o: [
       "Să poată fi serializate cu pickle",
       "Să fie obiecte imutabile",
-      "Să fie doar tipuri primitive (int, str, float)",
-      "Nicio restricție: procesele partajează memoria părintelui"], a: 0,
+      "Să fie tipuri primitive (int, str, float)",
+      "Fără restricții: procesele partajează memoria părintelui"], a: 0,
       e: "Procesele au memorie separată; argumentele și rezultatele trec granița prin pickling. Lambdas, conexiuni DB sau socket-uri nu se pot trimite. Overhead-ul face ca task-urile foarte mici să nu merite." },
     { id: "gil-07", q: "Ai 10.000 de request-uri HTTP de făcut în asyncio, cu maximum 50 simultan. Ce folosești?", o: [
       "Un `asyncio.Semaphore(50)` în jurul fiecărui request, plus `gather`",
-      "`asyncio.gather` pe toate 10.000, pentru că event loop-ul le dozează singur",
+      "`asyncio.gather` pe cele 10.000, pentru că event loop-ul le dozează singur",
       "Un `ThreadPoolExecutor(max_workers=10_000)` peste un client HTTP sincron",
       "`time.sleep(0.02)` între request-uri, ca să nu depășești 50 de conexiuni deschise"], a: 0,
       e: "`gather` pornește toate corutinele deodată; fără limită deschizi 10.000 de conexiuni. Semaforul sau N workeri pe o `asyncio.Queue` limitează concurența. `TaskGroup` (3.11+) anulează și restul task-urilor la prima eroare." },
     { id: "gil-08", q: "Diferența dintre `await coro()` și `asyncio.create_task(coro())`?", o: [
       "`create_task` o pornește concurent și întoarce un Task; `await` așteaptă pe loc",
-      "Sunt echivalente; `create_task` e doar sintaxa veche, dinainte de `async/await`",
+      "Sunt echivalente; `create_task` e sintaxa veche, dinainte de `async/await`",
       "`create_task` rulează corutina într-un thread separat din pool-ul implicit",
       "`await` pornește corutina într-un proces nou, `create_task` în același thread"], a: 0,
       e: "Cu `create_task` poți face altceva și aștepți task-ul mai târziu. Păstrezi o referință la el (altfel poate fi colectat) și îi tratezi excepțiile." },
     { id: "gil-09", tag: "formulare", q: "Ce formulare ai folosi la interviu?", o: [
       "„GIL-ul limitează paralelismul bytecode-ului, nu concurența: pentru I/O folosesc threads sau asyncio, pentru CPU procese.”",
-      "„GIL-ul împiedică orice execuție paralelă în procesul Python, deci folosesc mereu procese, inclusiv pentru operațiile I/O.”",
+      "„GIL-ul împiedică execuția paralelă în procesul Python, deci folosesc procese, inclusiv pentru operațiile I/O.”",
       "„GIL-ul face codul multi-threaded thread-safe, deci în Python nu am nevoie de Lock pentru contoare partajate.”",
       "„asyncio ocolește GIL-ul rulând corutinele pe mai multe core-uri, de aceea e mai rapid decât threadurile.”"], a: 0,
       e: "Codul nativ poate rula în paralel, GIL-ul nu protejează invariantele tale, iar asyncio e concurent pe un singur thread, nu paralel." },
@@ -86,7 +86,7 @@ print(counter)`, o: [
       e: "Disponibil din 3.9, e o scurtătură pentru `loop.run_in_executor(None, ...)`: loop-ul nu se blochează cât rulează funcția. Util pentru biblioteci sincrone (driver DB, `requests`). Pentru CPU greu: un executor de procese." },
     { id: "gil-12", q: "Folosești `asyncio.TaskGroup` (3.11+) pentru 5 sub-task-uri și unul aruncă excepție. Ce se întâmplă?", o: [
       "Celelalte task-uri sunt anulate, iar erorile ies ca `ExceptionGroup`",
-      "Celelalte continuă până la final, iar excepția apare doar în log",
+      "Celelalte continuă până la final, iar excepția apare în log",
       "Tot event loop-ul se oprește imediat, iar procesul iese cu cod de eroare",
       "Task-ul care a eșuat e reluat automat, iar celelalte îl așteaptă"], a: 0,
       e: "Concurență structurată: niciun task nu rămâne orfan. Le prinzi cu `except*`. `gather(..., return_exceptions=True)` e alternativa când vrei să continue toate." }

@@ -13,8 +13,8 @@ Azi:
 
 **Status:** ready-for-agent
 
-- [ ] `asyncio`, `asgi`, `gil` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
-- [ ] `node tools/xcheck.mjs asyncio asgi gil` citit integral; explicațiile variantelor greșite schimbate sunt noi.
-- [ ] Faptele noi verificate pe `research/interview-facts.md` (asyncio, threading, GIL, free-threading sunt deja acolo) sau pe surse primare.
-- [ ] Build, `node --check`, suita din `CLAUDE.md`.
-- [ ] Screenshot la 360 px, light și dark, pe câte o grilă rescrisă din fiecare modul.
+- [x] `asyncio`, `asgi`, `gil` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
+- [x] `node tools/xcheck.mjs asyncio asgi gil` citit integral; explicațiile variantelor greșite schimbate sunt noi.
+- [x] Faptele noi verificate pe `research/interview-facts.md` (asyncio, threading, GIL, free-threading sunt deja acolo) sau pe surse primare.
+- [x] Build, `node --check`, suita din `CLAUDE.md`.
+- [x] Screenshot la 360 px, light și dark, pe câte o grilă rescrisă din fiecare modul.

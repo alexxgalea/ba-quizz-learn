@@ -1338,3 +1338,9 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 16. TypeScript (secțiunea 47): documentația `tsconfig` dă `strict` implicit `true`, verificat cu `tsc` 7.0.2; data schimbării (TypeScript 6.0) e din surse secundare. Pagina „Everyday Types” nu acoperă excess property checks.
 17. Hook-uri (secțiunea 48): `useEffectEvent` e din React 19.2; tranzițiile nu pot controla un input de text; `useDeferredValue` cere `memo` pe componenta grea ca să aibă efect; `useFormStatus` vede doar un `<form>` părinte; o promisiune creată în render ține `Suspense` pe fallback la nesfârșit.
 18. TypeScript (secțiunea 49): handbook-ul nu spune că utility types sunt superficiale (rulat: sunt); `Omit` nu verifică cheile, `Pick` da; `erasableSyntaxOnly` (5.8) interzice `enum`.
+
+## Grile fără tipar: asyncio, asgi, gil (tichetul 06, 2026-11-20)
+
+- ✅ Rulat pe Python local: `threading.Timer` are `start()` și `cancel()` (e subclasă de `Thread`); `threading.Event` are `set()` / `wait()`; `CancelledError` e `BaseException`, nu `Exception`; `gather` nu anulează celelalte task-uri când unul aruncă (b a terminat după `ValueError` din a); `asyncio.timeout` ridică `TimeoutError`; un `Lock` luat de același thread blochează a doua oară (`acquire(timeout=.1)` dă `False`).
+- ✅ RFC 9110 §9.2.2: metodele idempotente sunt PUT, DELETE și cele safe; POST nu e. Sursă: https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2
+- ✅ `on_event("startup")` și `on_event("shutdown")` sunt depreciate în FastAPI și eliminate din Starlette 1.0 (secțiunea 5, deja verificat); variantele noi spun același lucru despre ambele.

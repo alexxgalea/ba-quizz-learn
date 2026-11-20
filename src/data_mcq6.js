@@ -131,25 +131,25 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
   Q("asyncio", [
     { id: "aio-01", pt: [1], lvl: 1, q: "Ce înseamnă că asyncio e concurență „cooperativă”?", o: [
       "O corutină rulează până la un `await`; abia atunci bucla poate trece la alta",
-      "Corutinele rulează în paralel, pe mai multe core-uri",
-      "Sistemul de operare întrerupe corutinele oricând, ca pe threaduri",
+      "Corutinele rulează în paralel, câte una pe fiecare core al procesorului",
+      "Sistemul de operare întrerupe o corutină după o felie de timp, ca la threaduri",
       "Fiecare corutină primește propriul thread"],
       ctx: "La threaduri, sistemul de operare decide când comută. În asyncio există un singur thread și o buclă de evenimente care rulează corutinele pe rând.",
       e: "Bucla poate comuta doar când corutina curentă cedează controlul, la un `await` pe ceva care chiar așteaptă (I/O, timer). Între două `await`-uri, corutina rulează singură." },
     { id: "aio-02", pt: [2], lvl: 1, q: "100 de cereri ajung simultan la acest handler, într-un singur worker. Cât așteaptă ultima?", code: R`async def handler():
     time.sleep(2)
     return "ok"`, o: [
-      "~200 s: `time.sleep` blochează bucla, cererile se servesc pe rând",
-      "~2 s: toate așteaptă în paralel",
-      "~2 s, pentru că `async def` face apelul non-blocant",
-      "Nimic: `time.sleep` aruncă eroare într-o corutină"],
+      "~200 s: cererile se servesc una după alta, câte 2 s fiecare",
+      "~2 s: cererile așteaptă în paralel, iar bucla le alternează",
+      "~2 s: `async def` face apelul din corutină non-blocant",
+      "Cererea eșuează: `time.sleep` aruncă eroare într-o corutină"],
       ctx: "`time.sleep` blochează threadul care îl apelează. `asyncio.sleep` e o corutină care cedează controlul buclei cât așteaptă.",
       e: "`time.sleep` nu cedează controlul: bucla stă blocată 2 s pe fiecare cerere, deci cererile se servesc una după alta. Cu `await asyncio.sleep(2)` toate ar aștepta în paralel, ~2 s în total." },
     { id: "aio-03", pt: [2], lvl: 1, q: "Ce face `await asyncio.to_thread(parse, data)`?", o: [
-      "Rulează funcția sincronă într-un thread al executorului implicit, fără să blocheze bucla",
-      "Rulează funcția într-un proces separat, pe alt core",
+      "Rulează funcția sincronă într-un thread, iar bucla rămâne liberă",
+      "Rulează funcția într-un proces separat, pe alt core al procesorului",
       "Transformă funcția într-o corutină care cedează controlul la fiecare linie",
-      "Rulează funcția direct pe bucla evenimentelor, cu prioritate"],
+      "Rulează funcția direct pe bucla evenimentelor, cu prioritate maximă"],
       ctx: "Uneori trebuie să apelezi dintr-o corutină cod sincron: un SDK fără variantă async, un driver blocant, o funcție de parsare.",
       e: "`asyncio.to_thread` (3.9+) trimite funcția într-un thread și întoarce o corutină pe care o aștepți. Bucla rămâne liberă cât rulează funcția." },
     { id: "aio-04", pt: [3], lvl: 2, q: "`a()` aruncă `ValueError` după 1 s; `b()` și `c()` mai au de lucru. Ce se întâmplă cu ele?", code: R`try:
@@ -157,25 +157,25 @@ print(Scanner("h1").ready)`, o: ["AttributeError", "True", "None", "TypeError la
         a(), b(), c())
 except ValueError:
     ...`, o: [
-      "Continuă să ruleze; `gather` doar propagă prima excepție",
-      "Sunt anulate automat",
+      "Continuă să ruleze; `gather` propagă prima excepție",
+      "Sunt anulate automat, ca într-un `TaskGroup`",
       "Sunt anulate, iar excepția devine `ExceptionGroup`",
-      "`gather` așteaptă să termine toate, apoi ridică excepția"],
+      "`gather` așteaptă să termine celelalte task-uri, apoi ridică excepția"],
       ctx: "`asyncio.gather` și `asyncio.TaskGroup` rulează amândouă corutine concurent, dar tratează diferit prima eroare.",
       e: "Fără `return_exceptions=True`, `gather` propagă imediat prima excepție, dar nu anulează celelalte task-uri: ele continuă în fundal. Dacă vrei anulare, folosești `TaskGroup`." },
     { id: "aio-05", pt: [4], lvl: 2, q: "Ce face `asyncio.TaskGroup` când un task aruncă o excepție?", o: [
-      "Anulează celelalte task-uri din grup, așteaptă să se oprească și ridică `ExceptionGroup`",
-      "Ignoră eroarea și continuă cu celelalte",
-      "Întoarce eroarea ca valoare, ca `return_exceptions=True`",
-      "Repornește task-ul care a eșuat"],
+      "Anulează celelalte task-uri din grup și ridică `ExceptionGroup`",
+      "Ignoră eroarea și lasă celelalte task-uri să continue",
+      "Întoarce eroarea ca valoare, ca `gather(return_exceptions=True)`",
+      "Repornește task-ul care a eșuat, de până la 3 ori"],
       ctx: "`async with asyncio.TaskGroup() as tg:` (3.11+) creează task-uri cu `tg.create_task(...)`; blocul se termină abia când s-au terminat toate.",
       e: "TaskGroup implementează concurența structurată: la prima eroare anulează frații, iar la ieșirea din bloc ridică toate excepțiile într-un `ExceptionGroup`, prinse cu `except*`." },
     { id: "aio-06", pt: [5], lvl: 2, q: "`fetch` durează 10 s. Ce se întâmplă?", code: R`async with asyncio.timeout(5):
     data = await fetch(url)`, o: [
       "După 5 s task-ul e anulat, iar blocul ridică `TimeoutError`",
       "`fetch` continuă în fundal, iar `data` devine `None`",
-      "În afara blocului primești `CancelledError`",
-      "Programul așteaptă toate cele 10 s, apoi ridică `TimeoutError`"],
+      "În afara blocului primești `CancelledError`, nu `TimeoutError`",
+      "Programul așteaptă să se termine cele 10 s, apoi ridică `TimeoutError`"],
       ctx: "`asyncio.timeout` (3.11+) e un context manager. Intern, la expirare anulează task-ul curent și transformă anularea în altă excepție la ieșire.",
       e: "La expirare, task-ul primește `CancelledError` în `fetch`, iar la ieșirea din bloc ea devine `TimeoutError`. `fetch` e oprit, nu lăsat în fundal." },
     { id: "aio-07", pt: [6], lvl: 3, q: "Ce problemă are acest worker la oprirea aplicației?", code: R`async def worker():
@@ -185,16 +185,16 @@ except ValueError:
         except BaseException:
             log.exception("failed")`, o: [
       "Prinde `CancelledError` și continuă bucla: task-ul nu mai poate fi oprit",
-      "Nicio problemă: `except BaseException` e modul corect de a prinde tot",
-      "`log.exception` nu funcționează în corutine",
-      "Bucla consumă 100% CPU"],
+      "Nu are probleme: `except BaseException` e modul corect de a prinde erorile",
+      "`log.exception` nu funcționează într-o corutină, doar în funcții sincrone",
+      "`await job()` blochează bucla cât timp jobul rulează"],
       ctx: "Anularea unui task (`task.cancel()`, timeout, oprirea aplicației) se face aruncând `CancelledError` în el, la următorul `await`.",
       e: "`CancelledError` e `BaseException` (din 3.8), deci `except BaseException` o înghite, iar bucla continuă. Corect: `except Exception`, iar dacă prinzi anularea pentru cleanup, o ridici din nou." },
     { id: "aio-08", pt: [8], lvl: 2, q: "Ce risc are `asyncio.create_task(send_alert(e))` dacă nu păstrezi task-ul?", o: [
-      "Task-ul poate fi colectat de GC înainte să termine, iar excepțiile lui se pierd",
-      "Corutina nu pornește până nu faci `await` pe ea",
-      "Rulează sincron și blochează apelantul",
-      "Pornește un thread nou pentru fiecare task"],
+      "Task-ul poate fi colectat de GC înainte să termine; excepțiile se pierd",
+      "Corutina nu pornește până nu faci `await` pe obiectul `Task` întors",
+      "Rulează sincron, în threadul apelantului, și blochează bucla până termină",
+      "Pornește un thread nou pentru fiecare task, ca `to_thread`"],
       ctx: "`create_task` programează corutina pe buclă și întoarce un obiect `Task`. Bucla ține doar o referință slabă la el.",
       e: "Documentația cere explicit să păstrezi o referință: fără ea task-ul poate dispărea la jumătate, iar o excepție rămâne doar un warning „Task exception was never retrieved”." },
     { id: "aio-09", pt: [9], lvl: 3, q: "Un thread de background vrea să pună un eveniment în `q`, o `asyncio.Queue` citită de bucla principală. Ce folosește?", o: [
@@ -209,7 +209,7 @@ except ValueError:
   Q("gil", [
     { id: "gil-15", lvl: 2, q: "Un producător și 4 consumatori, în threaduri. Ce folosești drept coadă de lucru?", o: [
       "`queue.Queue`: thread-safe, cu `get()` blocant și `task_done()` / `join()`",
-      "O listă cu `append` și `pop(0)`, protejată de GIL",
+      "O listă cu `append` și `pop(0)`, protejată de GIL la fiecare operație",
       "`asyncio.Queue`, pentru că e mai rapidă",
       "Un `dict` global și un `while True` care verifică dacă are elemente"],
       ctx: "Producer/consumer: un thread pune lucru, alții îl iau. Ai nevoie de sincronizare și de un mod de a aștepta fără să consumi CPU.",
@@ -223,10 +223,10 @@ def outer():
 def inner():
     with lock:
         ...`, o: [
-      "Deadlock: același thread încearcă să ia din nou un `Lock` pe care îl ține",
+      "Deadlock: `inner` cere un `Lock` pe care `outer` îl ține deja",
       "Merge: același thread poate lua de mai multe ori un lock",
-      "`RuntimeError`: lock deja luat",
-      "`inner` sare peste blocul `with`"],
+      "`RuntimeError`: `Lock` a fost deja luat de același thread",
+      "`inner` sare peste blocul `with`, iar `outer` continuă"],
       ctx: "`threading.Lock` nu ține minte cine l-a luat. `threading.RLock` (reentrant) ține minte threadul proprietar și un contor.",
       e: "Un `Lock` simplu blochează pe oricine îl cere a doua oară, inclusiv threadul care îl ține. Fix: `RLock`, sau, mai curat, o funcție internă care presupune lock-ul deja luat." },
     { id: "gil-17", lvl: 2, q: "În ce ordine se afișează rezultatele?", code: R`with ThreadPoolExecutor(8) as ex:
@@ -237,21 +237,21 @@ def inner():
       "În ordinea în care termină cererile",
       "În ordinea din `urls`",
       "Aleator, fără legătură cu durata",
-      "Toate deodată, după ce termină ultima"],
+      "Împreună, într-o listă, după ce termină ultima cerere"],
       ctx: "`executor.map` întoarce rezultatele în ordinea intrărilor. `concurrent.futures.as_completed` întoarce viitoarele (futures) pe măsură ce se termină.",
       e: "`as_completed` dă fiecare future imediat ce e gata, deci cererile rapide apar primele. `f.result()` ridică din nou excepția dacă sarcina a eșuat." },
     { id: "gil-18", lvl: 1, q: "La ce folosești `threading.Event`?", o: [
-      "Un semnal pe care un thread îl setează (`set()`) și altele îl așteaptă (`wait()`)",
+      "Un semnal: un thread face `set()`, iar altele așteaptă cu `wait()`",
       "Un lock pe care același thread îl poate lua de mai multe ori",
-      "O coadă de mesaje între threaduri",
-      "Un timer care pornește o funcție după un interval"],
+      "O coadă de mesaje între threaduri, cu `put()` și `get()`",
+      "Un timer care pornește o funcție după un interval, cu `start()` și `cancel()`"],
       ctx: "Exemplu tipic: oprirea curată a workerilor. Firul principal anunță „oprește-te”, iar workerii verifică semnalul între sarcini.",
       e: "`Event` e un flag sincronizat: `set()` îl pornește, `wait()` blochează până e pornit, `is_set()` îl citește. E modul simplu de a cere workerilor să se oprească." },
     { id: "gil-19", lvl: 3, q: "Ce face `cond.wait()` într-un `threading.Condition`?", o: [
-      "Eliberează lock-ul asociat, așteaptă un `notify()`, apoi îl reia înainte să revină",
-      "Așteaptă un `notify()` ținând lock-ul luat",
-      "Așteaptă un interval fix, apoi verifică singur condiția",
-      "Blochează toate threadurile până la `notify_all()`"],
+      "Eliberează lock-ul, așteaptă `notify()`, apoi îl reia înainte să revină",
+      "Așteaptă un `notify()` și ține lock-ul luat cât timp doarme",
+      "Așteaptă un interval fix, apoi verifică singur condiția și revine la apelant",
+      "Blochează threadurile procesului până primește `notify_all()`"],
       ctx: "Un `Condition` combină un lock cu o listă de așteptare: un thread așteaptă o stare („coada nu e goală”), altul o schimbă și îl anunță.",
       e: "`wait()` trebuie apelat cu lock-ul luat. Îl eliberează cât doarme, ca alții să poată schimba starea, și îl reia la trezire. Verifici condiția într-o buclă sau cu `wait_for(predicat)`." }
   ]);
@@ -355,27 +355,27 @@ def test_grid(a, b):
 
   Q("asgi", [
     { id: "asgi-12", lvl: 2, q: "Unde creezi un `httpx.AsyncClient` partajat de toată aplicația și unde îl închizi?", o: [
-      "În funcția `lifespan` (un `@asynccontextmanager` dat la `FastAPI(lifespan=...)`): îl creezi înainte de `yield` și îl închizi după",
-      "În fiecare endpoint, la fiecare cerere",
-      "Într-o variabilă globală creată la import, fără închidere",
-      "În `@app.on_event(\"startup\")`, modul recomandat acum"],
+      "În `lifespan`: îl creezi înainte de `yield` și îl închizi după `yield`",
+      "În fiecare endpoint, într-un `async with`, nou la fiecare cerere",
+      "Într-o variabilă globală creată la import, fără închidere explicită",
+      "În `@app.on_event(\"startup\")` și `@app.on_event(\"shutdown\")`, modul recomandat acum"],
       ctx: "Un client HTTP sau un pool de conexiuni se creează o dată, la pornire, și se închide la oprire. FastAPI are un singur loc pentru amândouă.",
       e: "`lifespan` rulează codul de dinainte de `yield` la pornire și pe cel de după la oprire. `on_event` e depreciat în favoarea lui." },
     { id: "asgi-13", lvl: 2, q: "Ce garantează `BackgroundTasks` din FastAPI?", o: [
-      "Rulează funcția după trimiterea răspunsului, în același proces; dacă procesul moare, sarcina se pierde",
-      "Pune sarcina într-o coadă durabilă, cu retry",
-      "Rulează sarcina într-un proces separat",
-      "Întârzie răspunsul până termină sarcina"],
+      "Rulează funcția după trimiterea răspunsului, în același proces",
+      "Pune sarcina într-o coadă durabilă, cu retry automat la eroare",
+      "Rulează sarcina într-un proces separat, care supraviețuiește workerului",
+      "Întârzie răspunsul până termină sarcina, apoi îl trimite clientului"],
       ctx: "Uneori vrei să răspunzi repede și să faci după aceea ceva mic: un email, un log de audit, o invalidare de cache.",
       e: "`BackgroundTasks` e convenabil pentru lucruri mici: clientul primește răspunsul, apoi sarcina rulează în același worker. Nu are coadă, retry sau persistență; pentru lucru care nu are voie să se piardă folosești Celery." },
     { id: "asgi-14", lvl: 1, q: "Ce face prima linie din test?", code: R`app.dependency_overrides[get_db] = (
     lambda: fake_db)
 client = TestClient(app)
 r = client.get("/alerts")`, o: [
-      "Endpoint-urile care cer `Depends(get_db)` primesc `fake_db`, fără schimbări în cod",
+      "Endpoint-urile care cer `Depends(get_db)` primesc `fake_db`",
       "Înlocuiește `get_db` peste tot în proces, și în afara FastAPI",
       "Dezactivează dependența: endpoint-ul primește `None`",
-      "Pornește o bază de date de test"],
+      "Pornește o bază de date de test, în memorie, pentru fiecare cerere"],
       ctx: "`Depends` e mecanismul de dependency injection al FastAPI. `dependency_overrides` e un dicționar pe aplicație.",
       e: "La fiecare cerere, FastAPI caută dependența în `dependency_overrides` și, dacă e acolo, apelează înlocuitorul. Codul endpoint-ului rămâne neschimbat; după test golești dicționarul." },
     { id: "asgi-15", lvl: 2, q: "Funcția întoarce `{\"id\": 1, \"secret\": \"x\"}`. Ce primește clientul?", code: R`class AlertOut(BaseModel):
@@ -391,10 +391,10 @@ def get_alert():
       ctx: "Modelul Pydantic de la intrare validează ce trimite clientul; `response_model` controlează ce trimite serverul.",
       e: "FastAPI trece valoarea întoarsă prin `AlertOut`: câmpurile care nu sunt în model sunt scoase. Așa nu expui din greșeală câmpuri interne." },
     { id: "asgi-16", lvl: 3, q: "Un endpoint cere două dependențe, iar fiecare cere `Depends(get_db)`. De câte ori rulează `get_db` într-o cerere?", o: [
-      "O dată: FastAPI ține minte rezultatul unei dependențe pe durata cererii",
+      "O dată: FastAPI refolosește rezultatul în cadrul cererii",
       "De două ori, câte o sesiune pentru fiecare dependență",
-      "De trei ori, inclusiv pentru endpoint",
-      "O dată pentru toată aplicația"],
+      "De trei ori, inclusiv pentru endpoint, care primește propria sesiune",
+      "O dată pe worker, la prima cerere, apoi se refolosește"],
       ctx: "Dependențele pot depinde la rândul lor de alte dependențe, deci aceeași dependență apare des de mai multe ori în același arbore.",
       e: "Implicit, o dependență e calculată o singură dată pe cerere și refolosită, deci toate primesc aceeași sesiune. Cu `Depends(get_db, use_cache=False)` ai fi primit sesiuni separate." }
   ]);
@@ -508,10 +508,10 @@ function label(x: State) {
       ctx: "O operație e idempotentă dacă efectul a N cereri identice e același ca al uneia. Contează pentru retry-urile automate ale clienților și proxy-urilor.",
       e: "Metodele safe (GET, HEAD, OPTIONS, TRACE) nu schimbă nimic, deci sunt idempotente; PUT și DELETE sunt idempotente fără să fie safe. POST și PATCH nu sunt." },
     { id: "asgi-19", lvl: 2, q: "Un `POST /alerts` primește timeout, fără răspuns. Clientul poate reîncerca în siguranță?", o: [
-      "Doar dacă API-ul acceptă o cheie de idempotență (`Idempotency-Key`)",
-      "Da, POST e idempotent după standard",
-      "Da, dacă reîncearcă în mai puțin de 30 de secunde",
-      "Nu, un POST nu se poate reîncerca niciodată"],
+      "Doar cu o cheie de idempotență (`Idempotency-Key`)",
+      "Da, POST e idempotent după RFC 9110, ca PUT și DELETE",
+      "Da, dacă reîncearcă imediat, în mai puțin de 30 de secunde",
+      "Nu, un POST care a dat timeout nu se mai poate reîncerca"],
       ctx: "La un timeout, clientul nu știe dacă serverul a primit cererea și a creat alerta sau nu.",
       e: "POST nu e idempotent: un retry poate crea a doua alertă. Cu o cheie trimisă de client, serverul recunoaște cererea repetată și întoarce același răspuns (exercițiul k13)." },
     { id: "asgi-20", lvl: 2, q: "Body-ul e valid, dar o alertă cu același `external_id` există deja. Ce status întorci?", o: [
