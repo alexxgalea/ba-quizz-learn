@@ -17,9 +17,9 @@ Limită: Un membru `private` sau `protected` face compararea nominală pentru ac
 La interviu: „TypeScript e structural: un tip e compatibil dacă are forma cerută, indiferent de nume. Dacă vreau tipuri distincte, adaug un câmp-etichetă sau un membru privat.”
 Verificare: Două `type` cu aceleași câmpuri, `A` și `B`. Poți pasa un `A` unei funcții care cere `B`?
 Răspuns verificare: Da. Alias-urile nu creează tipuri noi, iar tiparea e structurală: contează doar forma.
-Varianta greșită B: În C++ ar pica, dar TypeScript nu e nominal. Eroarea apare doar când formele nu se potrivesc.
+Varianta greșită B: În C++ ar pica, dar TypeScript nu e nominal. Numele clasei nu intră în comparație; eroarea apare când formele nu se potrivesc.
 Varianta greșită C: `strict` nu schimbă regula de compatibilitate. Nu compară numele claselor.
-Varianta greșită D: Nu ai nevoie de `as`. Un `as` ar ascunde un tip care deja se potrivește.
+Varianta greșită D: Nu ai nevoie de `as`. Formele coincid, deci apelul compilează direct, iar un `as` ar ascunde doar o eroare viitoare.
 
 ### ts-02
 Pe scurt: Doar `b` dă eroare: un literal de obiect cu proprietate în plus pică (TS2353), o variabilă cu aceeași formă nu.
@@ -39,9 +39,9 @@ Limită: Verificarea nu protejează la runtime: obiectul `a` are tot câmpul `y`
 La interviu: „TypeScript acceptă proprietăți în plus pe o variabilă, dar nu pe un literal de obiect. Verificarea de la literal prinde greșelile de scriere.”
 Verificare: `const c: P = { ...o }` compilează?
 Răspuns verificare: Da. Proprietățile care vin dintr-un spread nu declanșează verificarea.
-Varianta greșită B: `a` nu dă eroare: `o` e o variabilă, nu un literal. `y` în plus e permis prin tiparea structurală.
-Varianta greșită C: Tocmai `a` trece. Tipul lui `o` conține `x: number`, deci e compatibil cu `P`.
-Varianta greșită D: Tocmai pentru literale există TS2353: acolo un câmp în plus e semnalat, ca o posibilă greșeală de scriere.
+Varianta greșită B: `a` nu dă eroare: `o` e o variabilă, nu un literal. Un câmp `y` în plus e permis de tiparea structurală; doar `b` e verificat strict.
+Varianta greșită C: Tocmai `a` trece. Tipul lui `o` conține `x: number`, deci e compatibil cu `P`, chiar dacă are și `y`.
+Varianta greșită D: Excepția există tocmai pentru literale: acolo un câmp în plus (TS2353) e semnalat ca posibilă greșeală de scriere.
 
 ### ts-03
 Pe scurt: `I` primește ambele câmpuri, iar al doilea `T` dă „Duplicate identifier” (TS2300).
@@ -62,9 +62,9 @@ Limită: Prin `extends`, un câmp cu tip incompatibil dă eroare (TS2430), iar p
 La interviu: „Interfața se poate redeschide și extinde; tipul poate numi uniuni și tupluri. Pentru un obiect simplu sunt aproape echivalente, așa că rămân consecvent.”
 Verificare: Poți scrie `interface Id = string | number`?
 Răspuns verificare: Nu. O interfață descrie doar forma unui obiect. Pentru o uniune folosești `type`.
-Varianta greșită B: Doar interfețele se îmbină. Un alias duplicat dă TS2300.
-Varianta greșită C: Interfețele cu același nume nu dau eroare: tocmai asta e declaration merging.
-Varianta greșită D: E invers: `type` e cel care nu se poate redeclara.
+Varianta greșită B: Doar interfețele se îmbină. Un alias `type` nu se poate redeschide, deci al doilea `T` dă TS2300.
+Varianta greșită C: Interfețele cu același nume nu dau eroare: declaration merging le unește într-un singur tip.
+Varianta greșită D: E invers: `interface` e cel care se poate redeschide, iar `type` nu se poate redeclara.
 
 ### ts-04
 Pe scurt: Compilează, dar la runtime aruncă `TypeError: v.toUpperCase is not a function`.
@@ -84,9 +84,9 @@ Limită: `typeof`, `in` și `instanceof` directe în `if` sunt verificate de com
 La interviu: „Un type guard cu `x is T` e încredere, nu verificare: compilatorul nu citește corpul. Pentru date externe folosesc `unknown` și un validator, nu un guard scris la repezeală.”
 Verificare: Un guard corect pentru `string`?
 Răspuns verificare: `(x: unknown): x is string => typeof x === "string"`. Predicatul și verificarea spun același lucru.
-Varianta greșită B: Predicatul și corpul nu sunt comparate. Compilatorul nu dă nicio eroare.
-Varianta greșită C: `toUpperCase` nu există pe un număr, deci apelul aruncă la runtime.
-Varianta greșită D: `unknown` se poate restrânge, inclusiv printr-un type guard. Aici compilează.
+Varianta greșită B: Compilatorul nu compară corpul cu predicatul. Ia `x is string` drept adevărat, deci nu dă nicio eroare.
+Varianta greșită C: JavaScript nu convertește automat un număr în string la apelul unei metode: `toUpperCase` nu există pe `5`, deci aruncă `TypeError`.
+Varianta greșită D: Un type guard e tocmai unealta cu care restrângi un `unknown`. Aici compilează, cu tot cu minciuna din corp.
 
 ### ts-05
 Pe scurt: `T` n-are constrângeri, deci nu se știe că are `length` (TS2339); repari cu `T extends { length: number }`.
@@ -106,9 +106,9 @@ Limită: Constrângerea se verifică la compilare. La runtime nu rămâne nimic 
 La interviu: „Fără constrângere, `T` e orice tip, deci nu pot citi câmpuri. Cu `extends` cer forma minimă de care am nevoie, iar apelul pică dacă argumentul n-o are.”
 Verificare: Ce tip deduce TypeScript pentru `T` în `len([1, 2])`?
 Răspuns verificare: `number[]`, din argument. Îl poți da și explicit: `len<number[]>([1, 2])`.
-Varianta greșită B: `length` există pe array-uri și string-uri. Problema e că `T` nu spune asta. `any` ar ascunde eroarea.
-Varianta greșită C: Tipul de întoarcere nu are legătură cu eroarea TS2339 de pe `x.length`.
-Varianta greșită D: Generics pot accesa proprietăți, dar doar pe cele garantate de constrângere.
+Varianta greșită B: `length` există pe string-uri și array-uri. Problema e că `T` nu spune asta, iar `any` ar ascunde eroarea în loc s-o rezolve.
+Varianta greșită C: Tipul de întoarcere nu are legătură cu TS2339 de pe `x.length`: eroarea apare la citirea proprietății, nu la `return`.
+Varianta greșită D: Generics pot accesa proprietăți, dar numai pe cele garantate de constrângere. O supraîncărcare nu schimbă ce știe compilatorul despre `T`.
 
 ### ts-06
 Pe scurt: Doar `c` dă eroare: `Pick` păstrează `name` și `email`, deci `id` e în plus (TS2353).
@@ -128,9 +128,9 @@ Limită: Utility types sunt doar tipuri: dispar la runtime și nu validează un 
 La interviu: „`Pick` alege câmpuri, `Omit` le scoate, `Partial` le face opționale. Le combin ca să derivez un tip dintr-altul, ca să nu-l copiez.”
 Verificare: Ce face `Omit<User, "email">`?
 Răspuns verificare: Un tip cu `id` și `name`, adică `User` fără `email`.
-Varianta greșită B: `Partial` acceptă un obiect gol. Toate câmpurile devin opționale.
-Varianta greșită C: `a` e valid, iar `Pick` nu face câmpurile obligatorii. Le păstrează cu opționalitatea originală.
-Varianta greșită D: `Partial` se aplică doar la tipul primit, adică la cel din `Pick`. Nu la tot `User`.
+Varianta greșită B: `Partial` acceptă un obiect gol: toate câmpurile devin opționale. Iar `b` are `name`, deci e valid oricum.
+Varianta greșită C: `a` e valid: `Partial` e aplicat peste `Pick`, deci `name` și `email` sunt opționale, iar `{}` e bun.
+Varianta greșită D: `Partial` se aplică doar tipului primit, adică celui rezultat din `Pick`. `id` nu mai există în el, deci `c` pică.
 
 ### ts-07
 Pe scurt: Doar ultimul rând dă eroare: `b.red` e `unknown` (TS18046), fiindcă anotarea lărgește tipul.
@@ -150,9 +150,9 @@ Limită: `satisfies` apare în TypeScript 4.9. Nu convertește nimic și nu veri
 La interviu: „O anotare lărgește tipul valorii la cel declarat. `satisfies` verifică forma, dar păstrează tipul exact.”
 Verificare: Ce tip are `cfg.mode` după `const cfg = { mode: "dark" } as const`?
 Răspuns verificare: `"dark"`, un literal readonly. Fără `as const` ar fi `string`.
-Varianta greșită B: `satisfies` nu pierde tipul. Tocmai îl păstrează.
+Varianta greșită B: `satisfies` nu pierde tipul. Tocmai îl păstrează: `a.red` rămâne `number[]`, deci `map` merge.
 Varianta greșită C: `a.red` e `number[]`, deci are `map`. Doar `b.red` e `unknown`.
-Varianta greșită D: Tipurile diferă: anotarea lărgește, `satisfies` nu.
+Varianta greșită D: Tipurile diferă: anotarea înlocuiește tipul valorii cu cel declarat, iar `satisfies` doar verifică forma și îl lasă exact.
 
 ### ts-08
 Pe scurt: `u` are tipul `null`, iar `setU({ id: 1 })` pică la compilare (TS2353).
@@ -170,9 +170,9 @@ Limită: Genericul explicit nu verifică ce pui în state la runtime. Un răspun
 La interviu: „`useState` deduce tipul din valoarea inițială. Pentru `null` dau genericul, `useState<User | null>(null)`.”
 Verificare: Ce tip are `u` din `useState<User | null>(null)` după `if (u) {…}`, înăuntru?
 Răspuns verificare: `User`. Verificarea de truthiness restrânge tipul (narrowing).
-Varianta greșită B: TypeScript nu deduce din apelurile `setU`. Deduce doar din valoarea inițială.
-Varianta greșită C: `null` nu devine `any`. Rămâne tipul `null`.
-Varianta greșită D: Un obiect nu e compatibil cu `null` sub `strictNullChecks`. Eroarea e TS2353.
+Varianta greșită B: TypeScript nu deduce din apelurile `setU`. Deduce doar din valoarea inițială, adică `null`.
+Varianta greșită C: `null` nu devine `any`. Rămâne tipul `null`, iar `setU` cere `null`.
+Varianta greșită D: Un obiect nu e compatibil cu `null` sub `strictNullChecks`, deci `setU({ id: 1 })` pică (TS2353).
 
 ### ts-09
 Pe scurt: `names[0]` devine `string | undefined`, iar `first.toUpperCase()` pică (TS18048).
@@ -191,9 +191,9 @@ Limită: Flag-ul face codul mai verbos: după un `for` pe indici trebuie verific
 La interviu: „`strict` nu include `noUncheckedIndexedAccess`. Îl pornesc, ca un acces prin index să dea `T | undefined`.”
 Verificare: Prinde `noUncheckedIndexedAccess` un `as User` greșit?
 Răspuns verificare: Nu. Flag-ul privește doar accesul prin index. `as` rămâne promisiunea ta.
-Varianta greșită B: `strict` nu include flag-ul. Îl pornești separat.
-Varianta greșită C: Tipul devine `string | undefined`, nu `string`. Iar `names[5]` e vizibil ca posibil `undefined`.
-Varianta greșită D: Indexarea rămâne permisă. Flag-ul doar adaugă `undefined` la rezultat.
+Varianta greșită B: `strict` nu include flag-ul. Îl pornești separat în `tsconfig`, altfel `first` rămâne `string`.
+Varianta greșită C: Flag-ul nu are legătură cu limitele: tipul lui `names[0]` devine `string | undefined`, iar `names[5]` nu pică niciodată la compilare.
+Varianta greșită D: Indexarea rămâne permisă. Flag-ul doar adaugă `undefined` la tipul rezultatului.
 
 ### ts-10
 Pe scurt: Eroare TS18046: `x` e `unknown`, deci trebuie restrâns înainte de folosire.
@@ -213,9 +213,9 @@ Limită: `unknown` nu validează nimic singur: te obligă doar să verifici. Pen
 La interviu: „`any` oprește verificarea, `unknown` o păstrează: accept orice, dar trebuie să restrâng tipul înainte să-l folosesc. Pentru date din afară aleg `unknown`.”
 Verificare: Ce tip are `e` în `catch (e)` cu `strict` pornit?
 Răspuns verificare: `unknown`, prin `useUnknownInCatchVariables`, care face parte din `strict`. Verifici cu `e instanceof Error` înainte de `e.message`.
-Varianta greșită B: `unknown` nu se comportă ca `any`: tocmai interzice operațiile până la restrângere.
-Varianta greșită C: Eroarea apare la compilare, nu la runtime; codul nici nu se compilează.
-Varianta greșită D: Compilatorul verifică funcția după tipul declarat, nu după apelurile ei.
+Varianta greșită B: `unknown` nu se comportă ca `any`: tocmai interzice metodele și câmpurile până la restrângere.
+Varianta greșită C: Eroarea apare la compilare, nu la runtime: codul nici nu se compilează.
+Varianta greșită D: Compilatorul verifică corpul funcției după tipul declarat al parametrului, nu după apelurile ei.
 
 ### ts-11
 Pe scurt: Eroare TS2741, lipsește `id`: `Omit` nu verifică dacă `"idd"` e o cheie, deci n-a scos nimic.
@@ -241,9 +241,9 @@ Limită: Dacă vrei verificarea cheilor, scrii un tip propriu: `type StrictOmit<
 La interviu: „`Omit` scoate câmpuri, dar nu verifică dacă ele există, iar `Pick` verifică. O cheie scrisă greșit în `Omit` nu scoate nimic.”
 Verificare: Ce dă `Pick<User, "idd">`?
 Răspuns verificare: Eroare la cheie (TS2344): `Pick` cere `K extends keyof T`, iar `"idd"` nu e cheie a lui `User`.
-Varianta greșită B: `Omit` nu dă eroare la o cheie inexistentă; constrângerea ei e `keyof any`.
-Varianta greșită C: `NewUser` păstrează `id`, fiindcă `"idd"` n-a scos nimic.
-Varianta greșită D: `Omit` scoate câmpuri; cel care le face opționale e `Partial`.
+Varianta greșită B: `Omit` nu dă eroare la o cheie inexistentă: constrângerea lui `K` e `keyof any`. `Pick` e cel strict.
+Varianta greșită C: `NewUser` păstrează `id`, fiindcă `"idd"` n-a scos nimic; de aceea literalul fără `id` pică.
+Varianta greșită D: `Omit` scoate chei, nu face nimic opțional. Opționalitatea vine din `Partial`.
 
 ### ts-12
 Pe scurt: Nu: `Partial` lucrează pe un nivel, deci `address`, dacă apare, cere și `zip` (TS2741).
@@ -262,9 +262,9 @@ Limită: Biblioteca standard nu are `DeepPartial`; îl scrii recursiv sau îl ie
 La interviu: „`Partial`, `Readonly` și `Required` lucrează pe un singur nivel. Pentru câmpuri imbricate scriu tipul explicit sau un tip recursiv.”
 Verificare: Poți modifica `cfg.db.host` dacă `cfg` are tipul `Readonly<Config>`?
 Răspuns verificare: Da, dacă `db` nu e și el `readonly`. `Readonly` blochează doar `cfg.db = …`, nu câmpurile din interiorul lui `db`.
-Varianta greșită B: `Partial` nu coboară în obiectele imbricate.
-Varianta greșită C: Cu `Partial`, `name` devine opțional; lipsa lui nu e problema.
-Varianta greșită D: Literalul nici nu compilează, deci nu ajunge la runtime.
+Varianta greșită B: `Partial` nu coboară în obiectele imbricate: `address` devine opțional, dar tipul lui rămâne complet.
+Varianta greșită C: `Partial` face opționale toate câmpurile de pe primul nivel, deci și `name`; lipsa lui nu e problema.
+Varianta greșită D: Literalul nici nu compilează (TS2741), deci nu ajunge la runtime.
 
 ### ts-13
 Pe scurt: `getUser` e o valoare, nu un tip (TS2749). Scrii `ReturnType<typeof getUser>`.
@@ -280,9 +280,9 @@ Limită: O clasă e și valoare, și tip: `User` ca tip înseamnă instanța, ia
 La interviu: „Un generic primește tipuri. Ca să iau tipul unei funcții scriu `typeof f`, apoi `ReturnType<typeof f>` sau `Parameters<typeof f>`.”
 Verificare: Ce dă `Parameters<typeof getUser>`?
 Răspuns verificare: `[]`, un tuplu gol, fiindcă `getUser` nu are parametri. Pentru `(id: number) => …` ar fi `[id: number]`.
-Varianta greșită B: `ReturnType` merge pe orice tip de funcție, sincronă sau nu.
-Varianta greșită C: Tipul de retur se deduce; nu trebuie scris.
-Varianta greșită D: Codul nu compilează: `getUser` nu e un tip.
+Varianta greșită B: `ReturnType` merge pe orice tip de funcție, sincronă sau `async`. Problema e `getUser` folosit ca tip.
+Varianta greșită C: Tipul de retur se deduce din corp; nu trebuie scris. Eroarea e despre `getUser` în poziție de tip.
+Varianta greșită D: Codul nu compilează: `ReturnType<getUser>` primește o valoare acolo unde se cere un tip (TS2749).
 
 ### ts-14
 Pe scurt: `Promise<{ id: number }>`. Tipul obiectului îl dă `Awaited<ReturnType<typeof getUser>>`.
@@ -305,9 +305,9 @@ Limită: `Awaited` desface și `Promise<Promise<T>>`, ca `await`. Pe un tip care
 La interviu: „O funcție `async` întoarce `Promise<T>`, deci `ReturnType` dă promisiunea. Cu `Awaited` iau tipul de după `await`.”
 Verificare: Cum ai obține `id: 1`, cu valoarea exactă?
 Răspuns verificare: Cu `return { id: 1 } as const` în funcție: obiectul devine `{ readonly id: 1 }`.
-Varianta greșită B: `ReturnType` nu așteaptă nimic; dă tipul de retur exact, promisiunea.
-Varianta greșită C: Fără `as const`, literalul `1` din obiect se lărgește la `number`.
-Varianta greșită D: Tipul se deduce complet; `async` nu îl face `any`.
+Varianta greșită B: `ReturnType` nu așteaptă nimic; dă tipul de retur exact, adică promisiunea. Pentru conținut ai nevoie de `Awaited`.
+Varianta greșită C: Fără `as const`, literalul `1` dintr-un obiect se lărgește la `number`, fiindcă proprietatea e mutabilă.
+Varianta greșită D: Tipul se deduce complet; `async` nu îl face `any`, ci îl înfășoară în `Promise`.
 
 ### ts-15
 Pe scurt: `["0", "1", "Up", "Down"]`: un `enum` numeric e un obiect la runtime, cu mapare și inversă.
@@ -324,9 +324,9 @@ Limită: `const enum` se înlocuiește cu valorile la compilare, dar nu merge cu
 La interviu: „Un `enum` generează un obiect la runtime, cel numeric cu mapare inversă. Prefer o uniune de literale, iar dacă îmi trebuie și lista, `as const`. `erasableSyntaxOnly` interzice `enum`.”
 Verificare: De ce interzice `erasableSyntaxOnly` un `enum`?
 Răspuns verificare: Fiindcă `enum` are efect la runtime și nu poate fi doar șters. Node rulează TypeScript ștergând tipurile, deci un fișier cu `enum` nu ar funcționa așa.
-Varianta greșită B: Lipsesc cheile numerice ale mapării inverse.
-Varianta greșită C: Un `enum` nu e doar un tip; rămâne ca obiect după compilare.
-Varianta greșită D: `Object.keys` întoarce mereu string-uri, iar aici lipsesc și numele.
+Varianta greșită B: Lipsesc cheile numerice ale mapării inverse: `Dir[0]` e `"Up"`, deci `"0"` și `"1"` sunt chei ale obiectului.
+Varianta greșită C: Un `enum` nu e doar un tip: generează un obiect JavaScript, care rămâne după compilare.
+Varianta greșită D: `Object.keys` întoarce mereu string-uri, iar aici lipsesc și numele membrilor.
 
 ### ts-16
 Pe scurt: Rezultatul e dedus ca array de uniuni, `(boolean | (() => void))[]`, deci `toggle` poate fi și `boolean` (TS2349). `as const` îl face tuplu.
@@ -357,9 +357,9 @@ Limită: Cu mai mult de două-trei valori, un obiect (`{ on, toggle }`) e mai cl
 La interviu: „Un literal de array e dedus ca array de uniuni. Pentru o pereche ca la `useState` pun `as const` sau un tip de retur explicit, ca să fie tuplu.”
 Verificare: Ce tip are `on` după destructurarea variantei cu `as const`?
 Răspuns verificare: `boolean`. Cu `as const`, poziția 0 a tuplului are tipul lui `on` din funcție, nu uniunea.
-Varianta greșită B: Un hook poate întoarce orice, inclusiv funcții; problema e tipul dedus.
-Varianta greșită C: Destructurarea cu `const` nu are legătură cu eroarea; funcția schimbă variabila `on` din interiorul hook-ului, nu copia destructurată.
-Varianta greșită D: `toggle` are tipul `boolean | (() => void)`, nu `() => void`.
+Varianta greșită B: Un hook poate întoarce orice, inclusiv funcții. Problema e tipul dedus pentru array, nu ce întoarce.
+Varianta greșită C: Destructurarea cu `const` nu are legătură cu eroarea: funcția modifică variabila `on` din interiorul hook-ului, nu copia destructurată.
+Varianta greșită D: Tuplul `readonly` apare doar cu `as const` sau cu un tip explicit. Fără ele, `toggle` e `boolean | (() => void)` și pică.
 
 ### ts-17
 Pe scurt: `string[] | number[]`: un conditional type se aplică separat pe fiecare membru al uniunii.
@@ -384,6 +384,6 @@ Limită: Distribuirea are loc doar pentru un parametru generic gol. `string | nu
 La interviu: „Un conditional type pe un generic gol se distribuie peste uniune. Dacă vreau uniunea întreagă, înfășor ambele părți în paranteze pătrate.”
 Verificare: Ce dă `Exclude<"a" | "b" | "c", "a">`?
 Răspuns verificare: `"b" | "c"`. Condiția se aplică pe fiecare membru: `"a"` devine `never`, ceilalți rămân, iar `never` dispare din uniune.
-Varianta greșită B: Ar fi rezultatul fără distribuire, cu `[T] extends [unknown]`.
+Varianta greșită B: Ar fi rezultatul fără distribuire, cu `[T] extends [unknown]`. Aici `T` e un parametru gol, deci se distribuie.
 Varianta greșită C: Orice tip extinde `unknown`, deci se alege ramura `T[]`, nu `never`.
-Varianta greșită D: `T` nu se pierde; se aplică fiecărui membru al uniunii.
+Varianta greșită D: `T` nu se înlocuiește cu `unknown`: `extends unknown` e doar condiția, iar `T[]` păstrează fiecare membru al uniunii.
