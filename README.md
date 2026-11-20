@@ -102,6 +102,17 @@ Fiecare item știe ce puncte ale fișei atinge (Val 0.1, `.scratch/fundatie-conc
 - **Validarea** (`checkPoints` în `lib.mjs`, chemată de `validate.mjs`): eroare la un index inexistent, la un `kp` de altă lungime decât `k` și la o referință de kata greșită; avertisment, pe modul, la itemii fără câmp, iar pe modulele etichetate complet (`PT_DONE`: `asyncio`) eroare. Pentru acestea, raportul spune punctele fără nicio grilă și pe cele fără nicio formă de producție (card oral, schelet, kata).
 - **Jurnalul**: fiecare eveniment `answer` poartă `points` (`["asyncio:3", …]`), calculat în `add` din câmpul itemului (`ptsOf`); la cardul oral, punctele din `kp`.
 
+## Indicii de formă
+
+O grilă trebuie să măsoare ce știi, nu cât de bine citești forma variantelor (`.scratch/grile-fara-tipar/`). Ordinea variantelor e deja amestecată la afișare, deci contează textul lor. `checkCues` (`lib.mjs`, chemată de `validate.mjs`) urmărește două indicii; pragurile stau în `CUE`.
+
+- **Lungimea** (`optLen`: caractere vizibile, fără backtick-uri). Regula pe grilă: varianta corectă nu e cu mai mult de 1,15× și 8 caractere peste cea mai lungă greșită.
+- **Cuvintele absolute** (`ABS_WORDS`: mereu, niciodată, doar, orice…; cuvânt întreg, cu diacritice).
+- **Regulile pe modul**, cu `k = ceil(0,35 × n)`: corecta e strict cea mai lungă în cel mult `k` grile și strict cea mai scurtă în cel mult `k` (altfel „alege-o pe cea mai scurtă” devine tiparul); proporția variantelor greșite cu absolut ≤ proporția celor corecte + 10 puncte.
+- **Clichetul**: `tools/cue_baseline.json` are id-urile care încalcă azi regula pe grilă (67 la început). `validate.mjs` pică la o încălcare nouă și la un id din listă care nu mai încalcă (lista scade, nu minte). Regulile pe modul sunt erori doar pe modulele din `CUE_DONE` (`lib.mjs`), altfel doar raport (tabelul de la `validate.mjs`).
+- **Cum scoți un modul din listă**: rescrii grilele (întrebarea, ordinea și `a: 0` rămân; justificarea trece în explicație, variantele greșite capătă un detaliu concret, plauzibil și fals), ștergi id-urile modulului din `tools/cue_baseline.json` și adaugi modulul în `CUE_DONE`. La sfârșit lista e goală și se șterge.
+- **Utilitar**: `node tools/cues.mjs <modul…>` (`--viol`, `--all`, `--baseline`); test: `tools/unit/cues.test.mjs`.
+
 ## Formatul explicațiilor
 
 Fiecare grilă are o secțiune în `src/expl/*.md`, cu id-ul ei:

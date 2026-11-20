@@ -14,6 +14,10 @@ _Avoid_: utilizator (se confundă cu `user` din capabilitățile artifactului), 
 O temă a interviului (asyncio, OOP, pytest, frontend...), cu prioritatea ei, fișa, grilele și cardurile orale.
 _Avoid_: temă (în cod), capitol
 
+**Indiciu de formă**:
+Ceva din forma variantelor unei grile care trădează răspunsul fără cunoștințe: varianta corectă mai lungă decât celelalte, un cuvânt absolut („mereu”, „niciodată”) doar în cele greșite. O grilă bună măsoară ce știe Alex, nu cât de bine citește forma variantelor.
+_Avoid_: tipar, pattern de răspuns
+
 **Fișă**:
 Rezumatul de învățat al unui modul: o idee principală, punctele de reținut și formulările de evitat.
 _Avoid_: cheat sheet, foaie
