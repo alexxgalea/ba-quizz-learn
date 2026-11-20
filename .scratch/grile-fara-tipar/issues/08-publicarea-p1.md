@@ -6,8 +6,10 @@
 
 **Blocked by:** 02, 03, 04, 05, 06, 07
 
-**Status:** ready-for-agent
+**Progres:** Toate modulele P1 sunt în regulă; suita completă (25 de teste de interfață, `desf_examples` cu rezervele de mediu, `test:unit`) a trecut pe ramura PR-ului #21, iar `docs/app` e construit (BUILD = "44202dd"). Rămân, după îmbinarea PR-ului în `main`: verificarea `BUILD` pe adresa live și mesajul pentru Alex.
 
-- [ ] Toate modulele P1 (`python`, `oop`, `gil`, `asyncio`, `asgi`, `pytest`, `design`, `js`, `ts`, `react`, `frontend`, `fedebug`) sunt în `CUE_DONE`.
-- [ ] Suita completă din `CLAUDE.md`, `node tools/desf_examples.mjs`, `npm run test:unit` trec.
+**Status:** ready-for-human
+
+- [x] Toate modulele P1 (`python`, `oop`, `gil`, `asyncio`, `asgi`, `pytest`, `design`, `js`, `ts`, `react`, `frontend`, `fedebug`) sunt în `CUE_DONE`.
+- [x] Suita completă din `CLAUDE.md`, `node tools/desf_examples.mjs`, `npm run test:unit` trec.
 - [ ] PR îmbinat, `BUILD` verificat pe adresa live, mesajul trimis.

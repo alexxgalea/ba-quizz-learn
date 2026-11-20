@@ -14,11 +14,12 @@ Azi:
 
 **Blocked by:** 01, 08, 09
 
-**Progres:** partea de module e făcută (redis, rabbitmq, ops, docker, linux, graphql, aws, dbmodels, domain, perf, django în `CUE_DONE`); rămân curățarea clichetului și publicarea.
 
-**Status:** ready-for-agent
+**Progres:** Toate cele 29 de module trec toate regulile; `tools/cue_baseline.json` și `CUE_DONE` au dispărut, `checkCues(P)` nu mai are clichet, testele și documentația sunt aduse la zi. PWA construit în `docs/app` (BUILD = "44202dd"). Rămân, după îmbinarea PR-ului în `main`: verificarea `BUILD` live și mesajul pentru Alex.
 
-- [ ] Toate modulele trec toate regulile; `tools/cue_baseline.json` nu mai există; `node validate.mjs` → OK.
-- [ ] `tools/unit/cues.test.mjs` adus la regula fără clichet; `npm run test:unit` trece.
-- [ ] README și `CLAUDE.md` spun că regula e completă (fără listă de bază).
+**Status:** ready-for-human
+
+- [x] Toate modulele trec toate regulile; `tools/cue_baseline.json` nu mai există; `node validate.mjs` → OK.
+- [x] `tools/unit/cues.test.mjs` adus la regula fără clichet; `npm run test:unit` trece.
+- [x] README și `CLAUDE.md` spun că regula e completă (fără listă de bază).
 - [ ] Suita completă; PWA publicat; `BUILD` verificat live; mesajul scurt pentru Alex.
