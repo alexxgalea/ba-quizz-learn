@@ -8,7 +8,7 @@ Azi (18 grile, `k` = 7): corecta e cea mai lungă în 14 (✗), cea mai scurtă 
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `oop` e în `CUE_DONE`, nicio grilă `oop-*` în listă; `node validate.mjs` → OK.
 - [x] `node tools/xcheck.mjs oop` citit integral; explicațiile variantelor greșite schimbate sunt noi.

@@ -11,7 +11,7 @@ Azi:
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `asyncio`, `asgi`, `gil` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
 - [x] `node tools/xcheck.mjs asyncio asgi gil` citit integral; explicațiile variantelor greșite schimbate sunt noi.

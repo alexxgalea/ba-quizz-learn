@@ -447,8 +447,6 @@ export function proposeTags(P, m) {
 // ---------- indiciile de formă (`.scratch/grile-fara-tipar/`, tichetul 01) ----------
 // Lungimea variantelor și cuvintele absolute nu trebuie să trădeze răspunsul. Pragurile stau aici, într-un singur loc.
 export const CUE = { ratio: 1.15, gap: 8, rankShare: 0.35, absPp: 10 };
-// Modulele refăcute: toate regulile (și rangul, și cuvintele absolute) sunt erori, iar nicio grilă de-a lor nu poate sta în `tools/cue_baseline.json`.
-export const CUE_DONE = ["pytest", "python", "design", "frontend", "fedebug", "js", "oop", "ts", "react", "asyncio", "asgi", "gil", "redis", "rabbitmq", "ops", "docker", "linux", "graphql", "aws", "dbmodels", "domain", "perf", "django", "runtime", "index", "sqlalchemy", "postgres", "celery", "security"];
 export const ABS_WORDS = ["mereu", "niciodată", "întotdeauna", "doar", "numai", "orice", "oricând", "toate", "toți", "niciun", "nicio", "imposibil", "garantat", "exclusiv"];
 // Lungimea vizibilă a unei variante: fără backtick-uri (codul se numără, delimitatorii nu).
 export const optLen = s => [...String(s || "").replace(/`/g, "")].length;
@@ -465,26 +463,22 @@ export function cueGrid(q) {
     abs: q.o.map(absWords)
   };
 }
-// Regulile și raportul. `done`: modulele refăcute; `baseline`: id-urile care încalcă regula pe grilă și sunt tolerate (clichet).
+// Regulile și raportul; toate sunt erori, pe toate modulele (nu mai există clichet: lista de bază a fost golită și ștearsă).
 // Întoarce { errors, report: { modul: { n, longest, shortest, absCorrect, absWrong, wrongTotal, viol, k } } }.
-export function checkCues(P, { done = CUE_DONE, baseline = [] } = {}) {
-  const errors = [], report = {}, base = new Set(baseline), seen = new Set();
+export function checkCues(P) {
+  const errors = [], report = {};
   for (const m of P.modules) report[m.id] = { n: 0, longest: 0, shortest: 0, absCorrect: 0, absWrong: 0, wrongTotal: 0, viol: 0, k: 0 };
   for (const q of P.mcq || []) {
     const r = report[q.m] || (report[q.m] = { n: 0, longest: 0, shortest: 0, absCorrect: 0, absWrong: 0, wrongTotal: 0, viol: 0, k: 0 });
     const g = cueGrid(q);
-    seen.add(q.id);
     r.n++; if (g.longest) r.longest++; if (g.shortest) r.shortest++;
     g.abs.forEach((a, i) => { if (i === q.a) { if (a.length) r.absCorrect++; } else { r.wrongTotal++; if (a.length) r.absWrong++; } });
     if (g.viol) r.viol++;
     const lens = g.lens.join("/");
-    if (g.viol && !base.has(q.id)) errors.push(q.id + ": varianta corectă iese în evidență prin lungime (" + lens + "; corectă / cea mai lungă greșită = " + g.ratio.toFixed(2) + "); regulile: > " + CUE.ratio + "× și > " + CUE.gap + " caractere (tools/cues.mjs " + q.m + ")");
-    if (!g.viol && base.has(q.id)) errors.push(q.id + ": nu mai încalcă regula de lungime, dar e încă în tools/cue_baseline.json; scoate-l din listă");
-    if (base.has(q.id) && done.includes(q.m)) errors.push(q.id + ": modulul " + q.m + " e în CUE_DONE, deci grila nu poate sta în tools/cue_baseline.json");
+    if (g.viol) errors.push(q.id + ": varianta corectă iese în evidență prin lungime (" + lens + "; corectă / cea mai lungă greșită = " + g.ratio.toFixed(2) + "); regulile: > " + CUE.ratio + "× și > " + CUE.gap + " caractere (tools/cues.mjs " + q.m + ")");
   }
-  for (const id of base) if (!seen.has(id)) errors.push(id + ": id din tools/cue_baseline.json care nu mai există în date; scoate-l din listă");
-  for (const m of done) {
-    const r = report[m]; if (!r || !r.n) continue;
+  for (const [m, r] of Object.entries(report)) {
+    if (!r.n) continue;
     r.k = Math.ceil(0.35 * r.n);
     if (r.longest > r.k) errors.push(m + ": corecta e cea mai lungă în " + r.longest + " din " + r.n + " grile (cel mult " + r.k + ")");
     if (r.shortest > r.k) errors.push(m + ": corecta e cea mai scurtă în " + r.shortest + " din " + r.n + " grile (cel mult " + r.k + ")");

@@ -27,7 +27,7 @@ Aplicația de pregătire a lui Alex pentru interviurile de la Onapsis. Rolul e c
 - `node tools/dumpmod.mjs <modul...>`: grilele fără explicație nouă, cu variantele A*–D, contextul și explicația veche.
 - `node tools/xcheck.mjs <modul|id...>`: fiecare variantă greșită lângă explicația ei.
 - `node tools/tagpoints.mjs <modul...>`: propunerile de legături item–punct (`pt` / `kp`) pentru un modul; doar propuneri, le confirmi citind fiecare item.
-- `node tools/cues.mjs <modul…> [--viol] [--all]`: pe fiecare grilă lungimile variantelor (A* = corecta), raportul, rangul și cuvintele absolute, apoi regulile de modul cu ✓ / ✗; `--baseline` rescrie `tools/cue_baseline.json` (doar la început, apoi lista se micșorează de mână).
+- `node tools/cues.mjs <modul…> [--viol] [--all]`: pe fiecare grilă lungimile variantelor (A* = corecta), raportul, rangul și cuvintele absolute, apoi regulile de modul cu ✓ / ✗.
 - `node tools/fencew.mjs [coloane]`: rândurile din blocurile de cod mai lungi decât limita.
 - `node tools/desf_examples.mjs`: rulează blocurile Python (`# → …` / `# ! Tip`) și JS (`// → …` / `// ! Tip`, ca modul ESM) din desfășurări și trece blocurile `ts` prin `tsc --strict` (`// ! TS2322` pe rândul cu eroarea voită); TSX-ul și C++ se verifică de mână.
 - `python3 tools/shot_q.py <modul> <ID> [dark]`: screenshot cu explicația desfășurată, la 360 px.

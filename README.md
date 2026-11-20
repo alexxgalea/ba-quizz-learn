@@ -109,9 +109,8 @@ O grilă trebuie să măsoare ce știi, nu cât de bine citești forma variantel
 - **Lungimea** (`optLen`: caractere vizibile, fără backtick-uri). Regula pe grilă: varianta corectă nu e cu mai mult de 1,15× și 8 caractere peste cea mai lungă greșită.
 - **Cuvintele absolute** (`ABS_WORDS`: mereu, niciodată, doar, orice…; cuvânt întreg, cu diacritice).
 - **Regulile pe modul**, cu `k = ceil(0,35 × n)`: corecta e strict cea mai lungă în cel mult `k` grile și strict cea mai scurtă în cel mult `k` (altfel „alege-o pe cea mai scurtă” devine tiparul); proporția variantelor greșite cu absolut ≤ proporția celor corecte + 10 puncte.
-- **Clichetul**: `tools/cue_baseline.json` are id-urile care încalcă azi regula pe grilă (67 la început). `validate.mjs` pică la o încălcare nouă și la un id din listă care nu mai încalcă (lista scade, nu minte). Regulile pe modul sunt erori doar pe modulele din `CUE_DONE` (`lib.mjs`), altfel doar raport (tabelul de la `validate.mjs`).
-- **Cum scoți un modul din listă**: rescrii grilele (întrebarea, ordinea și `a: 0` rămân; justificarea trece în explicație, variantele greșite capătă un detaliu concret, plauzibil și fals), ștergi id-urile modulului din `tools/cue_baseline.json` și adaugi modulul în `CUE_DONE`. La sfârșit lista e goală și se șterge.
-- **Utilitar**: `node tools/cues.mjs <modul…>` (`--viol`, `--all`, `--baseline`); test: `tools/unit/cues.test.mjs`.
+- **Toate regulile sunt erori, pe toate modulele.** Clichetul din timpul refacerii (lista `tools/cue_baseline.json` și `CUE_DONE`) a dispărut: toate cele 29 de module cu grile au trecut regulile. O grilă nouă sau schimbată care încalcă o regulă oprește `validate.mjs`, cu cifrele. La o grilă nouă: întrebarea, ordinea și `a: 0` rămân; justificarea trece în explicație („Pe scurt” / „Mecanism”), iar variantele greșite capătă un detaliu concret, plauzibil și fals, nu umplutură și nu cuvinte absolute.
+- **Utilitar**: `node tools/cues.mjs <modul…>` (`--viol`, `--all`); test: `tools/unit/cues.test.mjs`.
 
 ## Formatul explicațiilor
 
