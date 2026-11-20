@@ -1318,6 +1318,14 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ **Cuvinte cheie C++** (puncte 2, 5, 6, 9): `std::async`, `future::wait_for`, `catch (...)`, `std::mutex` + `std::condition_variable`, aceleași ca în textul desfășurărilor, deja verificate acolo.
 - Punctele 10 și 11 n-au schemă; cuvintele lor cheie repetă doar fapte din text.
 
+## Grile `oop` fără indicii de formă: variantele greșite noi (rulate în Python 3, 20 noiembrie 2026)
+
+- `{Rule("brute-force")}` cu `@dataclass` simplu: `TypeError: unhashable type: 'Rule'`; `Rule.__hash__` este `None` (deci nu `AttributeError`, nu set gol).
+- `findings: list = []` într-un `@dataclass`: `ValueError: mutable default <class 'list'> for field findings is not allowed: use default_factory`, la definirea clasei; cu `default_factory=list`, instanțele nu împart lista.
+- `@classmethod` apelat pe instanță (`F().from_dict({})`) merge; `cls` e clasa instanței.
+- `__slots__`: atributele din slot-uri se pot reatribui (`x.rule = 5`), iar instanța nu are `__dict__`.
+- `typing.Protocol`: o clasă cu semnătură diferită de contract se importă și rulează; verificarea e doar statică (mypy, pyright). Un `@property` rulează getterul la fiecare acces.
+
 ## Rezumat: ce era greșit sau depinde de versiune
 
 1. `ThreadPoolExecutor` `max_workers`: formula `min(32, os.cpu_count() + 4)` e valabilă doar pentru **3.8–3.12**. Din **3.13** e `min(32, (os.process_cpu_count() or 1) + 4)`.

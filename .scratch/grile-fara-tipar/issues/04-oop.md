@@ -10,8 +10,8 @@ Azi (18 grile, `k` = 7): corecta e cea mai lungă în 14 (✗), cea mai scurtă 
 
 **Status:** ready-for-agent
 
-- [ ] `oop` e în `CUE_DONE`, nicio grilă `oop-*` în listă; `node validate.mjs` → OK.
-- [ ] `node tools/xcheck.mjs oop` citit integral; explicațiile variantelor greșite schimbate sunt noi.
-- [ ] Faptele noi verificate; un rezultat de cod pus într-o variantă greșită e rulat în Python ca să fie sigur greșit.
-- [ ] Build, `node --check`, suita din `CLAUDE.md`.
-- [ ] Screenshot la 360 px, light și dark, pe două grile rescrise.
+- [x] `oop` e în `CUE_DONE`, nicio grilă `oop-*` în listă; `node validate.mjs` → OK.
+- [x] `node tools/xcheck.mjs oop` citit integral; explicațiile variantelor greșite schimbate sunt noi.
+- [x] Faptele noi verificate; un rezultat de cod pus într-o variantă greșită e rulat în Python ca să fie sigur greșit.
+- [x] Build, `node --check`, suita din `CLAUDE.md`.
+- [x] Screenshot la 360 px, light și dark, pe două grile rescrise.
