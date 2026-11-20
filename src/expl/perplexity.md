@@ -414,7 +414,7 @@ Răspuns verificare: Da. Kafka păstrează evenimentele în log, iar consumatoru
 
 Varianta greșită: „Sunt același produs: Kafka e versiunea comercială, plătită, a RabbitMQ” — sunt produse diferite, cu modele de livrare și retenție diferite.
 
-Varianta greșită: „Kafka ține mesajele doar în memorie, RabbitMQ pe disc” — Kafka scrie logul pe disc și poate păstra evenimentele conform retenției configurate.
+Varianta greșită: „Kafka ține mesajele în memorie, RabbitMQ pe disc” — Kafka scrie logul pe disc și poate păstra evenimentele conform retenției configurate.
 
 Varianta greșită: „RabbitMQ nu suportă mai mulți consumatori pe aceeași coadă” — suportă mai mulți consumatori; aceștia împart mesajele din coadă, nu primesc fiecare toate mesajele.
 
@@ -453,7 +453,7 @@ Verificare: Un proces primește `SIGTERM`, dar handlerul său rămâne blocat la
 
 Răspuns verificare: Kubernetes trimite `SIGKILL`. Procesul este oprit imediat, fără să poată executa cleanup-ul.
 
-Varianta greșită: „Sunt identice, diferă doar numărul semnalului trimis” — numerele diferă, dar și comportamentul: `SIGTERM` poate fi tratat, `SIGKILL` nu.
+Varianta greșită: „Sunt identice, diferă numărul semnalului trimis” — numerele diferă, dar și comportamentul: `SIGTERM` poate fi tratat, `SIGKILL` nu.
 
 Varianta greșită: „`-9` oprește grațios procesul, `-15` îl oprește imediat” — este inversat: `-15` este `SIGTERM`, oprirea grațioasă; `-9` este `SIGKILL`, oprirea forțată.
 

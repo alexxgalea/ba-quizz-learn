@@ -20,8 +20,8 @@ La interviu: „Postgres ține fără probleme sute de milioane de rânduri, dac
 Verificare: Ai un tabel de 300 de milioane de evenimente, citit mereu după `system_id` și un interval de timp. Treci pe NoSQL?
 Răspuns verificare: Nu neapărat: un index compus pe `(system_id, created_at)` și partiționarea pe timp rezolvă citirile în Postgres. Ai motiv să schimbi doar dacă rata de scriere depășește ce poate duce un singur primar.
 Varianta greșită B: Câteva milioane de rânduri sunt puține pentru Postgres: cu indexuri, căutările rămân rapide și la sute de milioane.
-Varianta greșită C: NoSQL nu e mereu mai rapid: lipsa JOIN-urilor mută munca în aplicație, iar pentru query-uri variate un SQL indexat e adesea mai bun.
-Varianta greșită D: Multe baze NoSQL oferă consistență reglabilă, unele chiar tranzacții. O formulare absolută arată că nu cunoști opțiunile.
+Varianta greșită C: NoSQL nu e mai rapid în general: lipsa JOIN-urilor mută munca în aplicație, iar pentru query-uri variate un SQL indexat e adesea mai bun.
+Varianta greșită D: Multe baze NoSQL oferă consistență reglabilă, unele chiar tranzacții. A le exclude din start arată că nu cunoști opțiunile.
 
 ### dbm-02
 Pe scurt: Userii și facturile în Postgres, pentru tranzacții și integritate; logurile în Elasticsearch, pentru căutare full-text și agregări pe volum mare.

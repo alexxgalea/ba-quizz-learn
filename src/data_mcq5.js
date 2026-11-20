@@ -108,7 +108,7 @@
         "Publică într-un exchange; consumă dintr-o coadă legată de el",
         "Publică direct într-o coadă; consumă dintr-un exchange",
         "Publică și consumă din același exchange, prin abonare",
-        "Publică într-o coadă; RabbitMQ o copiază în toate celelalte"], a: 0,
+        "Publică într-o coadă; RabbitMQ o copiază în celelalte cozi"], a: 0,
       e: "Producătorul nu scrie direct în cozi: trimite mesajul unui exchange, cu un routing key. Exchange-ul îl pune în cozile legate (binding-uri), după tipul lui (direct, topic, fanout), iar consumatorii citesc din cozi. Exchange-ul implicit (cu numele gol) rutează direct după numele cozii." },
     { id: "rmq-11", q: "Ce e un ack (acknowledgement) în mesagerie?",
       ctx: "Un consumator primește un mesaj din coadă și îl procesează. Brokerul trebuie să afle dacă poate șterge mesajul sau dacă trebuie să-l dea altcuiva.",
@@ -133,7 +133,7 @@
       ctx: "În Redis, multe date sunt temporare: o sesiune, un cod de verificare, un contor pe minut. Ar fi incomod să ții minte să le ștergi manual.",
       o: [
         "Cheia `session:42` va fi ștearsă automat după 3600 de secunde",
-        "Șterge acum toate cheile mai vechi de 3600 de secunde din Redis",
+        "Șterge acum cheile mai vechi de 3600 de secunde din Redis",
         "Blochează cheia `session:42` timp de o oră pentru alți clienți",
         "Salvează cheia pe disc, iar după o oră o mută înapoi în memorie"], a: 0,
       e: "EXPIRE pune un TTL (time to live) pe cheie; `TTL session:42` îți arată cât mai are. Poți seta TTL-ul direct la scriere: `SET session:42 ... EX 3600`. Atenție: un SET ulterior fără EX șterge TTL-ul." }

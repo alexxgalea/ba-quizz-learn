@@ -14,6 +14,8 @@ Azi:
 
 **Blocked by:** 01, 08, 09
 
+**Progres:** partea de module e făcută (redis, rabbitmq, ops, docker, linux, graphql, aws, dbmodels, domain, perf, django în `CUE_DONE`); rămân curățarea clichetului și publicarea.
+
 **Status:** ready-for-agent
 
 - [ ] Toate modulele trec toate regulile; `tools/cue_baseline.json` nu mai există; `node validate.mjs` → OK.

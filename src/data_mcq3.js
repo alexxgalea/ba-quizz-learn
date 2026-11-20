@@ -78,7 +78,7 @@ def raise_alert(alert):
   Q("docker", [
     { id: "dk-01", q: "Imagine vs container?", o: [
       "Imaginea e șablonul read-only; containerul rulează din ea",
-      "Sunt sinonime; „container” e doar termenul din Kubernetes",
+      "Sunt sinonime; „container” e termenul din Kubernetes",
       "Containerul e fișierul Dockerfile, imaginea e rezultatul rulării",
       "Imaginea rulează, containerul e copia ei de pe disc"], a: 0,
       e: "Imaginea e făcută din layere; containerul adaugă un layer de scriere propriu. Din aceeași imagine pornești oricâte containere, iar ce scrie un container dispare cu el: datele persistente stau în volume." },
@@ -96,7 +96,7 @@ def raise_alert(alert):
       e: "Stage-ul de build produce wheels sau artefacte; stage-ul final copiază doar ce trebuie (`COPY --from=builder`). Suprafață de atac mai mică, distribuție mai rapidă." },
     { id: "dk-04", q: "Cu `CMD gunicorn app:app` (shell form), `docker stop` omoară aplicația după 10 s, fără oprire grațioasă. De ce?", o: [
       "PID 1 e `/bin/sh`, care nu-i transmite SIGTERM lui gunicorn",
-      "Gunicorn ignoră SIGTERM în orice configurație",
+      "Gunicorn nu tratează SIGTERM, deci workerii mor imediat",
       "`docker stop` trimite direct SIGKILL, fără SIGTERM",
       "Lipsește `EXPOSE`, deci semnalul nu ajunge în container"], a: 0,
       e: "Cu exec form (`CMD [\"gunicorn\", \"app:app\"]`), gunicorn e PID 1, primește SIGTERM și își închide workerii grațios. Pentru procese care nu tratează semnale: `--init` (tini)." },
@@ -116,12 +116,12 @@ def raise_alert(alert):
       "Swarm: simplu, integrat; Kubernetes: standard, mai complex",
       "Swarm e succesorul mai nou și mai complet al lui Kubernetes",
       "Kubernetes nu poate rula imagini construite cu Docker",
-      "Sunt identice ca funcționalitate; diferă doar CLI-ul și sintaxa YAML"], a: 0,
+      "Sunt identice ca funcționalitate; diferă CLI-ul și sintaxa YAML"], a: 0,
       e: "Kubernetes are ecosistemul bogat (autoscaling, operators, Helm). Ai lucrat cu Swarm: servicii, replici, rolling updates, rețele overlay; conceptele se transferă direct la Kubernetes și ECS." },
     { id: "dk-08", q: "În docker compose, cum se conectează aplicația la serviciul Postgres?", o: [
       "Prin numele serviciului ca hostname, de exemplu `postgres:5432`",
       "Prin `localhost:5432`, pentru că rulează pe aceeași mașină",
-      "Doar prin IP-ul mașinii gazdă și portul expus",
+      "Prin IP-ul mașinii gazdă și portul expus",
       "Nu se pot conecta fără o rețea creată manual de tine"], a: 0,
       e: "Compose creează o rețea în care serviciile se găsesc după nume. În container, `localhost` e chiar containerul. `depends_on` nu așteaptă ca DB-ul să fie gata: folosești healthcheck + `condition: service_healthy`." }
   ]);
@@ -135,13 +135,13 @@ def raise_alert(alert):
       e: "Rolurile dau credențiale temporare, rotite automat. Cheile statice în imagini sau cod sunt o problemă clasică de securitate." },
     { id: "aws-02", q: "Ce garantează SQS standard?", o: [
       "At-least-once și ordine best-effort; FIFO adaugă ordine",
-      "Exactly-once și ordine strictă pentru toate mesajele",
+      "Exactly-once și ordine strictă pentru mesajele din coadă",
       "Livrare la cel mult un consumator, fără retry",
-      "Mesaje păstrate permanent, până le ștergi manual"], a: 0,
+      "Mesaje păstrate permanent în coadă, până le ștergi manual"], a: 0,
       e: "FIFO adaugă și deduplicare. Visibility timeout: mesajul preluat devine invizibil; dacă nu e șters la timp, reapare. După `maxReceiveCount` ajunge în DLQ. Aceleași concepte ca la Celery și RabbitMQ." },
     { id: "aws-03", q: "Security Group vs NACL?", o: [
       "SG: per instanță, stateful; NACL: per subnet, stateless",
-      "Sunt identice, doar numele diferă între consolă și CLI",
+      "Sunt identice, numele diferă între consolă și CLI",
       "NACL e la nivel de instanță, SG la nivel de VPC",
       "SG: per subnet, stateless; NACL: per instanță, stateful"], a: 0,
       e: "SG are doar reguli allow; NACL are allow și deny. Stateful = răspunsul la o conexiune permisă trece automat. Baza de date stă în subnete private, accesibilă doar din SG-ul aplicației." },
@@ -156,33 +156,33 @@ def raise_alert(alert):
     { id: "aws-06", q: "Ce înregistrează CloudTrail?", o: [
       "Apelurile API din cont: cine, ce, când, de unde",
       "Metricile CPU și de memorie ale instanțelor",
-      "Logurile scrise de aplicația ta în stdout",
+      "Logurile scrise de aplicația ta în stdout sau în fișiere",
       "Costurile pe servicii, actualizate zilnic"], a: 0,
       e: "CloudTrail = audit al acțiunilor pe resursele AWS, util în investigații de securitate. CloudWatch = metrici, loguri, alarme." },
     { id: "aws-07", q: "Ce rezolvă combinația SNS + SQS (fan-out)?", o: [
       "Un eveniment ajunge în mai multe cozi independente",
       "Reduce costul stocării mesajelor vechi, mutându-le în S3",
       "Înlocuiește baza de date pentru datele de tip eveniment",
-      "Asigură ordine globală a mesajelor între toate cozile"], a: 0,
+      "Asigură ordine globală a mesajelor între cozile abonate"], a: 0,
       e: "Echivalentul unui fanout exchange: notificări, audit și indexare consumă același eveniment, fiecare în ritmul lui, cu consumatorii lui." }
   ]);
 
   Q("graphql", [
     { id: "gql-01", q: "Un resolver de câmp face un query DB pentru fiecare element dintr-o listă. Ce problemă e și cum o rezolvi?", o: [
       "N+1 query-uri; DataLoader le grupează într-un singur query",
-      "Over-fetching; adaugi paginare pe câmpul de listă",
-      "Deadlock; muți query-ul într-o tranzacție",
+      "Over-fetching; adaugi paginare și limite pe câmpul de listă",
+      "Deadlock între query-uri; muți query-ul într-o tranzacție",
       "CORS; configurezi header-ele de pe endpoint-ul GraphQL"], a: 0,
       e: "DataLoader colectează cheile cerute în același tick și face un `WHERE id IN (...)`, cu cache per request." },
     { id: "gql-02", q: "Care e un risc de securitate specific GraphQL?", o: [
       "Query-uri adânc imbricate care epuizează serverul (DoS)",
-      "Imposibilitatea de a folosi HTTPS pe un endpoint unic",
-      "SQL injection imposibil de prevenit în resolvers",
-      "Lipsa suportului pentru autentificare cu token-uri"], a: 0,
+      "Incompatibilitatea cu HTTPS pe un endpoint unic",
+      "SQL injection în resolvers, fără cale de prevenire",
+      "Lipsa suportului pentru autentificare cu token-uri în header"], a: 0,
       e: "Ex.: `user { friends { friends { friends ... } } }`. Limitezi adâncimea, complexitatea și timpul; plus autorizare per câmp și obiect, paginare obligatorie, rate limit pe cost, persisted queries." },
     { id: "gql-03", q: "Principalul avantaj GraphQL față de REST pentru un frontend complex?", o: [
       "Clientul cere exact câmpurile de care are nevoie",
-      "Serverul e mereu mai rapid decât unul REST echivalent",
+      "Serverul e mai rapid decât unul REST echivalent",
       "Caching HTTP mai simplu, pentru că totul e pe un URL",
       "Nu are nevoie de schemă, deci API-ul evoluează liber"], a: 0,
       e: "Poate agrega mai multe resurse într-un singur drum. Costul: complexitate pe server (N+1, costul query-urilor, caching mai greu). REST rămâne bun pentru API-uri simple, publice, cache-uibile." },
@@ -194,9 +194,9 @@ def raise_alert(alert):
       e: "Fără versiuni /v2: clienții cer explicit câmpurile, deci adăugarea nu strică nimic. Monitorizezi folosirea câmpurilor depreciate înainte să le scoți." },
     { id: "gql-05", q: "Unde faci autorizarea într-un API GraphQL multi-tenant?", o: [
       "În resolvers / logica de business, per obiect sau câmp",
-      "Doar în gateway, la intrarea în endpoint",
+      "În gateway, la intrarea în endpoint",
       "Nicăieri: schema e publică, deci datele sunt publice",
-      "Doar în frontend, care ascunde câmpurile nepermise"], a: 0,
+      "În frontend, care ascunde câmpurile nepermise"], a: 0,
       e: "Un singur endpoint expune tot graful; un user autentificat nu trebuie să poată traversa spre datele altui tenant." },
     { id: "gql-06", q: "Ce sunt mutations în GraphQL?", o: [
       "Operații de scriere, executate secvențial",
@@ -218,7 +218,7 @@ def raise_alert(alert):
     { id: "obs-02", q: "Metrici vs loguri vs trace-uri?", o: [
       "Metrici: agregate; loguri: evenimente; trace: drumul unui request",
       "Sunt aceleași date, stocate în trei formate, pentru trei unelte",
-      "Trace-urile sunt doar logurile de eroare, cu stack trace-ul lor",
+      "Trace-urile sunt logurile de eroare, cu stack trace-ul lor",
       "Metricile sunt loguri comprimate, păstrate o perioadă mai lungă"], a: 0,
       e: "Metricile (valori agregate în timp) spun CĂ e o problemă, trace-urile (pașii unui request prin servicii, cu durate) UNDE, logurile (evenimente cu context) DE CE." },
     { id: "obs-03", q: "Ce înseamnă RED?", o: [
@@ -229,26 +229,26 @@ def raise_alert(alert):
       e: "Pentru resurse: USE (Utilization, Saturation, Errors). Pentru cozi: adâncimea și vârsta celui mai vechi mesaj." },
     { id: "obs-04", q: "Ce îți arată concret New Relic APM într-o investigație de latență?", o: [
       "Unde se duce timpul pe tranzacție: cod, DB, apeluri externe",
-      "Doar uptime-ul serverelor și alertele de disponibilitate",
-      "Doar logurile brute, fără agregare pe tranzacții",
-      "Doar costurile din AWS, împărțite pe servicii"], a: 0,
+      "Uptime-ul serverelor și alertele de disponibilitate HTTP",
+      "Logurile brute ale aplicației, fără agregare pe tranzacții",
+      "Costurile din AWS, împărțite pe servicii și pe conturi"], a: 0,
       e: "Plus query-urile lente, trace-uri distribuite și erori. Vezi direct dacă endpoint-ul lent stă într-un query (N+1, index lipsă) sau într-un apel extern." },
     { id: "obs-05", q: "De ce loguri structurate (JSON) cu correlation ID?", o: [
       "Le filtrezi ușor și urmărești un request prin servicii",
-      "Ocupă mereu mai puțin spațiu pe disc decât logurile text simple",
+      "Ocupă mai puțin spațiu pe disc decât logurile text simple",
       "Sunt cerute de modulul `logging` începând cu Python 3.8",
       "Sunt mai ușor de citit cu ochiul liber, direct în terminal"], a: 0,
       e: "Propagi ID-ul în headerele task-ului Celery și în contextul logger-ului, ca să urmărești API → coadă → worker. Fără date sensibile în loguri." },
     { id: "obs-06", q: "În GitLab CI, diferența dintre `cache` și `artifacts`?", o: [
       "`cache` accelerează; `artifacts` transmit rezultate între joburi",
-      "Sunt identice; `artifacts` e doar numele vechi al lui `cache`",
-      "`artifacts` e doar pentru imaginile Docker construite în pipeline",
-      "`cache` e permanent și garantat între pipeline-uri și branch-uri"], a: 0,
+      "Sunt identice; `artifacts` e numele vechi al lui `cache`",
+      "`artifacts` e destinat imaginilor Docker construite în pipeline",
+      "`cache` e permanent și păstrat între pipeline-uri și branch-uri"], a: 0,
       e: "Cache-ul (ex. pip) n-are garanții, deci nu te bazezi pe el pentru corectitudine. Artifacts sunt descărcabile și trec la joburile următoare; rapoartele de teste (JUnit) și coverage apar în merge request." },
     { id: "obs-07", q: "Cum rulezi testele cu un Postgres real în GitLab CI?", o: [
       "Cu `services: [postgres:17]` în job",
       "Instalezi manual Postgres pe runner la fiecare rulare",
-      "Nu se poate; în CI folosești doar SQLite",
+      "Nu se poate; în CI folosești SQLite în loc",
       "Mock-uiești tot SQL-ul, ca testele să nu depindă de DB"], a: 0,
       e: "Aplicația se conectează la hostname-ul serviciului, ca în compose. Alternativ testcontainers, dacă runner-ul permite Docker." },
     { id: "obs-08", q: "Ce face `needs:` într-un job GitLab CI?", o: [
@@ -267,13 +267,13 @@ def raise_alert(alert):
 
   Q("linux", [
     { id: "lx-01", q: "Diferența dintre `kill -15` și `kill -9`?", o: [
-      "SIGTERM poate fi tratat de proces; SIGKILL nu",
-      "Sunt identice, diferă doar numărul semnalului trimis",
+      "SIGTERM poate fi tratat de proces; SIGKILL nu poate",
+      "Sunt identice, diferă numărul semnalului trimis",
       "`-9` oprește grațios procesul, `-15` îl oprește imediat",
       "`-15` repornește procesul, `-9` îl oprește definitiv"], a: 0,
       e: "Orchestratoarele trimit întâi SIGTERM, apoi SIGKILL după perioada de grație. Aplicația trebuie să trateze SIGTERM: termină request-urile în curs, închide conexiunile." },
     { id: "lx-02", q: "Cum afli ce proces ascultă pe portul 8000?", o: [
-      "`ss -tlnp | grep 8000` sau `lsof -i :8000`",
+      "`sudo ss -tlnp | grep 8000` sau `sudo lsof -i :8000`",
       "`ps aux | grep 8000`, care arată și porturile",
       "`df -h | grep 8000`, care listează resursele ocupate",
       "`ping localhost:8000`, care răspunde cu PID-ul"], a: 0,
@@ -292,14 +292,14 @@ def raise_alert(alert):
       e: "Fiecare fișier și fiecare conexiune (HTTP, DB) ocupă un descriptor. Cauza tipică: clienți creați per request și neînchiși. Soluții: context managers și pool-uri." },
     { id: "lx-05", q: "Ce înseamnă `chmod 640 config.yaml`?", o: [
       "Owner: citire și scriere; grup: citire; ceilalți: nimic",
-      "Toți utilizatorii: citire și scriere, fără execuție",
+      "Owner, grup și ceilalți: citire și scriere, fără execuție",
       "Owner: execuție; grup: scriere; ceilalți: citire",
-      "Doar root poate citi și modifica fișierul"], a: 0,
+      "Fișierul îl poate citi și modifica root, nu și ceilalți"], a: 0,
       e: "Cifre octale: 4 = r, 2 = w, 1 = x. 6 = rw, 4 = r, 0 = nimic." },
     { id: "lx-06", q: "Pe ce mecanisme ale kernelului Linux se bazează containerele?", o: [
-      "Namespaces (izolare) și cgroups (limite de resurse)",
+      "Namespaces (izolare) și cgroups (limite de CPU și memorie)",
       "Mașini virtuale complete, fiecare cu kernelul propriu",
-      "Doar chroot, care schimbă directorul rădăcină",
+      "Chroot, care schimbă directorul rădăcină al procesului",
       "Un hypervisor ușor, integrat direct în Docker Engine"], a: 0,
       e: "Namespaces izolează PID-uri, rețea, mount-uri; cgroups limitează CPU și memorie. Un container e un proces Linux izolat care partajează kernelul gazdei, de aceea pornește în milisecunde." },
     { id: "lx-07", q: "Un container se oprește cu exit code 137. Ce înseamnă de obicei?", o: [

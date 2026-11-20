@@ -248,9 +248,9 @@ def fetch_sap_logs(self, system_id):
       e: "Asigură distribuție echitabilă și backpressure. Prefetch mare + task-uri lungi = un consumator ține multe mesaje cât alții stau. Prefetch 1 pentru task-uri lungi, mai mare pentru mesaje mici și rapide." },
     { id: "rmq-04", q: "Ce îți trebuie ca mesajele să supraviețuiască unui restart al brokerului?", o: [
       "Coadă durable + mesaje persistente (plus publisher confirms)",
-      "Doar coada declarată durable, mesajele moștenesc setarea",
-      "Doar mesaje persistente, coada poate fi oricum",
-      "Nimic: RabbitMQ salvează automat totul pe disc"], a: 0,
+      "Coada declarată durable; mesajele moștenesc setarea",
+      "Mesaje persistente; coada poate fi și non-durable",
+      "Nimic: RabbitMQ salvează automat pe disc tot ce primește"], a: 0,
       e: "O coadă durable cu mesaje non-persistente pierde mesajele la restart. Ideal quorum queue. Publisher confirms îți spun că mesajul e în siguranță la broker." },
     { id: "rmq-05", q: "Un mesaj malformat face consumatorul să eșueze la nesfârșit (requeue în buclă). Soluția?", o: [
       "Reject fără requeue, spre un dead letter exchange",
@@ -260,14 +260,14 @@ def fetch_sap_logs(self, system_id):
       e: "„Poison message”. DLQ-ul păstrează mesajul pentru investigație fără să blocheze coada, iar o alertă pe DLQ te anunță; pe quorum queues ajută și `delivery-limit`. Retry-urile pentru erori tranzitorii merg separat, cu întârziere." },
     { id: "rmq-06", q: "Ce poți spune despre ordinea mesajelor în RabbitMQ?", o: [
       "FIFO per coadă, dar se strică cu mai mulți consumatori",
-      "E garantată global, între toate cozile și toate exchange-urile",
-      "Nu există nicio ordine, nici măcar într-o singură coadă",
-      "E garantată doar pentru mesajele trecute printr-un fanout"], a: 0,
+      "E garantată global, între cozile și exchange-urile broker-ului",
+      "Ordinea nu e definită nici măcar într-o singură coadă",
+      "E garantată pentru mesajele trecute printr-un fanout"], a: 0,
       e: "Cu mai mulți consumatori sau requeue, procesarea poate ieși din ordine. Dacă ordinea contează per entitate (per sistem SAP), rutezi după cheie spre cozi dedicate sau ai un singur consumator per cheie." },
     { id: "rmq-07", q: "RabbitMQ vs Kafka, pe scurt?", o: [
       "RabbitMQ șterge mesajul după ack; Kafka îl păstrează în log",
       "Sunt același produs: Kafka e versiunea comercială, plătită, a RabbitMQ",
-      "Kafka ține mesajele doar în memorie, RabbitMQ pe disc",
+      "Kafka ține mesajele în memorie, RabbitMQ pe disc",
       "RabbitMQ nu suportă mai mulți consumatori pe aceeași coadă"], a: 0,
       e: "Cozi de task-uri și routing flexibil → RabbitMQ. Event streaming cu retenție, partiții, replay după offset și throughput foarte mare → Kafka. (RabbitMQ are și Streams.)" },
     { id: "rmq-08", q: "Ce face un fanout exchange?", o: [
@@ -288,12 +288,12 @@ def fetch_sap_logs(self, system_id):
     { id: "rd-01", q: "Pub/Sub vs Streams în Redis, pentru evenimente care nu au voie să se piardă?", o: [
       "Streams: persistente, cu consumer groups și ack",
       "Pub/Sub: garantează livrarea către fiecare subscriber",
-      "Sunt echivalente ca garanții, diferă doar sintaxa",
+      "Sunt echivalente ca garanții, diferă sintaxa",
       "Niciunul: Redis nu poate transporta mesaje"], a: 0,
       e: "Pub/Sub e fire-and-forget: un subscriber deconectat pierde mesajele. Streams păstrează mesajele; consumer groups le împart între consumatori, cu listă de pending pentru cele neconfirmate." },
     { id: "rd-02", q: "Cum implementezi un lock distribuit simplu în Redis?", o: [
-      "`SET lock:job42 <token> NX PX 30000`",
-      "`GET lock:job42`, apoi `SET` dacă cheia nu există încă",
+      "`SET lock:job42 <token> NX PX 30000`, într-o comandă",
+      "`GET lock:job42`, apoi `SET` dacă lipsește",
       "`SET lock:job42 1` fără expirare, șters la final cu `DEL`",
       "`SETNX lock:job42 1`, apoi `EXPIRE` într-o comandă separată"], a: 0,
       e: "NX = doar dacă nu există (atomic); PX = expiră dacă procesul moare. La eliberare ștergi doar dacă token-ul e al tău (script Lua). GET + SET e un race; SETNX + EXPIRE separat lasă lock-ul etern dacă procesul moare între ele." },
@@ -310,10 +310,10 @@ def fetch_sap_logs(self, system_id):
       "O cheie are TTL prea mare și servește mult timp date vechi"], a: 0,
       e: "Previi cu lock/single-flight (un singur request recalculează), TTL cu jitter (cheile nu expiră toate odată) sau refresh anticipat." },
     { id: "rd-05", q: "De ce nu folosești `KEYS *` în producție?", o: [
-      "E O(N) și blochează serverul; folosești `SCAN`",
+      "E O(N) și blochează serverul cât rulează; folosești `SCAN`",
       "E depreciat și dă eroare de sintaxă în versiunile noi de Redis",
       "Șterge cheile pe care le găsește, la fel ca `FLUSHDB`",
-      "Funcționează doar pe replici, nu și pe nodul primar"], a: 0,
+      "Funcționează pe replici, nu și pe nodul primar"], a: 0,
       e: "Comenzile rulează pe un singur thread, deci o comandă lungă blochează tot. SCAN iterează incremental cu cursor. Aceeași grijă pentru SMEMBERS sau HGETALL pe structuri mari." },
     { id: "rd-06", q: "Rate limit de 100 de request-uri pe minut per API key, cu mai multe replici de API. Cea mai simplă implementare corectă?", o: [
       "`INCR rl:{key}:{minut}` + `EXPIRE`; respingi peste 100",
@@ -322,7 +322,7 @@ def fetch_sap_logs(self, system_id):
       "Un canal Pub/Sub pe care numeri mesajele per cheie"], a: 0,
       e: "Fixed window e simplu, dar permite rafale la granița ferestrelor; sliding window (sorted set) sau token bucket (Lua) sunt mai netede. Dict-ul local nu vede celelalte replici." },
     { id: "rd-07", q: "Ce `maxmemory-policy` alegi pentru un Redis folosit strict ca cache?", o: [
-      "`allkeys-lru` sau `allkeys-lfu`",
+      "`allkeys-lru` sau `allkeys-lfu`, cu `maxmemory`",
       "`noeviction`, valoarea implicită",
       "Nu există politici de evacuare în Redis",
       "`volatile-ttl` e singura opțiune validă"], a: 0,
@@ -334,8 +334,8 @@ def fetch_sap_logs(self, system_id):
       "Scriere sincronă pe disc a tuturor comenzilor din bloc"], a: 0,
       e: "Nicio comandă a altui client nu se intercalează. Pentru logică condiționată atomică (citești, apoi decizi) folosești scripturi Lua sau WATCH (optimistic)." },
     { id: "rd-09", q: "RDB vs AOF în Redis?", o: [
-      "RDB = snapshot periodic; AOF = log al comenzilor",
-      "Ambele țin datele doar în memorie, fără nimic pe disc",
+      "RDB = snapshot periodic; AOF = log al comenzilor de scriere",
+      "Ambele țin datele în memorie, fără nimic pe disc",
       "AOF e replicarea între noduri, RDB e backup-ul pe disc",
       "RDB garantează zero pierderi la crash, AOF nu garantează nimic"], a: 0,
       e: "Cu RDB poți pierde ultimele minute; cu AOF + everysec, cam o secundă. Le poți combina. Pentru cozi sau stare importantă: AOF + replicare; pentru cache pur, persistența poate fi oprită." }
@@ -362,9 +362,9 @@ def fetch_sap_logs(self, system_id):
       e: "Fără el, workerul poate căuta un rând încă necomis sau anulat de rollback. Echivalentul în SQLAlchemy: publici după `session.commit()`. Pentru garanție completă (crash între commit și publicare): outbox." },
     { id: "dj-04", q: "Django ORM vs SQLAlchemy ORM, la nivel de concept?", o: [
       "Django: Active Record; SQLAlchemy: Data Mapper",
-      "Sunt identice ca model; SQLAlchemy e doar mai nou și mai rapid",
-      "SQLAlchemy e doar Active Record, fără sesiuni",
-      "Django ORM nu are tranzacții, doar autocommit"], a: 0,
+      "Sunt identice ca model; SQLAlchemy e mai nou și mai rapid",
+      "SQLAlchemy e Active Record, fără sesiuni",
+      "Django ORM nu are tranzacții, ci autocommit"], a: 0,
       e: "În Django obiectul se salvează singur (`obj.save()`); în SQLAlchemy Session urmărește și scrie modificările, plus Core pentru SQL. Conceptele se mapează: select_related ≈ joinedload, prefetch_related ≈ selectinload, atomic ≈ `session.begin()`, migrate ≈ Alembic." }
   ]);
 })(window.PREP);

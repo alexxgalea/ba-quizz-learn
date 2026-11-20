@@ -1370,3 +1370,10 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ Rulat pe Python local: `threading.Timer` are `start()` și `cancel()` (e subclasă de `Thread`); `threading.Event` are `set()` / `wait()`; `CancelledError` e `BaseException`, nu `Exception`; `gather` nu anulează celelalte task-uri când unul aruncă (b a terminat după `ValueError` din a); `asyncio.timeout` ridică `TimeoutError`; un `Lock` luat de același thread blochează a doua oară (`acquire(timeout=.1)` dă `False`).
 - ✅ RFC 9110 §9.2.2: metodele idempotente sunt PUT, DELETE și cele safe; POST nu e. Sursă: https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2
 - ✅ `on_event("startup")` și `on_event("shutdown")` sunt depreciate în FastAPI și eliminate din Starlette 1.0 (secțiunea 5, deja verificat); variantele noi spun același lucru despre ambele.
+
+## 54. Grile fără tipar: P3 și P4 (tichetul 10, partea de module; 20 noiembrie 2026)
+
+- Variantele greșite noi sunt false prin ce erau deja (cuvintele absolute au fost scoase, nu s-au adăugat fapte). Singura afirmație nouă: „Gunicorn nu tratează SIGTERM, deci workerii mor imediat” (`dk-04`, B) e falsă; gunicorn instalează handler pentru SIGTERM și oprește grațios (secțiunile 13 și 23).
+- ✅ `noeviction` e valoarea implicită a `maxmemory-policy` și `allkeys-lru` / `allkeys-lfu` evacuează doar când `maxmemory` e setat (secțiunea 870 mai sus; `rd-07` cere `maxmemory` în varianta corectă).
+- ⚠️ `sudo ss -tlnp` / `sudo lsof -i :8000` (`lx-02`): `-p` arată procesul doar pentru socket-urile pe care le poți inspecta; pentru procesele altor useri trebuie privilegii. Nu l-am rulat într-un sandbox cu alt user.
+- Nicio eroare de fapt găsită în grilele atinse.

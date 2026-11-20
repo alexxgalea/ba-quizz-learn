@@ -214,8 +214,8 @@ session = pickle.loads(data)`, o: [
     { id: "dbm-01", tag: "formulare", q: "Care formulare e corectă la interviu?", o: [
       "„Postgres ține sute de milioane de rânduri cu indexuri bune; aleg NoSQL pentru un model de acces anume.”",
       "„Bazele relaționale devin ineficiente peste câteva milioane de rânduri, de aceea la volume mari trec pe NoSQL.”",
-      "„NoSQL e mereu mai rapid decât SQL, pentru că nu are JOIN-uri și nici scheme de respectat.”",
-      "„NoSQL nu are nicio garanție de consistență, deci pentru date de business nu-l folosesc niciodată.”"], a: 0,
+      "„NoSQL e mai rapid decât SQL, pentru că nu are JOIN-uri și nici scheme de respectat.”",
+      "„NoSQL nu oferă garanții de consistență, deci pentru date de business nu-l folosesc.”"], a: 0,
       e: "Exact formularea slabă de la Lateral. Motivele reale pentru NoSQL: modelul de acces, scalarea orizontală a scrierilor, schema flexibilă, latența." },
     { id: "dbm-02", q: "Aplicația are useri, facturi și căutare full-text în loguri. Ce stochezi unde?", o: [
       "Useri și facturi în Postgres, logurile în Elasticsearch",
@@ -226,30 +226,30 @@ session = pickle.loads(data)`, o: [
     { id: "dbm-03", q: "Ce înseamnă ACID?", o: ["Atomicity, Consistency, Isolation, Durability", "Availability, Consistency, Isolation, Distribution", "Atomicity, Caching, Indexing, Durability", "Asynchronous, Concurrent, Isolated, Distributed"], a: 0,
       e: "Atomic: totul sau nimic. Consistent: constrângerile rămân valide. Izolat: tranzacțiile concurente nu se calcă (după nivelul de izolare). Durabil: după COMMIT, datele supraviețuiesc unui crash (WAL)." },
     { id: "dbm-04", q: "De ce Elasticsearch e rar sursa primară de adevăr?", o: [
-      "Nu are tranzacții multi-document și e doar near-real-time",
+      "Nu are tranzacții multi-document și e near-real-time",
       "Nu poate stoca documente JSON imbricate pe mai multe niveluri",
       "Nu suportă mai mult de un milion de documente per index",
-      "Nu are API HTTP, doar un client binar proprietar"], a: 0,
+      "Nu are API HTTP, ci un client binar proprietar"], a: 0,
       e: "Plus: o schimbare de mapping cere reindexare. E optimizat pentru căutare și agregări. Scrii în Postgres, propagi în Elastic (outbox, CDC, coadă) și poți reconstrui indexul oricând." },
     { id: "dbm-05", q: "Teorema CAP: în prezența unei partiții de rețea, un sistem distribuit…", o: [
       "trebuie să aleagă între consistență și disponibilitate",
       "poate avea consistență, disponibilitate și toleranță la partiții simultan",
-      "pierde mereu o parte din datele scrise în timpul partiției",
+      "pierde o parte din datele scrise în timpul partiției",
       "devine automat eventual consistent, fără să piardă nimic"], a: 0,
       e: "CAP vorbește despre comportamentul la partiție. PACELC adaugă: fără partiție, alegi între latență și consistență. Un Postgres cu un singur primar alege consistența." },
     { id: "dbm-06", q: "Când alegi JSONB în Postgres în locul unui document store separat?", o: [
       "Când ai câmpuri variabile, dar vrei tranzacții și JOIN-uri",
-      "Niciodată: JSONB e mai lent decât un text simplu cu JSON",
+      "Nu: JSONB e mai lent decât un text simplu cu JSON",
       "Când ai nevoie de chei străine pe fiecare câmp intern",
-      "Doar pentru fișiere binare mari, ca imagini sau PDF-uri"], a: 0,
+      "Pentru fișiere binare mari, ca imagini sau PDF-uri"], a: 0,
       e: "De exemplu payload-ul unui eveniment. Câmpurile stabile rămân coloane, partea variabilă stă în JSONB: un sistem în loc de două." },
     { id: "dbm-07", q: "Unde ții starea efemeră cu TTL (sesiuni, rate limits, lock-uri distribuite)?", o: ["Redis", "Postgres, cu un job de ștergere", "Elasticsearch", "S3"], a: 0,
       e: "Redis e în memorie, cu TTL nativ și operații atomice (INCR, `SET NX PX`). Pierderea lui nu trebuie să însemne pierderea datelor de business." },
     { id: "dbm-08", q: "Ce e consistența eventuală?", o: [
       "Replicile converg în timp; între timp poți citi date vechi",
       "Datele devin consistente o dată pe zi, după un job de reconciliere",
-      "Datele nu ajung niciodată consistente între replici",
-      "Fiecare citire vede ultima scriere, pe orice replică"], a: 0,
+      "Datele rămân inconsistente între replici, fără să convergă",
+      "Fiecare citire vede ultima scriere, indiferent de replică"], a: 0,
       e: "Converg dacă scrierile se opresc. „Fiecare citire vede ultima scriere” descrie consistența puternică. Replicile de citire Postgres (asincrone) sunt și ele eventual consistente: „read your writes” se gândește explicit." }
   ]);
 
