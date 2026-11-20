@@ -448,7 +448,7 @@ export function proposeTags(P, m) {
 // Lungimea variantelor și cuvintele absolute nu trebuie să trădeze răspunsul. Pragurile stau aici, într-un singur loc.
 export const CUE = { ratio: 1.15, gap: 8, rankShare: 0.35, absPp: 10 };
 // Modulele refăcute: toate regulile (și rangul, și cuvintele absolute) sunt erori, iar nicio grilă de-a lor nu poate sta în `tools/cue_baseline.json`.
-export const CUE_DONE = ["pytest", "python", "design", "frontend", "fedebug", "js", "oop", "ts"];
+export const CUE_DONE = ["pytest", "python", "design", "frontend", "fedebug", "js", "oop", "ts", "react"];
 export const ABS_WORDS = ["mereu", "niciodată", "întotdeauna", "doar", "numai", "orice", "oricând", "toate", "toți", "niciun", "nicio", "imposibil", "garantat", "exclusiv"];
 // Lungimea vizibilă a unei variante: fără backtick-uri (codul se numără, delimitatorii nu).
 export const optLen = s => [...String(s || "").replace(/`/g, "")].length;
