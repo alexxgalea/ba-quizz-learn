@@ -1,5 +1,6 @@
 // Loads the data files the way the page does and checks the schema.
-import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles, DESF_FE_MODULES, checkPoints, PT_DONE } from "./lib.mjs";
+import { loadData, loadCode, buildExplanations, buildDesf, readDesfFiles, DESF_FE_MODULES, checkPoints, PT_DONE, checkCues, CUE_DONE } from "./lib.mjs";
+import fs from "node:fs";
 
 const root = new URL("./", import.meta.url);
 const P = loadData(root);
@@ -125,5 +126,12 @@ const pts = checkPoints(P, { done: PT_DONE });
 pts.errors.forEach(e => errors.push(e));
 if (pts.warnings.length) console.log(pts.warnings.map(w => w + " (warning)").join("\n"));
 for (const [m, r] of Object.entries(pts.report)) console.log("puncte " + m + " (" + r.points + "): fără grilă " + (r.noMcq.join(", ") || "–") + " · fără formă de producție " + (r.noProd.join(", ") || "–"));
+// Indiciile de formă (`.scratch/grile-fara-tipar/`): lungimea variantelor și cuvintele absolute, cu clichetul din tools/cue_baseline.json.
+const cueBase = fs.existsSync(new URL("./tools/cue_baseline.json", import.meta.url)) ? JSON.parse(fs.readFileSync(new URL("./tools/cue_baseline.json", import.meta.url), "utf8")) : [];
+const cues = checkCues(P, { done: CUE_DONE, baseline: cueBase });
+cues.errors.forEach(e => errors.push(e));
+const cueTable = {};
+for (const [m, r] of Object.entries(cues.report)) if (r.n) cueTable[m] = { n: r.n, "corecta lungă": r.longest, "corecta scurtă": r.shortest, "abs corecte": r.absCorrect, "abs greșite": r.absWrong + "/" + r.wrongTotal, "încalcă": r.viol, "în CUE_DONE": CUE_DONE.includes(m) ? "da" : "" };
+console.table(cueTable);
 if (errors.length) { console.error("ERRORS:\n" + errors.join("\n")); process.exit(1); }
 console.log("OK");
