@@ -24,9 +24,9 @@ Limită: Doar randarea trebuie să fie pură. Un handler de click sau un `useEff
 La interviu: „O componentă e o funcție pură de props și state. În timpul randării nu modific variabile din afară, props sau state. Strict Mode o apelează de două ori în dev tocmai ca să prindă asta.”
 Verificare: Ai `const items: string[] = []` declarat în interiorul componentei, iar în corp faci `items.push("x")`. Încalcă regula de puritate?
 Răspuns verificare: Nu. Array-ul e creat chiar în funcție, la fiecare apel, deci modificarea lui e locală. Regula interzice doar modificarea a ce exista înainte de render.
-Varianta greșită B: Strict Mode apelează componentele de două ori în dev, nu o dată. Tocmai de aceea impuritatea se vede.
-Varianta greșită C: `total` e declarat în afara funcției, deci nu se resetează la apel. Rămâne între apeluri.
-Varianta greșită D: O componentă poate citi o variabilă din modul. Problema e că o modifică.
+Varianta greșită B: Strict Mode apelează componentele de două ori în dev, nu o dată. Al doilea apel pornește de la `total` = 1 și îl ridică la 2.
+Varianta greșită C: `total` e declarat în afara funcției, deci nu se resetează la apel: rămâne între apeluri, iar al doilea apel adună peste primul.
+Varianta greșită D: O componentă poate modifica o variabilă din modul; JavaScript nu o oprește. Problema e că randarea trebuie să fie pură.
 
 ### re-02
 Pe scurt: `Parent`, `A` și `B`: copiii se re-randează odată cu părintele, chiar dacă nu au primit props noi.
@@ -52,8 +52,8 @@ Limită: `memo` sare peste copil doar dacă props sunt aceleași după `Object.i
 La interviu: „Re-render vine din state propriu, din re-render-ul părintelui sau dintr-un Context schimbat. Copiii se re-randează cu părintele, chiar fără props noi. Refs și variabilele locale nu declanșează nimic.”
 Verificare: După `setQ`, `A` se apelează din nou, dar DOM-ul lui se reface?
 Răspuns verificare: Nu neapărat. React apelează funcția, apoi aplică în DOM doar diferențele dintre randări. Dacă `A` întoarce același JSX, nodurile DOM nu se ating.
-Varianta greșită B: Props identice nu opresc re-render-ul. Pentru asta ai nevoie de `memo`.
-Varianta greșită C: State-ul propriu nu e condiția: un copil fără state se re-randează tot odată cu părintele.
+Varianta greșită B: Props identice nu opresc re-render-ul: React apelează copiii odată cu părintele. Pentru a-i sări ai nevoie de `memo`.
+Varianta greșită C: State-ul propriu nu e condiția: un copil fără state se re-randează odată cu părintele, iar `B` nu are nici el state.
 Varianta greșită D: Faptul că `q` nu apare în JSX nu contează. Re-render-ul se declanșează de schimbarea state-ului, nu de ce e afișat.
 
 ### re-03
@@ -79,9 +79,9 @@ Limită: Elementul adăugat cu `push` apare totuși la următorul render, produs
 La interviu: „React compară state-ul prin `Object.is`. Dacă modific array-ul pe loc și îl dau înapoi, referința e aceeași și nu re-randează. Dau mereu o copie nouă.”
 Verificare: De ce `setItems(prev => [...prev, x])` e mai sigur decât `setItems([...items, x])` când handlerul adaugă două elemente la rând?
 Răspuns verificare: `items` e valoarea din render-ul curent. Două apeluri în același handler pleacă amândouă de la ea. `prev` e starea după actualizările deja puse în coadă.
-Varianta greșită B: `setItems` nu amână nimic până la un click următor: comparația se face imediat.
-Varianta greșită C: `push` întoarce lungimea, dar valoarea lui nu se folosește aici: `setItems` primește `items`.
-Varianta greșită D: `const` nu împiedică `push`, fiindcă legarea nu se schimbă. Și `let` ar fi dat același rezultat.
+Varianta greșită B: `setItems` nu amână nimic până la un click următor: comparația se face imediat, iar ecranul nu rămâne în urmă cu un pas.
+Varianta greșită C: `push` întoarce lungimea, dar valoarea lui nu se folosește aici: `setItems` primește `items`, nu rezultatul lui `push`.
+Varianta greșită D: `const` nu împiedică `push`, fiindcă legarea nu se schimbă, iar array-ul rămâne modificabil. Și `let` ar fi dat același rezultat.
 
 ### re-04
 Pe scurt: Textul nu apare: `value` îl forțează la `""`, iar React avertizează că e un câmp fără `onChange`.
@@ -108,9 +108,9 @@ Limită: Un câmp necontrolat (`defaultValue`) e bun pentru formulare simple. Co
 La interviu: „Un input controlat are `value` din state și `onChange` care îl actualizează. Fără `onChange`, câmpul rămâne înghețat. `value` trebuie să fie mereu string, altfel React îl tratează ca necontrolat.”
 Verificare: Ce eroare apare când `value` pornește ca `undefined` și devine mai târziu un string?
 Răspuns verificare: React avertizează că o componentă trece de la un input necontrolat la unul controlat. Soluția: inițializezi state-ul cu `""` sau folosești `value={x ?? ""}`.
-Varianta greșită B: State-ul nu se actualizează fără `setName`, iar textul nu apare nici în câmp.
-Varianta greșită C: Nimic nu actualizează state-ul singur: `value` nu creează o legătură în ambele sensuri.
-Varianta greșită D: React nu aruncă eroare și nu scoate componenta. Doar avertizează în consolă.
+Varianta greșită B: Textul nu apare nici în câmp: `value` îl readuce la `""`, iar nimic nu apelează `setName`, deci state-ul nu are cum să se schimbe.
+Varianta greșită C: Nimic nu actualizează state-ul singur: `value` nu creează o legătură în ambele sensuri, ci impune valoarea din state.
+Varianta greșită D: React nu aruncă eroare și nu scoate componenta. Avertizează în consolă, iar `value` fără `onChange` nu e interzis: îngheață câmpul.
 
 ### re-05
 Pe scurt: State-ul urcă în părintele comun și coboară prin props; `Filter` primește un callback pentru schimbare.
@@ -137,9 +137,9 @@ Limită: Nu urci tot state-ul în rădăcină. Doar ce este folosit de mai multe
 La interviu: „Ridic state-ul în cel mai apropiat părinte comun și îl dau în jos prin props, cu un callback pentru schimbare. Fiecare informație are un singur proprietar, iar ce pot calcula din state nu devine state.”
 Verificare: Lista filtrată trebuie păstrată în state, în părinte?
 Răspuns verificare: Nu. O calculezi în render din `all` și `q`. O copie în state ar putea ieși din sincron cu sursa.
-Varianta greșită B: Un `useEffect` care copiază state-ul între frați duplică informația și adaugă un render în plus.
-Varianta greșită C: Variabila din afara componentelor nu declanșează re-render: React nu știe că s-a schimbat.
-Varianta greșită D: `memo` oprește re-randări, nu transmite date între componente.
+Varianta greșită B: Un `useEffect` care copiază state-ul dintr-un frate în altul duplică informația și adaugă un render în plus.
+Varianta greșită C: Variabila din afara componentelor nu declanșează re-render: React nu știe că s-a schimbat, deci lista nu se actualizează.
+Varianta greșită D: `memo` oprește re-randări, nu transmite date între componente. `q` din `Filter` rămâne tot în `Filter`.
 
 ### re-06
 Pe scurt: Ecranul rămâne la fel: reducer-ul întoarce aceeași referință, iar React vede „neschimbat”.
@@ -166,9 +166,9 @@ Limită: În Strict Mode, React apelează reducer-ul de două ori ca să prindă
 La interviu: „Un reducer e pur: ia starea și acțiunea și întoarce starea nouă. Dacă o modific pe loc și întorc același obiect, React compară prin `Object.is` și nu actualizează ecranul.”
 Verificare: Ce e mai mult în cod decât un `useState`, și ce câștigi?
 Răspuns verificare: Scrii reducer-ul și acțiunile. Câștigi logica de actualizare într-un singur loc, testabilă separat de componentă.
-Varianta greșită B: Reducer-ul chiar rulează, dar asta nu ajunge: React afișează doar ce vede diferit de starea veche.
+Varianta greșită B: Reducer-ul chiar rulează, dar asta nu ajunge: React afișează doar ce vede diferit de starea veche, iar referința e aceeași.
 Varianta greșită C: React nu blochează modificarea pe loc și nu aruncă nicio eroare. Defectul se vede doar pe ecran.
-Varianta greșită D: Ecranul nu se actualizează deloc la acest `dispatch`, deci nici cu un element, nici cu două.
+Varianta greșită D: Ecranul nu se actualizează deloc la acest `dispatch`, deci nici cu un element, nici cu două. `push` și `return` nu randează de la sine.
 
 ### re-07
 Pe scurt: `B` arată `0`: fiecare apel al hook-ului are propriul state, deci `A` și `B` au câte un contor.
@@ -224,9 +224,9 @@ Limită: O componentă definită în interiorul alteia e un tip nou la fiecare r
 La interviu: „React păstrează state-ul unei componente cât timp același tip rămâne pe aceeași poziție. Ca să resetez un formular, îi dau o `key` care se schimbă. Nu definesc componente în interiorul altora.”
 Verificare: De ce un `useEffect` care golește câmpul la schimbarea `mode` e mai slab decât `key`?
 Răspuns verificare: Effect-ul rulează după randare, deci utilizatorul vede un render cu textul vechi, apoi altul cu câmpul gol. `key` reface componenta din prima, fără render în plus.
-Varianta greșită B: Pentru React contează tipul și poziția, nu ramura de cod din care vine elementul.
+Varianta greșită B: Pentru React contează tipul și poziția, nu ramura de cod din care vine elementul. Ambele ramuri dau `<Form />` pe aceeași poziție.
 Varianta greșită C: Props noi nu resetează state-ul. Resetarea cere alt tip sau altă cheie.
-Varianta greșită D: Un `useEffect` ar merge, dar nu e singura soluție; `key` e cea recomandată.
+Varianta greșită D: Un `useEffect` ar merge, dar adaugă un render în plus; `key` e soluția recomandată.
 
 ### re-09
 Pe scurt: `let id` se recreează cu `0` la fiecare render, deci `stop` șterge alt id. ID-ul stă într-un `useRef`.
@@ -257,7 +257,7 @@ La interviu: „Ce apare pe ecran ține de `useState`. Ce trebuie doar păstrat 
 Verificare: Poți citi `id.current` în JSX, ca să afișezi id-ul?
 Răspuns verificare: Nu e o idee bună. Ref-ul nu cere re-render când se schimbă, deci ecranul ar arăta o valoare veche. Documentația cere să nu citești și să nu scrii `ref.current` în timpul randării; ce apare pe ecran ține de state.
 Varianta greșită B: `clearInterval` merge oriunde, inclusiv într-un handler. Problema e id-ul pe care îl primește.
-Varianta greșită C: `setN` doar schimbă numărul; nimic din render nu pornește alt interval.
+Varianta greșită C: `setN` doar schimbă numărul; nimic din render nu pornește alt interval, iar `stop` oprește intervalul pe care îl cunoaște.
 Varianta greșită D: `window.setInterval` întoarce un număr, id-ul intervalului, nu o promisiune.
 
 ### re-10
@@ -286,9 +286,9 @@ Limită: `useLayoutEffect` blochează desenarea, deci un calcul lent în el face
 La interviu: „`useEffect` rulează după ce browserul desenează, deci nu blochează nimic. `useLayoutEffect` rulează înainte de desenare și îl folosesc doar ca să măsor DOM-ul, de exemplu poziția unui tooltip, fără pâlpâire.”
 Verificare: De ce nu muți pur și simplu măsurarea în corpul componentei?
 Răspuns verificare: În timpul randării DOM-ul nou nu există încă: la primul render `ref.current` e `null`. Iar documentația cere să nu citești refs în timpul randării.
-Varianta greșită B: În corpul componentei DOM-ul nu e încă scris, iar `ref.current` e `null` la primul render.
-Varianta greșită C: `up` în dependențe doar ar rula effect-ul din nou, tot după desenare. Pâlpâirea rămâne.
-Varianta greșită D: `useMemo` rulează în timpul randării, înainte să existe DOM-ul de măsurat.
+Varianta greșită B: În corpul componentei DOM-ul nu e încă scris, iar `ref.current` e `null` la primul render. Nu ai ce măsura.
+Varianta greșită C: `up` în dependențe ar rula effect-ul din nou, tot după desenare. Pâlpâirea rămâne.
+Varianta greșită D: `useMemo` rulează în timpul randării, înainte să existe DOM-ul de măsurat, deci nu are ce măsura.
 
 ### re-11
 Pe scurt: `memo(Row)`. `del` e deja stabilă, dar fără `memo` copilul se re-randează odată cu părintele oricum.
@@ -317,8 +317,8 @@ La interviu: „`useCallback` ține minte funcția, dar ajută doar dacă o prim
 Verificare: Ce ține minte `useMemo` și ce ține minte `useCallback`?
 Răspuns verificare: `useMemo` ține minte rezultatul unei funcții, pe care o apelează. `useCallback` ține minte funcția însăși, fără s-o apeleze. `useCallback(fn, deps)` e ca `useMemo(() => fn, deps)`.
 Varianta greșită B: Cu `q` în dependențe, `del` ar deveni o funcție nouă la fiecare tastă, deci și mai rău.
-Varianta greșită C: `useMemo(() => fn, [])` dă exact același lucru ca `useCallback(fn, [])`. Lipsește tot `memo`.
-Varianta greșită D: `useCallback` nu oprește niciun re-render; doar păstrează identitatea funcției.
+Varianta greșită C: `useMemo(() => fn, [])` dă exact același lucru ca `useCallback(fn, [])`. `del` e deja stabilă; lipsește tot `memo`.
+Varianta greșită D: `useCallback` nu oprește niciun re-render; păstrează identitatea funcției. Un copil fără `memo` se re-randează oricum.
 
 ### re-12
 Pe scurt: State-ul unui input controlat nu poate sta într-o tranziție. Câmpul rămâne urgent, iar `Slow` primește `useDeferredValue(q)` și stă în `memo`.
@@ -344,8 +344,8 @@ Limită: `useDeferredValue` nu face randarea mai rapidă; o face întreruptibil�
 La interviu: „O tranziție marchează o actualizare ca neurgentă, dar nu o pot folosi pentru state-ul unui input. Las câmpul urgent și dau listei `useDeferredValue(q)`, cu lista în `memo`. Spre deosebire de debounce, nu am o întârziere fixă.”
 Verificare: Când alegi `startTransition` în loc de `useDeferredValue`?
 Răspuns verificare: Când ai acces la setter și actualizarea nu controlează un input, de exemplu schimbarea unui tab: `startTransition(() => setTab(t))`, cu `isPending` pentru un indicator. `useDeferredValue` e pentru o valoare primită: un prop sau rezultatul unui hook.
-Varianta greșită B: `isPending` doar raportează o tranziție; poți ignora valoarea, ca în cod, și tranziția pornește oricum.
-Varianta greșită C: `startTransition` primește și funcții sincrone, și asincrone.
+Varianta greșită B: `isPending` raportează o tranziție; poți ignora valoarea, ca în cod, și tranziția pornește oricum.
+Varianta greșită C: `startTransition` primește și funcții sincrone, și asincrone; `setQ` apelat sincron intră în tranziție. Defectul e altul: un input controlat nu stă în tranziție.
 Varianta greșită D: Documentația spune exact opusul: tranzițiile nu pot controla un input de text.
 
 ### re-13
@@ -377,9 +377,9 @@ Limită: `useId` nu e pentru `key` și nici pentru selectori CSS. Pentru un grup
 La interviu: „Un id fix într-o componentă reutilizabilă se dublează pe pagină. `useId` dă un id unic per instanță, stabil și identic între server și client, deci nu strică hidratarea.”
 Verificare: De ce nu folosești un contor global, `let next = 0; id = next++`?
 Răspuns verificare: Pe server și în client componentele pot fi randate în altă ordine, deci id-urile ar diferi și hidratarea ar eșua. Un contor crește și la fiecare render, nu doar o dată pe instanță.
-Varianta greșită B: React nu modifică valoarea unui atribut `id`; o pune în DOM exact cum o scrii.
-Varianta greșită C: `htmlFor` nu caută câmpul vecin: caută după id în tot documentul.
-Varianta greșită D: `Math.random()` dă alt id la fiecare render și altul pe server decât în client.
+Varianta greșită B: React nu modifică valoarea unui atribut `id`; o pune în DOM exact cum o scrii, deci nu apare niciun sufix.
+Varianta greșită C: `htmlFor` nu caută câmpul vecin: caută după id în tot documentul și găsește primul element cu acel id.
+Varianta greșită D: `Math.random()` dă alt id la fiecare render și altul pe server decât în client, deci strică hidratarea; nu repară problema.
 
 ### re-14
 Pe scurt: O buclă de re-randări: `getSnapshot` dă un obiect nou la fiecare apel. React avertizează, apoi aruncă `Maximum update depth exceeded`.
@@ -406,8 +406,8 @@ Limită: Pentru state obișnuit, documentația recomandă `useState` și `useRed
 La interviu: „`useSyncExternalStore` primește `subscribe` și `getSnapshot`. `getSnapshot` trebuie să dea aceeași valoare cât store-ul nu s-a schimbat; un obiect nou la fiecare apel produce o buclă de re-randări.”
 Verificare: De ce declari `subscribe` în afara componentei?
 Răspuns verificare: Dacă primește altă funcție `subscribe` la un re-render, React se dezabonează și se abonează din nou. O funcție declarată în afara componentei rămâne aceeași.
-Varianta greșită B: React compară doar referințe, prin `Object.is`, nu conținutul obiectelor.
-Varianta greșită C: Componenta nu ajunge să afișeze nimic stabil: obiectul nou declanșează randări repetate.
+Varianta greșită B: React compară referințe, prin `Object.is`, nu conținutul obiectelor; două obiecte `{ n: 1 }` sunt diferite.
+Varianta greșită C: Componenta nu ajunge să afișeze nimic stabil: obiectul nou declanșează randări repetate, iar `subscribe` nu are legătură cu asta.
 Varianta greșită D: `subscribe` poate fi declarat oriunde; în afara componentei e chiar varianta recomandată.
 
 ### re-15
@@ -469,6 +469,6 @@ Limită: `use` nu poate sta într-un `try` / `catch`; o promisiune respinsă aju
 La interviu: „`use(promise)` suspendă componenta până se rezolvă promisiunea, cu `Suspense` deasupra. Promisiunea trebuie să fie aceeași între randări, deci vine din cache sau din părinte, nu e creată în render.”
 Verificare: Ce diferență e între `use(Ctx)` și `useContext(Ctx)`?
 Răspuns verificare: Citesc același Context, dar `use` poate fi apelat într-un `if` sau într-o buclă, iar `useContext` doar la nivelul de sus al componentei.
-Varianta greșită B: Lista nu apare, fiindcă fiecare reluare a randării creează o promisiune nouă.
-Varianta greșită C: `use` primește promisiuni și Context; asta e chiar rolul lui.
-Varianta greșită D: Cât promisiunea e în așteptare, componenta e suspendată, deci se vede fallback-ul, nu o listă goală.
+Varianta greșită B: Lista nu apare, fiindcă fiecare reluare a randării creează o promisiune nouă, deci `fetch` pornește iar și iar.
+Varianta greșită C: `use` primește promisiuni și Context; asta e chiar rolul lui. Argumentul e corect ca tip; defectul e promisiunea creată în render.
+Varianta greșită D: Cât promisiunea e în așteptare, componenta e suspendată, deci se vede fallback-ul; `use` nu întoarce `undefined`.

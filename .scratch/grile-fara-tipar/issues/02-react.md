@@ -8,7 +8,7 @@ Azi (16 grile, `k` = 6): corecta e cea mai lungă în 15 (✗), cea mai scurtă 
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `react` e în `CUE_DONE`, nicio grilă `re-*` în listă; `node validate.mjs` → OK.
 - [ ] `node tools/xcheck.mjs react` citit integral: fiecare variantă greșită schimbată are explicație nouă, care spune de ce e greșită.

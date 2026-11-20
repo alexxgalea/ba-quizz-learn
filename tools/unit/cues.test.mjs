@@ -9,7 +9,7 @@ const q = (id, m, lens, extra = {}) => ({ id, m, a: 0, o: lens.map((n, i) => Str
 const world = (mcq, mods = ["a"]) => ({ modules: mods.map(id => ({ id })), mcq });
 const run = (mcq, opts = {}) => checkCues(world(mcq), { done: [], baseline: [], ...opts });
 
-test("CUE_DONE starts empty", () => assert.deepEqual(CUE_DONE, []));
+test("CUE_DONE is a list of unique module ids", () => assert.equal(new Set(CUE_DONE).size, CUE_DONE.length));
 
 test("optLen does not count backticks", () => {
   assert.equal(optLen("`ab`"), 2);
