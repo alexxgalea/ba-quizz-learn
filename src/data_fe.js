@@ -135,30 +135,30 @@ class OrderId {
   constructor(public v: number) {}
 }
 function loadUser(id: UserId) {}
-loadUser(new OrderId(7));`, o: ["Da: tiparea e structurală, iar `OrderId` are aceeași formă ca `UserId`", "Nu: sunt clase diferite, deci tipuri diferite, ca în C++", "Nu: `loadUser` cere exact `UserId`, iar `strict` verifică numele claselor", "Da, dar doar dacă pui `as UserId` la apel"],
+loadUser(new OrderId(7));`, o: ["Da: tiparea e structurală, iar `OrderId` are aceeași formă ca `UserId`", "Nu: clasele au nume diferite, deci tipurile sunt diferite, ca în C++", "Nu: `loadUser` cere exact `UserId`, iar `strict` verifică numele claselor", "Da, dar apelul are nevoie de `as UserId`, altfel tipurile nu se potrivesc"],
       ctx: "TypeScript compară tipurile după formă, nu după nume. Un tip e compatibil dacă are câmpurile cerute.",
       e: "Amândouă clasele au un singur câmp public, `v: number`, deci formele coincid și apelul compilează. În C++ ar fi două tipuri fără legătură. Ca să le separi, adaugi un câmp-etichetă sau un membru `private`." },
     { id: "ts-02", lvl: 1, q: "Care dintre atribuirile `a` și `b` dă eroare?", code: R`type P = { x: number };
 const o = { x: 1, y: 2 };
 const a: P = o;
-const b: P = { x: 1, y: 2 };`, o: ["Doar `b`: un literal de obiect cu proprietate în plus pică (TS2353)", "Amândouă: `y` nu există în `P`", "Doar `a`: `o` are tipul `{ x: number; y: number }`", "Niciuna: tiparea structurală acceptă proprietăți în plus"],
+const b: P = { x: 1, y: 2 };`, o: ["Doar `b`: un literal de obiect cu `y` în plus pică (TS2353)", "Amândouă: `y` nu există în `P`, deci ambele atribuiri sunt respinse", "Doar `a`: `o` are tipul `{ x: number; y: number }`, care nu e `P`", "Niciuna: tiparea structurală permite proprietăți în plus și la literale"],
       ctx: "Verificarea proprietăților în plus (excess property check) se aplică doar unui literal de obiect scris direct în locul atribuirii.",
       e: "`a` trece: `o` e o variabilă cu o formă care conține `x: number`, deci e compatibilă cu `P`. `b` e un literal proaspăt, iar `y` apare doar acolo, deci compilatorul presupune o greșeală de scriere și dă TS2353." },
     { id: "ts-03", lvl: 1, q: "Ce face compilatorul cu aceste declarații?", code: R`interface I { a: number }
 interface I { b: string }
 type T = { a: number };
-type T = { b: string };`, o: ["`I` primește ambele câmpuri; `T` dă eroare: Duplicate identifier (TS2300)", "Ambele se îmbină, fiindcă tipurile se pot redeschide", "Ambele dau eroare: nu poți declara același nume de două ori", "`T` se îmbină, iar `I` dă eroare, fiindcă `interface` e închis"],
+type T = { b: string };`, o: ["`I` primește ambele câmpuri; `T` dă eroare: Duplicate identifier (TS2300)", "Ambele se îmbină, fiindcă un alias `type` se poate redeschide ca o interfață", "Ambele dau eroare: același nume nu poate fi declarat de două ori în fișier", "`T` se îmbină cu `b: string`, iar `I` dă eroare, fiindcă `interface` e închis"],
       ctx: "Una dintre diferențele dintre `type` și `interface`: cine poate fi redeschis.",
       e: "Interfețele cu același nume se îmbină (declaration merging): `I` are `a` și `b`. Un alias `type` nu se poate redeclara, deci al doilea `T` dă TS2300. Tot de aceea bibliotecile îți lasă să le extinzi tipurile prin `interface`." },
     { id: "ts-04", lvl: 3, q: "Ce se întâmplă cu acest cod?", code: R`const isStr = (x: unknown): x is string =>
   typeof x === "number";
 const v: unknown = 5;
-if (isStr(v)) v.toUpperCase();`, o: ["Compilează, dar la runtime aruncă `TypeError: v.toUpperCase is not a function`", "Nu compilează: predicatul `x is string` nu se potrivește cu corpul funcției", "Compilează și rulează: `toUpperCase` există pe orice valoare", "Nu compilează: `v` e `unknown`, deci nu poate fi restrâns"],
+if (isStr(v)) v.toUpperCase();`, o: ["Compilează, dar la runtime aruncă `TypeError: v.toUpperCase is not a function`", "Nu compilează: corpul cu `typeof x === \"number\"` contrazice predicatul `x is string`", "Compilează și rulează, fiindcă `5` se convertește automat în string la apel", "Nu compilează: `v` e declarat `unknown`, iar un type guard nu-l poate restrânge"],
       ctx: "Un type guard definit de tine (`x is T`) îi spune compilatorului ce să creadă. Corpul lui nu e verificat față de predicat.",
       e: "TypeScript nu analizează corpul funcției. Ia predicatul `x is string` drept adevărat și în ramura `if` tratează `v` ca string, deci apelul compilează. La runtime `v` e 5, iar `toUpperCase` nu există pe un număr. Guard-ul tău poate minți." },
     { id: "ts-05", lvl: 2, q: "De ce pică funcția `len`, și cum o repari?", code: R`function len<T>(x: T) {
   return x.length;
-}`, o: ["`T` n-are constrângeri, deci nu se știe că are `length` (TS2339); repari cu `T extends { length: number }`", "`length` nu există în JavaScript pe valori generice; folosești `any`", "Lipsește tipul de întoarcere; cu `: number` compilează", "Generics nu pot accesa proprietăți; folosești o supraîncărcare"],
+}`, o: ["`T` nu garantează `length` (TS2339); repari cu `T extends { length: number }`", "`length` nu există pe valori generice în JavaScript; repari cu `x: any`", "Lipsește tipul de întoarcere; cu `: number` după lista de parametri compilează", "Generics nu pot accesa proprietăți; repari cu o supraîncărcare a funcției `len`"],
       ctx: "Într-o funcție generică, `T` e orice tip până îl restrângi. Poți face doar ce merge pe orice tip.",
       e: "Fără constrângere, `T` poate fi `number`, `null` sau orice altceva, iar compilatorul nu dă voie la `x.length`. `T extends { length: number }` cere un `T` cu acel câmp, deci `len(\"abc\")` și `len([1, 2])` merg, iar `len(5)` pică la apel." },
     { id: "ts-06", lvl: 2, q: "Care dintre `a`, `b` și `c` dă eroare?", code: R`type User = {
@@ -168,7 +168,7 @@ type Patch = Partial<
   Pick<User, "name" | "email">>;
 const a: Patch = {};
 const b: Patch = { name: "Ana" };
-const c: Patch = { id: 1 };`, o: ["Doar `c`: `Pick` păstrează `name` și `email`, deci `id` e în plus (TS2353)", "Toate trei: `Partial` nu acceptă un obiect gol", "`a` și `c`: `Pick` face câmpurile obligatorii", "Niciuna: `Partial` face toate câmpurile din `User` opționale"],
+const c: Patch = { id: 1 };`, o: ["Doar `c`: `Pick` păstrează `name` și `email`, deci `id` e în plus (TS2353)", "`a` și `b`: `Partial` cere cel puțin un câmp, deci `{}` e respins", "`a` și `c`: `Pick` păstrează câmpurile obligatorii, iar `{}` le lasă lipsă", "Niciuna: `Partial` face opționale și câmpurile pe care `Pick` le-a scos"],
       ctx: "Utility types se aplică de la interior spre exterior: `Pick` alege câmpurile, apoi `Partial` le face opționale.",
       e: "`Pick<User, \"name\" | \"email\">` are doar `name` și `email`. `Partial` le face opționale, deci `{}` și `{ name: \"Ana\" }` merg. `id` nu mai e în tip, iar un literal cu el pică la excess property check." },
     { id: "ts-07", lvl: 3, q: "Care rând dă eroare, și de ce?", code: R`type Colors = "red" | "blue";
@@ -178,29 +178,29 @@ const a = {
 const b: Record<Colors, unknown> =
   { red: [1], blue: "#00f" };
 a.red.map((x) => x);
-b.red.map((x) => x);`, o: ["Doar ultimul: `b.red` e `unknown` (TS18046), fiindcă anotarea lărgește tipul", "Penultimul: `satisfies` pierde tipul lui `a.red`", "Amândouă: `unknown` nu are `map`", "Niciunul: ambele forme dau același tip"],
+b.red.map((x) => x);`, o: ["Doar ultimul: `b.red` e `unknown` (TS18046), fiindcă anotarea lărgește tipul", "Penultimul: `satisfies` pierde tipul exact al lui `a.red` și îl lasă `unknown`", "Amândouă: `unknown` nu are `map`, iar ambele rânduri apelează `map`", "Niciunul: anotarea și `satisfies` dau același tip pentru `a.red` și `b.red`"],
       ctx: "`satisfies` verifică forma valorii, dar îi lasă tipul exact. O anotare îl înlocuiește cu tipul declarat.",
       e: "La `a`, `satisfies` doar verifică forma, iar tipul rămâne `{ red: number[]; blue: string }`, deci `a.red.map` merge. La `b`, anotarea `Record<Colors, unknown>` face `b.red` de tip `unknown`, iar `unknown` nu are `map`." },
     { id: "ts-08", lvl: 2, q: "Ce tip are `u`, și ce se întâmplă la `setU({ id: 1 })`?", code: R`type User = { id: number };
 function F() {
   const [u, setU] = useState(null);
   setU({ id: 1 });
-}`, o: ["`null`: setter-ul nu acceptă un obiect, deci pică la compilare (TS2353)", "`User | null`: TypeScript deduce din apelul `setU`", "`any`: `null` nu spune nimic despre tip", "`null`, dar `setU({ id: 1 })` compilează, fiindcă obiectele sunt compatibile cu `null`"],
+}`, o: ["`null`: setter-ul nu acceptă un obiect, deci pică la compilare (TS2353)", "`User | null`: TypeScript deduce din apelul `setU({ id: 1 })` de mai jos", "`any`: `null` nu spune nimic despre tip, deci `useState` cade pe `any`", "`null`, dar `setU({ id: 1 })` compilează, fiindcă obiectele sunt compatibile cu `null`"],
       ctx: "`useState(valoare)` deduce tipul din valoarea inițială. Dacă tipul real e mai larg, îl dai ca generic.",
       e: "Inițial `null`, deci `u` are tipul `null`, iar `setU` primește `null` sau o funcție de la `null` la `null`. Un obiect pică. Corect: `useState<User | null>(null)`." },
     { id: "ts-09", lvl: 3, q: "Cu `strict` pornit, `first.toUpperCase()` compilează. Ce schimbă `noUncheckedIndexedAccess`?", code: R`const names: string[] = ["a"];
 const first = names[0];
-first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar al treilea rând pică (TS18048)", "Nimic: `strict` include deja flag-ul", "`names[0]` devine `string`, iar `names[5]` pică la compilare", "Nu mai poți indexa array-uri cu un număr"],
+first.toUpperCase();`, o: ["`names[0]` devine `string | undefined`, iar `first.toUpperCase()` pică (TS18048)", "Nimic: `strict` pornește deja `noUncheckedIndexedAccess`, deci nu se schimbă", "`names[0]` rămâne `string`, dar `names[5]` pică la compilare ca index în afara limitelor", "Indexarea cu un număr nu mai e permisă; array-urile se citesc cu `.at(0)`"],
       ctx: "Un array nu garantează că indexul există. Implicit, TypeScript presupune că da.",
       e: "Fără flag, indexarea unui `string[]` dă `string`, chiar dacă la runtime `names[5]` e `undefined`. Cu `noUncheckedIndexedAccess` (în afara lui `strict`) tipul devine `string | undefined`, deci trebuie să verifici înainte de `toUpperCase()`." },
     { id: "ts-10", lvl: 1, q: "Ce spune compilatorul?", code: R`function shout(x: unknown) {
   return x.toUpperCase();
-}`, o: ["Eroare TS18046: `x` e `unknown`, deci trebuie restrâns înainte, de exemplu cu `typeof x === \"string\"`", "Compilează: `unknown` se comportă ca `any`", "Compilează, dar aruncă la runtime dacă `x` nu e string", "Compilează dacă funcția e apelată doar cu string-uri"],
+}`, o: ["Eroare TS18046: `x` e `unknown`, deci trebuie restrâns înainte de apel", "Compilează: `unknown` se comportă ca `any`, deci `x.toUpperCase()` e permis", "Compilează, dar aruncă `TypeError` la runtime dacă `x` nu e string", "Compilează dacă apelurile din proiect pasează un string, nu `unknown`"],
       ctx: "`unknown` acceptă orice valoare la intrare. `any` acceptă orice și te lasă să faci orice cu ea.",
       e: "`unknown` e varianta sigură a lui `any`: poți atribui orice în el, dar nu poți apela metode, accesa câmpuri sau pasa valoarea mai departe ca alt tip până nu o restrângi. `if (typeof x === \"string\") return x.toUpperCase();` compilează. Cu `x: any`, același cod ar trece și ar putea cădea la runtime." },
     { id: "ts-11", lvl: 2, q: "Ce se întâmplă la ultima linie?", code: R`type User = { id: number; name: string };
 type NewUser = Omit<User, "idd">;
-const u: NewUser = { name: "Ana" };`, o: ["Eroare TS2741, lipsește `id`: `Omit` nu verifică dacă `\"idd\"` e o cheie, deci n-a scos nimic", "Eroare la `Omit`: `\"idd\"` nu e o cheie a lui `User`", "Compilează: `NewUser` e `{ name: string }`", "Compilează: `Omit` face toate câmpurile opționale"],
+const u: NewUser = { name: "Ana" };`, o: ["Eroare TS2741: `Omit` acceptă `\"idd\"` fără să scoată ceva, deci `id` lipsește", "Eroare pe rândul 2: `\"idd\"` nu e o cheie a lui `User`, ca la `Pick`", "Compilează: `NewUser` rămâne `{ name: string }` și `id` dispare prin `Omit`", "Compilează: `Omit` face opționale câmpurile pe care nu le recunoaște"],
       ctx: "`Omit<T, K>` scoate cheile `K` din `T`. Constrângerea lui `K` e `keyof any`, adică orice string, număr sau simbol.",
       e: "`Omit` acceptă orice cheie, chiar și una inexistentă, fără eroare. `\"idd\"` nu scoate nimic, deci `NewUser` are tot `id`, iar literalul fără `id` pică cu TS2741. Greșeala de scriere iese la iveală doar indirect. `Pick` e strict: `Pick<User, \"idd\">` dă eroare la cheie." },
     { id: "ts-12", lvl: 2, q: "Compilează corpul acestui PATCH?", code: R`type User = {
@@ -209,23 +209,23 @@ const u: NewUser = { name: "Ana" };`, o: ["Eroare TS2741, lipsește `id`: `Omit`
 };
 const p: Partial<User> = {
   address: { city: "Iași" },
-};`, o: ["Nu: `Partial` lucrează pe un nivel, deci `address`, dacă apare, cere și `zip` (TS2741)", "Da: `Partial` face opționale toate câmpurile, inclusiv cele imbricate", "Nu: cu `Partial` trebuie să dai și `name`", "Da, dar `address.zip` devine `undefined` la runtime"],
+};`, o: ["Nu: `Partial` lucrează pe un nivel, deci `address` cere și `zip` (TS2741)", "Da: `Partial` face opționale câmpurile din `User`, inclusiv cele imbricate", "Nu: `Partial` face opțional doar `address`, deci `name` rămâne obligatoriu", "Da: obiectul compilează, iar `address.zip` ajunge `undefined` la runtime"],
       ctx: "`Partial<T>` construiește un tip în care fiecare proprietate a lui `T` e opțională.",
       e: "`Partial` adaugă `?` doar proprietăților de pe primul nivel. `address` devine opțional, dar tipul lui rămâne `{ city: string; zip: string }`, deci un obiect fără `zip` pică. Pentru un update pe mai multe niveluri scrii tipul explicit sau un tip recursiv (`DeepPartial`), pe care biblioteca standard nu-l are." },
     { id: "ts-13", lvl: 1, q: "Vrei tipul a ce întoarce `getUser`. Ce e greșit?", code: R`function getUser() {
   return { id: 1, name: "Ana" };
 }
-type U = ReturnType<getUser>;`, o: ["`getUser` e o valoare, nu un tip (TS2749); scrii `ReturnType<typeof getUser>`", "`ReturnType` merge doar pe funcții `async`", "Lipsește tipul de retur explicit al lui `getUser`", "Nimic: `U` e `{ id: number; name: string }`"],
+type U = ReturnType<getUser>;`, o: ["`getUser` e o valoare, nu un tip (TS2749); folosești `typeof getUser`", "`ReturnType` cere o funcție `async`, iar `getUser` e sincronă", "Lipsește tipul de retur explicit: `ReturnType` nu îl poate deduce singur", "Nimic: `ReturnType` primește funcția și dă `{ id: number; name: string }`"],
       ctx: "Un tip generic primește tipuri. O funcție e o valoare; `typeof` îi ia tipul.",
       e: "În poziție de tip, numele unei funcții nu înseamnă nimic, iar compilatorul spune exact asta: „refers to a value, but is being used as a type here. Did you mean 'typeof getUser'?”. `typeof getUser` dă tipul funcției, iar `ReturnType` îi scoate tipul rezultatului, dedus fără să-l scrii de mână." },
     { id: "ts-14", lvl: 2, q: "Ce tip are `U`?", code: R`async function getUser() {
   return { id: 1 };
 }
-type U = ReturnType<typeof getUser>;`, o: ["`Promise<{ id: number }>`; tipul obiectului îl dă `Awaited<ReturnType<typeof getUser>>`", "`{ id: number }`, fiindcă `ReturnType` așteaptă promisiunea", "`{ id: 1 }`, cu valoarea exactă", "`any`, fiindcă funcția e asincronă"],
+type U = ReturnType<typeof getUser>;`, o: ["`Promise<{ id: number }>`: `ReturnType` dă tipul exact de retur", "`{ id: number }`: `ReturnType` așteaptă promisiunea, ca un `await`", "`{ id: 1 }`: tipul păstrează valoarea literală a lui `id`", "`any`: `ReturnType` nu poate deduce tipul unei funcții `async`"],
       ctx: "O funcție `async` întoarce mereu o promisiune. `Awaited<T>` modelează ce face `await`.",
       e: "`ReturnType` dă exact tipul de retur, iar pentru o funcție `async` acesta e `Promise<{ id: number }>`. `Awaited` desface promisiunea (și pe cele imbricate), deci `Awaited<ReturnType<typeof getUser>>` e `{ id: number }`. Literalul `1` se lărgește la `number`, fiindcă proprietatea unui obiect e mutabilă." },
     { id: "ts-15", lvl: 2, q: "Compilezi și rulezi. Ce afișează?", code: R`enum Dir { Up, Down }
-console.log(Object.keys(Dir));`, o: ["`[\"0\", \"1\", \"Up\", \"Down\"]`: un `enum` numeric e un obiect la runtime, cu mapare și inversă", "`[\"Up\", \"Down\"]`", "`[]`: tipurile se șterg la compilare", "`[0, 1]`"],
+console.log(Object.keys(Dir));`, o: ["`[\"0\", \"1\", \"Up\", \"Down\"]`: un `enum` numeric are și mapare inversă", "`[\"Up\", \"Down\"]`: cheile sunt numele membrilor enum-ului", "`[]`: tipurile se șterg la compilare, iar `enum` e un tip", "`[0, 1]`: cheile sunt valorile numerice ale membrilor, ca numere"],
       ctx: "Spre deosebire de un `type`, un `enum` generează cod JavaScript.",
       e: "`enum Dir { Up, Down }` devine un obiect cu `Dir.Up = 0` și `Dir[0] = \"Up\"`, deci are patru chei. De aceea `enum` nu e „doar un tip”, iar `erasableSyntaxOnly` (TS 5.8) îl interzice. O uniune de literale, `type Dir = \"up\" | \"down\"`, nu lasă nimic la runtime." },
     { id: "ts-16", lvl: 3, q: "De ce pică `toggle()` la compilare?", code: R`function useToggle() {
@@ -233,12 +233,12 @@ console.log(Object.keys(Dir));`, o: ["`[\"0\", \"1\", \"Up\", \"Down\"]`: un `en
   return [on, () => { on = !on; }];
 }
 const [on, toggle] = useToggle();
-toggle();`, o: ["Rezultatul e dedus ca array de uniuni, `(boolean | (() => void))[]`, deci `toggle` poate fi și `boolean` (TS2349); `as const` îl face tuplu", "Un custom hook nu poate întoarce o funcție", "`on` e `const` în destructurare, deci `toggle` nu-l poate schimba", "Nu pică: `toggle` e `() => void`"],
+toggle();`, o: ["Tipul dedus e `(boolean | (() => void))[]`, deci `toggle` poate fi `boolean` (TS2349)", "Un custom hook nu poate întoarce o funcție împreună cu o valoare", "`on` e `const` în destructurare, deci `toggle` nu poate schimba valoarea lui `on`", "Nu pică: TypeScript deduce `readonly [boolean, () => void]`, ca la `useState`"],
       ctx: "Fără alt indiciu, TypeScript deduce un literal de array ca `T[]`, cu `T` uniunea tipurilor elementelor.",
       e: "`[on, fn]` devine `(boolean | (() => void))[]`: un array în care orice poziție poate fi oricare dintre tipuri. `toggle` primește tipul `boolean | (() => void)`, iar un `boolean` nu se poate apela (TS2349). `return [on, fn] as const` dă tuplul `readonly [boolean, () => void]`, ca la `useState`. Merge și un tip de retur explicit." },
     { id: "ts-17", lvl: 3, q: "Ce tip are `R`?", code: R`type ToArr<T> =
   T extends unknown ? T[] : never;
-type R = ToArr<string | number>;`, o: ["`string[] | number[]`: un conditional type se aplică separat pe fiecare membru al uniunii", "`(string | number)[]`", "`never`", "`unknown[]`"],
+type R = ToArr<string | number>;`, o: ["`string[] | number[]`: tipul condițional se distribuie pe uniune", "`(string | number)[]`: uniunea e tratată ca un singur tip", "`never`: uniunea nu se potrivește cu `extends unknown`, deci ramura falsă", "`unknown[]`: `T` ia tipul din dreapta lui `extends`"],
       ctx: "Când parametrul verificat e un tip generic gol, `T extends …` se distribuie peste o uniune.",
       e: "`ToArr<string | number>` devine `ToArr<string> | ToArr<number>`, adică `string[] | number[]`: un array numai de string-uri sau numai de numere. Ca să tratezi uniunea întreagă, înfășori ambele părți: `[T] extends [unknown] ? T[] : never` dă `(string | number)[]`. Așa e construit și `Exclude`." }
   ]);
