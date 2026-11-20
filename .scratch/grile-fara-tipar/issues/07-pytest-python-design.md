@@ -13,8 +13,8 @@ Azi:
 
 **Status:** done
 
-- [ ] `pytest`, `python`, `design` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
+- [x] `pytest`, `python`, `design` sunt în `CUE_DONE`, fără id-uri în listă; `node validate.mjs` → OK.
 - [ ] `node tools/xcheck.mjs pytest python design` citit integral; explicațiile variantelor greșite schimbate sunt noi.
-- [ ] Faptele noi verificate (pytest: documentația oficială, notată în `research/interview-facts.md`).
-- [ ] Build, `node --check`, suita din `CLAUDE.md`.
+- [x] Faptele noi verificate (pytest: documentația oficială, notată în `research/interview-facts.md`).
+- [x] Build, `node --check`, suita din `CLAUDE.md`.
 - [ ] Screenshot la 360 px, light și dark, pe câte o grilă rescrisă din `pytest` și `design`.

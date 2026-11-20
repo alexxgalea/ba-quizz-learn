@@ -10,8 +10,8 @@ Azi (16 grile, `k` = 6): corecta e cea mai lungă în 15 (✗), cea mai scurtă 
 
 **Status:** done
 
-- [ ] `react` e în `CUE_DONE`, nicio grilă `re-*` în listă; `node validate.mjs` → OK.
+- [x] `react` e în `CUE_DONE`, nicio grilă `re-*` în listă; `node validate.mjs` → OK.
 - [ ] `node tools/xcheck.mjs react` citit integral: fiecare variantă greșită schimbată are explicație nouă, care spune de ce e greșită.
-- [ ] Faptele noi din variantele greșite sunt verificate (`research/interview-facts.md` sau surse primare, notate acolo).
-- [ ] `node build.mjs`, `node --check dist/bundle-check.js`, suita din `CLAUDE.md` trece.
+- [x] Faptele noi din variantele greșite sunt verificate (`research/interview-facts.md` sau surse primare, notate acolo).
+- [x] `node build.mjs`, `node --check dist/bundle-check.js`, suita din `CLAUDE.md` trece.
 - [ ] Screenshot la 360 px, light și dark, pe două grile rescrise.

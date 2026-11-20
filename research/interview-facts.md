@@ -1383,3 +1383,11 @@ Schemele de pe tablă pentru punctele 2–9 din `src/desf/asyncio.md`. Toate fap
 - ✅ Rulat într-un venv cu SQLAlchemy 2.1.9 și Celery 5.7.0: `Session(...).expire_on_commit` e `True` implicit (deci `commit()` expiră toate atributele instanțelor din sesiune); `Celery().conf.task_serializer` e `json`; `worker_pool` implicit e `prefork`.
 - ✅ Variantele greșite noi sunt false fără dubiu: `joinedload` nu e numele vechi al lui `selectinload` (loaderi diferiți, SQL diferit); `close()` nu face COMMIT (rollback la tranzacția necomisă); `select()` e construct Core, nu doar ORM, iar Core nu e depreciat în 2.x; pool-ul nu deschide conexiunile la pornire (la cerere, până la `pool_size`); Celery nu limitează argumentele la `int` / `str` (orice tip serializabil în JSON); Beat nu are coordonare între instanțe (nu alege un lider), deci 3 replici = 3 publicări.
 - Nicio eroare de fapt găsită în grilele atinse; `index`, `postgres` și `security` treceau deja regulile și au intrat în `CUE_DONE` neschimbate.
+
+## 56. Grile fără tipar: reparații după code review (PR #21, 20 noiembrie 2026)
+
+- ✅ Rulat (SQLAlchemy 2.1.9, SQLite): după `session.add(obj); session.commit()` care ridică `IntegrityError`, orice folosire a sesiunii ridică `PendingRollbackError` până faci `rollback()`. Același lucru după un `flush()` eșuat (`sqa-09` C).
+- ✅ `pt-01` D: fixture-ul are scope-ul implicit `function`, deci teardown-ul de după `yield` rulează după fiecare test, nu o singură dată după toate (documentația pytest, „Fixture finalization / teardown”).
+- ✅ `dbm-06` B: JSONB se indexează (GIN pe document sau index pe expresie), deci afirmația „nu se poate indexa” e falsă (documentația PostgreSQL, „JSON Types”, „jsonb Indexing”).
+- ✅ `oop-02` D: nu mai afirmăm că interpretorul „inlinează” property-ul. CPython 3.12+ specializează `LOAD_ATTR_PROPERTY`, dar accesul tot rulează o funcție Python; explicația spune doar asta.
+- ✅ `cel-11` B: pickle nu apără de falsificare; mesajele Celery nu sunt semnate decât cu serializerul `auth` din `security` (documentația Celery, „Security”).

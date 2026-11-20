@@ -1,5 +1,7 @@
 Status: ready-for-agent
 
+Nota 20 noiembrie 2026: clichetul descris mai jos (`CUE_DONE`, `tools/cue_baseline.json`, `checkCues(P, { done, baseline })`) a fost scos la sfârșit, în tichetul 10. Toate regulile sunt acum erori pe toate modulele, iar `checkCues(P)` nu mai primește opțiuni. Tichetele păstrează istoricul lucrului așa cum a fost.
+
 # Grile fără tipar: lungimea și cuvintele absolute
 
 Prima parte din „grile fără tipar de răspuns”, cerută de Alex pe 20 noiembrie 2026: grilele rămân forma cea mai accesibilă de lucru (pe telefon, seara), deci trebuie să măsoare ce știe, nu cât de bine citește forma variantelor. Partea asta are prioritate: varianta corectă să nu mai fie cea mai lungă. A doua parte, modul de reformulare (Adevărat/Fals pe fiecare variantă, răspuns din memorie înainte de variante, mai multe variante greșite), are decizii deschise și trece întâi prin `/grill-with-docs`, într-un spec separat.
