@@ -1,0 +1,16 @@
+should_fire:
+  - 'explain how zero-knowledge proofs work using the Feynman technique and simple analogies'
+  - 'break down the intuition behind attention mechanisms in Transformers for a beginner'
+  - 'explain quantum entanglement simply without heavy mathematical jargon'
+  - 'use a real-world analogy to explain how database indexes work to a non-technical person'
+  - 'explain what monads are in functional programming without confusing category theory'
+  - 'explain the concept of opportunity cost using everyday relatable examples'
+  - 'break down how public-key cryptography works using physical lock and key metaphors'
+  - 'explain how inflation, interest rates, and bond prices affect one another simply'
+should_not_fire:
+  - prompt: 'test my retention by asking me questions about a concept'
+    expect: 'active-recall'
+  - prompt: 'write an in-depth academic research paper summary'
+    expect: 'paper-summary'
+  - prompt: 'structure a multi-month learning roadmap and curriculum'
+    expect: 'learning-roadmap'
