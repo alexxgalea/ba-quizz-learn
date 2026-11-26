@@ -418,6 +418,26 @@ Analogie: Un actor care joacă rolul unui coleg într-o repetiție.
 Limită: Mock-ul nu validează automat contractul real; folosește `autospec=True` și testează și integrarea unde contează.
 Vezi și: fixture, pytest, side_effect
 
+### CI/CD
+Forme: CI/CD, Continuous Integration, Continuous Delivery, Continuous Deployment
+
+Definiție: CI: fiecare schimbare e integrată des în ramura principală și verificată automat de un pipeline cu teste. CD: codul verificat ajunge până la „gata de lansare” (Delivery, producția e un buton) sau direct în producție (Deployment).
+Scop: Schimbările mici, verificate la fiecare push, se lansează cu risc mic: când ceva pică, ai puține commit-uri de suspectat.
+Exemplu: Un push în merge request rulează lint, unit și integrare; `main` se îmbină doar cu pipeline verde, iar imaginea construită o dată e promovată staging → producție.
+Analogie: O linie de asamblare cu control de calitate la fiecare stație, nu doar la ieșirea din fabrică.
+Limită: CI/CD valorează cât încrederea în teste: o suită lentă sau flaky e ocolită, iar poarta nu mai oprește nimic.
+Vezi și: test flaky, fixture
+
+### test flaky
+Forme: flaky, test flaky, teste flaky, testul flaky, testele flaky, testelor flaky
+
+Definiție: Un test care trece și pică pe același cod, fără nicio schimbare.
+Scop: Îl recunoști ca să nu-l tratezi ca zgomot: un test flaky tolerat îi învață pe oameni să ignore roșul.
+Exemplu: Un test UI cu `sleep(2)` care trece local și pică din când în când pe un CI încărcat.
+Analogie: O alarmă de fum care sună uneori fără fum: după câteva zile, nimeni nu mai iese din casă.
+Limită: Re-rularea automată ascunde simptomul; cauza (timp, ordine, rețea, stare partajată) trebuie reparată. Carantina e doar temporară.
+Vezi și: CI/CD, mock
+
 ### JWT
 Forme: JWT, JWT-ul, JWT-ului, JWT-uri
 

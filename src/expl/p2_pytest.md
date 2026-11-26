@@ -284,3 +284,152 @@ Răspuns verificare: Fără autospec trece, pentru că MagicMock acceptă orice 
 Varianta greșită B: Autospec nu creează mock-uri pentru tot modulul: se aplică doar obiectului pe care îl patch-uiești.
 Varianta greșită C: Autospec nu rulează testul de mai multe ori: construiește un singur mock, după specificația obiectului real.
 Varianta greșită D: Mock-ul rămâne activ pe toată durata patch-ului. Autospec doar verifică apelurile, nu le limitează numărul.
+
+### pt-18
+Pe scurt: Testul automat repetă exact aceeași verificare la fiecare schimbare, în secunde. Așa prinde regresiile: ce mergea și s-a stricat după un commit.
+Scop: Verificarea de mână se face o dată, apoi se uită. Codul se schimbă zilnic, deci fără repetare automată afli de regresie de la client.
+Mecanism: Testul fixează un comportament („`parse("1.2.2026")` întoarce `(2026, 2, 1)`”). La fiecare rulare, mașina îl verifică din nou, identic. Dacă o schimbare îl strică, testul pică imediat, lângă commit-ul vinovat, când contextul e încă proaspăt.
+Pas cu pas:
+```text
+azi: repari parserul, testul trece
+peste 2 săptămâni: alt fix
+  testul vechi rulează din nou
+  formatul cu puncte pică -> roșu
+afli acum, nu de la client
+```
+Legătură: E punctul 1 al fișei. În aplicația asta, `validate.mjs` și testele din `tools/` sunt plasa: o grilă stricată nu ajunge publicată.
+Limită: Testele arată prezența unui bug pe cazurile alese, nu absența lui pe toate. Cât de bine prind depinde de cazurile pe care le scrii (punctul 3).
+La interviu: „Testez ca să pot schimba codul fără frică: suita repetă identic, la fiecare commit, verificările pe care de mână le-aș face o dată. Așa o regresie apare lângă schimbarea care a produs-o, nu în producție.”
+Verificare: Un coleg spune: „Am testat de mână, merge, nu mai trebuie test.” Ce lipsește?
+Răspuns verificare: Repetarea. Verificarea de mână e bună azi, dar nu mai rulează la următoarea schimbare. Testul automat rulează de fiecare dată.
+Varianta greșită B: Testele verifică doar cazurile scrise. Pe intrările netestate nu afli nimic, deci nu dovedesc corectitudinea.
+Varianta greșită C: Testele și review-ul prind lucruri diferite: review-ul vede designul, numele și riscurile pe care niciun test nu le formulează. Unul nu îl înlocuiește pe celălalt.
+Varianta greșită D: Testele nu schimbă viteza codului testat; doar îl rulează. Performanța se măsoară separat, cu profilare sau benchmark-uri.
+
+### pt-19
+Pe scurt: Muți verificările de logică în jos, în teste unit și de integrare, și păstrezi puține teste E2E, pe fluxurile critice. Asta e piramida testelor.
+Scop: O suită de 40 de minute care pică aleator nu mai e crezută și încetinește fiecare merge request. Testele mici rulează în secunde și arată exact unde e problema.
+Mecanism: Un test E2E trece prin browser, rețea, API și bază: multe piese, deci lent și cu multe motive să pice fără legătură cu schimbarea. Ce verifică despre parsare sau reguli se poate verifica direct pe funcție (unit) sau pe API cu o bază reală (integrare). E2E rămân pentru ce numai ele dovedesc: că fluxul întreg merge.
+Pas cu pas:
+```text
+300 E2E: 40 min, pică aleator
+reguli → unit: 250 teste, 5 s
+API + DB → integrare: 40, 1 min
+rămân E2E: 10, 3 min
+total: sub 5 min, pică rar
+```
+Legătură: Punctul 2 al fișei și o-pt-4. Pentru testele E2E rămase, punctul 19: fără `sleep`, cu `expect`.
+Limită: Proporția exactă se discută: unele echipe pun mai mult accent pe integrare. Regula rămâne: cu cât urci, cu atât mai puține teste.
+La interviu: „Aș urma piramida: multe teste unit pe logica de domeniu, teste de integrare pe API cu o bază reală și puține E2E, doar pe fluxurile critice. Așa suita e rapidă, iar când pică știu unde să mă uit.”
+Verificare: Ce test pui pentru o regulă de detecție cu 12 cazuri de intrare?
+Răspuns verificare: Un test unit parametrizat (punctul 10): 12 cazuri în milisecunde, fără browser și fără bază.
+Varianta greșită B: `sleep` face testele și mai lente și nu le face stabile: ghicește un timp, iar pe un CI încărcat ghicește greșit.
+Varianta greșită C: Rulate rar, testele E2E prind regresiile după săptămâni, când nu mai știi ce commit le-a produs.
+Varianta greșită D: Alt browser nu schimbă nimic important: încetineala și instabilitatea vin din numărul de piese prin care trece fiecare test, nu din browser.
+
+### pt-20
+Pe scurt: Testul e legat de implementare: verifică un pas intern (cum e făcut), nu comportamentul (ce iese). Un refactor corect îl strică.
+Scop: Testele legate de implementare pică la fiecare refactor, deci devin un cost, nu o plasă. Iar oamenii ajung să le „repare” fără să se uite la ce verifică.
+Mecanism: Testul a cerut probabil ca `_normalize` să fie apelată (un mock cu `assert_called_once`). Numele intern nu face parte din contract. Un test bun dă o intrare prin interfața publică și verifică ieșirea sau efectul vizibil, deci supraviețuiește oricărei restructurări care păstrează comportamentul.
+Pas cu pas:
+```text
+test: patch(_normalize)
+  assert_called_once
+redenumești în _clean
+  comportament identic
+testul pică: fals pozitiv
+fix: assert calc_risk(x) == 87
+```
+Legătură: Punctul 3 al fișei. Punctul 12 (mock): mock-urile pe detalii interne sunt cauza clasică.
+Limită: Uneori interacțiunea chiar e comportamentul: „trimite exact un email”. Acolo verifici apelul, dar la granița cu exteriorul (clientul de email), nu pe o funcție privată.
+La interviu: „Testez comportamentul prin interfața publică: intrare, ieșire, efecte vizibile. Mock-uiesc doar la granițe (rețea, email, ceas), nu funcțiile mele interne, ca un refactor să nu strice testele.”
+Verificare: Când e corect ca un test să verifice un apel?
+Răspuns verificare: Când apelul e efectul cerut și traversează o graniță: emailul trimis, mesajul publicat în coadă. Atunci verifici apelul pe clientul acelei granițe.
+Varianta greșită B: Comportamentul public e identic, deci nu e o regresie. Testul a dat o alarmă falsă.
+Varianta greșită C: Un test flaky pică aleator pe același cod. Aici pică determinist, din cauza schimbării de nume.
+Varianta greșită D: Un fixture care să refacă numele vechi ar ascunde problema: testul ar rămâne legat de implementare.
+
+### pt-21
+Pe scurt: Hook-urile stau în `.git/hooks`, care nu se versionează, deci nu vin la `git clone`, iar oricine le sare cu `--no-verify`. Sunt feedback rapid, nu o garanție.
+Scop: Poarta reală trebuie să fie un loc pe care nimeni nu-l poate ocoli și care rulează la fel pentru toți: pipeline-ul din CI.
+Mecanism: Git rulează scriptul `pre-commit` înainte să creeze commit-ul; dacă iese cu un cod diferit de 0, commit-ul nu se face. Dar directorul de hook-uri e local: fiecare coleg îl instalează (de exemplu cu framework-ul `pre-commit`, config în `.pre-commit-config.yaml`, apoi `pre-commit install`). `git commit --no-verify` și `git push --no-verify` sar hook-urile.
+Pas cu pas:
+```text
+laptop: pre-commit -> lint, unit
+  sărit cu --no-verify? se poate
+  coleg nou fără install? lipsește
+CI: același pipeline pentru toți
+  nu se poate sări
+```
+Legătură: Punctul 4 al fișei. Punctul 16: `-m "not slow"` alege testele care încap într-un hook.
+Limită: Un hook lent e sărit des: oamenii pun `--no-verify` din reflex. În hook pui doar ce durează câteva secunde.
+La interviu: „Folosesc `pre-commit` pentru formatare, lint și testele rapide, ca să prind problemele în două secunde. Dar e doar confort: hook-urile se pot sări, așa că poarta e pipeline-ul de CI, cu `main` protejat.”
+Verificare: Un coleg nou face commit-uri neformatate, deși repo-ul are `.pre-commit-config.yaml`. De ce?
+Răspuns verificare: Fișierul de config e în repo, dar hook-ul din `.git/hooks` nu e instalat până nu rulează `pre-commit install`.
+Varianta greșită B: `pre-commit` rulează înainte de commit, nu după push. Pentru push există `pre-push`, tot înainte de trimitere.
+Varianta greșită C: Git nu ignoră codul de ieșire: o valoare diferită de 0 la `pre-commit` oprește commit-ul.
+Varianta greșită D: Hook-urile sunt scripturi executabile și rulează pe orice sistem pe care merge git, deci și pe macOS.
+
+### pt-22
+Pe scurt: Blochează merge-ul până când pipeline-ul merge request-ului se termină cu succes. Fără pipeline reușit, butonul de merge nu e disponibil.
+Scop: Codul ajunge în `main` doar după ce suita a rulat pe un runner curat, deci `main` rămâne verde și lansabil.
+Mecanism: Un push în ramura unui merge request pornește un pipeline (cu regula `$CI_PIPELINE_SOURCE == "merge_request_event"`). Setarea „Pipelines must succeed” din Merge checks cere ca acest pipeline să fi reușit înainte de merge. Un merge request fără niciun pipeline nu se poate îmbina. Pe ramura protejată, doar rolurile permise pot face merge, iar push-ul direct e restrâns.
+Pas cu pas:
+```text
+push în ramura MR
+  pipeline: lint, unit, integrare
+un job pică -> merge blocat
+repari, push din nou
+  pipeline verde + review
+merge în main
+```
+Legătură: Punctul 5 al fișei. Sintaxa pipeline-ului e în fișa `ops`, punctul 7 (OBS-06, OBS-07, OBS-08).
+Limită: Pipeline-ul unui merge request rulează pe ramura sursă, nu pe rezultatul îmbinării cu `main`. Pentru codul combinat, GitLab are merged results pipelines.
+La interviu: „`main` e protejată: merge doar prin merge request, cu pipeline verde și review. Pipeline-ul rulează întâi joburile rapide, ca să pice repede, iar un build roșu pe `main` se repară înaintea oricărui alt lucru.”
+Verificare: Cum faci același lucru în GitHub?
+Răspuns verificare: O regulă de protecție pe ramură, cu „Require status checks before merging” și check-urile din GitHub Actions marcate obligatorii.
+Varianta greșită B: Asta ar fi o verificare după fapt: codul stricat ar fi deja în `main`. Poarta oprește merge-ul înainte.
+Varianta greșită C: Pipeline-ul rulează pe runnerii CI, într-un mediu curat, nu pe laptopul cuiva.
+Varianta greșită D: Re-rularea automată e altă unealtă (`retry` pe job), folosită pentru eșecuri de infrastructură. Setarea doar cere un pipeline reușit.
+
+### pt-23
+Pe scurt: La Continuous Deployment, fiecare schimbare care trece pipeline-ul ajunge automat în producție. La Continuous Delivery ajunge până la „gata de lansare”, iar lansarea e un pas manual.
+Scop: Lansările mici și dese au risc mic: când ceva pică, sunt puține schimbări de suspectat, nu 200 de commit-uri.
+Mecanism: În amândouă, pipeline-ul construiește artefactul (imaginea Docker) o singură dată și îl duce prin teste și staging. La Delivery, jobul de producție e manual (`when: manual` în GitLab), apăsat de un om. La Deployment, jobul rulează singur după ce tot ce e înainte a trecut.
+Pas cu pas:
+```text
+merge în main -> build imaginea
+teste pe imagine -> staging
+Delivery: un om apasă -> prod
+Deployment: fără buton -> prod
+aceeași imagine, în ambele
+```
+Legătură: Punctul 6 al fișei. Aplicația asta face Continuous Delivery: PR în `main`, iar GitHub Pages servește build-ul nou.
+Limită: Continuous Deployment cere teste în care ai încredere deplină, plus metode de a limita impactul (feature flags, lansare treptată, rollback rapid).
+La interviu: „Delivery înseamnă că `main` e mereu lansabil, iar producția e un buton. Deployment scoate butonul: fiecare schimbare verde ajunge singură în producție. În ambele imaginea se construiește o dată și se promovează.”
+Verificare: De ce nu reconstruiești imaginea pentru producție, după ce a trecut pe staging?
+Răspuns verificare: Un build nou poate ieși diferit (alte dependențe, alt compilator). Promovând aceeași imagine, lansezi exact ce ai testat.
+Varianta greșită B: Niciuna dintre practici nu renunță la teste. La Deployment ele contează și mai mult, fiindcă sunt singura poartă.
+Varianta greșită C: Imaginea se construiește o singură dată și aceeași e promovată; reconstruirea pe mediu e chiar ce evită ambele practici.
+Varianta greșită D: Integrarea rară e opusul CI, pe care se sprijină și Delivery, și Deployment.
+
+### pt-24
+Pe scurt: Echipa învață să ignore roșul. Când un eșec real apare, arată la fel ca unul aleator, e re-rulat și trece de poartă.
+Scop: Poarta din CI valorează cât încrederea în ea. Un singur test flaky tolerat strică încrederea în toată suita.
+Mecanism: Testul pică pe același cod din cauze care nu țin de schimbare: timp (`sleep`), ordine între teste, rețea, stare partajată. „Retry până trece” transformă roșul într-un zgomot. Remediul: îl muți în carantină, unde nu mai blochează pipeline-ul și nu e ignorat, și îl repari repede, pornind de la cauză.
+Pas cu pas:
+```text
+test pică 1 din 20, fără schimbări
+echipa: Retry până trece
+roșul devine zgomot
+bug real -> roșu -> Retry -> trece
+fix: carantină + cauza reparată
+```
+Legătură: Punctul 6 al fișei. Cauzele clasice și remediile: punctul 15 (timp) și punctul 19 (`sleep` în UI). Ordinea aleatoare (pytest-randomly) scoate la iveală dependențele dintre teste.
+Limită: Carantina e temporară: un test lăsat acolo luni de zile nu mai protejează nimic. Re-rularea automată (`pytest-rerunfailures`) ascunde simptomul, nu repară cauza.
+La interviu: „Un test flaky e mai rău decât niciun test: îi învață pe oameni să re-ruleze până trece. Îl pun în carantină, ca să nu blocheze, și caut cauza: de obicei timp, ordine sau stare partajată.”
+Verificare: Cum verifici dacă un test depinde de ordinea testelor?
+Răspuns verificare: Rulezi suita în ordine aleatoare, cu pytest-randomly, și reproduci un eșec cu aceeași sămânță (`--randomly-seed`).
+Varianta greșită B: Durata în plus e reală, dar mică. Problema mare e că roșul nu mai înseamnă nimic.
+Varianta greșită C: Runner-ul nu se strică dacă un test rulează de mai multe ori; costul e doar timpul.
+Varianta greșită D: Acoperirea măsoară ce linii au rulat, nu de câte ori a fost re-rulat un test.
