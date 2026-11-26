@@ -1,16 +1,175 @@
-<!-- Desfășurările fișei `pytest` (13 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 6, 11, 16 și 24. -->
+<!-- Desfășurările fișei `pytest` (19 puncte). Format și reguli: lib.mjs (checkDesf), .scratch/desfasurari/spec.md. Faptele: research/interview-facts.md, secțiunile 6, 11, 16, 24 și 57. Excepție de la regula „punctele nu se reordonează” (hotărârea lui Alex, 26 noiembrie 2026): punctele 1–6 (de ce testăm, nivelurile, git, CI/CD) au fost puse la început, iar vechile 1–13 au devenit 7–19; nicio grilă nu era încă legată de punctele modulului. -->
 
 ### harta
-Problema: Un test bun e rapid, determinist și izolat. Dar codul real atinge baza de date, ceasul, rețeaua, Celery și browserul, iar fiecare dintre ele face testul lent, instabil sau dependent de ordine. Fără reguli, suita crește până când nimeni nu mai are încredere în ea. Modulul răspunde la patru întrebări: cum scrii și organizezi testele, cum izolezi dependențele, cum rulezi suita repede și cum construiești un framework de teste, inclusiv pentru UI.
+Problema: Fără teste, fiecare schimbare e un pariu: afli de bug de la utilizatori, iar refactorizarea devine riscantă. Testele te apără doar dacă rulează automat, la fiecare schimbare, și dacă echipa are încredere în ele. Modulul merge de la de ce la cum: ce testezi la fiecare nivel al codului, unde rulează testele pe drumul unei schimbări prin git, de pe laptop până în producție, apoi uneltele pytest: cum scrii testele, cum izolezi dependențele, cum rulezi suita repede și cum construiești un framework de teste.
 
 Grupuri:
-- 1–4: cum scrii și organizezi testele (assert, fixture-uri, `conftest.py`, parametrizare)
-- 5–6: uneltele care izolează codul (`raises`, `monkeypatch`, `tmp_path`, `caplog`, mock-uri)
-- 7–9: dependențele reale: baza de date, Celery, timpul
-- 10–11: cum rulezi suita repede (opțiuni, paralel cu xdist)
-- 12–13: framework-ul de teste și testele UI (straturi, configurare, Playwright)
+- 1–3: de ce testezi și ce testezi la fiecare nivel al codului (piramida)
+- 4–6: unde rulează testele pe drumul prin git: hook-uri locale, CI la merge request, CD până în producție
+- 7–10: cum scrii și organizezi testele (assert, fixture-uri, `conftest.py`, parametrizare)
+- 11–12: uneltele care izolează codul (`raises`, `monkeypatch`, `tmp_path`, `caplog`, mock-uri)
+- 13–15: dependențele reale: baza de date, Celery, timpul
+- 16–17: cum rulezi suita repede (opțiuni, paralel cu xdist)
+- 18–19: framework-ul de teste și testele UI (straturi, configurare, Playwright)
 
 ### 1
+Problema: Repari un bug în parserul de date. Peste două săptămâni, un client raportează că formatul cu puncte nu mai merge: nimeni nu l-a reverificat.
+Ideea: Un test e o afirmație despre comportament, verificată de mașină la fiecare schimbare. Prinde regresiile, îți dă curaj la refactorizare și spune ce face codul. Un bug prins pe laptop costă un minut, în producție un incident.
+Analogie: Lista de verificare a pilotului. Pilotul știe să zboare, dar lista prinde ce sare memoria în grabă.
+Legătură: `validate.mjs` și testele din `tools/` opresc o grilă stricată la publicare.
+Tablă:
+- problema: bug întors după fix
+- ideea: verificare repetată; prinde regresii
+- analogie: lista pilotului
+- punct: plasa schimbării
+
+### 2
+Greu: da
+Problema: Ai 300 de teste, toate prin browser: login, click, verificare. Suita durează 40 de minute și pică din când în când fără nicio schimbare. Când pică, nu știi dacă e de vină parserul, API-ul sau baza.
+Ideea: Testele au niveluri. Unit: o funcție sau o clasă, fără I/O, în milisecunde; când pică, știi exact unde. Integrare: codul tău plus o dependență reală (Postgres, broker, HTTP), în secunde; dovedește că piesele se potrivesc. End-to-end: tot sistemul, cum îl folosește userul; e singurul care dovedește fluxul întreg, dar e lent și fragil. Piramida lui Mike Cohn (2009): multe teste jos, tot mai puține spre vârf. Proporția exactă se discută, dar ideea rămâne: prinzi un bug la nivelul cel mai de jos la care se poate.
+Exemplu:
+```text
+E2E: browser → API → DB
+  puține, minute, fragile
+integrare: API + Postgres real
+  zeci, secunde
+unit: parse("1.2.2026")
+  sute, milisecunde
+```
+Legătură: o-pt-4 și punctul 10. În Django, testele pe serializer sunt unit, iar cele cu `APIClient` și baza de test sunt de integrare. Aici, `tools/unit` e baza, iar suitele Playwright din `tools/` sunt E2E.
+Tablă:
+- problema: 300 teste prin browser
+- ideea: unit, integrare, E2E; piramida
+- schemă:
+```text
+unit: o funcție, ms
+↓ urci un nivel
+integrare: cod + Postgres
+↓ urci încă unul
+E2E: tot sistemul, minute
+↓ cu cât urci
+tot mai puține teste
+```
+- punct: multe jos, puține sus
+
+### 3
+Greu: da
+Problema: Un test verifică faptul că `calc_risk` cheamă `_normalize` de două ori. Redenumești funcția internă, comportamentul rămâne identic, iar testul pică. Alt test nu atinge pragul: dacă `>=` devine `>`, trece mai departe.
+Ideea: Testezi ce vede apelantul: intrarea și ieșirea sau efectul, prin interfața publică, nu pașii interni. Un test are trei părți: pregătești (Arrange), acționezi (Act), verifici (Assert). Alegi cazurile: cel normal, limitele (gol, zero, pragul exact) și erorile. Un bug raportat primește întâi un test care îl reproduce și pică; abia apoi îl repari, iar testul rămâne în suită ca test de regresie. TDD face asta pentru orice cod nou: roșu (testul pică), verde (codul minim), refactor.
+Exemplu:
+```python
+def level(score):
+    if score >= 70:
+        return "high"
+    return "low"
+def test_prag():  # limita exactă
+    assert level(70) == "high"
+    assert level(69) == "low"
+test_prag()  # → None
+```
+Legătură: Punctul 12: un `assert_called_once` pe un detaliu intern leagă testul de implementare. Aplicația asta e scrisă cu TDD: întâi testul la interfață, apoi codul.
+Tablă:
+- problema: test legat de implementare
+- ideea: comportament, nu pași; limite și erori
+- schemă:
+```text
+bug raportat
+↓ scrii testul care îl arată
+testul pică: roșu
+↓ repari codul
+testul trece: verde
+↓ testul rămâne în suită
+regresia nu mai revine
+```
+- punct: întâi testul care pică
+
+### 4
+Greu: da
+Problema: Împingi un commit, iar după 10 minute CI-ul pică pe un import nefolosit și pe formatare. Ai pierdut un ciclu întreg pentru ceva ce se vedea în două secunde pe laptop.
+Ideea: Git rulează scripturi, numite hook-uri, la anumite momente: `pre-commit` înainte să creeze commit-ul, `pre-push` înainte să trimită. Dacă scriptul iese cu un cod diferit de 0, operația se oprește. Acolo pui verificările de câteva secunde: formatare, lint, testele unit rapide. Dar hook-urile stau în `.git/hooks`, care nu se versionează, deci nu vin la `git clone`. Le distribui cu framework-ul `pre-commit`: config în `.pre-commit-config.yaml`, iar fiecare coleg rulează o dată `pre-commit install`. Și oricine le sare cu `--no-verify`. Deci hook-ul e feedback rapid, nu garanție; garanția e în CI.
+Exemplu:
+```text
+$ cat .git/hooks/pre-commit
+#!/bin/sh
+pytest -q -m "not slow"
+$ git commit -m "fix"  # pică
+$ git commit --no-verify  # sare
+```
+Legătură: Punctul 16: `-m "not slow"` alege ce încape într-un hook. Repo-ul ăsta nu are hook-uri: verificările din CLAUDE.md le rulezi de mână înainte de publicare, exact ce ar automatiza un hook.
+Tablă:
+- problema: CI pică pe formatare
+- ideea: pre-commit, pre-push; --no-verify le sare
+- schemă:
+```text
+git commit
+↓ rulează hook-ul pre-commit
+lint și teste rapide
+↓ ieșire diferită de 0
+commit-ul nu se creează
+↓ cu --no-verify
+hook-ul e sărit
+```
+- punct: confort, nu garanție
+
+### 5
+Greu: da
+Problema: Pe laptopul tău testele trec. Colegul face merge, iar `main` nu mai pornește: tu aveai o variabilă de mediu setată local, el avea altă versiune de Python. Nimeni n-a rulat suita pe codul combinat, într-un mediu curat.
+Ideea: Continuous Integration înseamnă că fiecare își integrează schimbările des în ramura principală, cel puțin zilnic, iar fiecare integrare e verificată de un build automat, cu teste. Concret: un push într-un merge request pornește pipeline-ul pe un runner curat, cu lint, unit, integrare, apoi E2E; cele rapide întâi, ca să pice repede. Ramura `main` e protejată: merge doar cu pipeline verde și review. În GitLab setarea e „Pipelines must succeed”, în GitHub „required status checks”. Aici `--no-verify` nu ajută. Un build roșu pe `main` se repară înaintea oricărei alte sarcini.
+Exemplu:
+```text
+test:
+  stage: test
+  image: python:3.14
+  script:
+    - pytest -m "not slow"
+  rules:
+    - if: $CI_PIPELINE_SOURCE ==
+        "merge_request_event"
+```
+Legătură: OBS-06 și OBS-07: `artifacts` și `services: postgres` sunt piesele aceluiași pipeline; sintaxa e la fișa `ops`, punctul 7. Aici PR-ul spre `main` e poarta, doar că verificările le rulezi tu, nu un runner.
+Tablă:
+- problema: merge-ul strică main
+- ideea: pipeline la fiecare MR; main protejat
+- schemă:
+```text
+push în merge request
+↓ pornește pipeline-ul
+lint → unit → integrare
+↓ un job pică
+merge-ul e blocat
+↓ totul verde, plus review
+merge în main
+```
+- punct: poarta: pipeline verde
+
+### 6
+Greu: da
+Problema: Codul din `main` e verde, dar lansarea se face o dată pe lună, de mână: cineva construiește imaginea pe laptop, o copiază pe server și rulează migrările după o listă. Când ceva pică, sunt 200 de commit-uri suspecte.
+Ideea: Continuous Delivery: `main` se poate lansa oricând. Pipeline-ul construiește artefactul (imaginea Docker) și îl duce automat până la staging, iar lansarea în producție e o decizie, un buton. Continuous Deployment merge mai departe: fiecare schimbare care trece pipeline-ul ajunge singură în producție. Imaginea se construiește o singură dată și aceeași e promovată staging → producție, deci lansezi exact ce ai testat. Totul stă pe încrederea în teste. Un test flaky pică uneori fără nicio schimbare și îi învață pe oameni să re-ruleze până trece; atunci poarta nu mai oprește nimic. Îl pui în carantină și îl repari repede.
+Exemplu:
+```text
+stages: [build, test, deploy]
+deploy_prod:
+  stage: deploy
+  script: ./deploy.sh
+  when: manual  # Delivery
+# fără when: manual → Deployment
+```
+Legătură: Aplicația asta face Continuous Delivery: PR în `main`, iar GitHub Pages servește build-ul nou. În Docker Swarm, `docker service update --image` e pasul de lansare. Punctele 15 și 19: `sleep` e cauza clasică a testelor flaky.
+Tablă:
+- problema: lansare lunară, de mână
+- ideea: Delivery: buton; Deployment: automat
+- schemă:
+```text
+merge în main, pipeline verde
+↓ build o singură dată
+imaginea ajunge pe staging
+↓ Delivery: un om apasă
+aceeași imagine în producție
+```
+- punct: build o dată; flaky în carantină
+
+### 7
 Problema: Un test pică în CI doar cu „AssertionError”. Nu vezi ce valoare a întors funcția, așa că deschizi codul și pui `print`-uri.
 Ideea: Un test e o funcție `test_*` dintr-un fișier `test_*.py`. Pytest le găsește singur. Verifici cu `assert` simplu, fără `self.assertEqual`. Pytest rescrie `assert`-urile la import, deci un eșec arată valorile din expresie.
 Exemplu:
@@ -34,7 +193,7 @@ E  assert 4 == 5
 ```
 - punct: def test_*, assert simplu
 
-### 2
+### 8
 Greu: da
 Problema: Zece teste au nevoie de aceeași conexiune la baza de test. Pe fiecare o deschizi și o închizi de mână. Când un test pică la mijloc, conexiunea rămâne deschisă.
 Ideea: Fixture-ul e o funcție cu `@pytest.fixture`. Testul îl cere prin numele unui parametru, iar pytest îl rulează înainte și îi dă valoarea. Codul de după `yield` e teardown și rulează și când testul pică. Pytest face `next` pe generator pentru setup și încă un `next` pentru teardown. Exemplul imită asta cu un generator. Scope-ul decide cât trăiește valoarea: `function` (implicit), `class`, `module`, `package`, `session`.
@@ -66,7 +225,7 @@ valoarea intră în test
 - cpp: SetUp și TearDown
 - punct: yield: setup și teardown
 
-### 3
+### 9
 Problema: Trei fișiere de test au nevoie de fixture-ul `client`. Îl copiezi în fiecare sau îl imporți, iar importul pare neutilizat, fiindcă fixture-ul apare doar ca nume de parametru.
 Ideea: `conftest.py` e un plugin local al directorului. Pytest îl încarcă singur. Fixture-urile de acolo se văd în testele din director și din subdirectoare, fără import. Un `conftest.py` mai adânc poate redefini un fixture, iar cel mai apropiat de test câștigă.
 Exemplu:
@@ -92,7 +251,7 @@ client = root
 ```
 - punct: conftest.py, fără import
 
-### 4
+### 10
 Greu: da
 Problema: Ai 12 reguli de detecție, fiecare cu o intrare și un rezultat. Scrii 12 funcții aproape identice. Sau pui o buclă `for` într-un singur test, unde primul caz picat oprește restul.
 Ideea: `@pytest.mark.parametrize("n", [1, 2, 3])` rulează același test pentru fiecare valoare. Fiecare caz e un test separat în raport, cu id din valori. Un caz picat nu le oprește pe celelalte. Decoratorii stivuiți dau produsul cartezian. `pytest.param(..., id="...")` pune un nume lizibil.
@@ -125,7 +284,7 @@ test_p[1], [2], [3]
 - cpp: TEST_P; GetParam
 - punct: parametrize, teste separate
 
-### 5
+### 11
 Greu: da
 Problema: Testezi o funcție care citește `API_KEY` din mediu și un fișier de config, loghează un avertisment și ridică o eroare la config invalid. Fără unelte scrii `try`/`except`, atingi `os.environ` global și lași fișiere în `/tmp`.
 Ideea: `pytest.raises(Exc, match="...")` verifică excepția, iar `match` caută cu `re.search` în mesaj. `monkeypatch` schimbă atribute sau variabile de mediu și le anulează la sfârșitul testului. `tmp_path` e un director temporar unic pentru fiecare test. `caplog` prinde mesajele de log.
@@ -153,7 +312,7 @@ valoarea veche revine
 ```
 - punct: unelte care curăță singure
 
-### 6
+### 12
 Greu: da
 Problema: `alerts.py` face `from notify import send_email`. În test faci `patch("notify.send_email")`, dar funcția trimite tot emailul real.
 Ideea: `patch` înlocuiește un nume, deci îl patch-uiești unde e căutat, nu unde e definit: aici `alerts.send_email`. `autospec=True` copiază semnătura originalului, deci un apel cu argumente greșite ridică `TypeError`. `side_effect` cu o excepție o ridică la apel. `side_effect` cu o listă întoarce valorile pe rând.
@@ -183,7 +342,7 @@ apelul prinde mock-ul
 - cpp: interfață virtuală; EXPECT_CALL
 - punct: patch la consumator
 
-### 7
+### 13
 Greu: da
 Problema: Testele trec pe SQLite și pică pe Postgres în producție, fiindcă tipurile, funcțiile SQL și blocările diferă. Iar fiecare test lasă rânduri, deci următorul vede date străine.
 Ideea: Rulezi testele pe același motor ca în producție: Postgres real, ca service în CI sau în Docker, cu `testcontainers`. Izolezi testele cu tranzacție și rollback: fixture-ul deschide tranzacția, testul lucrează, teardown-ul face rollback. Dacă codul testat face `commit()`, sesiunea se leagă de tranzacția externă cu un SAVEPOINT (`create_savepoint`). `factory_boy` construiește datele cu valori implicite, pe care le schimbi doar unde contează.
@@ -212,7 +371,7 @@ baza e curată
 ```
 - punct: Postgres real, rollback
 
-### 8
+### 14
 Problema: Testezi un task Celery care trimite un email. Cu `.delay()` testul cere broker și worker. Cu `task_always_eager` nu mai testezi nimic din ce se întâmplă prin broker.
 Ideea: Un task e o funcție Python: o poți chema direct. Cu `task_always_eager = True`, `.delay()` rulează local, în același proces, fără broker. Docs: e doar o emulare a unui worker, bună pentru unit teste. Pentru integrare pornești un worker real și un broker de test.
 Exemplu:
@@ -239,7 +398,7 @@ rulează local, fără broker
 ```
 - punct: eager pentru unit teste
 
-### 9
+### 15
 Greu: da
 Problema: Testezi un token care expiră în 15 minute. Ca să-l vezi expirat, ar trebui să aștepți 15 minute. Sau pui `sleep(1)` ca să aștepți un worker, iar testul pică din când în când pe un CI lent.
 Ideea: Nu aștepți timpul real, îl controlezi. Cu freezegun sau time-machine ceasul stă pe loc sau sare înainte. Mai simplu, injectezi ceasul: funcția primește ora, iar testul îi dă ora dorită. Pentru sincronizare nu folosești `sleep`: aștepți condiția, cu timeout, sau un eveniment.
@@ -252,7 +411,7 @@ print(expired(0, 900))  # → True
 ```
 În C++: O funcție care cheamă direct `std::chrono::steady_clock::now()` nu se testează fără să aștepți. Cu ceasul ca parametru de șablon (`template <class Clock>`), testul pasează un ceas fals, cu un `now()` pe care îl controlezi.
 Unde nu ține: În C++ ceasul trebuie injectat prin design. În Python, freezegun și time-machine înlocuiesc ceasul global la rulare, fără să schimbi funcția. Un ceas injectat merge totuși la fel de bine în Python.
-Legătură: PT-09 și punctul 13: același principiu, `sleep` nu e sincronizare.
+Legătură: PT-09 și punctul 19: același principiu, `sleep` nu e sincronizare.
 Tablă:
 - problema: token expirat, sleep
 - ideea: ceas injectat; aștepți condiția
@@ -267,7 +426,7 @@ True, fără sleep
 - cpp: ceas ca parametru
 - punct: controlezi timpul
 
-### 10
+### 16
 Greu: da
 Problema: Suita rulează 8 minute. Un test pică, iar tu rulezi din nou tot. Alte teste sunt lente și vrei să le sari cât lucrezi.
 Ideea: `-x` oprește la primul eșec. `-k expr` alege testele după nume. `--lf` rulează doar testele picate data trecută. `-m "not slow"` sare testele marcate `slow`. `-n auto` (pytest-xdist) le rulează în paralel, pe procese. `pytest-cov` măsoară acoperirea, cu `--cov`.
@@ -283,7 +442,7 @@ Tablă:
 - ideea: -x, -k, --lf; -m, -n auto
 - punct: opțiuni care scurtează suita
 
-### 11
+### 17
 Problema: Rulezi cu `-n 4`. Fixture-ul `session` care creează baza de test rulează de patru ori, iar patru procese scriu în aceeași bază și își strică datele.
 Ideea: xdist pornește workeri ca procese separate, `gw0`, `gw1` și așa mai departe. Fiecare face propria colectare. Deci un fixture `scope="session"` rulează o dată pe worker, nu o dată în total. Fixture-ul `worker_id` îți dă numele workerului (`master`, fără paralelizare). Izolezi datele după el: o bază sau o scheamă pe worker.
 Exemplu:
@@ -309,7 +468,7 @@ test_gw0, test_gw1: baze separate
 ```
 - punct: session per worker
 
-### 12
+### 18
 Greu: da
 Problema: Echipa de QA are 400 de teste UI, iar fiecare repetă pașii de login. Când se schimbă un buton, repari 400 de teste. URL-ul de staging e scris în cod, deci nu le poți rula local.
 Ideea: Separi straturile: teste (ce verifici), pași de domeniu (ce face utilizatorul), clienți API sau page objects, drivere (browser, HTTP). O schimbare de detaliu ajunge într-un singur strat. Mediul vine din configurare: `pytest_addoption` adaugă `--env`, citit printr-un fixture. Datele vin din factories și se curăță în teardown, după `yield`. În CI scoți un raport JUnit cu `--junitxml`.
@@ -338,7 +497,7 @@ login()
 ```
 - punct: framework, nu doar teste
 
-### 13
+### 19
 Greu: da
 Problema: Un test UI apasă „Salvează”, pune `sleep(2)` și verifică mesajul. Local trece. Pe un CI mai lent pică din când în când.
 Ideea: Cauți elementele după rol, cum le vede utilizatorul: `get_by_role("button", name="Salvează")`. Acțiunile (`click`, `fill`) așteaptă singure ca elementul să fie gata. `expect(locator)` reîncearcă până trece sau expiră (5 s implicit). `is_visible()` nu așteaptă, deci nu faci `assert` pe el și nu pui `sleep`.
@@ -351,7 +510,7 @@ t = page.get_by_text("Salvat")
 expect(t).to_be_visible()
 assert t.is_visible()  # NU
 ```
-Legătură: PT-17 și punctul 9: `sleep` nu e sincronizare, ci o ghicire.
+Legătură: PT-17 și punctul 15: `sleep` nu e sincronizare, ci o ghicire.
 Tablă:
 - problema: sleep(2) fragil
 - ideea: get_by_role; expect reîncearcă

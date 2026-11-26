@@ -6,7 +6,7 @@ Aplicație de pregătire pentru interviul tehnic de la Onapsis (Software Enginee
 
 - **329 de grile** în 30 de module, pe trei niveluri (bază, practic, avansat). Fiecare are context înainte de întrebare, butonul „Nu știu încă” și „Am ghicit”, care trimite grila înapoi la repetat.
 - **Explicații pe două niveluri.** Imediat după răspuns: pe scurt, de ce contează, cum funcționează și de ce e greșită varianta aleasă. La cerere („Arată-mi concret”): pas cu pas, aplicare, legătura cu ce știi deja, limite, formularea pentru interviu, o întrebare de verificare și celelalte variante.
-- **Glosar** de 85 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
+- **Glosar** de 87 de termeni, legați automat în texte: atingi termenul subliniat și se deschide definiția.
 - **106 carduri orale** (dintre care 24 de snippet-uri de cod și 6 scenarii de design), **16 exerciții de live coding** cu soluții testate cu pytest și fișe pe module.
 - **Întrebări deschise**: cele 310 întrebări „Verificare” din explicații (fără modulul bonus), fără variante. Răspunzi cu voce tare, dezvălui răspunsul, te notezi (știu / parțial / nu); intră în aceleași cutii Leitner.
 - **Schelete** (Studiu › Schelete): forma minimă a fiecărui concept, scrisă din memorie în 2–5 minute (o coadă sigură între thread-uri, un proces pornit corect, un fixture cu `yield`). Scrii codul, te notezi pe 3–5 puncte esențiale, iar scheletul intră în cutiile Leitner. Vezi „Schelete”.

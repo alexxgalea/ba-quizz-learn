@@ -1,11 +1,18 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
+    "concept-explainer": {
+      "source": "poorvith-mp/skills-education",
+      "commit": "7ae884a84e46720ee4774a3d0e15b310064a9c4e",
+      "sourceType": "github",
+      "skillPath": "skills/concept-explainer/SKILL.md",
+      "computedHash": "1f2f73b8e950464114fa47da66906c5b38e1281c629cb557ac4693aec2b5c189"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
       "skillPath": "skills/find-skills/SKILL.md",
-      "computedHash": "913b9d37d0d54047dd65222bb8c67b2bf04e3cb87dcad1729068d7a8b2c8c396"
+      "computedHash": ""
     }
   }
 }

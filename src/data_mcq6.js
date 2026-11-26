@@ -586,4 +586,57 @@ assert page.locator(
       ctx: "Playwright așteaptă singur înainte de acțiuni (click, fill). Pentru aserții are funcția `expect`, cu timeout implicit de 5 secunde.",
       e: "`is_visible()` răspunde imediat, deci testul depinde de cât de repede apare toast-ul. `expect(...).to_be_visible()` reîncearcă până la timeout, iar `sleep` dispare." }
   ]);
+
+  // De ce testăm, nivelurile, git și CI/CD (punctele 1–6 ale fișei, 26 noiembrie 2026).
+  Q("pytest", [
+    { id: "pt-18", pt: [1], lvl: 1, q: "Ce câștigi, în primul rând, dintr-o suită de teste automate față de verificarea de mână?", o: [
+      "Aceeași verificare se repetă la fiecare schimbare și prinde regresiile",
+      "Afli că programul e corect și pe intrările pe care nu le-ai testat",
+      "Review-ul de cod devine inutil, deci merge-ul se poate face automat",
+      "Codul rulează mai repede, fiindcă testele îi optimizează funcțiile"],
+      ctx: "O regresie e ceva ce mergea înainte și s-a stricat după o schimbare.",
+      e: "Testul automat nu obosește și nu sare pași: aceeași verificare rulează identic la fiecare commit, deci o regresie apare imediat, nu la client." },
+    { id: "pt-19", pt: [2], lvl: 2, q: "Suita are 300 de teste E2E prin browser, durează 40 de minute și pică des fără nicio schimbare. Ce schimbi întâi?", o: [
+      "Muți logica în teste unit și păstrezi E2E pe fluxurile critice",
+      "Pui un `sleep` după fiecare pas, ca pagina să apuce să se încarce",
+      "Rulezi testele E2E o dată pe lună, chiar înainte de lansare",
+      "Rescrii testele E2E pe un alt browser, mai rapid decât Chromium"],
+      ctx: "Piramida testelor: multe teste unit jos, mai puține de integrare, puține end-to-end sus.",
+      e: "Testele E2E sunt lente și fragile. Ce se poate verifica la un nivel mai jos (parsare, reguli, validare) trece în teste unit sau de integrare, rapide și precise; E2E rămân pe câteva fluxuri critice." },
+    { id: "pt-20", pt: [3], lvl: 2, q: "Redenumești funcția internă `_normalize`. Comportamentul public e identic, dar un test pică. Ce îți spune asta despre test?", o: [
+      "Verifică un detaliu intern, nu ce vede apelantul",
+      "A prins o regresie reală, deci redenumirea e greșită",
+      "E flaky: pică aleator, fără legătură cu schimbarea",
+      "Îi lipsește un fixture care să refacă numele vechi"],
+      ctx: "Un test bun pică atunci când comportamentul se schimbă, nu atunci când se schimbă doar structura internă.",
+      e: "Testul era legat de implementare (de exemplu un mock pe `_normalize` cu `assert_called_once`). Un refactor care păstrează comportamentul nu trebuie să-l strice; testul verifică intrarea și ieșirea prin interfața publică." },
+    { id: "pt-21", pt: [4], lvl: 2, q: "Echipa are un hook `pre-commit` care rulează lint și testele rapide. De ce mai e nevoie și de pipeline-ul din CI?", o: [
+      "Hook-ul nu vine la `git clone` și se sare cu `--no-verify`",
+      "Hook-ul rulează abia după push, prea târziu pentru commit",
+      "Git ignoră codul de ieșire al hook-ului și face commit-ul",
+      "Hook-urile nu pornesc pe macOS, iar colegii lucrează pe Mac"],
+      ctx: "Hook-urile git sunt scripturi din `.git/hooks`, rulate la anumite momente (`pre-commit`, `pre-push`).",
+      e: "`.git/hooks` nu se versionează, deci fiecare coleg trebuie să le instaleze (de exemplu cu `pre-commit install`), iar oricine le poate sări cu `--no-verify`. Pe laptop dau feedback rapid; garanția vine din CI, unde nu se pot ocoli." },
+    { id: "pt-22", pt: [5], lvl: 2, q: "Ce face setarea GitLab „Pipelines must succeed” pe un proiect cu `main` protejat?", o: [
+      "Blochează merge-ul până trece pipeline-ul merge request-ului",
+      "Rulează pipeline-ul după merge și anulează commit-ul dacă pică",
+      "Rulează testele pe laptopul celui care apasă butonul de merge",
+      "Re-rulează singură joburile picate până când pipeline-ul trece"],
+      ctx: "Setarea e la Settings › Merge requests › Merge checks. Echivalentul din GitHub sunt status checks obligatorii pe o ramură protejată.",
+      e: "E poarta din CI: un merge request se poate îmbina doar cu un pipeline reușit. Un merge request fără niciun pipeline nu se poate îmbina." },
+    { id: "pt-23", pt: [6], lvl: 2, q: "Prin ce diferă Continuous Deployment de Continuous Delivery?", o: [
+      "O schimbare verde ajunge în producție fără un pas manual",
+      "Pipeline-ul nu mai rulează teste, ca lansarea să fie rapidă",
+      "Imaginea se construiește din nou pentru fiecare mediu",
+      "Codul se integrează în `main` o dată pe sprint, nu zilnic"],
+      ctx: "Continuous Delivery: software-ul se poate lansa în producție oricând, iar lansarea e o decizie.",
+      e: "La Delivery, ultimul pas (producția) e un buton apăsat de un om. La Deployment, fiecare schimbare care trece pipeline-ul ajunge automat în producție, deci testele sunt singura poartă." },
+    { id: "pt-24", pt: [6], lvl: 3, q: "Un test pică o dată la 20 de rulări, fără schimbări de cod, iar echipa apasă „Retry” până trece. Care e riscul principal?", o: [
+      "Roșul nu mai e crezut, deci și eșecurile reale trec de poartă",
+      "Pipeline-ul durează mai mult, fiindcă unele joburi rulează de două ori",
+      "Runner-ul de CI se strică, fiindcă repornește testul de prea multe ori",
+      "Acoperirea de cod scade, fiindcă testele re-rulate nu se mai numără"],
+      ctx: "Un test flaky trece și pică pe același cod, fără nicio schimbare.",
+      e: "Un test care pică aleator îi învață pe oameni să ignore roșul. Din acel moment, un eșec real arată la fel ca unul aleator și trece de poartă. Testul se pune în carantină și se repară repede." }
+  ]);
 })(window.PREP);

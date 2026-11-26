@@ -33,8 +33,8 @@
   const TERM_RE = TERM_FORM.size ? new RegExp("(^|[^\\p{L}\\p{N}_])(" + [...TERM_FORM.keys()].sort((a, b) => b.length - a.length).map(reEsc).join("|") + ")(?![\\p{L}\\p{N}_])", "gu") : null;
   // Modulele de frontend (JavaScript, TypeScript, React, depanare): snippet-urile lor se afișează fără colorare Python și intră în prompt ca js / ts / tsx.
   const isFE = id => !!(MOD[id] && MOD[id].fe);
-  // termeni care, într-un anumit loc, au alt sens decât cel din glosar („coada” la frontend e coada de actualizări sau de microtask-uri, nu o coadă de mesaje)
-  const TERM_SKIP = Object.assign({ "obs-01": ["coada"], domain: ["tranzactie"] }, Object.fromEntries(MODS.filter(m => m.fe).map(m => [m.id, ["coada"]])));
+  // termeni care, într-un anumit loc, au alt sens decât cel din glosar („coada” la frontend e coada de actualizări sau de microtask-uri, nu o coadă de mesaje; „hook” la pytest e hook-ul git, nu cel din React)
+  const TERM_SKIP = Object.assign({ "obs-01": ["coada"], domain: ["tranzactie"], pytest: ["hook"] },Object.fromEntries(MODS.filter(m => m.fe).map(m => [m.id, ["coada"]])));
   function termsIn(text) {
     const s = new Set(); if (!TERM_RE || !text) return s;
     for (const m of String(text).matchAll(TERM_RE)) s.add(TERM_FORM.get(m[2]));

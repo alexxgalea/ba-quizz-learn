@@ -337,7 +337,15 @@ def test_notify(m):
       "End-to-end: puține, pe fluxurile critice, într-un mediu apropiat de producție",
       "Anti-flaky: fără `sleep` (ceas injectat, polling cu timeout), fără stare partajată, date deterministe",
       "Izolare: rollback per test, `tmp_path`, `monkeypatch`; ordinea aleatoare scoate dependențele la iveală"],
-      model: "La bază pun multe teste unitare pe logica de domeniu: regulile de detecție și parsarea, fără I/O, cu `parametrize` pe cazurile de margine. Deasupra, teste de integrare care pornesc API-ul cu o bază de test reală și, unde contează, brokerul, cu sistemele externe înlocuite de fake-uri. End-to-end păstrez puține, doar pe fluxurile critice. Testele flaky vin de obicei din timp, stare partajată sau rețea: în loc de `sleep` injectez ceasul sau aștept o condiție cu timeout, izolez fiecare test cu rollback, `tmp_path` și `monkeypatch`, iar datele sunt deterministe. Rularea în ordine aleatoare scoate la iveală dependențele ascunse dintre teste." }
+      model: "La bază pun multe teste unitare pe logica de domeniu: regulile de detecție și parsarea, fără I/O, cu `parametrize` pe cazurile de margine. Deasupra, teste de integrare care pornesc API-ul cu o bază de test reală și, unde contează, brokerul, cu sistemele externe înlocuite de fake-uri. End-to-end păstrez puține, doar pe fluxurile critice. Testele flaky vin de obicei din timp, stare partajată sau rețea: în loc de `sleep` injectez ceasul sau aștept o condiție cu timeout, izolez fiecare test cu rollback, `tmp_path` și `monkeypatch`, iar datele sunt deterministe. Rularea în ordine aleatoare scoate la iveală dependențele ascunse dintre teste." },
+    { id: "o-pt-5", q: "Cum ajunge o schimbare de-a ta din editor în producție și unde rulează testele pe drum?", k: [
+      "Local: teste unit rapide; hook `pre-commit` cu lint și teste rapide, doar confort (se sare cu `--no-verify`, nu vine la clone)",
+      "Merge request: pipeline CI pe un runner curat, joburile rapide întâi (lint → unit → integrare, Postgres ca service)",
+      "Poarta: `main` protejată, merge doar cu pipeline verde și review; un build roșu pe `main` se repară primul",
+      "După merge: imaginea se construiește o dată și aceeași e promovată staging → producție",
+      "Delivery (producția e un buton) vs Deployment (automat); testele flaky în carantină și reparate, altfel poarta nu mai oprește nimic"],
+      kp: [4, 5, 5, 6, 6],
+      model: "Pe laptop rulez testele unit ale părții la care lucrez, iar un hook `pre-commit` face formatarea, lintul și testele rapide în câteva secunde. Hook-ul e doar confort: nu vine la clone și se poate sări cu `--no-verify`. Garanția e în CI: un push în merge request pornește pipeline-ul pe un runner curat, întâi joburile rapide, lint și unit, apoi integrarea cu un Postgres real pornit ca service. `main` e protejată, deci merge-ul se face doar cu pipeline verde și review, iar un build roșu pe `main` se repară înaintea oricărui alt lucru. După merge, pipeline-ul construiește imaginea o singură dată și o promovează pe staging, apoi în producție. Cu Continuous Delivery, producția e un buton; cu Continuous Deployment, merge singur. Totul stă pe încrederea în teste, așa că un test flaky îl pun în carantină și îl repar repede." }
   ]);
 
   O("asgi", [

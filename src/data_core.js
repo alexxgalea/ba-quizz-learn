@@ -195,8 +195,14 @@ window.PREP = window.PREP || { modules: [], mcq: [], oral: [], sheets: {}, katas
       ]
     },
     pytest: {
-      lead: "Teste rapide, deterministe, izolate. Testezi comportamentul, nu implementarea.",
+      lead: "Testele sunt plasa de siguranță a schimbării: rapide, deterministe, izolate și rulate automat la fiecare schimbare. Testezi comportamentul, nu implementarea.",
       points: [
+        "De ce testăm: un test e o afirmație despre comportament pe care o verifică mașina, identic, la fiecare schimbare. Prinde regresiile, îți dă curaj să refactorizezi și spune ce face codul. Un bug găsit mai târziu costă mai mult.",
+        "Nivelurile în cod: unit (o funcție sau o clasă, fără I/O, milisecunde), integrare (codul tău plus o dependență reală: Postgres, broker, HTTP), end-to-end (tot sistemul, cum îl folosește userul). Piramida (Mike Cohn, 2009): multe unit, mai puține de integrare, puține E2E.",
+        "Ce testezi: comportamentul prin interfața publică, nu pașii interni. Arrange, Act, Assert; cazul normal, limitele și erorile. Un bug primește întâi un test care îl reproduce (test de regresie); TDD: roșu → verde → refactor.",
+        "Git, local: hook-urile `pre-commit` și `pre-push` rulează lint și testele rapide înainte de commit sau push. Nu vin la `git clone` și se sar cu `--no-verify`, deci le distribui cu framework-ul `pre-commit` și le tratezi ca feedback rapid, nu ca garanție.",
+        "Git, pe server (CI): fiecare push într-un merge request pornește pipeline-ul pe un runner curat (lint → unit → integrare → E2E). `main` e protejată: merge doar cu pipeline verde și review (GitLab „Pipelines must succeed”, GitHub „required status checks”).",
+        "CD: Continuous Delivery = `main` se poate lansa oricând, iar lansarea e o decizie; Continuous Deployment = fiecare schimbare verde ajunge singură în producție. Imaginea se construiește o dată și se promovează staging → producție. Un test flaky strică poarta: carantină și reparat repede.",
         "Teste = funcții `test_*` cu `assert` simplu (pytest rescrie aserțiile pentru mesaje detaliate).",
         "Fixtures: setup/teardown injectat după nume; codul de după `yield` e teardown. Scope: function (implicit), class, module, package, session.",
         "`conftest.py`: fixture-uri partajate pe director, fără import.",
