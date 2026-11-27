@@ -419,14 +419,50 @@ Limită: Mock-ul nu validează automat contractul real; folosește `autospec=Tru
 Vezi și: fixture, pytest, side_effect
 
 ### CI/CD
-Forme: CI/CD, Continuous Integration, Continuous Delivery, Continuous Deployment
+Forme: CI/CD, CI, CD, Continuous Integration, Continuous Delivery, Continuous Deployment
 
-Definiție: CI: fiecare schimbare e integrată des în ramura principală și verificată automat de un pipeline cu teste. CD: codul verificat ajunge până la „gata de lansare” (Delivery, producția e un buton) sau direct în producție (Deployment).
-Scop: Schimbările mici, verificate la fiecare push, se lansează cu risc mic: când ceva pică, ai puține commit-uri de suspectat.
-Exemplu: Un push în merge request rulează lint, unit și integrare; `main` se îmbină doar cu pipeline verde, iar imaginea construită o dată e promovată staging → producție.
-Analogie: O linie de asamblare cu control de calitate la fiecare stație, nu doar la ieșirea din fabrică.
-Limită: CI/CD valorează cât încrederea în teste: o suită lentă sau flaky e ocolită, iar poarta nu mai oprește nimic.
-Vezi și: test flaky, fixture
+Definiție: Practica prin care serverul verifică singur fiecare schimbare de cod, imediat ce o trimiți (CI), apoi o duce singur până la utilizatori sau până în pragul lor (CD).
+Problema: Cinci oameni lucrează la aceeași aplicație, fiecare pe laptopul lui. Își țin schimbările separat zile întregi. Când le pun cap la cap, apar bug-uri pe care nu le-a văzut nimeni, fiindcă nimeni n-a rulat testele pe codul combinat. Apoi cineva lansează de mână, după o listă, o dată pe lună. Când ceva pică, sunt sute de schimbări de suspectat.
+Analogie: O brutărie cu bandă. Fiecare tavă nouă (o schimbare de cod) trece singură prin aceleași controale: cântar, termometru, gust (testele). O tavă care pică un control e oprită pe loc și nu ajunge în vitrină. Banda cu controale e CI. Drumul de la bandă la vitrină e CD: la Delivery un om dă drumul tăvii, la Deployment tava ajunge singură.
+Cuvinte:
+- push: trimiți pe serverul comun schimbările salvate în git (commit-urile)
+- merge request: cererea de a pune schimbările tale în ramura principală, `main`; în GitHub se numește pull request
+- pipeline: lista de verificări care pornește singură după fiecare push
+- runner: calculatorul curat de pe server care rulează verificările
+- imagine: pachetul gata de pornit, de obicei o imagine Docker, construit de pipeline
+- producție: serverele folosite de utilizatorii reali; staging e o copie de probă a lor
+Cum merge:
+1. Faci o schimbare mică și dai push într-un merge request.
+2. Serverul pornește singur pipeline-ul, pe un runner curat.
+3. Întâi rulează verificările rapide: formatarea și testele unit. Apoi cele lente: testele cu o bază de date reală.
+4. Dacă o verificare pică, merge-ul e blocat. Repari și dai push din nou.
+5. Totul e verde și un coleg a aprobat: schimbarea intră în `main`. Până aici e CI.
+6. Pipeline-ul construiește imaginea o singură dată și o pune pe staging.
+7. Delivery: un om apasă un buton și aceeași imagine ajunge în producție. Deployment: ajunge singură, fără buton.
+Exemplu: Un pipeline minim în GitLab, în fișierul `.gitlab-ci.yml`. `when: manual` e butonul: fără el, lansarea pornește singură și ai Deployment.
+```text
+stages: [test, deploy]
+teste:
+  stage: test
+  script: pytest
+lansare:
+  stage: deploy
+  script: ./deploy.sh
+  when: manual
+```
+Nu confunda:
+- CI nu e o unealtă. E obiceiul de a integra des și de a verifica automat fiecare schimbare; GitLab CI, GitHub Actions și Jenkins doar îl execută.
+- Delivery și Deployment se prescurtează amândouă „CD”. Diferența e un singur pas: butonul de lansare.
+- Pipeline verde nu înseamnă cod fără bug-uri. Înseamnă doar că testele scrise au trecut.
+Legătură: Aplicația asta are jumătate din drum. După merge-ul unui PR în `main`, GitHub Pages publică singur versiunea nouă în un-două minute: asta e partea de CD. Partea de CI lipsește: `validate.mjs` și testele din `tools/` le rulezi de mână, nu le rulează serverul. În Docker Swarm, `docker service update --image` era pasul de lansare pe care un pipeline îl face singur.
+Limită: CI/CD valorează cât testele pe care se sprijină. O suită lentă e ocolită. Un test flaky îi învață pe oameni să apese Retry până trece, iar atunci poarta nu mai oprește nimic.
+La interviu: „La fiecare merge request rulează pipeline-ul: întâi lint și teste unit, apoi integrare. `main` e protejată, deci merge-ul se face doar cu verde și review. După merge construim imaginea o singură dată și o promovăm de pe staging în producție.”
+Verifică-te: Schimbarea a trecut pipeline-ul, e în `main` și rulează pe staging. În producție ajunge doar când apasă cineva un buton. E Continuous Delivery sau Continuous Deployment? Și de ce nu se reconstruiește imaginea pentru producție?
+Răspuns: Continuous Delivery: lansarea rămâne o decizie, butonul. La Deployment butonul n-ar exista. Imaginea nu se reconstruiește ca să lansezi exact ce ai testat: un build nou poate ieși diferit (alte versiuni de dependențe).
+Citește:
+- [Martin Fowler: Continuous Integration](https://martinfowler.com/articles/continuousIntegration.html)
+- [Martin Fowler: Continuous Delivery](https://martinfowler.com/bliki/ContinuousDelivery.html)
+Vezi și: test flaky, imagine vs container
 
 ### test flaky
 Forme: flaky, test flaky, teste flaky, testul flaky, testele flaky, testelor flaky

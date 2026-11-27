@@ -145,6 +145,16 @@ Reguli:
 
 Glosarul (`src/expl/glosar.md`) are câte o secțiune `### Termen`, cu câmpurile `Forme:` (formele flexionate după care termenul e găsit în texte; trebuie să fie unice), `Definiție:`, `Scop:`, `Exemplu:`, `Analogie:`, `Limită:` și `Vezi și:`.
 
+### Glosarul pentru începători (pionier: CI/CD)
+
+Un termen scris pentru cineva care n-a mai întâlnit conceptul are, pe lângă câmpurile de bază, `Problema:`. Atunci fișa termenului (`vGlossLong` în `src/app.js`) se afișează în trei benzi, iar în Studiu › Glosar termenul are eticheta „pe larg”. Câmpurile, în ordinea de pe ecran:
+
+1. **Ideea**: `Definiție:` (o frază, fără cuvinte nedefinite), `Problema:` (povestea concretă de dinainte de concept), `Scop:` (opțional), `Analogie:` (cu structura conceptului: fiecare piesă a analogiei corespunde unei piese reale, iar maparea e spusă explicit).
+2. **Cum funcționează**: `Cuvinte:` (cel mult 6 rânduri `- termen: definiție`, cuvintele de care depind pașii), `Cum merge:` (cel mult 7 pași `1. …`, câte o idee pe pas, folosind doar cuvintele de mai sus), `Exemplu:` (text, apoi cod cu rânduri ≤ 36).
+3. **Ca să nu greșești**: `Nu confunda:` (rânduri `- …`, confuziile frecvente), `Legătură:` („Unde l-ai văzut deja”: experiența persoanei sau aplicația asta), `Limită:` („Atenție”), `La interviu:` (o frază de spus), `Verifică-te:` + `Răspuns:` (întrebare de reamintire; răspunsul e ascuns până la atingere), `Citește:` (rânduri `- [Titlu](https://…)`, sursa primară).
+
+Regulile (`checkGloss` în `lib.mjs`, din `validate.mjs`; test: `tools/unit/gloss.test.mjs`, ecranul: `tools/test_gloss.py`): formele listelor, numerotarea pașilor, plafoanele `GLOSS_LIMITS`, `Verifică-te` și `Răspuns` împreună, linkuri https, cod ≤ 36 de coloane. Termenii fără `Problema:` se afișează ca înainte.
+
 ## Intervievator
 
 Unde există o sursă pentru dialog: serverul propriu (PWA) sau `sample` (artifact), în această ordine. Fără niciuna butonul nu apare, iar fluxul „Verifică cu AI” rămâne ca înainte.

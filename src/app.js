@@ -2403,15 +2403,38 @@
     let h = '<div class="gs-back" data-a="term-close"></div><div class="gs-panel" role="dialog" aria-modal="true" aria-labelledby="gs-t">' +
       '<div class="gs-head"><h3 id="gs-t">' + esc(g.t) + '</h3><button class="btn sm ghost" data-a="term-close">Închide</button></div><div class="gs-body">';
     h += '<p class="gs-def">' + inlineRich(g.def, tc) + "</p>";
-    [["scop", "La ce folosește"], ["ex", "Exemplu"], ["an", "Analogie"], ["lim", "Atenție"]].forEach(([k, l]) => { if (g[k]) h += xsec(l, g[k], tc); });
+    if (g.p) h += vGlossLong(g, tc);
+    else [["scop", "La ce folosește"], ["ex", "Exemplu"], ["an", "Analogie"], ["lim", "Atenție"]].forEach(([k, l]) => { if (g[k]) h += xsec(l, g[k], tc); });
     if (g.see.length) h += '<div class="xp-sec"><div class="xp-h">Vezi și</div><div class="row">' + g.see.map(s => {
       const sid = findTerm(s);
       return sid && sid !== id ? '<button class="chip acc" data-a="term" data-t="' + sid + '">' + esc(s) + "</button>" : '<span class="chip">' + esc(s) + "</span>";
     }).join("") + "</div></div>";
     gsheet.innerHTML = h + "</div></div>";
+    gsheet.classList.toggle("long", !!g.p);
     gsheet.hidden = false; document.body.classList.add("gs-open");
     const panel = gsheet.querySelector(".gs-body"); if (panel) panel.scrollTop = 0;
     const btn = gsheet.querySelector('.gs-head [data-a="term-close"]'); if (btn) btn.focus({ preventScroll: true });
+  }
+  // Termenul scris pentru începători (are Problema; pionier: CI/CD, README › Glosar), în trei benzi, de la idee la capcane:
+  // Ideea (problema, analogia) → Cum funcționează (cuvintele de bază, pașii, exemplul) → Ca să nu greșești (confuzii, legătura, atenție, interviu, verifică-te, sursa).
+  function vGlossLong(g, tc) {
+    const band = (n, t) => '<div class="gs-band"><span class="gs-n">' + n + "</span>" + t + "</div>";
+    const list = (cls, items, f, tag) => '<' + (tag || "ul") + ' class="' + cls + '">' + items.map(f).join("") + "</" + (tag || "ul") + ">";
+    let h = band(1, "Ideea") + xsec("Ce problemă rezolvă", g.p, tc);
+    if (g.scop) h += xsec("La ce folosește", g.scop, tc);
+    if (g.an) h += xsec("Analogie", g.an, tc, "gs-an");
+    h += band(2, "Cum funcționează");
+    if (g.voc.length) h += '<div class="xp-sec"><div class="xp-h">Cuvintele de care ai nevoie</div>' + list("gs-voc", g.voc, v => "<div><dt>" + inlineRich(v.t) + "</dt><dd>" + inlineRich(v.d, tc) + "</dd></div>", "dl") + "</div>";
+    if (g.pas.length) h += '<div class="xp-sec"><div class="xp-h">Pas cu pas</div>' + list("gs-steps", g.pas, x => "<li>" + inlineRich(x, tc) + "</li>", "ol") + "</div>";
+    if (g.ex) h += xsec("Exemplu", g.ex, tc);
+    h += band(3, "Ca să nu greșești");
+    if (g.conf.length) h += '<div class="xp-sec"><div class="xp-h">Nu confunda</div>' + list("gs-conf", g.conf, x => "<li>" + inlineRich(x, tc) + "</li>") + "</div>";
+    if (g.leg) h += xsec("Unde l-ai văzut deja", g.leg, tc);
+    if (g.lim) h += xsec("Atenție", g.lim, tc);
+    if (g.intv) h += xsec("La interviu", g.intv, tc, "intv");
+    if (g.ver) h += '<div class="xp-sec ver"><div class="xp-h">Verifică-te</div>' + rich(g.ver, tc) + '<details class="gs-ans"><summary>Arată răspunsul</summary><div>' + rich(g.verR, tc) + "</div></details></div>";
+    if (g.read.length) h += '<div class="xp-sec"><div class="xp-h">Citește mai departe</div>' + list("gs-read", g.read, r => '<li><a href="' + esc(r.u) + '" target="_blank" rel="noopener noreferrer">' + esc(r.t) + "</a></li>") + "</div>";
+    return h;
   }
   function closeTerm() {
     gsheet.hidden = true; gsheet.innerHTML = ""; document.body.classList.remove("gs-open");
@@ -2420,7 +2443,7 @@
   }
   function vGloss() {
     return '<p class="muted small">' + GLOSS.length + " de termeni, explicați pe scurt. Îi găsești și apăsând pe cuvintele subliniate din context și din explicații.</p>" +
-      '<div class="glist">' + GLOSS.map(g => '<button class="glrow" data-a="term" data-t="' + g.id + '"><span class="gl-t">' + esc(g.t) + '</span><span class="gl-d">' + inlineRich(g.def) + "</span></button>").join("") + "</div>";
+      '<div class="glist">' + GLOSS.map(g => '<button class="glrow" data-a="term" data-t="' + g.id + '"><span class="gl-t">' + esc(g.t) + (g.p ? '<span class="gl-more">pe larg</span>' : "") + '</span><span class="gl-d">' + inlineRich(g.def) + "</span></button>").join("") + "</div>";
   }
 
   // ---------- events ----------

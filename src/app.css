@@ -290,6 +290,26 @@ details.day > summary::-webkit-details-marker { display: none; }
 .gs-body { overflow-y: auto; padding: 12px 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .gs-def { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.5; }
 body.gs-open { overflow: hidden; }
+/* termenul pentru începători (vGlossLong): trei benzi, cuvinte de bază, pași, răspuns ascuns */
+.gsheet.long .gs-panel { max-height: 90vh; }
+.gs-band { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); font: 700 15px/1.3 var(--font-display); color: var(--accent); }
+.gs-band:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.gs-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); font: 700 12px/1 var(--font-mono); }
+.xp-sec.gs-an { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.gs-voc { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.gs-voc > div { border-left: 3px solid var(--accent-soft); padding-left: 10px; }
+.gs-voc dt { font-weight: 700; font-size: 15px; }
+.gs-voc dd { margin: 2px 0 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
+.gs-steps { margin: 0; padding-left: 0; list-style: none; counter-reset: st; display: flex; flex-direction: column; gap: 8px; }
+.gs-steps > li { counter-increment: st; position: relative; padding-left: 32px; font-size: 15.5px; line-height: 1.5; }
+.gs-steps > li::before { content: counter(st); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font: 700 12px/1 var(--font-mono); }
+.gs-conf, .gs-read { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15.5px; line-height: 1.5; }
+.gs-read a { color: var(--accent); overflow-wrap: anywhere; }
+details.gs-ans { margin-top: 8px; }
+details.gs-ans > summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+details.gs-ans > div { margin-top: 6px; }
+.gl-more { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 11px/1.6 var(--font-mono); vertical-align: 2px; }
 
 /* glosarul din Studiu */
 .glist { display: flex; flex-direction: column; gap: 8px; }
