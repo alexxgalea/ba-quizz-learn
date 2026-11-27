@@ -119,32 +119,82 @@ export function resolveWrong(item, q) {
 // ---- glossary ----
 //   ### termen
 //   Forme: termen, termenul, ...      (how the term appears in text; used to make it tappable)
-//   Definiție / Scop / Exemplu / Analogie / Limită / Vezi și
-const GFIELDS = { "Forme": "forms", "Definiție": "def", "Scop": "scop", "Exemplu": "ex", "Analogie": "an", "Limită": "lim", "Vezi și": "see" };
+//   Definiție / Scop / Exemplu / Analogie / Limită / Vezi și   (formatul de bază)
+//   Pentru începători, toate opționale (pionier: CI/CD; README › Glosar):
+//   Problema / Legătură / La interviu / Verifică-te + Răspuns: text
+//   Cuvinte: rânduri „- termen: definiție”   Cum merge: „1. pas”, „2. pas”…   Nu confunda: rânduri „- …”
+//   Citește: rânduri „- [Titlu](https://…)”
+const GFIELDS = { "Forme": "forms", "Definiție": "def", "Scop": "scop", "Exemplu": "ex", "Analogie": "an", "Limită": "lim", "Vezi și": "see",
+  "Problema": "p", "Cuvinte": "voc", "Cum merge": "pas", "Nu confunda": "conf", "Legătură": "leg", "La interviu": "intv", "Verifică-te": "ver", "Răspuns": "verR", "Citește": "read" };
 const GFIELD_RE = new RegExp("^(" + Object.keys(GFIELDS).map(reEsc).join("|") + "):\\s*(.*)$");
+const GTEXT = ["def", "scop", "ex", "an", "lim", "p", "leg", "intv", "ver", "verR"];
+const GLIST = ["voc", "pas", "conf", "read"];
+// Plafoane pentru memoria de lucru: cel mult 6 cuvinte de bază și 7 pași; codul încape pe telefon (36 de coloane).
+export const GLOSS_LIMITS = { voc: 6, pas: 7, cols: 36 };
 export const slug = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+// Termenii, cu listele structurate: voc [{ t, d }], pas [text], conf [text], read [{ t, u }].
+// Rândurile care nu respectă forma listei ajung în `bad` (cheie → rânduri), raportate de checkGloss.
 export function parseGloss(md) {
   const out = [];
   let cur = null, key = null, fence = false;
   for (const line of md.split(/\r?\n/)) {
     if (!fence) {
       const h = line.match(/^###\s+(.+?)\s*$/);
-      if (h) { const t = h[1].replace(/`/g, ""); cur = { id: slug(t), t, forms: [], def: "", scop: "", ex: "", an: "", lim: "", see: [] }; out.push(cur); key = null; continue; }
+      if (h) {
+        const t = h[1].replace(/`/g, "");
+        cur = { id: slug(t), t, forms: [], see: [], raw: {} };
+        for (const k of GTEXT) cur[k] = "";
+        for (const k of GLIST) cur.raw[k] = [];
+        out.push(cur); key = null; continue;
+      }
       const f = cur && line.match(GFIELD_RE);
       if (f) {
         key = GFIELDS[f[1]];
         const v = clean(f[2]);
         if (key === "forms" || key === "see") cur[key] = v.split(",").map(s => s.trim().replace(/`/g, "")).filter(Boolean);
+        else if (GLIST.includes(key)) { if (v) cur.raw[key].push(v); }
         else cur[key] = v;
         continue;
       }
     }
     if (/^\s*```/.test(line)) fence = !fence;
-    if (cur && key && key !== "forms" && key !== "see" && line.trim()) cur[key] += "\n" + line;
+    if (!cur || !key || key === "forms" || key === "see" || !line.trim()) continue;
+    if (GLIST.includes(key)) cur.raw[key].push(line.trim());
+    else cur[key] += "\n" + line;
   }
-  for (const g of out) for (const k of ["def", "scop", "ex", "an", "lim"]) g[k] = clean(g[k]);
+  for (const g of out) {
+    for (const k of GTEXT) g[k] = clean(g[k]);
+    const bad = {}, take = (k, re, map) => g.raw[k].map(l => { const m = l.match(re); if (!m) (bad[k] = bad[k] || []).push(l); return m ? map(m) : null; }).filter(Boolean);
+    g.voc = take("voc", /^-\s*([^:]+?)\s*:\s*(\S.*)$/, m => ({ t: m[1], d: m[2] }));
+    const nums = [];
+    g.pas = take("pas", /^(\d+)\.\s+(\S.*)$/, m => { nums.push(+m[1]); return m[2]; });
+    g.conf = take("conf", /^-\s+(\S.*)$/, m => m[1]);
+    g.read = take("read", /^-\s*\[([^\]]+)\]\((\S+)\)$/, m => ({ t: m[1], u: m[2] }));
+    if (nums.some((n, i) => n !== i + 1)) (bad.pasNum = true);
+    delete g.raw;
+    if (Object.keys(bad).length) Object.defineProperty(g, "bad", { value: bad, enumerable: false });
+  }
   return out;
+}
+
+// Regulile unui termen (în afara Formelor și a Definiției, verificate în buildExplanations). Întoarce mesaje.
+export function checkGloss(g) {
+  const E = [], L = GLOSS_LIMITS, bad = g.bad || {};
+  const label = { voc: "Cuvinte (aștept „- termen: definiție”)", pas: "Cum merge (aștept „1. pas”)", conf: "Nu confunda (aștept „- …”)", read: "Citește (aștept „- [Titlu](https://…)”)" };
+  for (const k of GLIST) for (const l of bad[k] || []) E.push(label[k] + ": rând necitibil: " + l.slice(0, 50));
+  if (bad.pasNum) E.push("Cum merge: pașii se numerotează 1, 2, 3… în ordine");
+  if (g.voc.length > L.voc) E.push("Cuvinte: " + g.voc.length + " termeni (maxim " + L.voc + ")");
+  if (g.pas.length > L.pas) E.push("Cum merge: " + g.pas.length + " pași (maxim " + L.pas + ")");
+  for (const r of g.read) if (!/^https:\/\/\S+$/.test(r.u)) E.push("Citește: linkul trebuie să fie https: " + r.u.slice(0, 50));
+  if (g.ver && !g.verR) E.push("Verifică-te fără Răspuns");
+  if (g.verR && !g.ver) E.push("Răspuns fără Verifică-te");
+  for (const k of GTEXT) {
+    const t = g[k] || "";
+    if ((t.match(/```/g) || []).length % 2) E.push("bloc de cod neînchis");
+    for (const m of t.matchAll(/```\w*[^\n]*\n([\s\S]*?)```/g)) m[1].replace(/\s+$/, "").split("\n").forEach(l => { if ([...l].length > L.cols) E.push("rând de cod cu " + [...l].length + " de caractere (maxim " + L.cols + ")"); });
+  }
+  return E;
 }
 
 // Reads every explanation file, resolves wrong variants, returns { expl, gloss, errors }.
@@ -175,6 +225,7 @@ export function buildExplanations(root, P) {
   for (const g of gloss) {
     if (!g.def) errors.push("glosar: " + g.t + " missing Definiție");
     if (!g.forms.length) errors.push("glosar: " + g.t + " missing Forme");
+    for (const e of checkGloss(g)) errors.push("glosar: " + g.t + ": " + e);
     for (const fm of g.forms) {
       const k = fm.toLowerCase();
       if (seenForm.has(k)) errors.push("glosar: form „" + fm + "” used by both " + seenForm.get(k) + " and " + g.t);
